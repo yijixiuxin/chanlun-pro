@@ -1,0 +1,24 @@
+<nav class="navbar navbar-default">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"
+                    aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">缠论解盘</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/charts/stock_index/">缠论解盘</a>
+        </div>
+
+        <div id="navbar" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav">
+                <li role="presentation" {% if nav == 'gphq' %}class="active"{% endif %}><a href="/charts/stock_index">股票行情</a></li>
+                <li role="presentation" {% if nav == 'szhb' %}class="active"{% endif %}><a href="/charts/currency_index">数字货币</a></li>
+                <li role="presentation" {% if nav == 'dlph' %}class="active"{% endif %}><a href="/charts/dl_ranks_show">动量排行</a></li>
+                <li role="presentation" {% if nav == 'trader' %}class="active"{% endif %}><a href="/charts/trader/index">交易者</a></li>
+                <li role="presentation" {% if nav == 'dtb' %}class="active"{% endif %}><a href="/charts/more/charts">多图表</a></li>
+                <li role="presentation" {% if nav == 'hflx' %}class="active"{% endif %}><a href="/charts/re_record">回放练习</a></li>
+                <li role="presentation" {% if nav == 'zdysj' %}class="active"{% endif %}><a href="/charts/custom/index">自定义时间</a></li>
+            </ul>
+        </div>
+</nav>

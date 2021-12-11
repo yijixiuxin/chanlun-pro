@@ -1,0 +1,8 @@
+**/.ipynb_checkpoints
+/cl
+/cl_v2/config.py
+**/logs
+/pm2
+/pm2/log/
+/scripts
+/trader

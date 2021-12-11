@@ -1,0 +1,15 @@
+pandas
+requests
+numpy
+redis
+pyttsx3
+prettytable
+mysqlclient
+pyecharts==1.9.1
+django
+djangorestframework
+futu-api
+ccxt
+baostock
+TA-Lib
+matplotlib
