@@ -22,12 +22,18 @@ class ExchangeBinance(exchange.Exchange):
             # 'verbose': True,
         })
 
+        self._g_stocks = []
+
     def all_stocks(self):
+        if len(self._g_stocks) > 0:
+            return self._g_stocks
+
         markets = self.exchange.load_markets()
         stocks = []
         for s in markets:
             if '/' in s:
                 stocks.append({'code': s, 'name': s})
+        self._g_stocks = stocks
         return stocks
 
     def klines(self, code: str, frequency: str,

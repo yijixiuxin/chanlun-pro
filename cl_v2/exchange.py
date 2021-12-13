@@ -35,7 +35,7 @@ class Exchange:
         :return:
         """
         if len(self.__all_stocks) > 0:
-            return _global_stocks
+            return self.__all_stocks
 
         day = datetime.datetime.now()
         day -= datetime.timedelta(days=1)
@@ -57,9 +57,9 @@ class Exchange:
             if row[0] == 'sh.600000':
                 is_ok = True
             if is_ok:
-                _global_stocks.append({'code': row[0], 'name': row[2]})
+                self.__all_stocks.append({'code': row[0], 'name': row[2]})
 
-        return _global_stocks
+        return self.__all_stocks
 
     def klines(self, code: str, frequency: str,
                start_date: str = None, end_date: str = None,
@@ -73,7 +73,8 @@ class Exchange:
         :param args:
         :return:
         """
-        frequency_map = {'m': 'm', 'w': 'w', 'd': 'd', '60m': '60', '30m': '30', '15m': '15', '5m': '5', '1m': '1'}
+        frequency_map = {'m': 'm', 'w': 'w', 'd': 'd', '60m': '60', '30m': '30', '15m': '15', '5m': '5'}
+        default_start_day_map = {'m': 5000, 'w': 5000, 'd': 1000, '60m': 200, '30m': 100, '15m': 60, '5m': 20}
         if frequency not in frequency_map:
             raise Exception('不支持的周期 : ' + frequency)
 
@@ -81,6 +82,10 @@ class Exchange:
         # 详细指标参数，参见“历史行情指标参数”章节；“分钟线”参数与“日线”参数不同。
         # 分钟线指标：date,time,code,open,high,low,close,volume,amount,adjustflag
         # 周月线指标：date,code,open,high,low,close,volume,amount,adjustflag,turn,pctChg
+        if start_date is None:
+            start_date = datetime.datetime.now() - datetime.timedelta(days=default_start_day_map[frequency])
+            start_date = start_date.strftime('%Y-%m-%d')
+
         rs = bs.query_history_k_data_plus(code, "code,date,open,low,high,close,volume", start_date=start_date,
                                           end_date=end_date, frequency=frequency_map[frequency], adjustflag="2")
         if rs.error_code in ['10001001', '10002007']:
@@ -119,7 +124,7 @@ class Exchange:
                                 minutes=int(frequency_map[frequency]))
                     return self.__run_date
 
-                dk['date'] = dk['date'].map(append_time)
+                dk['date'] = dk['date'].apply(append_time)
                 new_kline = new_kline.append(dk)
             kline = new_kline.sort_values('date')
 
@@ -154,7 +159,7 @@ class Exchange:
         :param zx_name:
         :return: {'code', 'name'}
         """
-        return [{'code': 'sh.000001', 'name': '上证指数'}]
+        return [{'code': 'sh.000001', 'name': '上证指数'},{"code": "SZ.000875", "name": "吉电股份"}, {"code": "SH.603589", "name": "口子窖"}, {"code": "SZ.000951", "name": "中国重汽"}, {"code": "SH.688339", "name": "亿华通"}]
 
     @staticmethod
     def convert_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:

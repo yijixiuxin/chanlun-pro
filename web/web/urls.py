@@ -20,4 +20,5 @@ from django.conf.urls import url, include
 urlpatterns = [
     path('admin/', admin.site.urls),
     url(r'^charts/', include('charts.urls')),
+    url('', include('cl_demo.urls')),
 ]

@@ -11,21 +11,6 @@
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
 
     <style type="text/css">
-        .r {
-            margin-bottom: 10px;
-            border-bottom: 3px solid #018;
-            font-size: 12px;
-        }
-
-        .r_time {
-            font-weight: bold;
-        }
-
-        .r_bcmmd {
-            color: indianred;
-            font-size: 14px;
-        }
-
         .autocomplete-suggestions {
             border: 1px solid #999;
             background: #FFF;
@@ -67,7 +52,7 @@
         {% include 'base_nav.html' with nav='gphq' %}
     </div>
     <div style="width: 20%; float: left; padding-top: 8px;" class="navbar navbar-default">
-            <button class="btn btn-primary" id="shuaxin" type="button" value="0">开启自动刷新</button>
+        <button class="btn btn-primary" id="shuaxin" type="button" value="0">开启自动刷新</button>
     </div>
     <div style="clear: both;"></div>
 </div>
@@ -75,17 +60,20 @@
 <div class="row">
     <div class="col-md-1">
         <div id="stocks_list">
+            <div class="input-group">
+                <input class="form-control" id="stock_code" placeholder="StockCode" type="text"/>
+                <span class="input-group-btn"><button type="button" id="stock_ok"
+                                                      class="btn btn-default">OK</button></span>
+            </div>
+            <button class="btn btn-default" type="button" id="import_stocks">导入</button>
+            <hr/>
             <div class="form-group">
                 <a href="javascript:void(0);" data-my="我的持仓" class="btn btn-info btn-xs btn_zixuan">持</a>
                 <a href="javascript:void(0);" data-my="股票池" class="btn btn-info btn-xs btn_zixuan">池</a>
                 <a href="javascript:void(0);" data-my="今日关注" class="btn btn-info btn-xs btn_zixuan">今</a>
                 <a href="javascript:void(0);" data-my="ETF" class="btn btn-info btn-xs btn_zixuan">ETF</a>
-
-                <input class="form-control" id="stock_code" placeholder="StockCode" type="text"/>
-                <button type="button" id="stock_ok" class="btn btn-default">OK</button>
-                <button class="btn btn-default" type="button" id="import_stocks">导入</button>
             </div>
-            <div class="input-group">
+            <div class="from-group">
                 <input class="form-control" id="stock_search" placeholder="Search" type="text"/>
             </div>
             <ul class="list-group" id="my_stocks" style="height: 680px; overflow: scroll; font-size: 12px;">
@@ -172,7 +160,7 @@
     </div>
     <div class="col-md-1">
         <h3>机会列表</h3>
-        <ul class="list-group" id="jhs_ul"  style="height: 700px; overflow: scroll; font-size: 12px;">
+        <ul class="list-group" id="jhs_ul" style="height: 700px; overflow: scroll; font-size: 12px;">
             <li class="list-group-item">Loading</li>
         </ul>
     </div>
@@ -266,7 +254,7 @@
                 $.cookie('_stock_frequency_low_2', frequency_low_2);
                 fetchData(chart_low_2, code, frequency_low_2, false);
             });
-            
+
 
             // 定时刷新
             $('#shuaxin').click(function () {
@@ -346,7 +334,7 @@
             });
 
             // 批量导入股票列表
-            $('#import_stocks').click(function() {
+            $('#import_stocks').click(function () {
                 var json = prompt('请输入股票列表 JSON 数据：');
                 if (json === '') {
                     return false;
@@ -448,12 +436,13 @@
                             $('#jhs_ul').html('');
                             for (let i = 0; i < result['data'].length; i++) {
                                 jh = result['data'][i];
-                                $('#jhs_ul').append('<li class="list-group-item"><h4 class="list-group-item-heading"><a href="javascript:void(0);" class="code" data-code="'+jh['code']+'">'+jh['name']+'</a> <span>'+jh['frequency']+'</span></h4> <p class="list-group-item-text"><b>'+jh['jh_type']+' </b>机会 <br/>'+jh['bi_done']+' '+jh['bi_td']+'<br/> '+jh['datetime_str']+'</p></li>');
+                                $('#jhs_ul').append('<li class="list-group-item"><h4 class="list-group-item-heading"><a href="javascript:void(0);" class="code" data-code="' + jh['code'] + '">' + jh['name'] + '</a> <span>' + jh['frequency'] + '</span></h4> <p class="list-group-item-text"><b>' + jh['jh_type'] + ' </b>机会 <br/>' + jh['bi_done'] + ' ' + jh['bi_td'] + '<br/> ' + jh['datetime_str'] + '</p></li>');
                             }
                         }
                     }
                 });
             }
+
             jhs_list_show();
             setInterval(jhs_list_show, 60000);
         }

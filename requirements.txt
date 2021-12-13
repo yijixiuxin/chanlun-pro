@@ -6,7 +6,7 @@ pyttsx3
 prettytable
 mysqlclient
 pyecharts==1.9.1
-django
+django==3.2.9
 djangorestframework
 futu-api
 ccxt

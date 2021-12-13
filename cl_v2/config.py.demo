@@ -2,12 +2,12 @@
 服务总配置文件
 """
 
-
 # 代理服务器配置
 PROXY_HOST = '127.0.0.1'
 PROXY_PORT = '7890'
 
 # 富途API配置
+USE_FUTU = False
 FUTU_HOST = '127.0.0.1'
 FUTU_PORT = 11111
 FUTU_UNLOCK_PWD = '000000'

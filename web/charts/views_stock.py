@@ -11,6 +11,8 @@ from cl_v2 import kcharts
 from cl_v2 import stock_dl_rank
 from cl_v2 import fun
 from cl_v2 import rd
+from cl_v2 import config
+from cl_v2 import exchange
 
 
 # Create your views here.
@@ -49,8 +51,10 @@ JsonError = json_error
 '''
 股票行情
 '''
-
-exchange = exchange_futu.ExchangeFutu()
+if config.USE_FUTU:
+    stock_ex = exchange_futu.ExchangeFutu()
+else:
+    stock_ex = exchange.Exchange()
 
 
 def stock_index_show(request):
@@ -71,7 +75,7 @@ def stock_my_zixuan(request):
     my = request.GET.get('my')
     if my is None:
         my = '我的持仓'
-    stocks = exchange.zixuan_stocks(my)
+    stocks = stock_ex.zixuan_stocks(my)
     return JsonResponse(stocks)
 
 
@@ -92,7 +96,7 @@ def stock_plate(request):
     :return:
     """
     code = request.GET.get('code')
-    plates = exchange.stock_owner_plate(code)
+    plates = stock_ex.stock_owner_plate(code)
     return JsonResponse(plates)
 
 
@@ -103,7 +107,7 @@ def plate_stocks(request):
     :return:
     """
     code = request.GET.get('code')
-    stocks = exchange.plate_stocks(code)
+    stocks = stock_ex.plate_stocks(code)
     return JsonResponse(stocks)
 
 
@@ -125,9 +129,9 @@ def stocks_kline_base(code, frequency):
     :param frequency:
     :return:
     """
-    klines = exchange.klines(code, frequency=frequency)
+    klines = stock_ex.klines(code, frequency=frequency)
     cd = cl.CL(code, klines, frequency)
-    stock_info = exchange.stock_info(code)
+    stock_info = stock_ex.stock_info(code)
     orders = rd.stock_order_query(code)
     orders = fun.convert_stock_order_by_frequency(orders, frequency)
     chart = kcharts.render_charts(
@@ -182,7 +186,7 @@ def dl_gn_ranks_save(request):
 def SearchStocks(request):
     tp = request.GET.get('tp')
     search = request.GET.get('query')
-    all_stocks = exchange.all_stocks()
+    all_stocks = stock_ex.all_stocks()
     res = []
     for stock in all_stocks:
         if search in stock['code'] or search in stock['name']:
