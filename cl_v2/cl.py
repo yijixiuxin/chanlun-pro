@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import List, Tuple, Dict
 
 import numpy as np
@@ -18,10 +19,14 @@ class Kline:
         self.c: float = c
         self.a: float = a
 
+    def __str__(self):
+        return "index: %s date: %s h: %s l: %s o: %s c:%s a:%s" % \
+               (self.index, self.date, self.h, self.l, self.o, self.c, self.a)
+
 
 class CLKline:
     def __init__(self, k_index: int, date: datetime, h: float, l: float, o: float, c: float, a: float,
-                 index: int = 0, _n: int = 0, _q: bool = False):
+                 klines: List[Kline] = [], index: int = 0, _n: int = 0, _q: bool = False):
         self.k_index: int = k_index
         self.date: datetime = date
         self.h: float = h
@@ -29,9 +34,14 @@ class CLKline:
         self.o: float = o
         self.c: float = c
         self.a: float = a
+        self.klines: List[Kline] = klines  # 其中包含K线对象
         self.index: int = index
         self._n: int = _n  # 记录包含的K线数量
         self._q: bool = _q  # 是否有缺口
+
+    def __str__(self):
+        return "index: %s k_index:%s date: %s h: %s l: %s _n:%s _q:%s" % \
+               (self.index, self.k_index, self.date, self.h, self.l, self._n, self._q)
 
 
 class FX:
@@ -111,7 +121,24 @@ class CL:
         self.frequency = frequency
 
         # 计算后保存的值
-        self.klines, self.cl_klines = self.process_cl_kline(klines)
+        self.klines: List[Kline] = []
+        self.cl_klines: List[CLKline] = []  # 缠论K线
+        self.idx: dict = {}  # ta-lib 各种指标
+        self.fxs: List[FX] = []  # 分型列表
+        self.bis: List[BI] = []  # 笔列表
+        self.xds: List[XD] = []  # 线段列表
+        self.zss: List[ZS] = []  # 中枢列表
+
+        # 初始处理 缠论K线
+        self.process_cl_kline(klines)
+        # 处理 缠论数据
+        self.process_cl_datas()
+
+    def process_cl_datas(self):
+        """
+        根据缠论 K 线，计算缠论的 分型、笔、线段、中枢、买卖点
+        :return:
+        """
         self.idx = self.process_idx()  # 计算技术指标
         self.fxs = self.process_fx()
         self.bis = self.process_bi()
@@ -120,70 +147,72 @@ class CL:
         self.zss = self.process_zs(self.bis)
         self.process_mmds()
 
-    def process_cl_kline(self, klines: pd.DataFrame) -> Tuple[List[Kline], List[CLKline]]:
+    def process_cl_kline(self, klines: pd.DataFrame):
         """
         将初始 K 线整理为缠论包含关系的 k 线
         :return:
         """
-        new_klines = []
-        cl_klines = []
         for i in range(len(klines)):
             nk = klines.iloc[i]
             date = self.__process_date(nk['date'])
-            _k = Kline(index=i, date=date,
-                       h=float(nk['high']), l=float(nk['low']),
-                       o=float(nk['open']), c=float(nk['close']), a=float(nk['volume']))
-            new_klines.append(_k)
+            k = Kline(index=i, date=date,
+                      h=float(nk['high']), l=float(nk['low']),
+                      o=float(nk['open']), c=float(nk['close']), a=float(nk['volume']))
+            self.klines.append(k)
 
-            _cl_k = CLKline(date=date, k_index=i,
-                            h=float(nk['high']), l=float(nk['low']),
-                            o=float(nk['open']), c=float(nk['close']), a=float(nk['volume']),
-                            _n=1, _q=False)
-            # 判断是否有跳空缺口
-            if len(new_klines) > 2 and (new_klines[-1].l > new_klines[-2].h or new_klines[-1].h < new_klines[-2].l):
-                _cl_k._q = True
-
-            if i <= 1:
-                # 前两根 K线 直接插入
-                cl_klines.append(_cl_k)
-                continue
-            upup_k = cl_klines[-2]
-            up_k = cl_klines[-1]
-            # 判断趋势
-            qushi = 'up' if up_k.h > upup_k.h else 'down'
-
-            if (up_k.h >= _cl_k.h and up_k.l <= _cl_k.l) \
-                    or (_cl_k.h >= up_k.h and _cl_k.l <= up_k.l):
-                if qushi == 'up':  # 趋势上涨，向上合并
-                    up_k.k_index = up_k.k_index if up_k.h > _cl_k.h else _cl_k.k_index
-                    up_k.date = up_k.date if up_k.h > _cl_k.h else _cl_k.date
-                    up_k.h = max(up_k.h, _cl_k.h)
-                    up_k.l = max(up_k.l, _cl_k.l)
-                    up_k.a += _cl_k.a  # 交易量累加
-                else:
-                    up_k.k_index = up_k.k_index if up_k.l < _cl_k.l else _cl_k.k_index
-                    up_k.date = up_k.date if up_k.l < _cl_k.l else _cl_k.date
-                    up_k.h = min(up_k.h, _cl_k.h)
-                    up_k.l = min(up_k.l, _cl_k.l)
-                    up_k.a += _cl_k.a
-                up_k._n += 1
-                continue
-
-            cl_klines.append(_cl_k)
-
-        # 规整缠论的 K 线数据
-        up_k = cl_klines[0]
-        for i in range(len(cl_klines)):
-            cl_klines[i].index = i  # 重新编号
-            if cl_klines[i].h > up_k.h:
-                cl_klines[i].o = cl_klines[i].l
-                cl_klines[i].c = cl_klines[i].h
+            is_new, cl_k = self.__create_cl_kline(k)
+            if is_new:
+                self.cl_klines.append(cl_k)
             else:
-                cl_klines[i].o = cl_klines[i].h
-                cl_klines[i].c = cl_klines[i].l
-            up_k = cl_klines[i]
+                self.cl_klines[-1] = cl_k
 
-        return new_klines, cl_klines
+        # 重新编号
+        for i in range(len(self.cl_klines)):
+            self.cl_klines[i].index = i  # 重新编号
+
+        return
+
+    def increment_process_kline(self, klines: pd.DataFrame):
+        """
+        增量添加并处理 Kline
+        :param klines:
+        :return:
+        """
+
+        # 根据最后一个 缠论K线，进行增量更新处理（保证相同时间K线的数据进行更新）
+        last_cl_kline = self.cl_klines[-1]
+        start_kline = self.klines[last_cl_kline.klines[0].index - 1]
+
+        # 删除后续的 kline 数据
+        del (self.cl_klines[-1])
+        for i in range(self.klines[-1].index - start_kline.index):
+            del (self.klines[-1])
+
+        run_klines = klines[klines['date'] >= start_kline.date]
+        for i in range(len(run_klines)):
+            nk = run_klines.iloc[i]
+            if nk['date'] <= start_kline.date:
+                # 已经处理的进行跳过
+                continue
+
+            k = Kline(index=start_kline.index + 1, date=nk['date'],
+                      h=float(nk['high']), l=float(nk['low']),
+                      o=float(nk['open']), c=float(nk['close']), a=float(nk['volume']))
+            self.klines.append(k)
+            start_kline = k
+
+            is_new, cl_k = self.__create_cl_kline(k)
+            if is_new:
+                self.cl_klines.append(cl_k)
+            else:
+                self.cl_klines[-1] = cl_k
+
+        # 重新编号
+        for i in range(len(self.cl_klines)):
+            self.cl_klines[i].index = i  # 重新编号
+
+        # 重新计算缠论数据
+        self.process_cl_datas()
 
     def process_idx(self) -> map:
         """
@@ -514,6 +543,8 @@ class CL:
         """
         # 检查买卖点
         for bi in self.bis:
+            bi.mmds = []  # process_mmds 这个方法会多次运行，避免 mmds 一直增加，初始化一下
+
             if bi.qs_beichi:
                 # 只要是趋势背驰，那就是第一买卖点
                 if bi.type == 'up':
@@ -537,6 +568,14 @@ class CL:
             if '1sell' in up_same_bi.mmds:
                 if bi.type == 'up' and bi.high < up_same_bi.high:
                     bi.mmds.append('2sell')
+
+            # 离开中枢一笔（新高、新低），后续一笔回拉不突破前高、前低，就是二类买卖点
+            if bi.type == 'up' and up_same_bi.high >= zs.gg \
+                    and zs.bis[-1].end.index == up_same_bi.start.index and bi.high < up_same_bi.high:
+                bi.mmds.append('2sell')
+            if bi.type == 'down' and up_same_bi.low <= zs.dd \
+                    and zs.bis[-1].end.index == up_same_bi.start.index and bi.low > up_same_bi.low:
+                bi.mmds.append('2buy')
 
             # 检查类2买卖点
             if '2buy' in up_same_bi.mmds:
@@ -566,6 +605,52 @@ class CL:
             return datetime.datetime.strptime(d, '%Y-%m-%d')
         else:
             return datetime.datetime.strptime(d, '%Y-%m-%d %H:%M:%S')
+
+    def __create_cl_kline(self, k: Kline) -> Tuple[bool, CLKline]:
+        """
+        根据 K线 生成 缠论K线，处理其中的包含关系
+        :param k:
+        :return: (true 为新增缠论Kline，false 为包含缠论Kline)
+        """
+        cl_k = CLKline(date=k.date, k_index=k.index, h=k.h, l=k.l, o=k.o, c=k.c, a=k.a, klines=[k], _n=1, _q=False)
+        # 判断是否有跳空缺口，有跳空缺口，补一根 缠论K线
+        if len(self.klines) > 2:
+            up_kline = self.klines[-2]
+            if up_kline.l > k.h or up_kline.h < k.l:
+                # print('有跳空', len(self.klines), up_kline, k)
+                self.cl_klines.append(
+                    CLKline(date=k.date, k_index=k.index,
+                            h=min(k.l, self.klines[k.index - 1].l),
+                            l=min(k.h, self.klines[k.index - 1].h), o=k.o, c=k.c, a=k.a, klines=[], _n=1, _q=True)
+                )
+
+        if k.index <= 1:
+            # 前两根 K线 直接返回
+            return True, cl_k
+
+        upup_k = self.cl_klines[-2]
+        up_k = self.cl_klines[-1]
+        # 判断趋势
+        qushi = 'up' if up_k.h > upup_k.h else 'down'
+
+        if (up_k.h >= cl_k.h and up_k.l <= cl_k.l) or (cl_k.h >= up_k.h and cl_k.l <= up_k.l):
+            if qushi == 'up':  # 趋势上涨，向上合并
+                up_k.k_index = up_k.k_index if up_k.h > cl_k.h else cl_k.k_index
+                up_k.date = up_k.date if up_k.h > cl_k.h else cl_k.date
+                up_k.h = max(up_k.h, cl_k.h)
+                up_k.l = max(up_k.l, cl_k.l)
+                up_k.a += cl_k.a  # 交易量累加
+            else:
+                up_k.k_index = up_k.k_index if up_k.l < cl_k.l else cl_k.k_index
+                up_k.date = up_k.date if up_k.l < cl_k.l else cl_k.date
+                up_k.h = min(up_k.h, cl_k.h)
+                up_k.l = min(up_k.l, cl_k.l)
+                up_k.a += cl_k.a
+            up_k.klines.append(k)
+            up_k._n += 1
+            return False, up_k
+
+        return True, cl_k
 
     def __get_up_real_fx(self, fxs: List[FX]) -> FX:
         """

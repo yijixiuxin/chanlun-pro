@@ -1,5 +1,6 @@
 import MySQLdb
 import pandas as pd
+import datetime
 
 from . import config
 from . import exchange
@@ -89,6 +90,9 @@ class ExchangeDB(exchange.Exchange):
     def klines(self, code: str, frequency: str,
                start_date: str = None, end_date: str = None,
                args: dict = {}) -> [pd.DataFrame, None]:
+
+        if 'limit' not in args:
+            args['limit'] = 1000
         table = self.__table(code)
         sql = "select dt, f, h, l, o, c, v from %s where f='%s'" % (table, frequency)
         if start_date is not None:
@@ -103,5 +107,5 @@ class ExchangeDB(exchange.Exchange):
         kline_pd = pd.DataFrame(klines, columns=['date', 'f', 'high', 'low', 'open', 'close', 'volume'])
         kline_pd = kline_pd.iloc[::-1]
         kline_pd['code'] = code
-        kline_pd['date'] = kline_pd['date'].map(lambda d: d.strftime('%Y-%m-%d %H:%M:%S'))
+        kline_pd['date'] = kline_pd['date'].map(lambda d: d.to_pydatetime())
         return kline_pd[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]

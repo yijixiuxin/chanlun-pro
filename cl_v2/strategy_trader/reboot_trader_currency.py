@@ -10,6 +10,7 @@ sys.path.append(sys.path[0] + "/../..")
 
 from cl_v2 import exchange_binance
 from cl_v2 import rd
+from cl_v2 import cl
 from cl_v2.my import strategy_demo
 from cl_v2.my import trader_currency
 
@@ -80,7 +81,9 @@ try:
                     for f in ['30m', '5m']:
                         klines[f] = exchange.klines(code, f)
 
-                    TR.run(code, klines)
+                    cl_datas = cl.batch_cls(code, klines)
+
+                    TR.run(code, cl_datas)
                 except Exception as e:
                     logging.error(traceback.format_exc())
 

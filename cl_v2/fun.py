@@ -141,7 +141,7 @@ def monitoring_code(market: str, code: str, name: str, frequencys: list,
                 'bi': end_bi
             })
 
-    send_msgs = []
+    send_msgs = ""
     for jh in jh_msgs:
         bi_done = '笔完成' if jh['bi'].done else '笔未完成'
         if market in ['a', 'hk']:
@@ -157,8 +157,7 @@ def monitoring_code(market: str, code: str, name: str, frequencys: list,
             engine.runAndWait()
 
         if is_exists is False and is_send_msg:
-            send_msgs.append(
-                '【%s - %s】触发 %s (%s - TD:%s)' % (name, jh['frequency'], jh['type'], bi_done, jh['bi'].td))
+            send_msgs += '【%s - %s】触发 %s (%s - TD:%s) \n' % (name, jh['frequency'], jh['type'], bi_done, jh['bi'].td)
 
     # print('Send_msgs: ', send_msgs)
 

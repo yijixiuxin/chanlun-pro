@@ -49,9 +49,7 @@ class ExchangeBinance(exchange.Exchange):
                                          params={'startTime': start_date, 'endTime': end_date})
         kline_pd = pd.DataFrame(kline, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
         kline_pd['code'] = code
-        kline_pd['date'] = pd.to_datetime(kline_pd['date'].values / 1000, unit='s', utc=True).tz_convert(
-            'Asia/Shanghai')
-        kline_pd['date'] = kline_pd['date'].map(lambda d: d.strftime('%Y-%m-%d %H:%M:%S'))
+        kline_pd['date'] = pd.to_datetime(kline_pd['date'].values / 1000, unit='s', utc=True).tz_convert('Asia/Shanghai')
         return kline_pd[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
 
     def ticks(self, codes: List[str]) -> Dict[str, exchange.Tick]:
@@ -144,7 +142,9 @@ class ExchangeBinance(exchange.Exchange):
         seconds = f_maps[to_f]
 
         for k in klines.iterrows():
-            date_time = datetime.datetime.timestamp(datetime.datetime.strptime(k[1]['date'], '%Y-%m-%d %H:%M:%S'))
+            _date = k[1]['date'].to_pydatetime()
+            date_time = _date.timestamp()
+
             new_date_time = date_time - (date_time % seconds)
             new_date_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(new_date_time))
             if new_date_time in new_kline:
@@ -167,4 +167,5 @@ class ExchangeBinance(exchange.Exchange):
                     'volume': float(k[1]['volume']),
                 }
         kline_pd = pd.DataFrame(new_kline.values())
+        kline_pd['date'] = pd.to_datetime(kline_pd['date'])
         return kline_pd[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]

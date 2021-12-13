@@ -96,6 +96,7 @@ class Exchange:
             # 获取一条记录，将记录合并在一起
             data_list.append(rs.get_row_data())
         kline = pd.DataFrame(data_list, columns=rs.fields)
+        kline['date'] = pd.to_datetime(kline['date'])
 
         if frequency in ['60m', '30m', '15m', '5m', '1m']:
             dates = kline['date'].unique()
@@ -104,24 +105,23 @@ class Exchange:
                 dk = kline[kline['date'] == d]
                 self.__run_date = None
 
-                def append_time(d):
+                def append_time(_d: datetime.datetime) -> datetime.datetime:
                     if self.__run_date is None:
-                        self.__run_date = datetime.datetime.strptime(d + ' 09:30:00', "%Y-%m-%d %H:%M:%S")
+                        self.__run_date = datetime.datetime.strptime(_d.strftime('%Y-%m-%d') + ' 09:30:00',
+                                                                     "%Y-%m-%d %H:%M:%S")
                         self.__run_date = self.__run_date + datetime.timedelta(minutes=int(frequency_map[frequency]))
                     else:
                         self.__run_date = self.__run_date + datetime.timedelta(minutes=int(frequency_map[frequency]))
                         if (self.__run_date.hour == 11 and self.__run_date.minute > 30) or (self.__run_date.hour == 12):
-                            self.__run_date = datetime.datetime.strptime(d + ' 13:00:00', "%Y-%m-%d %H:%M:%S")
+                            self.__run_date = datetime.datetime.strptime(_d.strftime('%Y-%m-%d') + ' 13:00:00',
+                                                                         "%Y-%m-%d %H:%M:%S")
                             self.__run_date = self.__run_date + datetime.timedelta(
                                 minutes=int(frequency_map[frequency]))
-                    return self.__run_date.strftime('%Y-%m-%d %H:%M:%S')
+                    return self.__run_date
 
                 dk['date'] = dk['date'].map(append_time)
                 new_kline = new_kline.append(dk)
             kline = new_kline.sort_values('date')
-        else:
-            kline['date'] = kline['date'].map(
-                lambda d: datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%Y-%m-%d %H:%M:%S"))
 
         return kline[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
 
@@ -172,8 +172,8 @@ class Exchange:
         seconds = freq_second_maps[to_f]
 
         for k in klines.iterrows():
-            dt = datetime.datetime.strptime(k[1]['date'], '%Y-%m-%d %H:%M:%S')
-            date_time = datetime.datetime.timestamp(datetime.datetime.strptime(k[1]['date'], '%Y-%m-%d %H:%M:%S'))
+            dt: datetime.datetime = k[1]['date'].to_pydatetime()
+            date_time = dt.timestamp()
             if date_time % seconds == 0:
                 new_date_time = date_time
             else:
@@ -183,15 +183,12 @@ class Exchange:
                 new_date_time -= 8 * 60 * 60
             if to_f == '60m':
                 if (dt.hour == 9) or (dt.hour == 10 and dt.minute <= 30):
-                    new_date_time = datetime.datetime.timestamp(
-                        datetime.datetime.strptime(dt.strftime('%Y-%m-%d 10:30:00'), '%Y-%m-%d %H:%M:%S'))
+                    new_date_time = datetime.datetime.strptime(dt.strftime('%Y-%m-%d 10:30:00'), '%Y-%m-%d %H:%M:%S').timestamp()
                 elif (dt.hour == 10 and dt.minute >= 30) or (dt.hour == 11):
-                    new_date_time = datetime.datetime.timestamp(
-                        datetime.datetime.strptime(dt.strftime('%Y-%m-%d 11:30:00'), '%Y-%m-%d %H:%M:%S'))
+                    new_date_time = datetime.datetime.strptime(dt.strftime('%Y-%m-%d 11:30:00'), '%Y-%m-%d %H:%M:%S').timestamp()
             if to_f == '120m':
                 if dt.hour == 9 or dt.hour == 10 or (dt.hour == 11 and dt.minute <= 30):
-                    new_date_time = datetime.datetime.timestamp(
-                        datetime.datetime.strptime(dt.strftime('%Y-%m-%d 11:30:00'), '%Y-%m-%d %H:%M:%S'))
+                    new_date_time = datetime.datetime.strptime(dt.strftime('%Y-%m-%d 11:30:00'), '%Y-%m-%d %H:%M:%S').timestamp()
 
             new_date_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(new_date_time))
             if new_date_time in new_kline:
@@ -214,6 +211,7 @@ class Exchange:
                     'volume': float(k[1]['volume']),
                 }
         kline_pd = pd.DataFrame(new_kline.values())
+        kline_pd['date'] = pd.to_datetime(kline_pd['date'])
         return kline_pd[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
 
     def stock_owner_plate(self, code: str):

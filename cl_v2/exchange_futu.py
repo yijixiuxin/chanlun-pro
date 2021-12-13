@@ -91,7 +91,7 @@ class ExchangeFutu(exchange.Exchange):
                     start_date = (end_datetime - dt.timedelta(days=1500)).strftime(time_format)
             ret, kline, pk = self.CTX().request_history_kline(code=code, start=start_date, end=end_date, max_count=None,
                                                               ktype=frequency_map[frequency]['ktype'])
-        kline['date'] = kline['time_key']
+        kline['date'] = pd.to_datetime(kline['time_key'])
         kline = kline[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
         if frequency == '120m':
             kline = self.convert_kline_frequency(kline, '120m')

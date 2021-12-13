@@ -1,10 +1,12 @@
 # 回放行情所需
 import datetime
+from typing import Dict
 
 from . import exchange
 from . import exchange_binance
 from . import exchange_db
 from . import fun
+from . import cl
 
 
 class BackKlines:
@@ -26,12 +28,22 @@ class BackKlines:
         self.market = market
         self.code = code
         self.frequencys = frequency
+        if isinstance(start_date, str):
+            start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S')
         self.start_date = start_date
+        if isinstance(end_date, str):
+            end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d %H:%M:%S')
         self.end_date = end_date
+
         self.now_date = start_date
 
         self.klines = {}
         self.show_klines = {}
+
+        # 保存缠论数据对象
+        self.cl_datas: Dcit[str, cl.CL] = {}
+        for f in self.frequencys:
+            self.cl_datas[f] = None
 
         self.exchange = exchange_db.ExchangeDB(self.market)
 
@@ -58,14 +70,18 @@ class BackKlines:
                 return False
             try:
                 for f in self.frequencys:
-                    self.show_klines[f] = self.klines[f][
-                                              self.klines[f]['date'] <= self.now_date.strftime(self.time_fmt)][
-                                          -1000::]
+                    self.show_klines[f] = self.klines[f][self.klines[f]['date'] <= self.now_date][-1000::]
+
+                    # 计算缠论数据
+                    if self.cl_datas[f] is None:
+                        self.cl_datas[f] = cl.CL(self.code, self.show_klines[f], f)
+                    else:
+                        self.cl_datas[f].increment_process_kline(self.show_klines[f])
 
                 self.convert_klines()
             except Exception as e:
                 print('ERROR: %s 运行 Next 错误，当前时间 : %s，错误信息：%s' % (self.code, self.now_date, str(e)))
-                raise e
+                # raise e
                 return False
             return True
 
@@ -93,7 +109,7 @@ class BackKlines:
         :param frequency:
         :return:
         """
-        next_klines = self.klines[frequency][self.klines[frequency]['date'] > now_date.strftime('%Y-%m-%d %H:%M:%S')]
+        next_klines = self.klines[frequency][self.klines[frequency]['date'] > now_date]
 
         if len(next_klines) == 0:
             return None
@@ -104,7 +120,7 @@ class BackKlines:
                 next_date = next_klines.iloc[500]['date']
             else:
                 return None
-        return fun.str_to_time(next_date)
+        return next_date
 
     def _cal_start_date_by_frequency(self, start_date: datetime, frequency) -> str:
         """
@@ -123,5 +139,3 @@ class BackKlines:
                 return (start_date - datetime.timedelta(days=market_days_freq_maps[self.market][_freq])).strftime(
                     self.time_fmt)
         raise Exception('不支持的周期 ' + frequency)
-
-

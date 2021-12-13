@@ -8,7 +8,7 @@ from cl_v2 import back_klines
 from cl_v2 import cl
 from cl_v2 import kcharts
 
-bk_hq: back_klines.BackKlines
+bk_hq: back_klines.BackKlines = None
 
 
 def ReRecordKlineIndexView(request):
@@ -47,11 +47,7 @@ def ReRecordKlines(request):
     if not is_next:
         return HttpResponse('')
 
-    klines = {}
-    for f in frequencys.split(','):
-        klines[f] = bk_hq.show_klines[f]
-
-    cl_datas = cl.batch_cls(code, klines)
+    cl_datas = bk_hq.cl_datas
 
     charts = '{'
     for cd in cl_datas:

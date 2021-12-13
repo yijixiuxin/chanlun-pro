@@ -35,8 +35,7 @@ class Trader(object):
     回测交易（可继承支持实盘）
     """
 
-    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None,
-                 is_save_kline=True):
+    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None):
         """
         交易者初始化
         :param name: 交易者名称
@@ -44,7 +43,6 @@ class Trader(object):
         :param is_futures: 是否是期货交易（决定是否可以做空）
         :param mmds: 可交易的买卖点
         :param log: 日志展示方法
-        :param is_save_kline: 是否保存klines
         """
 
         # 当前名称
@@ -56,8 +54,6 @@ class Trader(object):
         # 是否打印日志
         self.log = log
         self.log_history = []
-        # 是否保存Kline
-        self.is_save_kline = is_save_kline
 
         # 盯盘对象
         self.strategy = None
@@ -65,8 +61,8 @@ class Trader(object):
         # 存储代码最后的价格
         self.prices = {}
 
-        # 存储kline线信息
-        self.klines = {}
+        # 存储缠论数据
+        self.cl_datas = {}
 
         # 代码当前运行时间
         self.todays = {}
@@ -107,36 +103,28 @@ class Trader(object):
         self.strategy = strategy
 
     # 运行的唯一入口
-    def run(self, code, klines):
-        self.save_kline(code, klines)
-
-        _cal_klines = {}
-        for f in klines:
-            if self.is_save_kline:
-                k = self.klines[code][f][-1000:]
-            else:
-                k = klines[f]
-            _cal_klines[f] = k
-        cl_datas = cl.batch_cls(code, _cal_klines)
+    def run(self, code, cl_datas: Dict[str, cl.CL]):
+        self.cl_datas[code] = cl_datas
 
         # 存储当前代码最后价格/时间
-        self.prices[code] = float(cl_datas[-1].klines[-1].c)
-        self.todays[code] = cl_datas[-1].klines[-1].date
+        frequencys = list(cl_datas.keys())
+        self.prices[code] = float(cl_datas[frequencys[-1]].klines[-1].c)
+        self.todays[code] = cl_datas[frequencys[-1]].klines[-1].date
 
-        high_price = float(cl_datas[-1].klines[-1].h)
-        low_price = float(cl_datas[-1].klines[-1].l)
+        high_price = float(cl_datas[frequencys[-1]].klines[-1].h)
+        low_price = float(cl_datas[frequencys[-1]].klines[-1].l)
         self._position_record(code, high_price, low_price)
 
         # 优先检查持仓情况
         if code in self.positions:
             for mmd in self.positions[code]:
                 pos = self.positions[code][mmd]
-                opt = self.strategy.stare(mmd, pos, cl_datas)
+                opt = self.strategy.stare(mmd, pos, list(cl_datas.values()))
                 if opt:
                     self.execute(code, opt)
 
         # 再执行检查机会方法
-        opts = self.strategy.look(cl_datas)
+        opts = self.strategy.look(list(cl_datas.values()))
         if opts:
             for opt in opts:
                 self.execute(code, opt)
@@ -154,22 +142,9 @@ class Trader(object):
                     self.execute(code, {'opt': 'sell', 'mmd': mmd, 'msg': '退出'})
         return True
 
-    # 保存 kline 信息
-    def save_kline(self, code, klines):
-        if not self.is_save_kline:
-            return
-        if code not in self.klines:
-            self.klines[code] = klines
-
-        for f in klines:
-            self.klines[code][f] = self.klines[code][f].append(klines[f])
-            self.klines[code][f].drop_duplicates(subset=['date'], keep='last', inplace=True)
-        return
-
     # 结果显示Kline结果
     def show_kline(self, code, show_frequency='d'):
-        kline = self.klines[code][show_frequency]
-        cd = cl.CL(code, kline, show_frequency)
+        cd = self.cl_datas[code][show_frequency]
         orders = fun.convert_stock_order_by_frequency(self.orders[code], show_frequency) if code in self.orders else []
         render = kcharts.render_charts('%s' % code, cd, orders=orders)
         return render
@@ -185,7 +160,7 @@ class Trader(object):
             self.positions[code] = {mmd: POSITION(mmd=mmd)}
         return self.positions[code][mmd]
 
-    def reset_pos(self, code:str, mmd:str):
+    def reset_pos(self, code: str, mmd: str):
         # 增加进入历史
         self.positions[code][mmd].close_datetime = self.todays[code].strftime('%Y-%m-%d %H:%M:%S')
         if code not in self.positions_history:
@@ -195,7 +170,7 @@ class Trader(object):
         self.positions[code][mmd] = POSITION(mmd=mmd)
         return
 
-    def _position_record(self, code:str, high_price:float, low_price:float):
+    def _position_record(self, code: str, high_price: float, low_price: float):
         """
         持仓记录更新
         :param code:
@@ -283,7 +258,7 @@ class Trader(object):
         return {'price': self.prices[code], 'amount': amount}
 
     # 做多平仓
-    def close_buy(self, code, pos:POSITION, opt):
+    def close_buy(self, code, pos: POSITION, opt):
         balance = self.get_balance_info(code)
         amount = pos.amount
         use_balance = self.prices[code] * amount
@@ -293,7 +268,7 @@ class Trader(object):
         return {'price': self.prices[code], 'amount': pos.amount}
 
     # 做空平仓
-    def close_sell(self, code, pos:POSITION, opt):
+    def close_sell(self, code, pos: POSITION, opt):
         balance = self.get_balance_info(code)
         amount = pos.amount
         use_balance = self.prices[code] * amount
