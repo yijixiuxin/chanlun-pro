@@ -9,43 +9,9 @@
     <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
     <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
-
-    <style type="text/css">
-        .autocomplete-suggestions {
-            border: 1px solid #999;
-            background: #FFF;
-            overflow: auto;
-        }
-
-        .autocomplete-suggestion {
-            padding: 2px 5px;
-        {#white-space: nowrap;#}{#overflow: hidden;#}
-        }
-
-        .autocomplete-selected {
-            background: #F0F0F0;
-        }
-
-        .autocomplete-suggestions strong {
-            font-weight: normal;
-            color: #3399FF;
-        }
-
-        .autocomplete-group {
-            padding: 2px 5px;
-        }
-
-        .autocomplete-group strong {
-            display: block;
-            border-bottom: 1px solid #000;
-        }
-
-        a.active {
-            color: red;
-        }
-    </style>
+    <link href="/static/chart/app.css" rel="stylesheet" />
 </head>
-<body class="container-fluid">
+<body class="container-fluid" style="width:100%; height:100%;position: fixed;top: 0px; left: 0px;">
 
 <div>
     <div style="width: 80%; float: left;">
@@ -76,7 +42,7 @@
             <div class="from-group">
                 <input class="form-control" id="stock_search" placeholder="Search" type="text"/>
             </div>
-            <ul class="list-group" id="my_stocks" style="height: 680px; overflow: scroll; font-size: 12px;">
+            <ul class="list-group" id="my_stocks" style="overflow: scroll; font-size: 12px;">
                 <li class="list-group-item code" data-code="--">
                     <a href="#--">-- / --</a>
                 </li>
@@ -100,7 +66,7 @@
                     <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                 </div>
             </div>
-            <div id="kline_high_1" style="width:100%; height:360px;margin-top: 10px;"></div>
+            <div id="kline_high_1" class="kline_chart" style="width:100%; margin-top: 10px;"></div>
         </div>
         <div style="width: 50%; float: left;">
             <div class="btn-toolbar" role="toolbar" aria-label="周期选择">
@@ -117,7 +83,7 @@
                     <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                 </div>
             </div>
-            <div id="kline_high_2" style="width:100%; height:360px;margin-top: 10px;"></div>
+            <div id="kline_high_2" class="kline_chart" style="width:100%;margin-top: 10px;"></div>
         </div>
         <div style="width: 50%; float: left;">
             <div class="btn-toolbar" role="toolbar" aria-label="周期选择">
@@ -134,7 +100,7 @@
                     <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                 </div>
             </div>
-            <div id="kline_low_1" style="width:100%; height:360px;margin-top: 10px;"></div>
+            <div id="kline_low_1" class="kline_chart" style="width:100%; margin-top: 10px;"></div>
         </div>
         <div style="width: 50%; float: left;">
             <div class="btn-toolbar" role="toolbar" aria-label="周期选择">
@@ -151,7 +117,7 @@
                     <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                 </div>
             </div>
-            <div id="kline_low_2" style="width:100%; height:360px;margin-top: 10px;"></div>
+            <div id="kline_low_2" class="kline_chart" style="width:100%; margin-top: 10px;"></div>
         </div>
         <div style="width:100%; clear: both;">
             <p>行业信息：<span class="hy_list"></span></p>
@@ -160,7 +126,7 @@
     </div>
     <div class="col-md-1">
         <h3>机会列表</h3>
-        <ul class="list-group" id="jhs_ul" style="height: 700px; overflow: scroll; font-size: 12px;">
+        <ul class="list-group" id="jhs_ul" style="overflow: scroll; font-size: 12px;">
             <li class="list-group-item">Loading</li>
         </ul>
     </div>
@@ -170,6 +136,7 @@
 
 <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="/static/chart/app.js"></script>
 <script crossorigin="anonymous"
         integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
         src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
@@ -184,6 +151,10 @@
             if ('ontouchend' in document.body) {
                 $('#stocks_list').css('position', 'inherit')
             }
+
+            $('.kline_chart').css('height', String((getClientHeight() - 72 - 55 - 60) / 2) + 'px');
+            $('#jhs_ul').css('height', String(getClientHeight() - 130) + 'px');
+            $('#my_stocks').css('height', String(getClientHeight() - 260) + 'px');
 
             var code = 'SH.000001';
             var url = window.location.href;

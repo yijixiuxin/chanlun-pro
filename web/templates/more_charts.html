@@ -9,39 +9,9 @@
     <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
     <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
-    <style>
-        .autocomplete-suggestions {
-            border: 1px solid #999;
-            background: #FFF;
-            overflow: auto;
-        }
-
-        .autocomplete-suggestion {
-            padding: 2px 5px;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-
-        .autocomplete-selected {
-            background: #F0F0F0;
-        }
-
-        .autocomplete-suggestions strong {
-            font-weight: normal;
-            color: #3399FF;
-        }
-
-        .autocomplete-group {
-            padding: 2px 5px;
-        }
-
-        .autocomplete-group strong {
-            display: block;
-            border-bottom: 1px solid #000;
-        }
-    </style>
+    <link href="/static/chart/app.css" rel="stylesheet" />
 </head>
-<body class="container-fluid">
+<body class="container-fluid" style="width:100%; height:100%;position: fixed;top: 0px; left: 0px;">
 <div>
     <div style="width: 80%; float: left;">
         {% include 'base_nav.html' with nav='dtb' %}
@@ -77,7 +47,7 @@
                     <button class="update_frequency_1 btn btn-default btn-xs" data-num="1" data-frequency="d">d</button>
                     <button class="update_frequency_1 btn btn-default btn-xs" data-num="1" data-frequency="w">w</button>
                 </div>
-                <div id="chart_1" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_1" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
             <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
                 <div>
@@ -98,7 +68,7 @@
                     <button class="update_frequency_2 btn btn-default btn-xs" data-num="2" data-frequency="d">d</button>
                     <button class="update_frequency_2 btn btn-default btn-xs" data-num="2" data-frequency="w">w</button>
                 </div>
-                <div id="chart_2" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_2" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
             <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
                 <div>
@@ -119,7 +89,7 @@
                     <button class="update_frequency_3 btn btn-default btn-xs" data-num="3" data-frequency="d">d</button>
                     <button class="update_frequency_3 btn btn-default btn-xs" data-num="3" data-frequency="w">w</button>
                 </div>
-                <div id="chart_3" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_3" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
             <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
                 <div>
@@ -140,7 +110,7 @@
                     <button class="update_frequency_4 btn btn-default btn-xs" data-num="4" data-frequency="d">d</button>
                     <button class="update_frequency_4 btn btn-default btn-xs" data-num="4" data-frequency="w">w</button>
                 </div>
-                <div id="chart_4" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_4" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
             <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
                 <div>
@@ -161,7 +131,7 @@
                     <button class="update_frequency_5 btn btn-default btn-xs" data-num="5" data-frequency="d">d</button>
                     <button class="update_frequency_5 btn btn-default btn-xs" data-num="5" data-frequency="w">w</button>
                 </div>
-                <div id="chart_5" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_5" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
             <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
                 <div>
@@ -182,7 +152,7 @@
                     <button class="update_frequency_6 btn btn-default btn-xs" data-num="6" data-frequency="d">d</button>
                     <button class="update_frequency_6 btn btn-default btn-xs" data-num="6" data-frequency="w">w</button>
                 </div>
-                <div id="chart_6" style="width:100%; height:370px;margin-top: 10px;"></div>
+                <div id="chart_6" class="kline_chart" style="width:100%; height:370px;"></div>
             </div>
         </div>
         <div id="loading" style="width: 200px; height: 50px; position: fixed; right: 0; bottom: 0;"></div>
@@ -192,6 +162,7 @@
 
 <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="/static/chart/app.js"></script>
 <script crossorigin="anonymous"
         integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
         src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
@@ -201,9 +172,10 @@
 
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery.devbridge-autocomplete/1.4.9/jquery.autocomplete.js"></script>
 <script>
-
     $(
         function () {
+
+            $('.kline_chart').css('height', String((getClientHeight() - 72 - 26 - 30) / 2) + 'px');
 
             // 股票搜索
             $('.autocomplete_stock').autocomplete({

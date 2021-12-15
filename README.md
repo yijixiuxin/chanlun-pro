@@ -6,6 +6,7 @@
 因为个人能力有限，理解可能会有偏差的地方，导致项目所实现的缠论，必然有错误之处；  
 所以决定开源出来，希望大家一起学习并加以完善。
 
+
 ![缠论图表demo](img/chanlun_demo.png)
 
 
@@ -45,6 +46,21 @@
 > 可直接创建 exchange 对象进行使用，无需配置 api 等参数
 > 缺点是在交易日无当日行情更新，好处是可获取很久之前的历史行情数据
 > 在研究环境使用还是很好用的
+
+
+### Docker 使用说明
+1. 平台安装 Docker [下载](https://www.docker.com/products/docker-desktop)
+2. 启动 Docker 服务
+3. 执行以下命令启动容器；project_code_path 需要替换为项目代码地址
+    
+    docker run -itd -p 8000:8000 -p 8888:8888 -p 3306:3306 -v /project_code_path:/root/app yijixiuxin/chanlun
+    
+    docker run -itd -p 8000:8000 -v /root/chanlun:/root/app yijixiuxin/chanlun
+
+4. 访问以下地址进行访问
+
+    http://127.0.0.1:8000/charts/stock_index  项目主页
+    http://127.0.0.1:8888   研究环境 (token：262468670f9a00b51e3f93b0955a0bdfdcba7ba3e8b821c5)
 
 ### 配置文件说明
 

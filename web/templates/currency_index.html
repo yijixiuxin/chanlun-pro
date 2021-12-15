@@ -9,28 +9,9 @@
     <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
     <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
-    <style type="text/css">
-        .r {
-            margin-bottom: 10px;
-            border-bottom: 3px solid #018;
-            font-size: 12px;
-        }
-
-        .r_time {
-            font-weight: bold;
-        }
-
-        .r_bcmmd {
-            color: indianred;
-            font-size: 14px;
-        }
-
-        a.active {
-            color: red;
-        }
-    </style>
+    <link href="/static/chart/app.css" rel="stylesheet" />
 </head>
-<body class="container-fluid">
+<body class="container-fluid" style="height: 0px; padding-bottom: 100%;">
 <div>
     <div style="width: 80%; float: left;">
         {% include 'base_nav.html' with nav='szhb' %}
@@ -71,7 +52,7 @@
                         <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                     </div>
                 </div>
-                <div id="kline_high" style="width:100%; height:500px;margin-top: 10px;"></div>
+                <div id="kline_high" class="kline_chart" style="width:100%; height:500px;margin-top: 10px;"></div>
             </div>
             <div style="width: 50%; float:left;">
                 <div class="btn-toolbar" role="toolbar" aria-label="周期选择">
@@ -85,7 +66,7 @@
                         <button type="button" class="btn btn-default" data-zq="1m">1M</button>
                     </div>
                 </div>
-                <div id="kline_low" style="width:100%; height:500px;margin-top: 10px;"></div>
+                <div id="kline_low" class="kline_chart" style="width:100%; height:500px;margin-top: 10px;"></div>
             </div>
         </div>
         <div style="width: 100%; clear: both;">
@@ -131,6 +112,7 @@
 
 <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="/static/chart/app.js"></script>
 <script crossorigin="anonymous"
         integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
         src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
@@ -138,13 +120,13 @@
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery.quicksearch/2.4.0/jquery.quicksearch.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery-easy-loading/2.0.0-rc.2/jquery.loading.min.js"></script>
 <script>
-
-
     $(
         function () {
             if ('ontouchend' in document.body) {
                 $('#stocks_list').css('position', 'inherit')
             }
+
+             $('.kline_chart').css('height', String((getClientHeight()) / 2) + 'px')
 
             var code = 'BTC/USDT';
             var frequency_high = $.cookie('_currency_frequency_high');

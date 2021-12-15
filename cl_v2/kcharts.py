@@ -57,8 +57,12 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
         klines_vols.append(k.a)
 
     for fx in fxs:
-        point_ding['index'].append(fx.k.date)
-        point_ding['val'].append(fx.val)
+        if fx.type == 'ding':
+            point_ding['index'].append(fx.k.date)
+            point_ding['val'].append(fx.val)
+        else:
+            point_di['index'].append(fx.k.date)
+            point_di['val'].append(fx.val)
 
     # 画 笔
     line_bis = {'index': [], 'val': []}

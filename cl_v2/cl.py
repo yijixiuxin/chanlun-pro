@@ -478,7 +478,7 @@ class CL:
         _run_zs = {'zd': None, 'up': None, 'down': None}
 
         while True:
-            if end > len(bis):
+            if end >= len(bis):
                 if _run_zs['up'] is not None:
                     zss.append(_run_zs['up'])
                     _run_zs = {'zd': None, 'up': None, 'down': None}
@@ -495,7 +495,7 @@ class CL:
                         end = start + 3
                     else:
                         break
-                elif end - start > 3:
+                elif len(bis) - start > 3:
                     start += 1
                     end = start + 3
                 elif _run_zs['zd'] is not None:
@@ -931,7 +931,7 @@ class CL:
         """
         bi_zs = None
         for zs in self.zss:
-            if zs.start.index < bi.start.index:
+            if zs.type in ['up', 'down'] and zs.start.index < bi.start.index:
                 bi_zs = zs
             else:
                 break

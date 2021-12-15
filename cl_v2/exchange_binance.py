@@ -12,15 +12,18 @@ from . import exchange
 class ExchangeBinance(exchange.Exchange):
 
     def __init__(self):
-        self.exchange = ccxt.binanceusdm({
-            'proxies': {
-                'https': "http://%s:%s" % (config.PROXY_HOST, config.PROXY_PORT),
-                'http': "http://%s:%s" % (config.PROXY_HOST, config.PROXY_PORT)
-            },
+        params = {
             'apiKey': config.BINANCE_APIKEY,
             'secret': config.BINANCE_SECRET,
             # 'verbose': True,
-        })
+        }
+        if config.PROXY_HOST != '':
+            params['proxies'] = {
+                'https': "http://%s:%s" % (config.PROXY_HOST, config.PROXY_PORT),
+                'http': "http://%s:%s" % (config.PROXY_HOST, config.PROXY_PORT)
+            }
+
+        self.exchange = ccxt.binanceusdm(params)
 
         self._g_stocks = []
 
