@@ -52,15 +52,17 @@
 1. 平台安装 Docker [下载](https://www.docker.com/products/docker-desktop)
 2. 启动 Docker 服务
 3. 执行以下命令启动容器；project_code_path 需要替换为项目代码地址
-    
+
+```
     docker run -itd -p 8000:8000 -p 8888:8888 -p 3306:3306 -v /project_code_path:/root/app yijixiuxin/chanlun
-    
-    docker run -itd -p 8000:8000 -v /root/chanlun:/root/app yijixiuxin/chanlun
+```
 
 4. 访问以下地址进行访问
 
-    http://127.0.0.1:8000/charts/stock_index  项目主页
+```
+    http://127.0.0.1:8000/charts/stock_index  项目主页    
     http://127.0.0.1:8888   研究环境 (token：262468670f9a00b51e3f93b0955a0bdfdcba7ba3e8b821c5)
+```
 
 ### 配置文件说明
 
