@@ -1,11 +1,9 @@
-import json
 import datetime
-import numpy as np
+
 from django.http import HttpResponse
 from django.shortcuts import render
 
 from cl_v2 import back_klines
-from cl_v2 import cl
 from cl_v2 import kcharts
 
 bk_hq: back_klines.BackKlines = None
@@ -50,7 +48,7 @@ def ReRecordKlines(request):
     cl_datas = bk_hq.cl_datas
 
     charts = '{'
-    for cd in cl_datas:
+    for cd in cl_datas.values():
         c = kcharts.render_charts(code + ':' + cd.frequency, cd)
         charts += '"' + cd.frequency + '" : ' + c + ','
     charts += '}'

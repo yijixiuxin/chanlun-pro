@@ -47,13 +47,13 @@ class CurrencyTrader(trader.Trader):
         return {'price': res['price'], 'amount': res['amount']}
 
     # 做多平仓
-    def close_buy(self, code, pos, opt):
+    def close_buy(self, code, pos: trader.POSITION, opt):
         hold_position = self.exchange.positions(code)
         if len(hold_position) == 0:
-            return {'price': pos['price'], 'amount': pos['amount']}
+            return {'price': pos.price, 'amount': pos.amount}
         hold_position = hold_position[0]
 
-        res = self.exchange.order(code, 'close_long', pos['amount'])
+        res = self.exchange.order(code, 'close_long', pos.amount)
         if res is False:
             fun.send_dd_msg('currency', '%s 下单失败' % code)
             return False
@@ -64,13 +64,13 @@ class CurrencyTrader(trader.Trader):
         return {'price': res['price'], 'amount': res['amount']}
 
     # 做空平仓
-    def close_sell(self, code, pos, opt):
+    def close_sell(self, code, pos: trader.POSITION, opt):
         hold_position = self.exchange.positions(code)
         if len(hold_position) == 0:
-            return {'price': pos['price'], 'amount': pos['amount']}
+            return {'price': pos.price, 'amount': pos.amount}
         hold_position = hold_position[0]
 
-        res = self.exchange.order(code, 'close_short', pos['amount'])
+        res = self.exchange.order(code, 'close_short', pos.amount)
         if res is False:
             fun.send_dd_msg('currency', '%s 下单失败' % code)
             return False
@@ -79,3 +79,4 @@ class CurrencyTrader(trader.Trader):
         fun.send_dd_msg('currency', msg)
         rd.currency_opt_record_save(code, '策略交易：' + msg)
         return {'price': res['price'], 'amount': res['amount']}
+

@@ -2,11 +2,10 @@
 import datetime
 from typing import Dict
 
+from . import cl
 from . import exchange
 from . import exchange_binance
 from . import exchange_db
-from . import fun
-from . import cl
 
 
 class BackKlines:
@@ -41,7 +40,7 @@ class BackKlines:
         self.show_klines = {}
 
         # 保存缠论数据对象
-        self.cl_datas: Dcit[str, cl.CL] = {}
+        self.cl_datas: Dict[str, cl.CL] = {}
         for f in self.frequencys:
             self.cl_datas[f] = None
 
@@ -109,17 +108,20 @@ class BackKlines:
         :param frequency:
         :return:
         """
+        if now_date is None:
+            return None
+
         next_klines = self.klines[frequency][self.klines[frequency]['date'] > now_date]
 
         if len(next_klines) == 0:
             return None
         next_date = next_klines.iloc[0]['date']
-        pre_klines = self.klines[frequency][self.klines[frequency]['date'] < next_date]
-        if len(pre_klines) < 500:
-            if len(next_klines) > 501:
-                next_date = next_klines.iloc[500]['date']
-            else:
-                return None
+        # pre_klines = self.klines[frequency][self.klines[frequency]['date'] < next_date]
+        # if len(pre_klines) < 500:
+        #     if len(next_klines) > 501:
+        #         next_date = next_klines.iloc[500]['date']
+        #     else:
+        #         return None
         return next_date
 
     def _cal_start_date_by_frequency(self, start_date: datetime, frequency) -> str:

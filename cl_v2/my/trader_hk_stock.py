@@ -63,14 +63,14 @@ class HKStockTrader(trader.Trader):
         return {'price': order['dealt_avg_price'], 'amount': order['dealt_amount']}
 
     # 做多平仓
-    def close_buy(self, code, pos, opt):
+    def close_buy(self, code, pos: trader.POSITION, opt):
         positions = self.exchange.positions(code)
         if len(positions) == 0:
-            return {'price': pos['price'], 'amount': pos['amount']}
+            return {'price': pos.price, 'amount': pos.amount}
 
-        order = self.exchange.order(code, 'sell', pos['amount'])
+        order = self.exchange.order(code, 'sell', pos.amount)
         if order is False:
-            fun.send_dd_msg('hk', '%s 下单失败 平仓卖出 %s' % (code, pos['amount']))
+            fun.send_dd_msg('hk', '%s 下单失败 平仓卖出 %s' % (code, pos.amount))
             return False
         msg = '股票卖出 %s 价格 %s 数量 %s 盈亏 %s (%.2f%%) 原因 %s' % (
             code, order['dealt_avg_price'], order['dealt_amount'], positions[0]['profit_val'], positions[0]['profit'], opt['msg'])
@@ -78,17 +78,18 @@ class HKStockTrader(trader.Trader):
         return {'price': order['dealt_avg_price'], 'amount': order['dealt_amount']}
 
     # 做空平仓
-    def close_sell(self, code, pos, opt):
+    def close_sell(self, code, pos: trader.POSITION, opt):
         positions = self.exchange.positions(code)
         if len(positions) == 0:
-            return {'price': pos['price'], 'amount': pos['amount']}
+            return {'price': pos.price, 'amount': pos.amount}
 
-        order = self.exchange.order(code, 'buy', pos['amount'])
+        order = self.exchange.order(code, 'buy', pos.amount)
         if order is False:
-            fun.send_dd_msg('hk', '%s 下单失败 平仓买入 %s' % (code, pos['amount']))
+            fun.send_dd_msg('hk', '%s 下单失败 平仓买入 %s' % (code, pos.amount))
             return False
         msg = '股票平空 %s 价格 %s 数量 %s 盈亏 %s (%.2f%%) 原因 %s' % (
             code, order['dealt_avg_price'], order['dealt_amount'], positions[0]['profit_val'], positions[0]['profit'],
             opt['msg'])
         fun.send_dd_msg('hk', msg)
         return {'price': order['dealt_avg_price'], 'amount': order['dealt_amount']}
+

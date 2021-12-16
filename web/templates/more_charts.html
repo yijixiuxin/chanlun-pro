@@ -11,7 +11,7 @@
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
     <link href="/static/chart/app.css" rel="stylesheet" />
 </head>
-<body class="container-fluid" style="width:100%; height:100%;position: fixed;top: 0px; left: 0px;">
+<body class="container-fluid" style="width:100%; height:0px;padding-bottom: 100%;">
 <div>
     <div style="width: 80%; float: left;">
         {% include 'base_nav.html' with nav='dtb' %}
@@ -28,7 +28,7 @@
 <div class="row">
     <div class="col-md-12">
         <div style="width: 100%;height: 100%;">
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_1" id="chart_input_1" value=""/>
                     <button id="chart_button_1" class="update btn btn-default btn-xs" data-num="1">Update</button>
@@ -47,9 +47,9 @@
                     <button class="update_frequency_1 btn btn-default btn-xs" data-num="1" data-frequency="d">d</button>
                     <button class="update_frequency_1 btn btn-default btn-xs" data-num="1" data-frequency="w">w</button>
                 </div>
-                <div id="chart_1" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_1" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_2" id="chart_input_2" value=""/>
                     <button id="chart_button_2" class="update btn btn-default btn-xs" data-num="2">Update</button>
@@ -68,9 +68,9 @@
                     <button class="update_frequency_2 btn btn-default btn-xs" data-num="2" data-frequency="d">d</button>
                     <button class="update_frequency_2 btn btn-default btn-xs" data-num="2" data-frequency="w">w</button>
                 </div>
-                <div id="chart_2" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_2" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_3" id="chart_input_3" value=""/>
                     <button id="chart_button_3" class="update btn btn-default btn-xs" data-num="3">Update</button>
@@ -89,9 +89,9 @@
                     <button class="update_frequency_3 btn btn-default btn-xs" data-num="3" data-frequency="d">d</button>
                     <button class="update_frequency_3 btn btn-default btn-xs" data-num="3" data-frequency="w">w</button>
                 </div>
-                <div id="chart_3" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_3" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_4" id="chart_input_4" value=""/>
                     <button id="chart_button_4" class="update btn btn-default btn-xs" data-num="4">Update</button>
@@ -110,9 +110,9 @@
                     <button class="update_frequency_4 btn btn-default btn-xs" data-num="4" data-frequency="d">d</button>
                     <button class="update_frequency_4 btn btn-default btn-xs" data-num="4" data-frequency="w">w</button>
                 </div>
-                <div id="chart_4" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_4" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_5" id="chart_input_5" value=""/>
                     <button id="chart_button_5" class="update btn btn-default btn-xs" data-num="5">Update</button>
@@ -131,9 +131,9 @@
                     <button class="update_frequency_5 btn btn-default btn-xs" data-num="5" data-frequency="d">d</button>
                     <button class="update_frequency_5 btn btn-default btn-xs" data-num="5" data-frequency="w">w</button>
                 </div>
-                <div id="chart_5" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_5" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
-            <div style="width: 33%;height: 50%;float: left;border: 1px dashed #000;">
+            <div class="col-lg-4" style="border: 1px dashed #000;">
                 <div>
                     <input class="autocomplete_stock" name="chart_input_6" id="chart_input_6" value=""/>
                     <button id="chart_button_6" class="update btn btn-default btn-xs" data-num="6">Update</button>
@@ -152,7 +152,7 @@
                     <button class="update_frequency_6 btn btn-default btn-xs" data-num="6" data-frequency="d">d</button>
                     <button class="update_frequency_6 btn btn-default btn-xs" data-num="6" data-frequency="w">w</button>
                 </div>
-                <div id="chart_6" class="kline_chart" style="width:100%; height:370px;"></div>
+                <div id="chart_6" class="kline_chart" style="width:100%; min-height:370px;"></div>
             </div>
         </div>
         <div id="loading" style="width: 200px; height: 50px; position: fixed; right: 0; bottom: 0;"></div>
