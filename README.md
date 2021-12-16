@@ -6,6 +6,7 @@
 因为个人能力有限，理解可能会有偏差的地方，导致项目所实现的缠论，必然有错误之处；  
 所以决定开源出来，希望大家一起学习并加以完善。
 
+[【在线Demo展示】](http://www.chanlun-trader.com/)
 
 ![缠论图表demo](img/chanlun_demo.png)
 

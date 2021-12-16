@@ -81,13 +81,12 @@ try:
         TR = pickle.loads(p_bytes)
     else:
         STR = strategy_demo.Strategy_Demo()
-        TR = trader_hk_stock.HKStockTrader('HKStock', is_stock=False, is_futures=False, log=logging.info,
-                                           is_save_kline=False, mmds=['1buy', '2buy', '3buy'])
-        TR.set_eye(STR)
+        TR = trader_hk_stock.HKStockTrader('HKStock', is_stock=False, is_futures=False, log=logging.info, mmds=['1buy', '2buy', 'l2buy', '3buy'])
+        TR.set_strategy(STR)
 
     # 单独设置一些参数，更新之前缓存的参数
     TR.is_stock = False
-    TR.allow_mmds = ['1buy', '2buy', '3buy']
+    TR.allow_mmds = ['1buy', '2buy', 'l2buy', '3buy']
 
     while True:
         try:
@@ -108,10 +107,10 @@ try:
             for code in run_codes:
                 try:
                     # logging.info('Run code : ' + code)
-                    klines = {}
+                    cl_datas = {}
                     for f in ['30m', '5m']:
-                        klines[f] = exchange.klines(code, f)
-                    cl_datas = cl.batch_cls(code, klines)
+                        klines = exchange.klines(code, f)
+                        cl_datas[f] = cl.CL(code, klines, f)
 
                     TR.run(code, cl_datas)
                 except Exception as e:

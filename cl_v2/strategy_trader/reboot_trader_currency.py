@@ -49,13 +49,11 @@ try:
         TR = pickle.loads(p_bytes)
     else:
         STR = strategy_demo.Strategy_Demo()
-        TR = trader_currency.CurrencyTrader('Currency', is_stock=False, is_futures=True, log=logging.info,
-                                            is_save_kline=False,
-                                            mmds=['1buy', '2buy', '3buy', '1sell', '2sell', '3sell'])
-        TR.set_eye(STR)
+        TR = trader_currency.CurrencyTrader('Currency', is_stock=False, is_futures=True, log=logging.info, mmds=None)
+        TR.set_strategy(STR)
 
     # 单独设置一些参数，更新之前缓存的参数
-    TR.allow_mmds = ['1buy', '2buy', '3buy', '1sell', '2sell', '3sell']
+    TR.allow_mmds = None
 
     while True:
         try:
@@ -77,11 +75,10 @@ try:
             for code in run_codes:
                 try:
                     # logging.info('Run Symbol: ' + symbol)
-                    klines = {}
+                    cl_datas = {}
                     for f in ['30m', '5m']:
-                        klines[f] = exchange.klines(code, f)
-
-                    cl_datas = cl.batch_cls(code, klines)
+                        klines = exchange.klines(code, f)
+                        cl_datas[f] = cl.CL(code, klines, f)
 
                     TR.run(code, cl_datas)
                 except Exception as e:
