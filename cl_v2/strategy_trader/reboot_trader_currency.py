@@ -1,9 +1,8 @@
 import logging
+import pickle
 import sys
 import time
 import traceback
-import pickle
-import threading
 
 cur_path = sys.path[0]
 sys.path.append(sys.path[0] + "/../..")

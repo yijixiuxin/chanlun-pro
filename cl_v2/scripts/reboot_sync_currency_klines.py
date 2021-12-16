@@ -20,7 +20,7 @@ exchange.create_tables(codes)
 
 for code in codes:
     try:
-        for f in ['d', '4h', '60m', '30m', '15m', '5m', '1m']:
+        for f in ['d', '4h', '60m', '30m', '15m', '5m']:
             while True:
                 last_dt = exchange.query_last_datetime(code, f)
                 if last_dt is None:

@@ -29,10 +29,11 @@ class ExchangeFutu(exchange.Exchange):
                 self.ctx.unsubscribe_all()
         return self.ctx
 
-    def TTX(self):
+    def TTX(self) -> OpenSecTradeContext:
         if self.ttx is None:
             self.ttx = OpenSecTradeContext(filter_trdmarket=TrdMarket.HK, host=config.FUTU_HOST, port=config.FUTU_PORT,
                                            security_firm=SecurityFirm.FUTUSECURITIES)
+        return self.ttx
 
     def all_stocks(self):
         if len(self.__all_stocks) > 0:
@@ -255,12 +256,12 @@ class ExchangeFutu(exchange.Exchange):
 
     def order(self, code, o_type, amount, args=None):
         order_type_map = {'buy': TrdSide.BUY, 'sell': TrdSide.SELL}
-        trd_ctx.unlock_trade(config.FUTU_UNLOCK_PWD)  # 先解锁交易
+        self.TTX().unlock_trade(config.FUTU_UNLOCK_PWD)  # 先解锁交易
         ret, data = self.TTX().place_order(price=0, qty=amount, code=code, order_type=OrderType.MARKET,
                                            trd_side=order_type_map[o_type])
         if ret == RET_OK:
             time.sleep(5)
-            ret, o = TTX().order_list_query(order_id=data.iloc[0]['order_id'])
+            ret, o = self.TTX().order_list_query(order_id=data.iloc[0]['order_id'])
             if ret == RET_OK:
                 return {
                     'id': o.iloc[0]['order_id'],

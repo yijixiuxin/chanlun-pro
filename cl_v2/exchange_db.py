@@ -82,7 +82,7 @@ class ExchangeDB(exchange.Exchange):
         for kline in klines.iterrows():
             k = kline[1]
             sql = "replace into %s(dt, f, h, l, o, c, v) values ('%s', '%s', %f, %f, %f, %f, %f)" % (
-            table, k['date'], frequency, k['high'], k['low'], k['open'], k['close'], k['volume'])
+            table, k['date'].strftime('%Y-%m-%d %H:%M:%S'), frequency, k['high'], k['low'], k['open'], k['close'], k['volume'])
             self.cursor.execute(sql)
             self.db.commit()
         return
