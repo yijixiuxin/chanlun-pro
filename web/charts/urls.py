@@ -42,13 +42,15 @@ urlpatterns = [
 
     # 多图表
     url(r'^more/charts$', views.MoreChartsView, name='mores'),
-    url(r'^more/kline', views.ChartKline, name='mores'),
+    url(r'^more/kline$', views.ChartKline, name='mores'),
 
     # 自定义时间 Kline 图表
-    url(r'^custom/index', views.CustomKlineDateView, name='custom'),
-    url(r'^custom/kline', views.CustomDateKline, name='custom'),
+    url(r'^custom/index$', views.CustomKlineDateView, name='custom'),
+    url(r'^custom/kline$', views.CustomDateKline, name='custom'),
 
     # 交易对象视图
-    url(r'^trader/index', views_trader.trader_view, name='trader'),
+    url(r'^trader/index$', views_trader.trader_view, name='trader'),
+    url(r'^strategy_back$', views_trader.StrategyBackIndex, name='strategy'),
+    url(r'^strategy_back/kline$', views_trader.StragegyBackKline, name='strategy'),
 ]
 

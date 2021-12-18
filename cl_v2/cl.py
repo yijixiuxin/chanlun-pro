@@ -753,7 +753,7 @@ class CL:
             zs.bis.append(bi)
             # 根据笔数量，计算级别
             zs.bi_num = len(zs.bis)
-            zs.level = (zs.bi_num % 3) - 1
+            zs.level = int(zs.bi_num / 3) - 1
             zs.end = bi.end
             # 记录中枢中，最大的笔力度
             if zs.max_ld is None:

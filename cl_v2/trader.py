@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 import prettytable as pt
+import copy
 
 from . import cl
 from . import fun
@@ -13,6 +14,7 @@ class POSITION:
     """
     持仓对象
     """
+    code: str
     mmd: str
     type: str = None
     balance: float = 0
@@ -28,6 +30,9 @@ class POSITION:
     open_msg: str = ''
     close_msg: str = ''
     info: Dict = None
+    # 以下信息，只有在回测的时候才会记录
+    open_cl_data = None
+    close_cl_data = None
 
 
 class Trader(object):
@@ -35,7 +40,7 @@ class Trader(object):
     回测交易（可继承支持实盘）
     """
 
-    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None):
+    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None, is_test=True):
         """
         交易者初始化
         :param name: 交易者名称
@@ -43,6 +48,7 @@ class Trader(object):
         :param is_futures: 是否是期货交易（决定是否可以做空）
         :param mmds: 可交易的买卖点
         :param log: 日志展示方法
+        :param is_test: 是否回测测试（回测的话会记录一些运行信息）
         """
 
         # 当前名称
@@ -50,6 +56,7 @@ class Trader(object):
         self.is_stock = is_stock
         self.is_futures = is_futures
         self.allow_mmds = mmds
+        self.is_test = is_test
 
         # 是否打印日志
         self.log = log
@@ -62,16 +69,10 @@ class Trader(object):
         self.prices = {}
 
         # 存储缠论数据
-        self.cl_datas = {}
+        self.cl_datas:Dict[str, cl.CL] = {}
 
         # 代码当前运行时间
         self.todays = {}
-
-        # 资金信息
-        self.init_balance = 1000000
-        self.pos_space = 1
-        self.balances = {}
-        self.balances_history = {}
 
         # 当前持仓信息
         self.positions = {}
@@ -129,8 +130,6 @@ class Trader(object):
             for opt in opts:
                 self.execute(code, opt)
 
-        # 记录资金历史
-        self.record_balance_history(code)
         return True
 
     # 运行结束，统一清仓
@@ -155,9 +154,9 @@ class Trader(object):
             if mmd in self.positions[code]:
                 return self.positions[code][mmd]
             else:
-                self.positions[code][mmd] = POSITION(mmd=mmd)
+                self.positions[code][mmd] = POSITION(code=code, mmd=mmd)
         else:
-            self.positions[code] = {mmd: POSITION(mmd=mmd)}
+            self.positions[code] = {mmd: POSITION(code=code, mmd=mmd)}
         return self.positions[code][mmd]
 
     def reset_pos(self, code: str, mmd: str):
@@ -167,7 +166,7 @@ class Trader(object):
             self.positions_history[code] = []
         self.positions_history[code].append(self.positions[code][mmd])
 
-        self.positions[code][mmd] = POSITION(mmd=mmd)
+        self.positions[code][mmd] = POSITION(code=code, mmd=mmd)
         return
 
     def _position_record(self, code: str, high_price: float, low_price: float):
@@ -193,88 +192,24 @@ class Trader(object):
                 pos.max_loss_rate = min(pos.max_loss_rate, profit_rate)
         return
 
-    def _hold_positions(self, code):
-        """
-        获取当前持仓情况
-        :param code:
-        :return:
-        """
-        res_pos = []
-        if code not in self.positions:
-            return res_pos
-
-        for pos in self.positions[code].values():
-            if pos.balance == 0:
-                continue
-            res_pos.append(pos)
-
-        return res_pos
-
-    # 获取资金信息
-    def get_balance_info(self, code):
-        if code in self.balances:
-            return self.balances[code]
-        self.balances[code] = {
-            'balance': 1000000,
-            'freeze': 0,
-            'amount': 0,
-        }
-        return self.balances[code]
-
-    # 记录资金历史
-    def record_balance_history(self, code):
-        balance = self.get_balance_info(code)
-        net_asset = balance['balance'] + balance['amount'] * self.prices[code]
-        if code not in self.balances_history:
-            self.balances_history[code] = []
-        self.balances_history[code].append({'datetime': self.todays[code], 'net_asset': net_asset})
-
     # 做多买入
     def open_buy(self, code, opt):
-        poss = self._hold_positions(code)
-        if len(poss) > self.pos_space:
-            return False
-        balance = self.get_balance_info(code)
-        use_balance = round(balance['balance'] / (self.pos_space - len(poss)) * 0.99, 2)
+        use_balance = 100000
         amount = round((use_balance / self.prices[code]) * 0.99, 4)
-        use_balance = self.prices[code] * amount
-        balance['balance'] -= use_balance
-        balance['amount'] += amount
-
         return {'price': self.prices[code], 'amount': amount}
 
     # 做空卖出
     def open_sell(self, code, opt):
-        poss = self._hold_positions(code)
-        if len(poss) > self.pos_space:
-            return False
-        balance = self.get_balance_info(code)
-        use_balance = round(balance['balance'] / (self.pos_space - len(poss)) * 0.99, 2)
+        use_balance = 100000
         amount = round((use_balance / self.prices[code]) * 0.99, 4)
-        use_balance = self.prices[code] * amount
-        balance['balance'] += use_balance
-        balance['amount'] -= amount
-
         return {'price': self.prices[code], 'amount': amount}
 
     # 做多平仓
     def close_buy(self, code, pos: POSITION, opt):
-        balance = self.get_balance_info(code)
-        amount = pos.amount
-        use_balance = self.prices[code] * amount
-        balance['balance'] += use_balance
-        balance['amount'] -= amount
-
         return {'price': self.prices[code], 'amount': pos.amount}
 
     # 做空平仓
     def close_sell(self, code, pos: POSITION, opt):
-        balance = self.get_balance_info(code)
-        amount = pos.amount
-        use_balance = self.prices[code] * amount
-        balance['balance'] -= use_balance
-        balance['amount'] += amount
-
         return {'price': self.prices[code], 'amount': pos.amount}
 
     # 打印日志信息
@@ -309,6 +244,8 @@ class Trader(object):
             pos.open_datetime = self.todays[code].strftime('%Y-%m-%d %H:%M:%S')
             pos.open_msg = opt['msg']
             pos.info = opt['info']
+            if self.is_test:
+                pos.open_cl_data = copy.deepcopy(self.cl_datas[code])
 
             self._print_log('[%s - %s] // %s 做多买入（%s - %s），原因： %s' % (
                 code, self.todays[code], opt_mmd, res['price'], res['amount'], opt['msg']))
@@ -329,6 +266,8 @@ class Trader(object):
             pos.open_datetime = self.todays[code].strftime('%Y-%m-%d %H:%M:%S')
             pos.open_msg = opt['msg']
             pos.info = opt['info']
+            if self.is_test:
+                pos.open_cl_data = copy.deepcopy(self.cl_datas[code])
 
             self._print_log('[%s - %s] // %s 做空卖出（%s - %s），原因： %s' % (
                 code, self.todays[code], opt_mmd, res['price'], res['amount'], opt['msg']))
@@ -359,6 +298,8 @@ class Trader(object):
             profit_rate = round((profit / hold_balance) * 100, 2)
             pos.profit_rate = profit_rate
             pos.close_msg = opt['msg']
+            if self.is_test:
+                pos.close_cl_data = copy.deepcopy(self.cl_datas[code])
 
             self._print_log('[%s - %s] // %s 平仓做空（%s - %s） 盈亏：%s (%.2f%%)，原因： %s' % (
                 code, self.todays[code], opt_mmd, res['price'], res['amount'], profit, profit_rate, opt['msg']))
@@ -391,6 +332,8 @@ class Trader(object):
             profit_rate = round((profit / hold_balance) * 100, 2)
             pos.profit_rate = profit_rate
             pos.close_msg = opt['msg']
+            if self.is_test:
+                pos.close_cl_data = copy.deepcopy(self.cl_datas[code])
 
             self._print_log('[%s - %s] // %s 平仓做多（%s - %s） 盈亏：%s  (%.2f%%)，原因： %s' % (
                 code, self.todays[code], opt_mmd, res['price'], res['amount'], profit, profit_rate, opt['msg']))

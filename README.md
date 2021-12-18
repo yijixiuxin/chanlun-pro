@@ -6,9 +6,20 @@
 因为个人能力有限，理解可能会有偏差的地方，导致项目所实现的缠论，必然有错误之处；  
 所以决定开源出来，希望大家一起学习并加以完善。
 
+[【在线Demo】](http://www.chanlun-trader.com/)
 
+缠论图表
 ![缠论图表demo](img/chanlun_demo.png)
 
+回测结果展示  
+![回测结果展示](img/strategy_back_demo.png)
+![回测结果展示](img/strategy_back_kline.png)
+
+多图表展示  
+![多图表展示](img/more_charts.png)
+
+行情数据回放练习  
+![行情数据回放练习](img/hf_back_kline.png)
 
 ### 特别说明
 

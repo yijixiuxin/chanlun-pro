@@ -11,9 +11,9 @@ class HKStockTrader(trader.Trader):
     港股股票交易对象
     """
 
-    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None):
-        super().__init__(name, is_stock, is_futures, mmds, log)
-        self.b_space = 4  # 资金分割数量
+    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None, is_test=False):
+        super().__init__(name, is_stock, is_futures, mmds, log, is_test=False)
+        self.b_space = 3  # 资金分割数量
 
     # 做多买入
     def open_buy(self, code, opt):

@@ -54,3 +54,4 @@ def ReRecordKlines(request):
     charts += '}'
 
     return HttpResponse(charts)
+

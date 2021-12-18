@@ -13,3 +13,4 @@ ccxt
 baostock
 TA-Lib
 matplotlib
+tqdm

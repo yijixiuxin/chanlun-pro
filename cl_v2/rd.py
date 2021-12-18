@@ -39,6 +39,35 @@ def get_byte(key):
     return robj.get(key)
 
 
+def strategy_save(key, obj):
+    """
+    策略回测结果保存
+    :param key:
+    :param obj:
+    :return:
+    """
+    robj = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=False)
+    return robj.hset('strategy_back', key, obj)
+
+
+def strategy_get(key):
+    """
+    策略回测结果读取
+    :param key:
+    :return:
+    """
+    robj = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=False)
+    return robj.hget('strategy_back', key)
+
+
+def strategy_keys():
+    """
+    获取保存的所有回测结果 key
+    :return:
+    """
+    return Robj().hkeys('strategy_back')
+
+
 def stock_jh_query():
     """
     股票的机会查询

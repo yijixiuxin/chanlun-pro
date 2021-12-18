@@ -9,8 +9,8 @@ class CurrencyTrader(trader.Trader):
     数字货币交易者
     """
 
-    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None):
-        super().__init__(name, is_stock, is_futures, mmds, log)
+    def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None, is_test=False):
+        super().__init__(name, is_stock, is_futures, mmds, log, is_test)
         self.exchange = exchange_binance.ExchangeBinance()
 
     # 做多买入
