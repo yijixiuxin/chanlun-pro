@@ -90,20 +90,20 @@
                                 <td>
                                     {{ item.1.open_datetime }} <br />
                                     {% for cl in item.1.open_cl_data.items %}
-                                        <a href="javascript:void(0);"
+                                        <button class="btn btn-sm show_kline"
                                            data-strategy_key="{{ strategy_key }}" data-key="{{ item.0 }}" data-frequency="{{ cl.0 }}"
                                            data-show_type="open"
-                                        data-toggle="modal" data-target="#show_kline" class="show_kline">{{ cl.0 }}</a> --
+                                        data-toggle="modal" data-target="#show_kline" >{{ cl.0 }}</button>
                                     {% endfor %}
                                     <a href=""></a>
                                 </td>
                                 <td>
                                     {{ item.1.close_datetime }} <br />
                                     {% for cl in item.1.close_cl_data.items %}
-                                        <a href="javascript:void(0);"
+                                        <button class="btn btn-sm show_kline"
                                            data-strategy_key="{{ strategy_key }}" data-key="{{ item.0 }}" data-frequency="{{ cl.0 }}"
                                            data-show_type="close"
-                                        data-toggle="modal" data-target="#show_kline" class="show_kline">{{ cl.0 }}</a> --
+                                        data-toggle="modal" data-target="#show_kline">{{ cl.0 }}</button>
                                     {% endfor %}
                                 </td>
                                 <td>{{ item.1.profit_rate }}</td>
