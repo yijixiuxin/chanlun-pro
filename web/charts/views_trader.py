@@ -35,7 +35,13 @@ def trader_view(request):
     })
 
 
+# 变量记录回测记录，避免每次请求都加载
+__global_traders: Dict[str, Dict[str, trader.Trader]] = {}
+
+
 def StrategyBackIndex(request):
+    global __global_traders
+
     strategy_key = request.GET.get('strategy_key')
 
     codes = []  # 记录运行的股票代码
@@ -44,18 +50,20 @@ def StrategyBackIndex(request):
     positions = {}  # 记录所有持仓历史记录
 
     if strategy_key is not None:
-        traders = rd.strategy_get(strategy_key)
-        if traders is not None:
-            traders: Dict[str, trader.Trader] = pickle.loads(traders)
-            result_table_html = trader.traders_result(traders.values(), lambda a: a).get_html_string(attributes={'class': 'table'})
-            for td in traders.values():
-                strategy_class = td.strategy.__class__
-                for code in td.positions_history:
-                    codes.append(code)
-                    for i in range(len(td.positions_history[code])):
-                        p = td.positions_history[code][i]
-                        positions[code + '-' + str(i)] = p
-            codes = list(set(codes))
+        if strategy_key not in __global_traders:
+            p_obj = rd.strategy_get(strategy_key)
+            __global_traders[strategy_key] = pickle.loads(p_obj)
+
+        result_table_html = trader.traders_result(__global_traders[strategy_key].values(), lambda a: a).get_html_string(
+                attributes={'class': 'table'})
+        for td in __global_traders[strategy_key].values():
+            strategy_class = td.strategy.__class__
+            for code in td.positions_history:
+                codes.append(code)
+                for i in range(len(td.positions_history[code])):
+                    p = td.positions_history[code][i]
+                    positions[code + '-' + str(i)] = p
+        codes = list(set(codes))
 
     strategy_list = rd.strategy_keys()
 
@@ -68,18 +76,17 @@ def StrategyBackIndex(request):
 
 
 def StragegyBackKline(request):
+    global __global_traders
     strategy_key = request.GET.get('strategy_key')
-    key:str = request.GET.get('key')
+    key: str = request.GET.get('key')
     show_type = request.GET.get('show_type')
     frequency = request.GET.get('frequency')
 
     keys = key.split('-')
     code = keys[0]
     i = int(keys[1])
-    traders = rd.strategy_get(strategy_key)
-    traders: Dict[str, trader.Trader] = pickle.loads(traders)
     cl_data = None
-    for td in traders.values():
+    for td in __global_traders[strategy_key].values():
         for _code in td.positions_history:
             if code != _code:
                 continue

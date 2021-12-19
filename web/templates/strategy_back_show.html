@@ -164,7 +164,7 @@
                 window.location.href = '/charts/strategy_back?strategy_key=' + $('#strategy_key').val()
             });
 
-            $('.show_kline').click(function () {
+            $("body").delegate('.show_kline', 'click', function () {
                 chart.clear();
                 // 展示Kline
                 let strategy_key = $(this).data('strategy_key')
