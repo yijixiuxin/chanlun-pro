@@ -179,6 +179,14 @@ class CL:
         :return:
         """
 
+        # 多于特定数量，则全部重新计算
+        if len(self.klines) >= 1500:
+            self.klines = []
+            self.cl_klines = []
+            self.process_cl_kline(klines[-1000::])
+            self.process_cl_datas()
+            return
+
         # 根据最后一个 缠论K线，进行增量更新处理（保证相同时间K线的数据进行更新）
         last_cl_kline = self.cl_klines[-1]
         start_kline = self.klines[last_cl_kline.klines[0].index - 1]

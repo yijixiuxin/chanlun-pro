@@ -9,6 +9,7 @@
     <!-- 最新版本的 Bootstrap 核心 CSS 文件 -->
     <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
           integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/datatables/1.9.4/css/jquery.dataTables.min.css" rel="stylesheet">
 </head>
 <body class="container-fluid">
 
@@ -57,8 +58,9 @@
             </div>
 
                 <h3>历史持仓</h3>
-                <table class="table table-bordered">
-                    <tr>
+                <table class="table table-bordered table-hover table-condensed" id="table-positions">
+                <thead>
+                <tr>
                         <td>交易对儿</td>
                         <td>类型</td>
                         <td>买卖点</td>
@@ -74,11 +76,13 @@
                         <td>开仓信息</td>
                         <td>平仓信息</td>
                     </tr>
-                    {% for item in positions.items %}
+                </thead>
+                <tbody>
+                {% for item in positions.items %}
                             <tr>
                                 <td>{{ item.1.code }}</td>
                                 <td>{{ item.1.type }}</td>
-                                <td><a href="/charts/strategy_back?strategy_key={{ strategy_key }}&show_mmd={{ item.1.mmd }}">{{ item.1.mmd }}</a></td>
+                                <td>{{ item.1.mmd }}</td>
                                 <td>{{ item.1.balance }}</td>
                                 <td>{{ item.1.price }}</td>
                                 <td>{{ item.1.amount }}</td>
@@ -109,6 +113,9 @@
                                 <td>{{ item.1.close_msg }}</td>
                             </tr>
                     {% endfor %}
+                </tbody>
+
+
                 </table>
 
             </div>
@@ -142,9 +149,13 @@
         src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery.quicksearch/2.4.0/jquery.quicksearch.min.js"></script>
 <script src="https://cdn.bootcdn.net/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/datatables/1.9.4/jquery.dataTables.min.js"></script>
+
 <script>
     $(
         function () {
+
+            $('#table-positions').dataTable();
 
             var chart = echarts.init(document.getElementById('kline'), 'white', {renderer: 'canvas'});
 
