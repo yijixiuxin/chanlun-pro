@@ -12,7 +12,7 @@ class HKStockTrader(trader.Trader):
     """
 
     def __init__(self, name, is_stock=True, is_futures=False, mmds=None, log=None, is_test=False):
-        super().__init__(name, is_stock, is_futures, mmds, log, is_test=False)
+        super().__init__(name, is_stock, is_futures, mmds, log, is_test=is_test)
         self.b_space = 3  # 资金分割数量
 
     # 做多买入
