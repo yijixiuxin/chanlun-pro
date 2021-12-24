@@ -503,9 +503,9 @@ class CL:
                         end = start + 3
                     else:
                         break
-                elif len(bis) - start > 3:
-                    start += 1
-                    end = start + 3
+                # elif len(bis) - start > 3:
+                #     start += 1
+                #     end = start + 3
                 elif _run_zs['zd'] is not None:
                     zss.append(_run_zs['zd'])
                     break
@@ -523,12 +523,12 @@ class CL:
                 if _run_zs['up'] is not None:
                     zss.append(_run_zs['up'])
                     _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 1
+                    start = zss[-1].bis[-1].index + 2
                     end = start + 3
                 elif _run_zs['down'] is not None:
                     zss.append(_run_zs['down'])
                     _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 1
+                    start = zss[-1].bis[-1].index + 2
                     end = start + 3
                 else:
                     start += 1
@@ -594,9 +594,9 @@ class CL:
                     bi.mmds.append('l2sell')
 
             # 查找三类买卖点
-            if bi.type == 'down' and bi.low > zs.zg and bi.index - zs_end_bi.index == 2:
+            if bi.type == 'down' and bi.low > zs.zg and bi.index - zs_end_bi.index <= 2:
                 bi.mmds.append('3buy')
-            if bi.type == 'up' and bi.high < zs.zd and bi.index - zs_end_bi.index == 2:
+            if bi.type == 'up' and bi.high < zs.zd and bi.index - zs_end_bi.index <= 2:
                 bi.mmds.append('3sell')
 
         return
@@ -939,7 +939,8 @@ class CL:
         """
         bi_zs = None
         for zs in self.zss:
-            if zs.type in ['up', 'down'] and zs.start.index < bi.start.index:
+            # if zs.type in ['up', 'down'] and zs.start.index < bi.start.index:
+            if zs.start.index < bi.start.index:
                 bi_zs = zs
             else:
                 break
