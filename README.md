@@ -47,7 +47,7 @@
 > 前提：需要事先安装 MySQL、Redis （PS：单纯的研究环境则不太需要）
 
 1. 克隆项目到本地 （git clone https://github.com/yijixiuxin/chanlun.git）
-2. 安装 [Anaconda](https://www.anaconda.com/) ，创建运行环境，Python 版本 3.7
+2. 安装 [Anaconda](https://www.anaconda.com/) ，创建运行环境，Python 版本 3.7 
 3. pip 安装项目依赖包 ( pip install -r requirements.txt )
 4. 使用 Anaconda 安装 JupyterLab，用于本地进行研究使用
 5. 在 cl_v2 目录，复制拷贝 config.py.demo 文件为 config.py ，用于配置整个项目的配置参数
@@ -189,5 +189,7 @@ Demo 实例参考 ： [cl_v2/my/strategy_demo.py](cl_v2/my/strategy_demo.py)
 
 ![微信支付](img/wx_pay.jpg)
 
-BTC : 36Rc4vuVL6ogJrw6SMsjPMqEHGmY1SBxYi  
-ETH : 0xEae26eaaa3b7ce6E7b0B991Ca14C8Ed744ECd21f
+USDT (ETH ERC20) : 0xa98dbf355462a964f465d867a0c1fd6d609647e7  
+USDT (TRX TRC20) : TEPEJ534pKYg1JteNqXtzNNph3ZYGFR11E  
+BTC : 1BAbRCAkxyT3punbihB2Rpy8638kCx98Ys  
+ETH : 0xa98dbf355462a964f465d867a0c1fd6d609647e7

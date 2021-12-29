@@ -1,3 +1,5 @@
+.idea
+**/__pycache__
 **/.ipynb_checkpoints
 /cl
 /cl_v2/config.py
