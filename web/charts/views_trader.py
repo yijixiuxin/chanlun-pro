@@ -43,6 +43,7 @@ def StrategyBackIndex(request):
     global __global_traders
 
     strategy_key = request.GET.get('strategy_key')
+    show_mmd = request.GET.get('mmd')
 
     codes = []  # 记录运行的股票代码
     strategy_class = ''  # 记录运行的策略类
@@ -62,6 +63,8 @@ def StrategyBackIndex(request):
                 codes.append(code)
                 for i in range(len(td.positions_history[code])):
                     p = td.positions_history[code][i]
+                    if show_mmd is not None and show_mmd != p.mmd:
+                        continue
                     positions[code + '-' + str(i)] = p
         codes = list(set(codes))
 
@@ -75,7 +78,7 @@ def StrategyBackIndex(request):
     })
 
 
-def StragegyBackKline(request):
+def StrategyBackKline(request):
     global __global_traders
     strategy_key = request.GET.get('strategy_key')
     key: str = request.GET.get('key')

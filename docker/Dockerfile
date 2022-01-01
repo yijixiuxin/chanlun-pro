@@ -49,10 +49,10 @@ RUN apt update && apt install -y \
     source .bashrc && \
     conda create -y -n cl python=3.7 && \
     conda activate cl && \
-    conda install -y pandas requests numpy redis matplotlib mysqlclient && \
+    conda install -y pandas requests numpy redis matplotlib pymysql && \
     conda install -y -c conda-forge ta-lib && \
     conda install -y -c conda-forge jupyterlab  && \
-    pip3 install django==3.2.9 redis futu-api ccxt prettytable pyttsx3 pyecharts==1.9.1 djangorestframework baostock && \
+    pip3 install django==3.2.9 redis futu-api ccxt prettytable pyttsx3 pyecharts==1.9.1 djangorestframework baostock dbutils && \
     npm install -g pm2 && \
     jupyter-lab --generate-config && \
     conda deactivate && \

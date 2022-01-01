@@ -33,8 +33,8 @@ try:
             logging.info('Run : ' + code + ' - ' + name)
 
             # 顶底停顿配置
-            ding_td = ['30m', '5m']
-            di_td = ['30m', '5m']
+            ding_td = ['30m']
+            di_td = ['30m']
             check_beichi = True
             check_buy = False
             check_sell = True

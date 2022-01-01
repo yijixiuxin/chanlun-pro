@@ -363,7 +363,7 @@ def traders_result(traders, _pfun=None):
         _pfun = print
 
     tb = pt.PrettyTable()
-    tb.field_names = ["买卖点", "成功", "失败", '胜率', "盈利", '亏损', '净利润', '平均盈利', '平均亏损', '盈亏比']
+    tb.field_names = ["买卖点", "成功", "失败", '胜率', "盈利", '亏损', '净利润', '回吐比例', '平均盈利', '平均亏损', '盈亏比']
 
     results = {
         '1buy': {'win_num': 0, 'loss_num': 0, 'win_balance': 0, 'loss_balance': 0},
@@ -395,11 +395,13 @@ def traders_result(traders, _pfun=None):
         shenglv = 0 if win_num == 0 and loss_num == 0 else win_num / (win_num + loss_num) * 100
         win_balance = results[k]['win_balance']
         loss_balance = results[k]['loss_balance']
+        net_balance = win_balance - loss_balance
+        back_rate = 0 if win_balance == 0 else loss_balance / win_balance * 100
         win_mean_balance = 0 if win_num == 0 else win_balance / win_num
         loss_mean_balance = 0 if loss_num == 0 else loss_balance / loss_num
         ykb = 0 if loss_mean_balance == 0 or win_mean_balance == 0 else win_mean_balance / loss_mean_balance
 
         tb.add_row([mmd, win_num, loss_num, str(round(shenglv, 2)) + '%', round(win_balance, 2), round(loss_balance, 2),
-                    round((win_balance - loss_balance), 2), round(win_mean_balance, 2), round(loss_mean_balance, 2),
+                    round(net_balance, 2), round(back_rate, 2), round(win_mean_balance, 2), round(loss_mean_balance, 2),
                     round(ykb, 4)])
     return _pfun(tb)

@@ -48,15 +48,13 @@ JsonError = json_error
 数字货币行情
 '''
 
-exchange = exchange_binance.ExchangeBinance()
-
-
 def currency_index_view(request):
     """
     数字货币行情首页
     :param request:
     :return:
     """
+    exchange = exchange_binance.ExchangeBinance()
     stocks = exchange.all_stocks()
     return render(request, 'currency_index.html', {'stocks': stocks})
 
@@ -83,6 +81,7 @@ def currency_trade_open(request):
     open_usdt = request.GET.get('open_usdt')
     trade_type = request.GET.get('trade_type')
 
+    exchange = exchange_binance.ExchangeBinance()
     ticks = exchange.ticks([symbol])
     amount = (float(open_usdt) / ticks[symbol].last) * int(leverage)
     res = exchange.order(symbol, trade_type, amount, {'leverage': leverage})
@@ -99,6 +98,8 @@ def currency_trade_close(request):
     :param request:
     :return:
     """
+    exchange = exchange_binance.ExchangeBinance()
+
     symbol = request.GET.get('symbol')
     amount = request.GET.get('amount')
     trade_type = request.GET.get('trade_type')
@@ -121,6 +122,7 @@ def currency_open_buysell(request):
     :param request:
     :return:
     """
+    exchange = exchange_binance.ExchangeBinance()
     # 查询账户信息
     balance = exchange.balance()
     # 查询买卖配置设置
@@ -179,6 +181,7 @@ def currency_positions(request):
     :param request:
     :return:
     """
+    exchange = exchange_binance.ExchangeBinance()
     positions = exchange.positions()
     for p in positions:
         # 止损价
@@ -285,6 +288,7 @@ def currency_kline_base(code, frequency):
     :param frequency:
     :return:
     """
+    exchange = exchange_binance.ExchangeBinance()
     klines = exchange.klines(code, frequency=frequency)
     cd = cl.CL(code, klines, frequency)
 

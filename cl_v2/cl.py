@@ -1,6 +1,6 @@
 import datetime
 import time
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union, Any
 
 import numpy as np
 import pandas as pd
@@ -69,6 +69,7 @@ class BI:
         self.ld: dict = ld
         self.done: bool = done  # 笔是否完成
         self.mmds: list = mmds  # 买卖点
+        self.mmd_zs_maps: Dict[str, List[ZS]] = {}  # 买卖点对应的中枢列表
         self.index: int = index
         self.qs_beichi: bool = qs_beichi  # 趋势背驰
         self.pz_beichi: bool = pz_beichi  # 盘整背驰
@@ -222,7 +223,7 @@ class CL:
         # 重新计算缠论数据
         self.process_cl_datas()
 
-    def process_idx(self) -> map:
+    def process_idx(self) -> Dict[str, Union[Dict[str, Any], Dict[str, Any]]]:
         """
         计算所需要的技术指标
         :return:
@@ -398,10 +399,10 @@ class CL:
             bis[i].index = i
 
         # 从新计算高低值，包含其中的K线
-        for bi in bis:
-            for i in range(bi.start.k.k_index, bi.end.k.k_index + 1):
-                bi.high = max(bi.high, self.klines[i].h)
-                bi.low = min(bi.low, self.klines[i].l)
+        # for bi in bis:
+        #     for i in range(bi.start.k.k_index, bi.end.k.k_index + 1):
+        #         bi.high = max(bi.high, self.klines[i].h)
+        #         bi.low = min(bi.low, self.klines[i].l)
 
         return bis
 
@@ -432,24 +433,31 @@ class CL:
         if len(xl_fxs) == 0:
             return xds
 
-        real_xl_fxs = [xl_fxs[0]]
-        for i in range(1, len(xl_fxs)):
+        real_xl_fxs = []
+
+        for xl in xl_fxs:
+            if len(real_xl_fxs) == 0:
+                real_xl_fxs.append(xl)
+                continue
             up_xl = real_xl_fxs[-1]
-            now_xl = xl_fxs[i]
-            if up_xl['type'] == 'ding' and now_xl['type'] == 'ding':
+            if up_xl['type'] == 'ding' and xl['type'] == 'ding':
                 # 两个顶序列分型
-                if now_xl['max'] > up_xl['max']:
+                if xl['max'] > up_xl['max']:
                     del (real_xl_fxs[-1])
-                    real_xl_fxs.append(now_xl)
-            elif up_xl['type'] == 'di' and now_xl['type'] == 'di':
+                    real_xl_fxs.append(xl)
+            elif up_xl['type'] == 'di' and xl['type'] == 'di':
                 # 两个低序列分型
-                if now_xl['min'] < up_xl['min']:
+                if xl['min'] < up_xl['min']:
                     del (real_xl_fxs[-1])
-                    real_xl_fxs.append(now_xl)
-            elif now_xl['bi'].index - up_xl['bi'].index < 3:  # 线段不足3笔
+                    real_xl_fxs.append(xl)
+            elif up_xl['type'] == 'ding' and xl['type'] == 'di' and up_xl['max'] < xl['min']:
+                continue
+            elif up_xl['type'] == 'di' and xl['type'] == 'ding' and up_xl['min'] > xl['max']:
+                continue
+            elif xl['bi'].index - up_xl['bi'].index < 3:  # 线段不足3笔
                 continue
             else:
-                real_xl_fxs.append(now_xl)
+                real_xl_fxs.append(xl)
 
         xd = None
         for fx in real_xl_fxs:
@@ -459,7 +467,7 @@ class CL:
                 continue
             if (xd.type == 'up' and fx['type'] == 'ding') \
                     or (xd.type == 'down' and fx['type'] == 'di'):
-                xd.end = fx['bi'].end
+                xd.end = fx['bi'].start
                 xds.append(xd)
                 xd = XD(start=fx['bi'].start)
                 xd.type = 'up' if fx['type'] == 'di' else 'down'
@@ -476,63 +484,10 @@ class CL:
         处理中枢 (分解中枢)
         :return:
         """
-        zss = []
-        if len(bis) <= 3:
-            return zss
-
-        start = 1
-        end = start + 3
-
-        _run_zs = {'zd': None, 'up': None, 'down': None}
-
-        while True:
-            if end >= len(bis):
-                if _run_zs['up'] is not None:
-                    zss.append(_run_zs['up'])
-                    _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 1
-                    if len(bis) - start >= 5:
-                        end = start + 3
-                    else:
-                        break
-                elif _run_zs['down'] is not None:
-                    zss.append(_run_zs['down'])
-                    _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 1
-                    if len(bis) - start >= 5:
-                        end = start + 3
-                    else:
-                        break
-                # elif len(bis) - start > 3:
-                #     start += 1
-                #     end = start + 3
-                elif _run_zs['zd'] is not None:
-                    zss.append(_run_zs['zd'])
-                    break
-                else:
-                    break
-            # print('start : %s end : %s' % (start, end))
-            _bis = bis[start:end]
-            zs = self.__create_zs(_bis)
-
-            if zs is not None:
-                _run_zs[zs.type] = zs
-                self.__compare_zs_ld(zss, bis, zs, end)
-                end += 1
-            elif zs is None:
-                if _run_zs['up'] is not None:
-                    zss.append(_run_zs['up'])
-                    _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 2
-                    end = start + 3
-                elif _run_zs['down'] is not None:
-                    zss.append(_run_zs['down'])
-                    _run_zs = {'zd': None, 'up': None, 'down': None}
-                    start = zss[-1].bis[-1].index + 2
-                    end = start + 3
-                else:
-                    start += 1
-                    end = start + 3
+        up_zss = self.__create_zss(bis, zs_type='up')
+        down_zss = self.__create_zss(bis, zs_type='down')
+        zss = up_zss + down_zss
+        zss = sorted(zss, key=lambda z: z.start.index, reverse=False)
 
         # 编号
         for i in range(len(zss)):
@@ -541,7 +496,6 @@ class CL:
                 # 如果中枢与前一个中枢有重合，则扩展为一个高级别的中枢扩展
                 if self.__cross_qujian([zss[i - 1].zg, zss[i - 1].zd], [zss[i].zg, zss[i].zd]) is not None:
                     zss[i].is_high_kz = True
-
         return zss
 
     def process_mmds(self):
@@ -549,23 +503,35 @@ class CL:
         处理买卖点
         :return:
         """
+
+        def append_mmd_zs(bi: BI, mmd: str, zs: ZS):
+            """
+            增加买卖点对应的中枢
+            """
+            if zs is None:
+                return
+            if mmd not in bi.mmd_zs_maps.keys():
+                bi.mmd_zs_maps[mmd] = []
+            bi.mmd_zs_maps[mmd].append(zs)
+
         # 检查买卖点
         for bi in self.bis:
             bi.mmds = []  # process_mmds 这个方法会多次运行，避免 mmds 一直增加，初始化一下
+            bi.mmd_zs_maps = {}
+
+            pre_up_zs = self.__find_bi_zs(bi, 'up')
+            pre_down_zs = self.__find_bi_zs(bi, 'down')
+            if pre_up_zs is None and pre_down_zs is None:  # 没有中枢则没有买卖点
+                continue
 
             if bi.qs_beichi:
                 # 只要是趋势背驰，那就是第一买卖点
-                if bi.type == 'up':
+                if bi.type == 'up' and pre_up_zs:
                     bi.mmds.append('1sell')
-                elif bi.type == 'down':
+                    append_mmd_zs(bi, '1sell', pre_up_zs)
+                elif bi.type == 'down' and pre_down_zs:
                     bi.mmds.append('1buy')
-
-            zs = self.__find_bi_zs(bi)
-            if zs is None:  # 没有中枢则没有买卖点
-                continue
-
-            zs_one_bi = zs.bis[0]
-            zs_end_bi = zs.bis[-1]
+                    append_mmd_zs(bi, '1buy', pre_down_zs)
 
             up_same_bi = self.bis[bi.index - 2]
 
@@ -573,32 +539,63 @@ class CL:
             if '1buy' in up_same_bi.mmds:
                 if bi.type == 'down' and bi.low > up_same_bi.low:
                     bi.mmds.append('2buy')
+                    append_mmd_zs(bi, '2buy', pre_down_zs)
             if '1sell' in up_same_bi.mmds:
                 if bi.type == 'up' and bi.high < up_same_bi.high:
                     bi.mmds.append('2sell')
+                    append_mmd_zs(bi, '2sell', pre_up_zs)
 
             # 离开中枢一笔（新高、新低），后续一笔回拉不突破前高、前低，就是二类买卖点
-            if bi.type == 'up' and up_same_bi.high >= zs.gg \
-                    and zs.bis[-1].end.index == up_same_bi.start.index and bi.high < up_same_bi.high:
+            if bi.type == 'up' and pre_up_zs is not None \
+                    and up_same_bi.high >= pre_up_zs.gg \
+                    and pre_up_zs.bis[-1].end.index == up_same_bi.start.index \
+                    and bi.high < up_same_bi.high:
                 bi.mmds.append('2sell')
-            if bi.type == 'down' and up_same_bi.low <= zs.dd \
-                    and zs.bis[-1].end.index == up_same_bi.start.index and bi.low > up_same_bi.low:
+                append_mmd_zs(bi, '2sell', pre_up_zs)
+            if bi.type == 'down' and pre_down_zs is not None \
+                    and up_same_bi.low <= pre_down_zs.dd \
+                    and pre_down_zs.bis[-1].end.index == up_same_bi.start.index \
+                    and bi.low > up_same_bi.low:
                 bi.mmds.append('2buy')
+                append_mmd_zs(bi, '2buy', pre_down_zs)
 
             # 检查类2买卖点
             if '2buy' in up_same_bi.mmds:
-                if bi.type == 'down' and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
-                    bi.mmds.append('l2buy')
+                for zs_2buy in up_same_bi.mmd_zs_maps['2buy']:
+                    if bi.type == 'down' and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
+                        bi.mmds.append('l2buy')
+                        append_mmd_zs(bi, 'l2buy', zs_2buy)
             if '2sell' in up_same_bi.mmds:
-                if bi.type == 'up' and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
-                    bi.mmds.append('l2sell')
+                for zs_2sell in up_same_bi.mmd_zs_maps['2sell']:
+                    if bi.type == 'up' and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
+                        bi.mmds.append('l2sell')
+                        append_mmd_zs(bi, 'l2sell', zs_2sell)
 
-            # 查找三类买卖点
-            if bi.type == 'down' and bi.low > zs.zg and bi.index - zs_end_bi.index <= 2:
+            # 查找三类买卖点，同一个趋势中，只有在第一个中枢的时候出三买
+            if bi.type == 'down' and pre_up_zs is not None \
+                    and bi.low > pre_up_zs.zg \
+                    and bi.index - pre_up_zs.bis[-1].index <= 2 \
+                    and self.__find_3buysell_is_exists(bi, '3buy') is False:
                 bi.mmds.append('3buy')
-            if bi.type == 'up' and bi.high < zs.zd and bi.index - zs_end_bi.index <= 2:
+                append_mmd_zs(bi, '3buy', pre_up_zs)
+            if bi.type == 'up' and pre_down_zs is not None \
+                    and bi.high < pre_down_zs.zd \
+                    and bi.index - pre_down_zs.bis[-1].index <= 2 \
+                    and self.__find_3buysell_is_exists(bi, '3sell') is False:
                 bi.mmds.append('3sell')
+                append_mmd_zs(bi, '3sell', pre_down_zs)
 
+            # 检查类3买卖点
+            if '3buy' in up_same_bi.mmds:
+                for zs_3buy in up_same_bi.mmd_zs_maps['3buy']:
+                    if bi.type == 'down' and bi.low > zs_3buy.zg and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
+                        bi.mmds.append('l3buy')
+                        append_mmd_zs(bi, 'l3buy', zs_3buy)
+            if '3sell' in up_same_bi.mmds:
+                for zs_3sell in up_same_bi.mmd_zs_maps['3sell']:
+                    if bi.type == 'up' and bi.high < zs_3sell.zd and self.__compare_ld_beichi(up_same_bi.ld, bi.ld):
+                        bi.mmds.append('l3sell')
+                        append_mmd_zs(bi, 'l3sell', zs_3sell)
         return
 
     def __process_date(self, d):
@@ -628,7 +625,7 @@ class CL:
                 # print('有跳空', len(self.klines), up_kline, k)
                 self.cl_klines.append(
                     CLKline(date=k.date, k_index=k.index,
-                            h=min(k.l, self.klines[k.index - 1].l),
+                            h=max(k.l, self.klines[k.index - 1].l),
                             l=min(k.h, self.klines[k.index - 1].h), o=k.o, c=k.c, a=k.a, klines=[], _n=1, _q=True)
                 )
 
@@ -689,13 +686,16 @@ class CL:
                 up_xl = xulie[-1]
                 if (up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']) \
                         or (up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']):
-                    del (xulie[-1])
                     if qs == 'up':
+                        now_xl['bi'] = now_xl['bi'] if now_xl['max'] >= up_xl['max'] else up_xl['bi']
                         now_xl['max'] = max(up_xl['max'], now_xl['max'])
                         now_xl['min'] = max(up_xl['min'], now_xl['min'])
                     else:
+                        now_xl['bi'] = now_xl['bi'] if now_xl['min'] <= up_xl['min'] else up_xl['bi']
                         now_xl['max'] = min(up_xl['max'], now_xl['max'])
                         now_xl['min'] = min(up_xl['min'], now_xl['min'])
+
+                    del (xulie[-1])
                     xulie.append(now_xl)
                 else:
                     xulie.append(now_xl)
@@ -735,28 +735,61 @@ class CL:
         else:
             return None
 
-    def __create_zs(self, bis: List[BI]) -> [ZS, None]:
+    def __create_zss(self, bis: List[BI], zs_type='up') -> List[ZS]:
+        """
+        根据笔，查找并创建指定方向的中枢
+        """
+        zss = []
+        if len(bis) <= 3:
+            return zss
+
+        for start in range(1, len(bis)):
+            end = start + 3
+            if bis[start].type == zs_type:
+                continue
+
+            while True:
+                if end >= len(bis):
+                    break
+                _bis = bis[start:end]
+                _pre_bi = bis[start - 1]
+                _next_bi = bis[end] if end < len(bis) else None
+                zs = self.__create_zs(_bis, _pre_bi, _next_bi)
+
+                if zs is not None:
+                    if zs.type == zs_type:
+                        zss.append(zs)
+                        self.__compare_zs_ld(zss, zs, _pre_bi, _next_bi)
+                    end += 1
+                elif zs is None:
+                    break
+
+        return zss
+
+    def __create_zs(self, bis: List[BI], pre_bi: BI = None, next_bi: BI = None) -> [ZS, None]:
         """
         创建中枢
         :param bis:
+        :param pre_bi:
+        :param next_bi:
         :return:
         """
         if len(bis) < 3:
             return None
-        zs = ZS(start=bis[0].start, bis=[bis[0]])
+
+        zs = ZS(start=bis[0].start, bis=[])
 
         zs_fanwei = [bis[0].high, bis[0].low]
         zs_gg = bis[0].high
         zs_dd = bis[0].low
-        for i in range(1, len(bis)):
-            bi = bis[i]
+        for bi in bis:
             bi_fanwei = [bi.high, bi.low]
             cross_fanwei = self.__cross_qujian(zs_fanwei, bi_fanwei)
             if cross_fanwei is None:
                 return None
             zs_gg = max(zs_gg, bi.high)
             zs_dd = min(zs_dd, bi.low)
-            if i <= 2:
+            if len(zs.bis) < 2:
                 zs_fanwei = [cross_fanwei['max'], cross_fanwei['min']]
             zs.bis.append(bi)
             # 根据笔数量，计算级别
@@ -774,16 +807,14 @@ class CL:
         zs.gg = zs_gg
         zs.dd = zs_dd
 
-        zs_pre_bi = self.bis[bis[0].index - 1]
-        zs_next_bi = None if self.bis[-1].index == bis[-1].index else self.bis[bis[-1].index + 1]
         zs_type = 'up' if bis[0].type == 'down' else 'down'
 
-        if zs_next_bi is None:
+        if next_bi is None:
             zs.type = 'zd'
-        elif zs_pre_bi.type == zs_next_bi.type:  # 进去中枢笔同向，中枢才有方向
-            if zs_type == 'up' and zs_pre_bi.low < zs.dd and zs_next_bi.high > zs.gg:
+        elif pre_bi.type == next_bi.type:  # 进去中枢笔同向，中枢才有方向
+            if zs_type == 'up' and pre_bi.low < zs.dd and next_bi.high > zs.gg:
                 zs.type = 'up'
-            elif zs_type == 'down' and zs_pre_bi.high > zs.gg and zs_next_bi.low < zs.dd:
+            elif zs_type == 'down' and pre_bi.high > zs.gg and next_bi.low < zs.dd:
                 zs.type = 'down'
             else:
                 zs.type = 'zd'
@@ -791,40 +822,45 @@ class CL:
             zs.type = 'zd'
         return zs
 
-    def __compare_zs_ld(self, zss: List[ZS], bis: List[BI], end_zs: ZS, end_bi_index: int):
+    def __compare_zs_ld(self, zss: List[ZS], now_zs: ZS, pre_bi: BI = None, next_bi: BI = None):
         """
         对比中枢前后力度
         :param zss:
-        :param bis:
-        :param end_zs:
-        :param end_bi_index:
+        :param now_zs:
+        :param pre_bi:
+        :param next_bi:
         :return:
         """
-        if end_bi_index >= len(bis):
+        if next_bi is None:
             return
 
         # 对比 趋势/盘整 背驰
-        pre_bi = bis[end_zs.bis[0].index - 1]
-        end_bi = bis[end_bi_index]
-        pre_zs = zss[-1] if len(zss) > 0 else None
+        pre_zs = None  # 找符合要求的上一个中枢
+        for _zs in zss[::-1]:
+            pre_zs_last_bi_index = _zs.bis[-1].index
+            now_zs_one_bi_index = now_zs.bis[0].index
+            # 中枢直接不能有重叠，并且之间笔数要小于等于 5 笔，离得不能太远
+            if pre_zs_last_bi_index < now_zs_one_bi_index and now_zs_one_bi_index - pre_zs_last_bi_index <= 5:
+                if now_zs.type == 'up' and now_zs.zd > _zs.zg:
+                    pre_zs = _zs
+                    break
+                if now_zs.type == 'down' and now_zs.zg < _zs.zd:
+                    pre_zs = _zs
+                    break
 
-        if pre_zs and end_zs.type in ['up', 'down'] \
-                and pre_zs.type == end_zs.type \
-                and end_zs.bis[0].index - pre_zs.bis[-1].index <= 3:
+        if pre_zs and now_zs.type in ['up', 'down']:
             # 趋势背驰判断（有前中枢并且同类型的，并且新高新低的，才有趋势背驰）
-            if (end_zs.type == 'up' and end_zs.zd > pre_zs.zg) \
-                    or (end_zs.type == 'down' and end_zs.zg < pre_zs.zd):
-                if end_bi.qs_beichi is False:
-                    if self.__zs_call_back_boll(end_zs) and self.__compare_ld_beichi(pre_bi.ld, end_bi.ld):
-                        end_bi.qs_beichi = True
+            if next_bi.qs_beichi is False:
+                if self.__zs_call_back_boll(now_zs) and self.__compare_ld_beichi(pre_bi.ld, next_bi.ld):
+                    next_bi.qs_beichi = True
         else:
             # 盘整背驰判断
-            if end_bi.pz_beichi is False:
+            if next_bi.pz_beichi is False:
                 # 中枢内新高或新低，判断力度，出盘整背驰
-                if end_bi.high > end_zs.gg or end_bi.low < end_zs.dd:
-                    if self.__compare_ld_beichi(pre_bi.ld, end_bi.ld) and self.__compare_ld_beichi(end_zs.max_ld,
-                                                                                                   end_bi.ld):
-                        end_bi.pz_beichi = True
+                if next_bi.high >= now_zs.gg or next_bi.low <= now_zs.dd:
+                    if self.__compare_ld_beichi(pre_bi.ld, next_bi.ld) and \
+                            self.__compare_ld_beichi(now_zs.max_ld, next_bi.ld):
+                        next_bi.pz_beichi = True
 
         return
 
@@ -931,20 +967,46 @@ class CL:
             'hist': {'sum': hist_sum, 'end': end_hist},
         }
 
-    def __find_bi_zs(self, bi: BI) -> [None, ZS]:
+    def __find_bi_zs(self, bi: BI, zs_type: str = 'up') -> [None, ZS]:
         """
         查询笔所在的中枢，不包括以此笔起始的中枢
         :param bi:
+        :param zs_type:
         :return:
         """
         bi_zs = None
         for zs in self.zss:
-            # if zs.type in ['up', 'down'] and zs.start.index < bi.start.index:
-            if zs.start.index < bi.start.index:
-                bi_zs = zs
+            if zs.type != zs_type:
+                continue
+            if zs.start.index < bi.start.index and zs.end.index != bi.end.index:
+                if bi_zs is not None and bi_zs.start.index == zs.start.index:
+                    # 遇到了相同起点的中枢，排序可能会有问题，所以取最接近当前笔的中枢
+                    if bi.index - bi_zs.bis[-1].index > bi.index - zs.bis[-1].index:
+                        bi_zs = zs
+                else:
+                    bi_zs = zs
             else:
                 break
         return bi_zs
+
+    def __find_3buysell_is_exists(self, bi: BI, find_type: str = '3buy') -> bool:
+        """
+        查找笔之前是否存在三类买卖点，存在返回 True，不存在返回 False
+        """
+        for i in range(bi.index - 1, 0, -1):
+            _bi = self.bis[i]
+            mmds = '/'.join(_bi.mmds)
+            if find_type == '3buy':
+                if 'buy' in mmds and '3buy' not in mmds:
+                    return False
+                if '3buy' in mmds:
+                    return True
+            elif find_type == '3sell':
+                if 'sell' in mmds and '3sell' not in mmds:
+                    return False
+                if '3sell' in mmds:
+                    return True
+        return False
 
 
 def batch_cls(code, klines: Dict[str, pd.DataFrame]) -> List[CL]:

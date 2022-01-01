@@ -75,12 +75,12 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
 
     # 画 线段
     line_xds = {'index': [], 'val': []}
-    if len(xds) > 0:
-        line_xds['index'].append(xds[0].start.k.date)
-        line_xds['val'].append(xds[0].start.val)
     for x in xds:
         line_xds['index'].append(x.start.k.date)
         line_xds['val'].append(x.start.val)
+    if len(xds) > 0:
+        line_xds['index'].append(xds[-1].end.k.date)
+        line_xds['val'].append(xds[-1].end.val)
 
     # 画 笔中枢
     line_bi_zss = []
@@ -93,11 +93,13 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             [zs.zg, zs.zd, zs.zd, zs.zg, zs.zg],
         ]
         if zs.type == 'up':
-            l_zs.append('#FF6666')
+            l_zs.append('rgba(255,102,102,0.6)')
         elif zs.type == 'down':
-            l_zs.append('#0099CC')
+            l_zs.append('rgba(0,153,204,0.6)')
         else:
-            l_zs.append('#CCCCCC')
+            l_zs.append('rgba(204,204,204,0.6)')
+
+        l_zs.append(zs.level + 1)
 
         line_bi_zss.append(l_zs)
 
@@ -298,7 +300,7 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
                 zs[1],
                 symbol=None,
                 label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(width=2, color=zs[2]),
+                linestyle_opts=opts.LineStyleOpts(width=zs[3], color=zs[2]),
                 tooltip_opts=opts.TooltipOpts(is_show=False),
             )
         )
@@ -313,10 +315,10 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             y_axis=point_bi_bcs['val'],
             symbol_size=10,
             symbol='circle',
-            itemstyle_opts=opts.ItemStyleOpts(color='#df9464'),
+            itemstyle_opts=opts.ItemStyleOpts(color='rgba(223,148,100,0.7)'),
             label_opts=opts.LabelOpts(is_show=False),
             tooltip_opts=opts.TooltipOpts(
-                textstyle_opts=opts.TextStyleOpts(font_size=24),
+                textstyle_opts=opts.TextStyleOpts(font_size=18),
                 formatter=JsCode(
                     "function (params) {return params.value[2];}"
                 )
@@ -332,11 +334,11 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             .add_yaxis(
             series_name="买点",
             y_axis=scatter_buy['val'],
-            symbol_size=20,
+            symbol_size=15,
             symbol='arrow',
-            itemstyle_opts=opts.ItemStyleOpts(color='red'),
+            itemstyle_opts=opts.ItemStyleOpts(color='rgba(250,128,114,0.8)'),
             tooltip_opts=opts.TooltipOpts(
-                textstyle_opts=opts.TextStyleOpts(font_size=24),
+                textstyle_opts=opts.TextStyleOpts(font_size=18),
                 formatter=JsCode(
                     "function (params) {return params.value[2];}"
                 )
@@ -349,12 +351,12 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             .add_yaxis(
             series_name="卖点",
             y_axis=scatter_sell['val'],
-            symbol_size=20,
+            symbol_size=15,
             symbol='arrow',
             symbol_rotate=180,
-            itemstyle_opts=opts.ItemStyleOpts(color='green'),
+            itemstyle_opts=opts.ItemStyleOpts(color='rgba(30,144,255,0.8)'),
             tooltip_opts=opts.TooltipOpts(
-                textstyle_opts=opts.TextStyleOpts(font_size=24),
+                textstyle_opts=opts.TextStyleOpts(font_size=18),
                 formatter=JsCode(
                     "function (params) {return params.value[2];}"
                 )
@@ -372,12 +374,12 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
                 .add_yaxis(
                 series_name="买卖点",
                 y_axis=scatter_buy_orders['val'],
-                symbol_size=15,
+                symbol_size=10,
                 symbol='diamond',
                 label_opts=opts.LabelOpts(is_show=False),
                 itemstyle_opts=opts.ItemStyleOpts(color='rgba(255,20,147,0.5)'),
                 tooltip_opts=opts.TooltipOpts(
-                    textstyle_opts=opts.TextStyleOpts(font_size=24),
+                    textstyle_opts=opts.TextStyleOpts(font_size=18),
                     formatter=JsCode(
                         "function (params) {return params.value[2];}"
                     )
@@ -391,12 +393,12 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
                 .add_yaxis(
                 series_name="买卖点",
                 y_axis=scatter_sell_orders['val'],
-                symbol_size=15,
+                symbol_size=10,
                 symbol='diamond',
                 label_opts=opts.LabelOpts(is_show=False),
                 itemstyle_opts=opts.ItemStyleOpts(color='rgba(0,191,255,0.5)'),
                 tooltip_opts=opts.TooltipOpts(
-                    textstyle_opts=opts.TextStyleOpts(font_size=24),
+                    textstyle_opts=opts.TextStyleOpts(font_size=18),
                     formatter=JsCode(
                         "function (params) {return params.value[2];}"
                     )

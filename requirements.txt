@@ -4,7 +4,7 @@ numpy
 redis
 pyttsx3
 prettytable
-mysqlclient
+pymysql
 pyecharts==1.9.1
 django==3.2.9
 djangorestframework
@@ -13,4 +13,4 @@ ccxt
 baostock
 TA-Lib
 matplotlib
-tqdm
+dbutils

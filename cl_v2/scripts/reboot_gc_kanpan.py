@@ -34,7 +34,7 @@ try:
 
             # 顶底停顿配置
             ding_td = []
-            di_td = ['30m', '15m']
+            di_td = ['30m']
             check_beichi = True
             check_buy = True
             check_sell = False
@@ -46,7 +46,7 @@ try:
                 check_sell = run_config[name]['sell']
 
             try:
-                run_frequencys = ['60m', '30m', '15m']
+                run_frequencys = ['d', '30m']
                 if name in run_config:
                     run_frequencys = run_config[name]['run']
 

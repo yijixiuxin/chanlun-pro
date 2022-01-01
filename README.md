@@ -6,6 +6,8 @@
 因为个人能力有限，理解可能会有偏差的地方，导致项目所实现的缠论，必然有错误之处；  
 所以决定开源出来，希望大家一起学习并加以完善。
 
+[项目更新记录](update.md)
+
 [【在线Demo展示】](http://www.chanlun-trader.com/)
 
 
@@ -40,19 +42,49 @@
 * 自定义缠论策略进行回测
 * 实盘策略交易
 
-[项目更新记录](update.md)
-
 ### 安装使用
 
-> 前提：需要事先安装 MySQL、Redis （PS：单纯的研究环境则不太需要）
+> 前提：需要事先安装 MySQL、Redis
 
-1. 克隆项目到本地 （git clone https://github.com/yijixiuxin/chanlun.git）
-2. 安装 [Anaconda](https://www.anaconda.com/) ，创建运行环境，Python 版本 3.7 
-3. pip 安装项目依赖包 ( pip install -r requirements.txt )
+1. 克隆项目到本地 
+
+```
+git clone https://github.com/yijixiuxin/chanlun.git）
+```
+
+3. 安装 [Anaconda](https://www.anaconda.com/products/individual) ，创建运行环境，Python 版本 3.7 
+
+```
+下载 Anaconda 并安装，打开 Anaconda Shell 并执行以下命令  
+conda create -y -n chanlun python=3.7
+```
+
+3. pip 安装项目依赖包
+
+```
+conda activate chanlun # 切换到新创建的 chanlun 环境  
+conda install -y pandas requests numpy redis matplotlib pymysql  
+conda install -y -c conda-forge ta-lib  
+pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+pip3 install django==3.2.9 redis futu-api ccxt prettytable pyttsx3 pyecharts==1.9.1 djangorestframework baostock dbutils  
+```
+
 4. 使用 Anaconda 安装 JupyterLab，用于本地进行研究使用
-5. 在 cl_v2 目录，复制拷贝 config.py.demo 文件为 config.py ，用于配置整个项目的配置参数
-6. 到 web 目录，运行 python manage.py runserver 0.0.0.0:8000 启动 web 服务
-7. 浏览器访问 http://127.0.0.1:8000/charts/stock_index/ 即可显示缠论主页
+
+```
+conda install -y -c conda-forge jupyterlab 
+jupyter-lab --generage-config   # 生成配置文件  
+# 修改配置文件中的 c.ServerApp.notebook_dir 配置项为 项目地址
+jupyter-lab  # 启动
+```
+
+6. 在 cl_v2 目录，复制拷贝 config.py.demo 文件为 config.py ，用于配置整个项目的配置参数
+7. 到 web 目录，启动 web 服务
+```
+python manage.py runserver 0.0.0.0:8000
+```
+
+8. 浏览器访问 http://127.0.0.1:8000/charts/stock_index/ 即可显示缠论主页
 
 > 默认 exchange 交易行情，使用的 [baostock](http://baostock.com/baostock/index.php/%E9%A6%96%E9%A1%B5) 服务  
 > 可直接创建 exchange 对象进行使用，无需配置 api 等参数
@@ -61,12 +93,22 @@
 
 
 ### Docker 使用说明
+
+> Docker 相关命令文档 https://www.runoob.com/docker/docker-command-manual.html
+
 1. 平台安装 Docker [下载](https://www.docker.com/products/docker-desktop)
 2. 启动 Docker 服务
-3. 执行以下命令启动容器；project_code_path 需要替换为项目代码地址
+3. 构建 Docker 镜像
 
 ```
-    docker run -itd -p 8000:8000 -p 8888:8888 -p 3306:3306 -v /project_code_path:/root/app yijixiuxin/chanlun
+# 进入项目中的 docker 目录，执行以下命令
+docker build -t chanlun
+```
+
+4. 根据镜像启动容器；project_code_path 需要替换为项目代码地址
+
+```
+    docker run -itd -p 8000:8000 -p 8888:8888 -p 3306:3306 -v /project_code_path:/root/app chanlun
 ```
 
 4. 访问以下地址进行访问
@@ -84,6 +126,7 @@
 数字货币行情与交易，基于 [ccxt](https://github.com/ccxt/ccxt) 包实现，可以很方便进行其他交易所的实现；  
 如没有好用的 vpn，推荐我自己使用的 [V2free](https://w1.ddnsgo.xyz/auth/register?code=RFb5) 服务 （PS：使用链接注册，我可以获得返利） 
    
+
 * 富途 API 配置  
 我自己主要使用的行情服务，同时也可以进行 港股 的自动化交易，推荐使用；  
 [OpenAPI](https://www.futunn.com/download/OpenAPI?lang=zh-CN)  
@@ -91,9 +134,11 @@
 开户用户每月只能获取 100 只股票K线（可多次获取），总资产达1万港币则为 300   
 我的用法为：在聚宽平台研究环境筛选符合条件的股票，在使用 富途API 获取行情精选查看，这样 300 个已经够用了。
 
+
 * Redis、Mysql 配置   
 K线 同步到本地，使用 Mysql 进行保存，程序会自动创建表，需要给表创建的权限；  
 Redis 用于保存非结构化的一些数据，用于实现一些信息的保存；如 股票盯盘结果查看、动量排行、实盘实例保存等；
+
 
 * 钉钉消息配置  
 用于发送推送消息 [API 文档](https://open.dingtalk.com/document/robots/custom-robot-access)
@@ -163,7 +208,9 @@ web 服务中，股票行情使用 富途API 实现，其中股票列表是基�
 自己写的策略，需要继承 Strategy 类，并实现其中的 look、stare 方法
 Demo 实例参考 ： [cl_v2/my/strategy_demo.py](cl_v2/my/strategy_demo.py)
 
-回测运行实例参考：[数字货币策略回测.ipynb](数字货币策略回测.ipynb)
+回测运行实例参考：  
+[数字货币策略回测.ipynb](数字货币策略回测.ipynb)  
+[股票策略回测.ipynb](股票策略回测.ipynb)  
 
 
 ### 实盘策略交易

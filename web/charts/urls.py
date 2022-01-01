@@ -51,6 +51,6 @@ urlpatterns = [
     # 交易对象视图
     url(r'^trader/index$', views_trader.trader_view, name='trader'),
     url(r'^strategy_back$', views_trader.StrategyBackIndex, name='strategy'),
-    url(r'^strategy_back/kline$', views_trader.StragegyBackKline, name='strategy'),
+    url(r'^strategy_back/kline$', views_trader.StrategyBackKline, name='strategy'),
 ]
 

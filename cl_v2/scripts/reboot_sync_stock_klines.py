@@ -24,7 +24,7 @@ exchange.create_tables(run_codes)
 
 for code in run_codes:
     try:
-        for f in ['d', '60m', '30m', '15m', '5m', '1m']:
+        for f in ['d', '60m', '30m', '15m', '5m']:
             time.sleep(3)
             while True:
                 last_dt = exchange.query_last_datetime(code, f)

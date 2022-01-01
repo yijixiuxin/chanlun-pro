@@ -16,7 +16,7 @@ class CurrencyTrader(trader.Trader):
     # 做多买入
     def open_buy(self, code, opt):
         # 固定买入 1000 USDT 的
-        open_usdt = 1000
+        open_usdt = 1500
         leverage = 5
         ticks = self.exchange.ticks([code])
         amount = (open_usdt / ticks[code].last) * leverage
@@ -33,7 +33,7 @@ class CurrencyTrader(trader.Trader):
     # 做空卖出
     def open_sell(self, code, opt):
         # 固定卖出 1000 USDT 的
-        open_usdt = 1000
+        open_usdt = 1500
         leverage = 5
         ticks = self.exchange.ticks([code])
         amount = (open_usdt / ticks[code].last) * leverage

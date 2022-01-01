@@ -7,6 +7,7 @@ import pandas as pd
 
 from . import config
 from . import exchange
+from . import exchange_db
 
 
 class ExchangeBinance(exchange.Exchange):
@@ -25,6 +26,8 @@ class ExchangeBinance(exchange.Exchange):
 
         self.exchange = ccxt.binanceusdm(params)
 
+        self.db_exchange = exchange_db.ExchangeDB('currency')
+
         self._g_stocks = []
 
     def all_stocks(self):
@@ -42,6 +45,32 @@ class ExchangeBinance(exchange.Exchange):
     def klines(self, code: str, frequency: str,
                start_date: str = None, end_date: str = None,
                args: dict = {}) -> [pd.DataFrame, None]:
+        if start_date is not None or end_date is not None:
+            online_klines = self._online_klines(code, frequency, start_date, end_date, args)
+            self.db_exchange.insert_klines(code, frequency, online_klines)
+            return online_klines
+
+        db_klines = self.db_exchange.klines(code, frequency)
+        if len(db_klines) == 0:
+            online_klines = self._online_klines(code, frequency, start_date, end_date, args)
+            self.db_exchange.insert_klines(code, frequency, online_klines)
+            return online_klines
+
+        last_datetime = db_klines.iloc[-1]['date'].strftime('%Y-%m-%d %H:%M:%S')
+        online_klines = self._online_klines(code, frequency, start_date=last_datetime)
+        self.db_exchange.insert_klines(code, frequency, online_klines)
+        if len(online_klines) == 1000:
+            online_klines = self._online_klines(code, frequency, start_date, end_date, args)
+            self.db_exchange.insert_klines(code, frequency, online_klines)
+            return online_klines
+
+        klines = db_klines.append(online_klines)
+        klines.drop_duplicates(subset=['date'], keep='last', inplace=True)
+        return klines[-1000::]
+
+    def _online_klines(self, code: str, frequency: str,
+               start_date: str = None, end_date: str = None,
+               args: dict = {}) -> [pd.DataFrame, None]:
         # 1m  3m  5m  15m  30m  1h  2h  4h  6h  8h  12h  1d  3d  1w  1M
         frequency_map = {'d': '1d', '4h': '4h', '60m': '1h', '30m': '30m', '15m': '15m', '5m': '5m', '1m': '1m'}
         if frequency not in frequency_map.keys():
@@ -54,12 +83,15 @@ class ExchangeBinance(exchange.Exchange):
             end_date = int(
                 datetime.datetime.timestamp(datetime.datetime.strptime(end_date, '%Y-%m-%d %H:%M:%S'))) * 1000
 
-        kline = self.exchange.fetchOHLCV(symbol=code, timeframe=frequency_map[frequency], limit=2000,
+        kline = self.exchange.fetchOHLCV(symbol=code, timeframe=frequency_map[frequency], limit=1000,
                                          params={'startTime': start_date, 'endTime': end_date})
         kline_pd = pd.DataFrame(kline, columns=['date', 'open', 'high', 'low', 'close', 'volume'])
         kline_pd['code'] = code
-        kline_pd['date'] = pd.to_datetime(kline_pd['date'].values / 1000, unit='s', utc=True).tz_convert('Asia/Shanghai')
+        kline_pd['date'] = kline_pd['date'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1e3))
+        # kline_pd['date'] = pd.to_datetime(kline_pd['date'].values / 1000, unit='s', utc=True).tz_convert('Asia/Shanghai')
         return kline_pd[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
+
+
 
     def ticks(self, codes: List[str]) -> Dict[str, exchange.Tick]:
         res_ticks = {}

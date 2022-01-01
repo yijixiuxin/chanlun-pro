@@ -90,6 +90,8 @@ class ExchangeFutu(exchange.Exchange):
                     start_date = (end_datetime - dt.timedelta(days=150)).strftime(time_format)
                 elif frequency == 'd':
                     start_date = (end_datetime - dt.timedelta(days=1500)).strftime(time_format)
+                elif frequency == 'w':
+                    start_date = (end_datetime - dt.timedelta(days=2500)).strftime(time_format)
             ret, kline, pk = self.CTX().request_history_kline(code=code, start=start_date, end=end_date, max_count=None,
                                                               ktype=frequency_map[frequency]['ktype'])
         kline['date'] = pd.to_datetime(kline['time_key'])
