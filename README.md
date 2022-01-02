@@ -64,7 +64,7 @@ conda create -y -n chanlun python=3.7
 ```
 conda activate chanlun # 切换到新创建的 chanlun 环境  
 conda install -y pandas requests numpy redis matplotlib pymysql  
-conda install -y -c conda-forge ta-lib  
+conda install -y -c conda-forge ta-lib  ipywidgets  
 pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 pip3 install django==3.2.9 redis futu-api ccxt prettytable pyttsx3 pyecharts==1.9.1 djangorestframework baostock dbutils  
 ```
@@ -72,8 +72,8 @@ pip3 install django==3.2.9 redis futu-api ccxt prettytable pyttsx3 pyecharts==1.
 4. 使用 Anaconda 安装 JupyterLab，用于本地进行研究使用
 
 ```
-conda install -y -c conda-forge jupyterlab 
-jupyter-lab --generage-config   # 生成配置文件  
+conda install -y -c conda-forge jupyterlab jupyterlab_widgets  
+jupyter-lab --generate-config   # 生成配置文件  
 # 修改配置文件中的 c.ServerApp.notebook_dir 配置项为 项目地址
 jupyter-lab  # 启动
 ```
