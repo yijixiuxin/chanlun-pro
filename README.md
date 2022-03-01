@@ -49,9 +49,9 @@
 
 ### 实际效果展示
 
-![Demo-1](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-1.png)
-![Demo-2](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-2.png)
-![Demo-3](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-3.png)
+![Demo-1](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-1.png)
+![Demo-2](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-2.png)
+![Demo-3](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-3.png)
 
 
 **有 bug 请在这个页面提交： https://github.com/yijixiuxin/chanlun/issues**
@@ -59,11 +59,11 @@
 
 **缠论理论交流，可加微信 【添加请备注： 缠论。否则不会添加通过】**
 
-![微信](https://github.com/yijixiuxin/chanlun/tree/main/images/wx.jpg)
+![微信](https://github.com/yijixiuxin/chanlun/raw/main/images/wx.jpg)
 
 ### 赞助
 
 开发维护不易，如果觉得项目对你有帮助，还请多多支持
 
 
-![微信支付](https://github.com/yijixiuxin/chanlun/tree/main/images/wx_pay.jpg)
+![微信支付](https://github.com/yijixiuxin/chanlun/raw/main/images/wx_pay.jpg)
