@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="chanlun",
-    version="0.0.1",
+    version="1.0.1",
     author="Wang Xu",
     author_email="1058715329@qq.com",
     description="基于缠论对过往行情数据进行分析的工具包。",
@@ -24,7 +24,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Topic :: Office/Business :: Financial",
         "Topic :: Office/Business :: Financial :: Investment",
-        "Topic :: Libraries :: Python Modules",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.7",

@@ -6,6 +6,8 @@
 
 可用于量化交易、Jupyter 分析、以及 Html 页面展示。
 
+> 项目 GitHub 地址 : https://github.com/yijixiuxin/chanlun
+
 **主要功能**
 
 目前，`chanlun` 已经实现以下功能:
@@ -28,7 +30,7 @@
 
 ### 使用示例
 
-[使用示例.ipynb](example/使用示例.ipynb)
+[使用示例.ipynb](https://github.com/yijixiuxin/chanlun/tree/main/example/使用示例.ipynb)
 
     import pandas as pd
     from chanlun import cl
@@ -47,9 +49,9 @@
 
 ### 实际效果展示
 
-![Demo-1](images/demo-1.png)
-![Demo-2](images/demo-2.png)
-![Demo-3](images/demo-3.png)
+![Demo-1](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-1.png)
+![Demo-2](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-2.png)
+![Demo-3](https://github.com/yijixiuxin/chanlun/tree/main/images/demo-3.png)
 
 
 **有 bug 请在这个页面提交： https://github.com/yijixiuxin/chanlun/issues**
@@ -57,11 +59,11 @@
 
 **缠论理论交流，可加微信 【添加请备注： 缠论。否则不会添加通过】**
 
-![微信](images/wx.jpg)
+![微信](https://github.com/yijixiuxin/chanlun/tree/main/images/wx.jpg)
 
 ### 赞助
 
 开发维护不易，如果觉得项目对你有帮助，还请多多支持
 
 
-![微信支付](images/wx_pay.jpg)
+![微信支付](https://github.com/yijixiuxin/chanlun/tree/main/images/wx_pay.jpg)
