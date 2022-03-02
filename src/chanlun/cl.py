@@ -44,6 +44,7 @@ class CLKline:
         self.index: int = index
         self.n: int = _n  # 记录包含的K线数量
         self.q: bool = _q  # 是否有缺口
+        self.up_qs = None  # 合并时之前的趋势
 
     def __str__(self):
         return "index: %s k_index:%s date: %s h: %s l: %s _n:%s _q:%s" % \
@@ -67,7 +68,8 @@ class FX:
         self.done: bool = done  # 分型是否完成
 
     def __str__(self):
-        return 'index: %s type: %s real: %s val: %s done: %s' % (self.index, self.type, self.real, self.val, self.done)
+        return 'index: %s type: %s real: %s date : %s val: %s done: %s' % (
+            self.index, self.type, self.real, self.k.date, self.val, self.done)
 
 
 class ZS:
@@ -349,7 +351,8 @@ class CL:
             self.cl_klines.append(cl_kline)
             return True
 
-        qushi = 'up' if len(self.cl_klines) >= 4 and self.cl_klines[-4].h > self.cl_klines[-3].h else 'down'
+        # 传递之前两个的缠论K线，用来判断趋势（不包括最后两个）
+        up_cl_klines = self.cl_klines[-4:-2]
 
         # 最后两个缠论K线，重新进行包含处理
         cl_kline_1 = self.cl_klines[-1]
@@ -359,7 +362,7 @@ class CL:
         if k.date != klines[-1].date:
             klines.append(k)
 
-        cl_klines = self.klines_baohan(klines, qushi)
+        cl_klines = self.klines_baohan(klines, up_cl_klines)
         if (len(cl_klines) >= 2 and cl_kline_2) or (len(cl_klines) == 1 and cl_kline_2):
             # 重新给缠论k线附新值
             cl_kline_2.k_index = cl_klines[0].k_index
@@ -372,6 +375,7 @@ class CL:
             cl_kline_2.klines = cl_klines[0].klines
             cl_kline_2.n = cl_klines[0].n
             cl_kline_2.q = cl_klines[0].q
+            cl_kline_2.up_qs = cl_klines[0].up_qs
 
             if len(cl_klines) == 1:
                 # 之前有两个缠论K线，新合并的只有一个了，之前最后一个删除
@@ -390,6 +394,7 @@ class CL:
             cl_kline_1.klines = cl_klines[0].klines
             cl_kline_1.n = cl_klines[0].n
             cl_kline_1.q = cl_klines[0].q
+            cl_kline_1.up_qs = cl_klines[0].up_qs
             del (cl_klines[0])
 
         for ck in cl_klines:
@@ -425,6 +430,19 @@ class CL:
             self.fxs.append(fx)
             return True
 
+        # 检查最后一个分型是否还和要求，不符合则删除
+        # end_fx = self.fxs[-1]
+        # if (
+        #         end_fx.type == 'ding' and
+        #         (end_fx.klines[-3].h > end_fx.klines[-2].h
+        #          or end_fx.klines[-2].h < end_fx.klines[-1].h)
+        # ) or (
+        #         end_fx.type == 'di' and (
+        #         end_fx.klines[-3].l < end_fx.klines[-2].l or end_fx.klines[-2].l > end_fx.klines[-1].l
+        # )
+        # ):
+        #     del (self.fxs[-1])
+
         # 检查和上个分型是否是一个，是就重新算
         is_update = False  # 标识本次是否是更新分型
         end_fx = self.fxs[-1]
@@ -457,9 +475,11 @@ class CL:
         if fx.type == 'ding' and up_fx.type == 'ding' and up_fx.k.h <= fx.k.h:
             # 连续两个顶分型，前面的低于后面的，只保留后面的，前面的去掉
             up_fx.real = False
+            fx.real = True
         elif fx.type == 'di' and up_fx.type == 'di' and up_fx.k.l >= fx.k.l:
             # 连续两个底分型，前面的高于后面的，只保留后面的，前面的去掉
             up_fx.real = False
+            fx.real = True
         elif fx.type == up_fx.type:
             # 相邻的性质，必然前顶不能低于后顶，前底不能高于后底，遇到相同的，只保留第一个
             fx.real = False
@@ -477,8 +497,9 @@ class CL:
                 pass
             else:
                 fx.real = False
-        fx.index = self.fxs[-1].index + 1
+
         if is_update is False:
+            fx.index = self.fxs[-1].index + 1
             self.fxs.append(fx)
         return True
 
@@ -488,6 +509,11 @@ class CL:
         """
         if len(self.fxs) == 0:
             return False
+
+        # 检查最后一笔的起始分型是否有效，无效则删除笔
+        if len(self.bis) > 0 and self.bis[-1].start.real is False:
+            del(self.bis[-1])
+
         bi = self.bis[-1] if len(self.bis) > 0 else None
 
         # 如果笔存在，检查是否有笔分型停顿
@@ -555,51 +581,6 @@ class CL:
         """
         根据最后笔，生成特征序列，计算线段
         """
-        xl_fxs = self.cal_xd_xlfx()
-        if len(xl_fxs) == 0:
-            return True
-        last_fx = xl_fxs[-1]
-
-        # 初始线段
-        if len(self.xds) == 0:
-            if len(xl_fxs) < 2:
-                return True
-            if xl_fxs[-1]['type'] == xl_fxs[-2]['type']:
-                return True
-            xd = XD(start=xl_fxs[-2]['bi'], end=xl_fxs[-1]['bi'],
-                    _type='up' if xl_fxs[-1] == 'ding' else 'down')
-            xd.index = 0
-            xd.high = max(xl_fxs[-1]['bi'].high, xl_fxs[-2]['bi'].high)
-            xd.low = min(xl_fxs[-1]['bi'].low, xl_fxs[-2]['bi'].low)
-            self.xds.append(xd)
-            return True
-
-        xd = self.xds[-1]
-        if xd.type == 'up' and last_fx['type'] == 'ding' and xd.end.index != last_fx['bi'].index:
-            xd.end = last_fx['bi']
-            xd.high = max(xd.high, last_fx['bi'].high)
-            xd.low = min(xd.low, last_fx['bi'].low)
-            xd.done = last_fx['done']
-        elif xd.type == 'down' and last_fx['type'] == 'di' and xd.end.index != last_fx['bi'].index:
-            xd.end = last_fx['bi']
-            xd.high = max(xd.high, last_fx['bi'].high)
-            xd.low = min(xd.low, last_fx['bi'].low)
-            xd.done = last_fx['done']
-            return True
-        elif xd.type == 'up' and last_fx['type'] == 'di':
-            xd_start_bi = xd.end
-            xd = XD(start=xd_start_bi, end=last_fx['bi'], _type='down')
-            xd.high = max(xd_start_bi.high, last_fx['bi'].high)
-            xd.low = min(xd_start_bi.low, last_fx['bi'].low)
-            xd.done = last_fx['done']
-            self.xds.append(xd)
-        elif xd.type == 'down' and last_fx['type'] == 'ding':
-            xd_start_bi = xd.end
-            xd = XD(start=xd_start_bi, end=last_fx['bi'], _type='up')
-            xd.high = max(xd_start_bi.high, last_fx['bi'].high)
-            xd.low = min(xd_start_bi.low, last_fx['bi'].low)
-            xd.done = last_fx['done']
-            self.xds.append(xd)
 
         return True
 
@@ -813,7 +794,7 @@ class CL:
         if zs.type not in ['up', 'down']:
             return False
 
-        return self.compare_ld_beichi(zs.bis[0].ld, now_bi.ld, now_bi.type)
+        return self.compare_ld_beichi(zs.bis[0].ld, now_bi.ld)
 
     def beichi_qs(self, zs: ZS, now_bi: BI):
         """
@@ -954,158 +935,8 @@ class CL:
             'hist': {'sum': hist_sum, 'up_sum': hist_up_sum, 'down_sum': hist_down_sum, 'end': end_hist},
         }
 
-    def cal_xd_xlfx(self):
-        """
-        计算并返回所有的序列分型（包含顶底分型）
-        """
-        if len(self.bis) == 0:
-            return False
-        if self.cal_xd_xl('ding'):
-            if len(self.__xl_ding) > 3:
-                up_xl = self.__xl_ding[-3]
-                now_xl = self.__xl_ding[-2]
-                next_xl = self.__xl_ding[-1]
-                if up_xl['max'] <= now_xl['max'] and now_xl['max'] >= next_xl['max']:
-                    if len(self.__xlfx_ding) == 0:
-                        now_xl['type'] = 'ding'
-                        now_xl['done'] = True
-                        self.__xlfx_ding.append(now_xl)
-                    else:
-                        now_xl['type'] = 'ding'
-                        now_xl['done'] = True
-                        last_xf = self.__xlfx_ding[-1]
-                        if last_xf['bi'].index == now_xl['bi'].index:
-                            last_xf['bi'] = now_xl['bi']
-                            last_xf['max'] = now_xl['max']
-                            last_xf['min'] = now_xl['min']
-                            last_xf['bh_bis'] = now_xl['bh_bis']
-                            last_xf['done'] = now_xl['done']
-                        else:
-                            self.__xlfx_ding.append(now_xl)
-
-        if self.cal_xd_xl('di'):
-            if len(self.__xl_di) > 3:
-                up_xl = self.__xl_di[-3]
-                now_xl = self.__xl_di[-2]
-                next_xl = self.__xl_di[-1]
-                if up_xl['min'] >= now_xl['min'] and now_xl['min'] <= next_xl['min']:
-                    if len(self.__xlfx_di) == 0:
-                        now_xl['type'] = 'di'
-                        now_xl['done'] = True
-                        self.__xlfx_di.append(now_xl)
-                    else:
-                        now_xl['type'] = 'ding'
-                        now_xl['done'] = True
-                        last_xf = self.__xlfx_di[-1]
-                        if last_xf['bi'].index == now_xl['bi'].index:
-                            last_xf['bi'] = now_xl['bi']
-                            last_xf['max'] = now_xl['max']
-                            last_xf['min'] = now_xl['min']
-                            last_xf['bh_bis'] = now_xl['bh_bis']
-                            last_xf['done'] = now_xl['done']
-                        else:
-                            self.__xlfx_di.append(now_xl)
-        xl_fxs = self.__xlfx_ding + self.__xlfx_di
-        xl_fxs.sort(key=lambda xl: xl['bi'].start.index)
-
-        real_xl_fxs = []
-
-        for xl in xl_fxs:
-            if len(real_xl_fxs) == 0:
-                real_xl_fxs.append(xl)
-                continue
-            up_xl = real_xl_fxs[-1]
-            if up_xl['type'] == 'ding' and xl['type'] == 'ding':
-                # 两个顶序列分型
-                if xl['max'] > up_xl['max']:
-                    del (real_xl_fxs[-1])
-                    real_xl_fxs.append(xl)
-            elif up_xl['type'] == 'di' and xl['type'] == 'di':
-                # 两个低序列分型
-                if xl['min'] < up_xl['min']:
-                    del (real_xl_fxs[-1])
-                    real_xl_fxs.append(xl)
-            elif up_xl['type'] == 'ding' and xl['type'] == 'di' and up_xl['max'] < xl['min']:
-                continue
-            elif up_xl['type'] == 'di' and xl['type'] == 'ding' and up_xl['min'] > xl['max']:
-                continue
-            elif xl['bi'].index - up_xl['bi'].index < 3:  # 线段不足3笔
-                continue
-            else:
-                real_xl_fxs.append(xl)
-
-        return real_xl_fxs
-
-    def cal_xd_xl(self, xl_type='ding'):
-        """
-        计算线段序列（处理包含关系）
-        """
-        if len(self.bis) == 0:
-            return False
-        bi = self.bis[-1]
-        if xl_type == 'ding':
-            if bi.type == 'up':
-                return False
-            new_xl = {'bi': bi, 'min': bi.low, 'max': bi.high, 'bh_bis': [bi]}
-            if len(self.__xl_ding) == 0:
-                self.__xl_ding.append(new_xl)
-                return True
-            last_xl = self.__xl_ding[-1]
-            cal_bis = last_xl['bh_bis'] + [bi]
-            cal_xls = self.xdxl_baohan(cal_bis, 'up')
-            last_xl['bi'] = cal_xls[0]['bi']
-            last_xl['min'] = cal_xls[0]['min']
-            last_xl['max'] = cal_xls[0]['max']
-            last_xl['bh_bis'] = cal_xls[0]['bh_bis']
-            for i in range(1, len(cal_xls)):
-                self.__xl_ding.append(cal_xls[i])
-            return True
-        if xl_type == 'di':
-            if bi.type == 'down':
-                return False
-            new_xl = {'bi': bi, 'min': bi.low, 'max': bi.high, 'bh_bis': [bi]}
-            if len(self.__xl_di) == 0:
-                self.__xl_di.append(new_xl)
-                return True
-            last_xl = self.__xl_di[-1]
-            cal_bis = last_xl['bh_bis'] + [bi]
-            cal_xls = self.xdxl_baohan(cal_bis, 'down')
-            last_xl['bi'] = cal_xls[0]['bi']
-            last_xl['min'] = cal_xls[0]['min']
-            last_xl['max'] = cal_xls[0]['max']
-            last_xl['bh_bis'] = cal_xls[0]['bh_bis']
-            for i in range(1, len(cal_xls)):
-                self.__xl_di.append(cal_xls[i])
-            return True
-        return False
-
     @staticmethod
-    def xdxl_baohan(bis: List[BI], qs='up'):
-        """
-        计算给定笔列表的序列分型
-        """
-        xls = [{'bi': bis[0], 'min': bis[0].low, 'max': bis[0].high, 'bh_bis': [bis[0]]}]
-        for i in range(1, len(bis)):
-            bi = bis[i]
-            now_xl = {'bi': bi, 'min': bi.low, 'max': bi.high, 'bh_bis': [bi]}
-            up_xl = xls[-1]
-            if (up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']) \
-                    or (up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']):
-                if qs == 'up':
-                    up_xl['bi'] = now_xl['bi'] if now_xl['max'] >= up_xl['max'] else up_xl['bi']
-                    up_xl['max'] = max(up_xl['max'], now_xl['max'])
-                    up_xl['min'] = max(up_xl['min'], now_xl['min'])
-                else:
-                    up_xl['bi'] = now_xl['bi'] if now_xl['min'] <= up_xl['min'] else up_xl['bi']
-                    up_xl['max'] = min(up_xl['max'], now_xl['max'])
-                    up_xl['min'] = min(up_xl['min'], now_xl['min'])
-                up_xl['bh_bis'].append(bi)
-            else:
-                xls.append(now_xl)
-        return xls
-
-    @staticmethod
-    def compare_ld_beichi(one_ld: dict, two_ld: dict, hist_type=None):
+    def compare_ld_beichi(one_ld: dict, two_ld: dict):
         """
         比较两个力度，后者小于前者，返回 True
         :param one_ld:
@@ -1145,7 +976,7 @@ class CL:
             return None
 
     @staticmethod
-    def klines_baohan(klines: List[Kline], qushi: str) -> List[CLKline]:
+    def klines_baohan(klines: List[Kline], up_cl_klines: List[CLKline]) -> List[CLKline]:
         """
         k线包含处理，返回缠论k线对象
         """
@@ -1154,31 +985,33 @@ class CL:
                            h=klines[0].h, l=klines[0].l, o=klines[0].o, c=klines[0].c, a=klines[0].a,
                            klines=[klines[0]])
         cl_klines.append(cl_kline)
+        up_cl_klines.append(cl_kline)
 
         for i in range(1, len(klines)):
-            if len(cl_klines) >= 2:
-                qushi = 'up' if cl_klines[-1].h > cl_klines[-2].h else 'down'
-
             cl_k = cl_klines[-1]
             k = klines[i]
             if (cl_k.h >= k.h and cl_k.l <= k.l) or (k.h >= cl_k.h and k.l <= cl_k.l):
+                qushi = 'up' if len(up_cl_klines) >= 3 and up_cl_klines[-2].h > up_cl_klines[-3].h else 'down'
                 if qushi == 'up':  # 趋势上涨，向上合并
                     cl_k.k_index = cl_k.k_index if cl_k.h > k.h else k.index
                     cl_k.date = cl_k.date if cl_k.h > k.h else k.date
                     cl_k.h = max(cl_k.h, k.h)
                     cl_k.l = max(cl_k.l, k.l)
                     cl_k.a += k.a  # 交易量累加
+                    cl_k.up_qs = 'up'
                 else:
                     cl_k.k_index = cl_k.k_index if cl_k.l < k.l else k.index
                     cl_k.date = cl_k.date if cl_k.l < k.l else k.date
                     cl_k.h = min(cl_k.h, k.h)
                     cl_k.l = min(cl_k.l, k.l)
                     cl_k.a += k.a
+                    cl_k.up_qs = 'down'
                 cl_k.klines.append(k)
                 cl_k.n += 1
             else:
                 cl_kline = CLKline(k_index=k.index, date=k.date, h=k.h, l=k.l, o=k.o, c=k.c, a=k.a, klines=[k])
                 cl_klines.append(cl_kline)
+                up_cl_klines.append(cl_kline)
 
         return cl_klines
 
