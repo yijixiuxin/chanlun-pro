@@ -241,6 +241,21 @@ class QS:
             self.type, self.start_bi.start.index, self.end_bi.end.index, len(self.zss))
 
 
+class XLFX:
+    """
+    线段序列分型
+    """
+
+    def __init__(self, _type: str, high: float, low: float, bi: BI):
+        self.type = _type
+        self.high = high
+        self.low = low
+        self.bi = bi
+
+    def __str__(self):
+        return "XLFX type : %s high : %s low : %s bi : %s" % (self.type, self.high, self.low, self.bi)
+
+
 class CL:
     """
     行情数据缠论分析
@@ -568,7 +583,61 @@ class CL:
         根据最后笔，生成特征序列，计算线段
         """
 
-        return True
+        if len(self.xds) == 0:
+            dings = self.cal_xd_xlfx(self.bis, 'ding')
+            dis = self.cal_xd_xlfx(self.bis, 'di')
+            if len(dings) <= 0 or len(dis) <= 0:
+                return False
+            xlfxs = dings + dis
+            xlfxs.sort(key=lambda xl: xl.bi.index)
+            xlfxs = self.merge_xd_xlfx(xlfxs)
+            if len(xlfxs) < 2:
+                return False
+            xd = XD(xlfxs[0].bi, xlfxs[1].bi, _type='up' if xlfxs[0].type == 'di' else 'down',
+                    high=max(xlfxs[0].high, xlfxs[1].high), low=min(xlfxs[0].low, xlfxs[0].low))
+            self.xds.append(xd)
+            return True
+
+        up_xd = self.xds[-1]
+        dings = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'ding')
+        dis = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'di')
+        if len(dings) == 0 and len(dis) == 0:
+            return False
+
+        if up_xd.type == 'up' and len(dis) > 0:
+            # 上一个线段是向上的，找底分型
+            for di in dis:
+                if di.bi.index - up_xd.end.index >= 2 and di.low < up_xd.high:
+                    self.xds.append(
+                        XD(up_xd.end, di.bi, _type='down', high=up_xd.high, low=di.low, index=up_xd.index + 1)
+                    )
+                    return True
+        if up_xd.type == 'down' and len(dings) > 0:
+            # 上一个线段是向下的，找顶分型
+            for ding in dings:
+                if ding.bi.index - up_xd.end.index >= 2 and ding.high > up_xd.low:
+                    self.xds.append(
+                        XD(up_xd.end, ding.bi, _type='up', high=ding.high, low=up_xd.low, index=up_xd.index + 1)
+                    )
+                    return True
+
+        if up_xd.type == 'up' and len(dings) > 0:
+            # 上一个线段是向上的，之后又出现了顶分型，进行线段的修正
+            for ding in dings:
+                if ding.high >= up_xd.high:
+                    up_xd.end = ding.bi
+                    up_xd.high = ding.high
+            return True
+
+        if up_xd.type == 'down' and len(dis) > 0:
+            # 上一个线段是向下的，之后有出现了底分型，进行线段的修正
+            for di in dis:
+                if di.low <= up_xd.low:
+                    up_xd.end = di.bi
+                    up_xd.low = di.low
+            return True
+
+        return False
 
     def process_zs(self):
         """
@@ -920,6 +989,86 @@ class CL:
             'dif': {'end': end_dif, 'max': np.max(dif), 'min': np.min(dif)},
             'hist': {'sum': hist_sum, 'up_sum': hist_up_sum, 'down_sum': hist_down_sum, 'end': end_hist},
         }
+
+    @staticmethod
+    def cal_xd_xlfx(bis: List[BI], fx_type='ding'):
+        """
+        计算线段序列分型
+        """
+        xulie = []
+        for bi in bis:
+            if (fx_type == 'ding' and bi.type == 'down') or (fx_type == 'di' and bi.type == 'up'):
+                now_xl = {'max': bi.high, 'min': bi.low, 'bi': bi}
+                if len(xulie) == 0:
+                    xulie.append(now_xl)
+                    continue
+                qs = 'up' if fx_type == 'ding' else 'down'
+                up_xl = xulie[-1]
+                if (up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']) \
+                        or (up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']):
+                    if qs == 'up':
+                        now_xl['bi'] = now_xl['bi'] if now_xl['max'] >= up_xl['max'] else up_xl['bi']
+                        now_xl['max'] = max(up_xl['max'], now_xl['max'])
+                        now_xl['min'] = max(up_xl['min'], now_xl['min'])
+                    else:
+                        now_xl['bi'] = now_xl['bi'] if now_xl['min'] <= up_xl['min'] else up_xl['bi']
+                        now_xl['max'] = min(up_xl['max'], now_xl['max'])
+                        now_xl['min'] = min(up_xl['min'], now_xl['min'])
+
+                    del (xulie[-1])
+                    xulie.append(now_xl)
+                else:
+                    xulie.append(now_xl)
+
+        xlfxs: List[XLFX] = []
+        for i in range(1, len(xulie) - 1):
+            up_xl = xulie[i - 1]
+            now_xl = xulie[i]
+            next_xl = xulie[i + 1]
+            if fx_type == 'ding' and up_xl['max'] <= now_xl['max'] and now_xl['max'] >= next_xl['max']:
+                now_xl['type'] = 'ding'
+                xlfxs.append(
+                    XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'])
+                )
+            if fx_type == 'di' and up_xl['min'] >= now_xl['min'] and now_xl['min'] <= next_xl['min']:
+                now_xl['type'] = 'di'
+                xlfxs.append(
+                    XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'])
+                )
+
+        return xlfxs
+
+    @staticmethod
+    def merge_xd_xlfx(xlfxs: List[XLFX]):
+        """
+        合并线段的顶底序列分型，过滤掉无效的分型
+        """
+        real_xl_fxs = []
+        for xl in xlfxs:
+            if len(real_xl_fxs) == 0:
+                real_xl_fxs.append(xl)
+                continue
+            up_xl = real_xl_fxs[-1]
+            if up_xl.type == 'ding' and xl.type == 'ding':
+                # 两个顶序列分型
+                if xl.high > up_xl.high:
+                    del (real_xl_fxs[-1])
+                    real_xl_fxs.append(xl)
+            elif up_xl.type == 'di' and xl.type == 'di':
+                # 两个低序列分型
+                if xl.low < up_xl.low:
+                    del (real_xl_fxs[-1])
+                    real_xl_fxs.append(xl)
+            elif up_xl.type == 'ding' and xl.type == 'di' and up_xl.high < xl.low:
+                continue
+            elif up_xl.type == 'di' and xl.type == 'ding' and up_xl.low > xl.high:
+                continue
+            elif xl.bi.index - up_xl.bi.index < 3:  # 线段不足3笔
+                continue
+            else:
+                real_xl_fxs.append(xl)
+
+        return real_xl_fxs
 
     @staticmethod
     def compare_ld_beichi(one_ld: dict, two_ld: dict):
