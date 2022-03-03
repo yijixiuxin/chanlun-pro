@@ -430,19 +430,6 @@ class CL:
             self.fxs.append(fx)
             return True
 
-        # 检查最后一个分型是否还和要求，不符合则删除
-        # end_fx = self.fxs[-1]
-        # if (
-        #         end_fx.type == 'ding' and
-        #         (end_fx.klines[-3].h > end_fx.klines[-2].h
-        #          or end_fx.klines[-2].h < end_fx.klines[-1].h)
-        # ) or (
-        #         end_fx.type == 'di' and (
-        #         end_fx.klines[-3].l < end_fx.klines[-2].l or end_fx.klines[-2].l > end_fx.klines[-1].l
-        # )
-        # ):
-        #     del (self.fxs[-1])
-
         # 检查和上个分型是否是一个，是就重新算
         is_update = False  # 标识本次是否是更新分型
         end_fx = self.fxs[-1]
@@ -452,6 +439,7 @@ class CL:
             end_fx.val = fx.val
             end_fx.tk = fx.tk
             end_fx.done = fx.done
+            end_fx.real = fx.real
             fx = end_fx
             is_update = True
 
@@ -475,11 +463,9 @@ class CL:
         if fx.type == 'ding' and up_fx.type == 'ding' and up_fx.k.h <= fx.k.h:
             # 连续两个顶分型，前面的低于后面的，只保留后面的，前面的去掉
             up_fx.real = False
-            fx.real = True
         elif fx.type == 'di' and up_fx.type == 'di' and up_fx.k.l >= fx.k.l:
             # 连续两个底分型，前面的高于后面的，只保留后面的，前面的去掉
             up_fx.real = False
-            fx.real = True
         elif fx.type == up_fx.type:
             # 相邻的性质，必然前顶不能低于后顶，前底不能高于后底，遇到相同的，只保留第一个
             fx.real = False
@@ -512,7 +498,7 @@ class CL:
 
         # 检查最后一笔的起始分型是否有效，无效则删除笔
         if len(self.bis) > 0 and self.bis[-1].start.real is False:
-            del(self.bis[-1])
+            del (self.bis[-1])
 
         bi = self.bis[-1] if len(self.bis) > 0 else None
 
@@ -991,7 +977,7 @@ class CL:
             cl_k = cl_klines[-1]
             k = klines[i]
             if (cl_k.h >= k.h and cl_k.l <= k.l) or (k.h >= cl_k.h and k.l <= cl_k.l):
-                qushi = 'up' if len(up_cl_klines) >= 3 and up_cl_klines[-2].h > up_cl_klines[-3].h else 'down'
+                qushi = 'up' if len(up_cl_klines) >= 2 and up_cl_klines[-2].h > cl_k.h else 'down'
                 if qushi == 'up':  # 趋势上涨，向上合并
                     cl_k.k_index = cl_k.k_index if cl_k.h > k.h else k.index
                     cl_k.date = cl_k.date if cl_k.h > k.h else k.date
