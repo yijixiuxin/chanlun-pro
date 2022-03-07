@@ -1,4 +1,3 @@
-import copy
 import datetime
 from typing import List, Dict
 
@@ -439,9 +438,22 @@ class CL:
                     done=True)
 
         if fx is None:
-            return False
+            # 检测未完成符合条件的分型
+            up_k = self.cl_klines[-2]
+            now_k = self.cl_klines[-1]
+            end_k = None
+            if now_k.h > up_k.h:
+                fx = FX(index=0, _type='ding', k=now_k, klines=[up_k, now_k, end_k], val=now_k.h, tk=False, real=True,
+                        done=False)
+            elif now_k.l < up_k.l:
+                fx = FX(index=0, _type='di', k=now_k, klines=[up_k, now_k, end_k], val=now_k.l, tk=False, real=True,
+                        done=False)
+            else:
+                return False
 
-        if len(self.fxs) == 0:
+        if len(self.fxs) == 0 and fx.done is False:
+            return False
+        elif len(self.fxs) == 0 and fx.done is True:
             self.fxs.append(fx)
             return True
 
@@ -1122,11 +1134,14 @@ class CL:
         cl_klines.append(cl_kline)
         up_cl_klines.append(cl_kline)
 
+        # if klines[0].date >= datetime.datetime.strptime('2021-06-03 00:00:00', '%Y-%m-%d %H:%M:%S'):
+        #     a = 1
+
         for i in range(1, len(klines)):
             cl_k = cl_klines[-1]
             k = klines[i]
             if (cl_k.h >= k.h and cl_k.l <= k.l) or (k.h >= cl_k.h and k.l <= cl_k.l):
-                qushi = 'up' if len(up_cl_klines) >= 2 and up_cl_klines[-2].h > cl_k.h else 'down'
+                qushi = 'up' if len(up_cl_klines) >= 2 and up_cl_klines[-2].h < cl_k.h else 'down'
                 if qushi == 'up':  # 趋势上涨，向上合并
                     cl_k.k_index = cl_k.k_index if cl_k.h > k.h else k.index
                     cl_k.date = cl_k.date if cl_k.h > k.h else k.date
@@ -1157,7 +1172,18 @@ class CL:
         """
         qss = []
         zss = sorted(zss, key=lambda z: z.index, reverse=False)
-        qs = None
+
+        def copy_zs(_zs: ZS) -> ZS:
+            """
+            复制一个新的中枢对象
+            """
+            new_zs = ZS(
+                start=_zs.start, end=_zs.end, zg=_zs.zg, zd=_zs.zd, gg=_zs.gg, dd=_zs.dd, _type=_zs.type,
+                index=_zs.index, bi_num=_zs.bi_num, level=_zs.level
+            )
+            new_zs.bis = _zs.bis
+            return new_zs
+
         for zs in zss:
             if zs.type not in ['up', 'down']:
                 continue
@@ -1171,9 +1197,9 @@ class CL:
                 if (start_zs.gg < next_zs.dd or start_zs.dd > next_zs.gg) and (
                         next_zs.bis[0].index - start_zs.bis[-1].index <= 2):
                     if qs is None:
-                        qs = QS(start_bi=start_zs.bis[0], end_bi=start_zs.bis[-1], zss=[copy.deepcopy(start_zs)],
+                        qs = QS(start_bi=start_zs.bis[0], end_bi=start_zs.bis[-1], zss=[copy_zs(start_zs)],
                                 _type=start_zs.type)
-                    qs.zss.append(copy.deepcopy(next_zs))
+                    qs.zss.append(copy_zs(next_zs))
                     qs.end_bi = next_zs.bis[-1]
                     start_zs = next_zs
 

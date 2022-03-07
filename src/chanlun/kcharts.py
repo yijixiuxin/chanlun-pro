@@ -29,6 +29,7 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
     :return:
     """
     klines = cl_data.klines
+    cl_klines = cl_data.cl_klines
     fxs = cl_data.fxs
     bis = cl_data.bis
     xds = cl_data.xds
@@ -45,6 +46,9 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
     klines_xaxis = []
     klines_vols = []
 
+    cl_klines_yaxis = []
+    cl_klines_xaxis = []
+
     # 找到顶和底的坐标
     point_ding = {'index': [], 'val': []}
     point_di = {'index': [], 'val': []}
@@ -54,6 +58,11 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
         # 开/收/低/高
         klines_yaxis.append([k.o, k.c, k.l, k.h])
         klines_vols.append(k.a)
+
+    for clk in cl_klines:
+        cl_klines_xaxis.append(clk.date)
+        # 开/收/低/高
+        cl_klines_yaxis.append([clk.l, clk.h, clk.l, clk.h])
 
     for fx in fxs:
         if fx.type == 'ding':
@@ -211,6 +220,17 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             #                             y=kline[-1]['c'])]
             # ),
         )
+            #     .add_xaxis(xaxis_data=cl_klines_xaxis)
+            #     .add_yaxis(
+            #     series_name="缠论K线",
+            #     y_axis=cl_klines_yaxis,
+            #     itemstyle_opts=opts.ItemStyleOpts(
+            #         color='red',
+            #         color0='red',
+            #         border_color="red",
+            #         border_color0="red",
+            #     ),
+            # )
             .set_global_opts(
             title_opts=opts.TitleOpts(title=title, pos_left="0"),
             xaxis_opts=opts.AxisOpts(
