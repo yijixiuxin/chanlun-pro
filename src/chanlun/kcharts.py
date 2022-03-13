@@ -19,7 +19,7 @@ if "JPY_PARENT_PID" in os.environ:
     Scatter().load_javascript()
 
 
-def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
+def render_charts(title, cl_data: cl.CL, show_num=500, orders=[]):
     """
     缠论数据图表化展示
     :param title:
@@ -306,7 +306,7 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
             "线段",
             line_xds['val'],
             label_opts=opts.LabelOpts(is_show=False),
-            linestyle_opts=opts.LineStyleOpts(width=3, type_='dashed', color='#FF9966')
+            linestyle_opts=opts.LineStyleOpts(width=3, type_='dashed', color='#333399')
         )
     )
     overlap_kline = overlap_kline.overlap(line_xd)
@@ -565,14 +565,14 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
 
     grid_chart.add(
         overlap_kline,
-        grid_opts=opts.GridOpts(width="96%", height="60%", pos_left='1%', pos_right='3%'),
+        grid_opts=opts.GridOpts(width="96%", height="75%", pos_left='1%', pos_right='3%'),
     )
 
     # Volumn 柱状图
     grid_chart.add(
         bar_vols,
         grid_opts=opts.GridOpts(
-            pos_top="60%", height="10%", width="96%", pos_left='1%', pos_right='3%'
+            pos_bottom="15%", height="10%", width="96%", pos_left='1%', pos_right='3%'
         ),
     )
 
@@ -580,10 +580,11 @@ def render_charts(title, cl_data: cl.CL, show_num=320, orders=[]):
     grid_chart.add(
         macd_bar_line,
         grid_opts=opts.GridOpts(
-            pos_top="70%", height="30%", width="96%", pos_left='1%', pos_right='3%'
+            pos_bottom="0", height="15%", width="96%", pos_left='1%', pos_right='3%'
         ),
     )
     if "JPY_PARENT_PID" in os.environ:
         return grid_chart.render_notebook()
     else:
         return grid_chart.dump_options()
+

@@ -66,6 +66,53 @@ class FX:
         self.real: bool = real  # 是否是有效的分型
         self.done: bool = done  # 分型是否完成
 
+    def ld(self):
+        """
+        分型力度值，数值越大表示分型力度越大
+        根据第三根K线与前两根K线的位置关系决定
+        """
+        ld = 0
+        one_k = self.klines[0]
+        two_k = self.klines[1]
+        three_k = self.klines[2]
+        if three_k is None:
+            return ld
+        if self.type == 'ding':
+            if three_k.h < (two_k.h - (two_k.h - two_k.l) / 2):
+                # 第三个K线的高点，低于第二根的50%以下
+                ld += 1
+            if three_k.l < one_k.l and three_k.l < two_k.l:
+                # 第三个最低点是三根中最低的
+                ld += 1
+        elif self.type == 'di':
+            if three_k.l > (two_k.l + (two_k.h - two_k.l) / 2):
+                # 第三个K线的低点，低于第二根的50%之上
+                ld += 1
+            if three_k.h > one_k.h and three_k.h > two_k.h:
+                # 第三个最低点是三根中最低的
+                ld += 1
+        return ld
+
+    def high(self):
+        """
+        获取分型最高点
+        """
+        high = self.klines[0].h
+        for k in self.klines:
+            if k is not None:
+                high = max(high, k.h)
+        return high
+
+    def low(self):
+        """
+        获取分型的最低点
+        """
+        low = self.klines[0].l
+        for k in self.klines:
+            if k is not None:
+                low = min(low, k.l)
+        return low
+
     def __str__(self):
         return 'index: %s type: %s real: %s date : %s val: %s done: %s' % (
             self.index, self.type, self.real, self.k.date, self.val, self.done)
@@ -105,6 +152,12 @@ class ZS:
         self.bis.append(bi)
         # self.bis = sorted(self.bis, key=lambda b: b.index, reverse=False)
         return True
+
+    def zf(self):
+        """
+        中枢振幅
+        """
+        return ((self.gg - self.dd) / (self.zg - self.zd) - 1) * 100
 
     def __str__(self):
         return 'index: %s level: %s FX: (%s-%s) type: %s zg: %s zd: %s gg: %s dd: %s done: %s' % \
@@ -203,20 +256,44 @@ class BI:
         return True
 
 
+class XLFX:
+    """
+    线段序列分型
+    """
+
+    def __init__(self, _type: str, high: float, low: float, bi: BI, qk: bool = False, fx_high: float = None,
+                 fx_low: float = None, done: bool = True):
+        self.type = _type
+        self.high = high
+        self.low = low
+        self.bi = bi
+
+        self.qk = qk  # 分型是否有缺口
+        self.fx_high = fx_high  # 三个分型特征序列的最高点
+        self.fx_low = fx_low  # 三个分型特征序列的最低点
+
+        self.done = done  # 序列分型是否完成
+
+    def __str__(self):
+        return "XLFX type : %s high : %s low : %s bi : %s" % (self.type, self.high, self.low, self.bi)
+
+
 class XD:
     """
     线段对象
     """
 
     def __init__(self, start: BI, end: BI = None, _type: str = None, high: float = None, low: float = None,
-                 index: int = 0):
+                 ding_fx: XLFX = None, di_fx: XLFX = None, index: int = 0, done: bool = True):
         self.start: BI = start  # 线段起始笔
         self.end: BI = end  # 线段结束笔
         self.type: str = _type  # 线段类型 （up 上涨线段 down 下跌线段）
         self.high: float = high
         self.low: float = low
+        self.ding_fx: XLFX = ding_fx
+        self.di_fx: XLFX = di_fx
         self.index: int = index
-        self.done: bool = True
+        self.done: bool = done
 
     def __str__(self):
         return 'XD index: %s type: %s start: % end: %s high: %s low: %s done: %s' % (
@@ -240,27 +317,12 @@ class QS:
             self.type, self.start_bi.start.index, self.end_bi.end.index, len(self.zss))
 
 
-class XLFX:
-    """
-    线段序列分型
-    """
-
-    def __init__(self, _type: str, high: float, low: float, bi: BI):
-        self.type = _type
-        self.high = high
-        self.low = low
-        self.bi = bi
-
-    def __str__(self):
-        return "XLFX type : %s high : %s low : %s bi : %s" % (self.type, self.high, self.low, self.bi)
-
-
 class CL:
     """
     行情数据缠论分析
     """
 
-    def __init__(self, code: str, frequency: str, config: dict = None):
+    def __init__(self, code: str, frequency: str, config: [dict, None] = None):
         """
         缠论计算
         :param code: 代码
@@ -269,7 +331,17 @@ class CL:
         """
         self.code = code
         self.frequency = frequency
-        self.config = config
+        self.config = config if config else {}
+
+        # 是否标识出未完成的笔， True 标识，False 不标识
+        if 'no_bi' not in self.config:
+            self.config['no_bi'] = False
+        # 是否标识未完成的线段，True 标识，False 不标识
+        if 'no_xd' not in self.config:
+            self.config['no_xd'] = False
+        # 笔类型 old  老笔  new 新笔  dd 顶底成笔
+        if 'bi_type' not in self.config:
+            self.config['bi_type'] = 'old'
 
         # 计算后保存的值
         self.klines: List[Kline] = []  # 整理后的原始K线
@@ -438,16 +510,20 @@ class CL:
                     done=True)
 
         if fx is None:
-            # 检测未完成符合条件的分型
-            up_k = self.cl_klines[-2]
-            now_k = self.cl_klines[-1]
-            end_k = None
-            if now_k.h > up_k.h:
-                fx = FX(index=0, _type='ding', k=now_k, klines=[up_k, now_k, end_k], val=now_k.h, tk=False, real=True,
-                        done=False)
-            elif now_k.l < up_k.l:
-                fx = FX(index=0, _type='di', k=now_k, klines=[up_k, now_k, end_k], val=now_k.l, tk=False, real=True,
-                        done=False)
+            if self.config['no_bi']:
+                # 检测未完成符合条件的分型
+                up_k = self.cl_klines[-2]
+                now_k = self.cl_klines[-1]
+                end_k = None
+                if now_k.h > up_k.h:
+                    fx = FX(index=0, _type='ding', k=now_k, klines=[up_k, now_k, end_k], val=now_k.h, tk=False,
+                            real=True,
+                            done=False)
+                elif now_k.l < up_k.l:
+                    fx = FX(index=0, _type='di', k=now_k, klines=[up_k, now_k, end_k], val=now_k.l, tk=False, real=True,
+                            done=False)
+                else:
+                    return False
             else:
                 return False
 
@@ -487,6 +563,12 @@ class CL:
         if up_fx is None:
             return False
 
+        if self.config['bi_type'] == 'dd':
+            if is_update is False:
+                fx.index = self.fxs[-1].index + 1
+                self.fxs.append(fx)
+            return True
+
         if fx.type == 'ding' and up_fx.type == 'ding' and up_fx.k.h <= fx.k.h:
             # 连续两个顶分型，前面的低于后面的，只保留后面的，前面的去掉
             up_fx.real = False
@@ -497,18 +579,20 @@ class CL:
             # 相邻的性质，必然前顶不能低于后顶，前底不能高于后底，遇到相同的，只保留第一个
             fx.real = False
         elif fx.type == 'ding' and up_fx.type == 'di' \
-                and (fx.k.h <= up_fx.k.l or fx.k.l <= up_fx.k.h or fx.val < fx_qj_high):
+                and (fx.k.h <= up_fx.k.l or fx.k.l <= up_fx.k.h or fx.val < fx_qj_high or fx.high() < up_fx.high()):
             # 当前分型 顶，上一个分型 底，当 顶 低于 底， 或者 当前分型不是区间中最高的，是个无效的顶，跳过
             fx.real = False
         elif fx.type == 'di' and up_fx.type == 'ding' \
-                and (fx.k.l >= up_fx.k.h or fx.k.h >= up_fx.k.l or fx.val > fx_qj_low):
+                and (fx.k.l >= up_fx.k.h or fx.k.h >= up_fx.k.l or fx.val > fx_qj_low or fx.low() > up_fx.low()):
             # 当前分型 底，上一个分型 顶 ，当 底 高于 顶，或者 当前分型不是区间中最低的，是个无效顶底，跳过
             fx.real = False
         else:
-            # 顶与底之间缠论 K线 数量大于1
-            if fx.k.index - up_fx.k.index >= 4:
-                pass
-            else:
+            if self.config['bi_type'] == 'old' and fx.k.index - up_fx.k.index < 4:
+                # 老笔 顶与底之间缠论 K线 数量至少 5 根
+                fx.real = False
+            if self.config['bi_type'] == 'new' and \
+                    (fx.k.index - up_fx.k.index < 3 or fx.k.klines[-1].index - up_fx.k.klines[0].index < 4):
+                # 新笔  进行包含处理，顶底在内至少4根独立K线  还原包含关系，顶底在内至少5根K线
                 fx.real = False
 
         if is_update is False:
@@ -605,48 +689,95 @@ class CL:
             xlfxs = self.merge_xd_xlfx(xlfxs)
             if len(xlfxs) < 2:
                 return False
-            xd = XD(xlfxs[0].bi, xlfxs[1].bi, _type='up' if xlfxs[0].type == 'di' else 'down',
-                    high=max(xlfxs[0].high, xlfxs[1].high), low=min(xlfxs[0].low, xlfxs[0].low))
+
+            if xlfxs[0].type == 'di':
+                xd_type = 'up'
+                di_fx = xlfxs[0]
+                ding_fx = xlfxs[1]
+                done = ding_fx.done
+            else:
+                xd_type = 'down'
+                di_fx = xlfxs[1]
+                ding_fx = xlfxs[0]
+                done = di_fx.done
+
+            # 根据配置，是否显示未完成线段
+            if self.config['no_xd'] is False and done is False:
+                return False
+
+            xd = XD(xlfxs[0].bi, xlfxs[1].bi, _type=xd_type,
+                    high=max(xlfxs[0].high, xlfxs[1].high), low=min(xlfxs[0].low, xlfxs[0].low),
+                    ding_fx=ding_fx, di_fx=di_fx, done=done)
             self.xds.append(xd)
             return True
 
         up_xd = self.xds[-1]
-        dings = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'ding')
-        dis = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'di')
+        if up_xd.done is True:
+            dings = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'ding')
+            dis = self.cal_xd_xlfx(self.bis[up_xd.end.index:], 'di')
+        else:
+            dings = self.cal_xd_xlfx(self.bis[up_xd.start.index:], 'ding')
+            dis = self.cal_xd_xlfx(self.bis[up_xd.start.index:], 'di')
+
         if len(dings) == 0 and len(dis) == 0:
             return False
 
-        if up_xd.type == 'up' and len(dis) > 0:
+        if up_xd.type == 'up' and up_xd.done and len(dis) > 0:
             # 上一个线段是向上的，找底分型
             for di in dis:
+                # 根据配置，是否显示未完成线段
+                if self.config['no_xd'] is False and di.done is False:
+                    continue
                 if di.bi.index - up_xd.end.index >= 2 and di.low < up_xd.high:
+                    # 判断第二种情况，有缺口，后续的分型继续 跌破/突破 前高/前低
+                    if up_xd.ding_fx.qk and up_xd.ding_fx.fx_high < di.fx_high:
+                        continue
                     self.xds.append(
-                        XD(up_xd.end, di.bi, _type='down', high=up_xd.high, low=di.low, index=up_xd.index + 1)
+                        XD(up_xd.end, di.bi, _type='down', high=up_xd.high, low=di.low, index=up_xd.index + 1,
+                           ding_fx=up_xd.ding_fx, di_fx=di, done=di.done)
                     )
                     return True
-        if up_xd.type == 'down' and len(dings) > 0:
+        if up_xd.type == 'down' and up_xd.done and len(dings) > 0:
             # 上一个线段是向下的，找顶分型
             for ding in dings:
+                # 根据配置，是否显示未完成线段
+                if self.config['no_xd'] is False and ding.done is False:
+                    continue
                 if ding.bi.index - up_xd.end.index >= 2 and ding.high > up_xd.low:
+                    # 判断第二种情况，有缺口，后续的分型继续 跌破/突破 前高/前低
+                    if up_xd.di_fx.qk and up_xd.di_fx.fx_low > ding.fx_low:
+                        continue
+
                     self.xds.append(
-                        XD(up_xd.end, ding.bi, _type='up', high=ding.high, low=up_xd.low, index=up_xd.index + 1)
+                        XD(up_xd.end, ding.bi, _type='up', high=ding.high, low=up_xd.low, index=up_xd.index + 1,
+                           ding_fx=ding, di_fx=up_xd.di_fx, done=ding.done)
                     )
                     return True
 
         if up_xd.type == 'up' and len(dings) > 0:
             # 上一个线段是向上的，之后又出现了顶分型，进行线段的修正
             for ding in dings:
+                # 根据配置，是否显示未完成线段
+                if self.config['no_xd'] is False and ding.done is False:
+                    continue
                 if ding.high >= up_xd.high:
                     up_xd.end = ding.bi
                     up_xd.high = ding.high
+                    up_xd.ding_fx = ding
+                    up_xd.done = ding.done
             return True
 
         if up_xd.type == 'down' and len(dis) > 0:
             # 上一个线段是向下的，之后有出现了底分型，进行线段的修正
             for di in dis:
+                # 根据配置，是否显示未完成线段
+                if self.config['no_xd'] is False and di.done is False:
+                    continue
                 if di.low <= up_xd.low:
                     up_xd.end = di.bi
                     up_xd.low = di.low
+                    up_xd.di_fx = di
+                    up_xd.done = di.done
             return True
 
         return False
@@ -1016,8 +1147,8 @@ class CL:
                     continue
                 qs = 'up' if fx_type == 'ding' else 'down'
                 up_xl = xulie[-1]
-                if (up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']) \
-                        or (up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']):
+
+                if up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']:
                     if qs == 'up':
                         now_xl['bi'] = now_xl['bi'] if now_xl['max'] >= up_xl['max'] else up_xl['bi']
                         now_xl['max'] = max(up_xl['max'], now_xl['max'])
@@ -1029,24 +1160,57 @@ class CL:
 
                     del (xulie[-1])
                     xulie.append(now_xl)
+                elif up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']:
+                    # 强包含，之后的特征序列包含前面的，形成强转折，这时不处理包含关系
+                    xulie.append(now_xl)
                 else:
                     xulie.append(now_xl)
 
         xlfxs: List[XLFX] = []
-        for i in range(1, len(xulie) - 1):
+        for i in range(1, len(xulie)):
             up_xl = xulie[i - 1]
             now_xl = xulie[i]
-            next_xl = xulie[i + 1]
-            if fx_type == 'ding' and up_xl['max'] <= now_xl['max'] and now_xl['max'] >= next_xl['max']:
-                now_xl['type'] = 'ding'
-                xlfxs.append(
-                    XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'])
-                )
-            if fx_type == 'di' and up_xl['min'] >= now_xl['min'] and now_xl['min'] <= next_xl['min']:
-                now_xl['type'] = 'di'
-                xlfxs.append(
-                    XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'])
-                )
+            if len(xulie) > (i + 1):
+                next_xl = xulie[i + 1]
+            else:
+                next_xl = None
+
+            qk = True if (up_xl['max'] < now_xl['min'] or up_xl['min'] > now_xl['max']) else False
+            if next_xl is not None:
+                # 已完成分型
+                fx_high = max(up_xl['max'], now_xl['max'], next_xl['max'])
+                fx_low = min(up_xl['min'], now_xl['min'], now_xl['min'])
+
+                if fx_type == 'ding' and up_xl['max'] <= now_xl['max'] and now_xl['max'] >= next_xl['max']:
+                    now_xl['type'] = 'ding'
+                    xlfxs.append(
+                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                             done=True)
+                    )
+                if fx_type == 'di' and up_xl['min'] >= now_xl['min'] and now_xl['min'] <= next_xl['min']:
+                    now_xl['type'] = 'di'
+                    xlfxs.append(
+                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                             done=True)
+                    )
+
+            else:
+                # 未完成分型
+                fx_high = max(up_xl['max'], now_xl['max'])
+                fx_low = min(up_xl['min'], now_xl['min'])
+
+                if fx_type == 'ding' and up_xl['max'] <= now_xl['max']:
+                    now_xl['type'] = 'ding'
+                    xlfxs.append(
+                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                             done=False)
+                    )
+                if fx_type == 'di' and up_xl['min'] >= now_xl['min']:
+                    now_xl['type'] = 'di'
+                    xlfxs.append(
+                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                             done=False)
+                    )
 
         return xlfxs
 
@@ -1075,7 +1239,7 @@ class CL:
                 continue
             elif up_xl.type == 'di' and xl.type == 'ding' and up_xl.low > xl.high:
                 continue
-            elif xl.bi.index - up_xl.bi.index < 3:  # 线段不足3笔
+            elif xl.bi.index - up_xl.bi.index < 3:  # 不足3笔
                 continue
             else:
                 real_xl_fxs.append(xl)
@@ -1209,16 +1373,17 @@ class CL:
         return qss
 
 
-def batch_cls(code, klines: Dict[str, pd.DataFrame]) -> List[CL]:
+def batch_cls(code, klines: Dict[str, pd.DataFrame], config: dict = None) -> List[CL]:
     """
     批量计算并获取 缠论 数据
     :param code:
     :param klines:
+    :param config: 缠论配置
     :return:
     """
     cls = []
     for f in klines.keys():
-        cls.append(CL(code, f).process_klines(klines[f]))
+        cls.append(CL(code, f, config).process_klines(klines[f]))
     return cls
 
 

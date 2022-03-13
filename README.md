@@ -21,12 +21,21 @@
 * 趋势
 * 多级别分析
 
+## 付费项目介绍
+
+[chanlun-pro](https://github.com/yijixiuxin/chanlun/blob/main/README_PRO.md)
+
 ## 安装
 
-### 用pypi安装
+### 用 pip 安装
 
     pip install -U chanlun
 
+### 本地编译安装
+
+    git clone https://github.com/yijixiuxin/chanlun.git
+    cd chanlun
+    python3 setup.py install
 
 ### 使用示例
 
@@ -53,17 +62,14 @@
 ![Demo-2](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-2.png)
 ![Demo-3](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-3.png)
 
-
 **有 bug 请在这个页面提交： https://github.com/yijixiuxin/chanlun/issues**
 
-
-**缠论理论交流，可加微信 【添加请备注： 缠论。否则不会添加通过】**
+**缠论交流，可加微信 【添加请备注： 缠论。否则不会添加通过】**
 
 ![微信](https://github.com/yijixiuxin/chanlun/raw/main/images/wx.jpg)
 
 ### 赞助
 
 开发维护不易，如果觉得项目对你有帮助，还请多多支持
-
 
 ![微信支付](https://github.com/yijixiuxin/chanlun/raw/main/images/wx_pay.jpg)
