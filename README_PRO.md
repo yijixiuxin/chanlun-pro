@@ -2,7 +2,7 @@
 
 ---
 
-chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，属于付费项目；
+chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，属于付费增值项目；
 
 ### 项目当前功能
 
@@ -17,7 +17,7 @@ chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，
 
 项目基于的缠论数据计算，与开源的 chanlun 并无二致，如已经有自己的分析工具，并且编程能力OK，可自行根据开源的 chanlun 项目进行集成，无需购买本项目。
 
-项目为个人开发与维护，精力有限，不太可能服务太多用户，所以定价稍高一些，为 1000 元，使用期限不限；  
+项目为个人开发与维护，精力有限，不太可能服务太多用户，所以定价为 1000 元，使用期限不限；  
 如人数太多，保留后期调整价格的权利；
 
 ### 付费购买后的权利
@@ -43,4 +43,6 @@ chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，
 ![回放页面](https://github.com/yijixiuxin/chanlun/raw/main/images/back.png)
 
 ![监控任务管理](https://github.com/yijixiuxin/chanlun/raw/main/images/check.png)
+
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test.png)
 

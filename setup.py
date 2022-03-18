@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="chanlun",
-    version="1.1.0",
+    version="1.1.1",
     author="Wang Xu",
     author_email="1058715329@qq.com",
     description="基于缠论对过往行情数据进行分析的工具包。",

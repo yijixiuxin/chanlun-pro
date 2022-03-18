@@ -59,8 +59,6 @@
 ### 实际效果展示
 
 ![Demo-1](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-1.png)
-![Demo-2](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-2.png)
-![Demo-3](https://github.com/yijixiuxin/chanlun/raw/main/images/demo-3.png)
 
 **有 bug 请在这个页面提交： https://github.com/yijixiuxin/chanlun/issues**
 
