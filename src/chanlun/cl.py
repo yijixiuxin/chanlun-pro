@@ -686,7 +686,7 @@ class CL:
                 and (
                 fx.k.h <= up_fx.k.l
                 or fx.k.l <= up_fx.k.h
-                or fx.val < fx_qj_high
+                # or fx.val < fx_qj_high
                 or (self.config['fx_baohan'] is False and fx.high() < up_fx.high())  # 是否允许分型包含的判断
         ):
             # 当前分型 顶，上一个分型 底，当 顶 低于 底， 或者 当前分型不是区间中最高的，是个无效的顶，跳过
@@ -695,7 +695,7 @@ class CL:
                 and (
                 fx.k.l >= up_fx.k.h
                 or fx.k.h >= up_fx.k.l
-                or fx.val > fx_qj_low
+                # or fx.val > fx_qj_low
                 or (self.config['fx_baohan'] is False and fx.low() > up_fx.low())  # 是否允许分型包含的判断
         ):
             # 当前分型 底，上一个分型 顶 ，当 底 高于 顶，或者 当前分型不是区间中最低的，是个无效顶底，跳过
