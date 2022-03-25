@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import List, Dict
 
 import numpy as np
@@ -126,12 +127,33 @@ class LINE:
     def __init__(self, start: FX, end: FX, high: float, low: float, _type: str, ld: dict, done: bool, index: int):
         self.start: FX = start  # 线的起始位置，以分型来记录
         self.end: FX = end  # 线的结束位置，以分型来记录
-        self.high: float = high
-        self.low: float = low
+        self.high: float = high  # 实际高点
+        self.low: float = low  # 实际低点
         self.type: str = _type  # 线的方向类型 （up 上涨  down 下跌）
         self.ld: dict = ld  # 记录线的力度信息
         self.done: bool = done  # 线是否完成
         self.index: int = index  # 线的索引，后续查找方便
+
+    def ding_high(self):
+        return self.end.val if self.type == 'up' else self.start.val
+
+    def di_low(self):
+        return self.end.val if self.type == 'down' else self.start.val
+
+    def dd_high_low(self):
+        """
+        返回线 顶底端点 的高低点
+        """
+        if self.type == 'up':
+            return {'high': self.end.val, 'low': self.start.val}
+        else:
+            return {'high': self.start.val, 'low': self.end.val}
+
+    def real_high_low(self):
+        """
+        返回线 两端 实际的 高低点
+        """
+        return {'high': self.high, 'low': self.low}
 
 
 class ZS:
@@ -173,7 +195,7 @@ class ZS:
 
     def __str__(self):
         return 'index: %s zs_type: %s level: %s FX: (%s-%s) type: %s zg: %s zd: %s gg: %s dd: %s done: %s' % \
-               (self.index, self.zs_type, self.level, self.start.index, self.end.index, self.type, self.zg, self.zd,
+               (self.index, self.zs_type, self.level, self.start.k.date, self.end.k.date, self.type, self.zg, self.zd,
                 self.gg, self.dd,
                 self.done)
 
@@ -221,7 +243,7 @@ class BI(LINE):
 
     def __str__(self):
         return 'index: %s type: %s FX: (%s - %s) high: %s low: %s done: %s' % \
-               (self.index, self.type, self.start.index, self.end.index, self.high, self.low, self.done)
+               (self.index, self.type, self.start.k.date, self.end.k.date, self.high, self.low, self.done)
 
     def add_mmd(self, name: str, zs: ZS):
         """
@@ -237,7 +259,7 @@ class BI(LINE):
         return list(set([m.name for m in self.mmds]))
 
     def line_bcs(self):
-        return [_bc.type for _bc in self.bcs]
+        return [_bc.type for _bc in self.bcs if _bc.bc]
 
     def mmd_exists(self, check_mmds: list):
         """
@@ -267,24 +289,27 @@ class BI(LINE):
 
 class XLFX:
     """
-    线段序列分型
+    序列分型
     """
 
-    def __init__(self, _type: str, high: float, low: float, bi: BI, qk: bool = False, fx_high: float = None,
-                 fx_low: float = None, done: bool = True):
+    def __init__(self, _type: str, high: float, low: float, line: LINE,
+                 qk: bool = False, line_bad: bool = False,
+                 fx_high: float = None, fx_low: float = None, done: bool = True):
         self.type = _type
         self.high = high
         self.low = low
-        self.bi = bi
+        self.line = line
 
         self.qk = qk  # 分型是否有缺口
+        self.line_bad = line_bad  # 标记是否线破坏
         self.fx_high = fx_high  # 三个分型特征序列的最高点
         self.fx_low = fx_low  # 三个分型特征序列的最低点
 
         self.done = done  # 序列分型是否完成
 
     def __str__(self):
-        return "XLFX type : %s high : %s low : %s bi : %s" % (self.type, self.high, self.low, self.bi)
+        return "XLFX type : %s done : %s qk : %s line_bad : %s high : %s low : %s line : %s" % (
+            self.type, self.done, self.qk, self.line_bad, self.high, self.low, self.line)
 
 
 class XD(LINE):
@@ -292,17 +317,37 @@ class XD(LINE):
     线段对象
     """
 
-    def __init__(self, start: FX, end: FX, start_bi: BI, end_bi: BI = None, _type: str = None, high: float = None,
+    def __init__(self, start: FX, end: FX, start_line: LINE, end_line: LINE = None, _type: str = None,
+                 high: float = None,
                  low: float = None,
-                 ding_fx: XLFX = None, di_fx: XLFX = None, ld: dict = None, index: int = 0, done: bool = True):
+                 ding_fx: XLFX = None, di_fx: XLFX = None, ld: dict = None,
+                 index: int = 0, done: bool = True):
         super().__init__(start, end, high, low, _type, ld, done, index)
 
-        self.start_bi: BI = start_bi  # 线段起始笔
-        self.end_bi: BI = end_bi  # 线段结束笔
+        self.start_line: LINE = start_line  # 线段起始笔
+        self.end_line: LINE = end_line  # 线段结束笔
         self.mmds: List[MMD] = []  # 买卖点
         self.bcs: List[BC] = []  # 背驰信息
         self.ding_fx: XLFX = ding_fx
         self.di_fx: XLFX = di_fx
+
+    def is_qk(self):
+        """
+        成线段的分型是否有缺口
+        """
+        if self.type == 'up':
+            return self.ding_fx.qk
+        else:
+            return self.di_fx.qk
+
+    def is_line_bad(self):
+        """
+        成线段的分数，是否背笔破坏（被笔破坏不等于线段结束，但是有大概率是结束了）
+        """
+        if self.type == 'up':
+            return self.ding_fx.line_bad
+        else:
+            return self.di_fx.line_bad
 
     def add_mmd(self, name: str, zs: ZS):
         """
@@ -318,7 +363,7 @@ class XD(LINE):
         return list(set([m.name for m in self.mmds]))
 
     def line_bcs(self):
-        return [_bc.type for _bc in self.bcs]
+        return [_bc.type for _bc in self.bcs if _bc.bc]
 
     def mmd_exists(self, check_mmds: list):
         """
@@ -346,26 +391,10 @@ class XD(LINE):
         return True
 
     def __str__(self):
-        return 'XD index: %s type: %s start: % end: %s high: %s low: %s done: %s' % (
-            self.index, self.type, self.start_bi.index, self.end_bi.index, self.high, self.low, self.done
+        return 'XD index: %s type: %s start: %s end: %s high: %s low: %s done: %s' % (
+            self.index, self.type, self.start_line.start.k.date, self.end_line.end.k.date, self.high, self.low,
+            self.done
         )
-
-
-class QS:
-    """
-    趋势对象
-    """
-
-    def __init__(self, qs_type: str, start_line: LINE, end_line: LINE = None, zss: List[ZS] = None, _type='zd'):
-        self.qs_type: str = qs_type  # 趋势的类型，bi 笔中枢组成的趋势 xd 线段中枢组成的趋势
-        self.start_line: LINE = start_line  # 趋势的起始线
-        self.end_line: LINE = end_line  # 趋势的结束线
-        self.zss: List[ZS] = zss  # 趋势包含的中枢列表
-        self.type: str = _type  # 趋势方向类型 （up 上涨趋势 zd 震荡趋势 down 下跌趋势）
-
-    def __str__(self):
-        return 'QS qsType: %s Type %s start: %s end: %s ZSS %s' % (
-            self.type, self.qs_type, self.start_line.index, self.end_line.index, len(self.zss))
 
 
 class CL:
@@ -387,15 +416,18 @@ class CL:
         # 是否标识出未完成的笔， True 标识，False 不标识
         if 'no_bi' not in self.config:
             self.config['no_bi'] = False
-        # 是否标识未完成的线段，True 标识，False 不标识
-        if 'no_xd' not in self.config:
-            self.config['no_xd'] = False
         # 笔类型 old  老笔  new 新笔  dd 顶底成笔
         if 'bi_type' not in self.config:
             self.config['bi_type'] = 'old'
         # 分型是否允许包含成笔的配置，False 不允许分型包含成笔，True 允许分型包含成笔
         if 'fx_baohan' not in self.config:
             self.config['fx_baohan'] = False
+        # 中枢类型，dn 段内中枢，以线段为主，只算线段内的中枢，bl 遍历查找所有存在的中枢
+        if 'zs_type' not in self.config:
+            self.config['zs_type'] = 'dn'
+        # 中枢标准，hl 实际高低点，dd 顶底端点
+        if 'zs_qj' not in self.config:
+            self.config['zs_qj'] = 'hl'
 
         # 指标配置项
         idx_keys = {
@@ -421,11 +453,10 @@ class CL:
         }  # 各种行情指标
         self.fxs: List[FX] = []  # 分型列表
         self.bis: List[BI] = []  # 笔列表
-        self.xds: List[XD] = []  # 线段列表
+        self.xds: List[XD] = []  # 线段列表（有笔的特征序列生成）
+        self.qss: List[XD] = []  # 大趋势线（由线段的特征序列生成）
         self.bi_zss: List[ZS] = []  # 笔中枢列表
-        self.bi_qss: List[QS] = []  # 笔趋势列表
         self.xd_zss: List[ZS] = []  # 线段中枢列表
-        self.xd_qss: List[QS] = []  # 线段趋势列表
 
         # 用于保存计算线段的序列分型
         self.__xl_ding = []
@@ -433,7 +464,16 @@ class CL:
         self.__xlfx_ding = []
         self.__xlfx_di = []
 
-        self._use_time = 0  # debug 调试用时
+        self.use_time = {}  # debug 调试用时
+
+    def __add_time(self, key, use_time):
+        """
+        debug 增加用时
+        """
+        if key not in self.use_time:
+            self.use_time[key] = use_time
+        else:
+            self.use_time[key] += use_time
 
     def process_klines(self, klines: pd.DataFrame):
         """
@@ -470,15 +510,47 @@ class CL:
                            o=float(k['open']), c=float(k['close']), a=float(k['volume']))
                 self.klines.append(nk)
                 k_index += 1
+            # 处理指标
+            _s = time.time()
             self.process_idx()
+            self.__add_time('process_idx', time.time() - _s)
+
+            # 处理缠论k线
+            _s = time.time()
             self.process_cl_kline()
+            self.__add_time('process_cl_kline', time.time() - _s)
+
+            # 处理分型
+            _s = time.time()
             self.process_fx()
-            if self.process_bi():
-                # 有新笔产生，才更新以下数据
-                self.process_xd()
-                self.process_zs(['bi', 'xd'])
-                self.process_qs(['bi', 'xd'])
-                self.process_mmd(['bi', 'xd'])
+            self.__add_time('process_fx', time.time() - _s)
+            _s = time.time()
+
+            # 处理笔
+            bi_update = self.process_bi()
+            self.__add_time('process_bi', time.time() - _s)
+
+            # 处理线段，有笔更新才执行
+            _s = time.time()
+            xd_update = self.process_up_line('bi') if bi_update else False  # 根据笔生成线段
+            self.__add_time('process_up_line_bi', time.time() - _s)
+
+            # 处理趋势，有线段更新才执行
+            _s = time.time()
+            self.process_up_line('xd') if xd_update else False  # 根据线段生成趋势
+            self.__add_time('process_up_line_xd', time.time() - _s)
+
+            # 处理中枢，有对应的更新，才执行相应的中枢方法
+            _s = time.time()
+            self.process_zs(['bi']) if bi_update else None
+            self.process_zs(['xd']) if xd_update else None
+            self.__add_time('process_zs', time.time() - _s)
+
+            # 处理买卖点，有对应的更新，才执行相应的方法
+            _s = time.time()
+            self.process_mmd(['bi']) if bi_update else None
+            self.process_mmd(['xd']) if xd_update else None
+            self.__add_time('process_mmd', time.time() - _s)
 
         return self
 
@@ -489,7 +561,19 @@ class CL:
         if len(self.klines) < 2:
             return False
 
-        prices = [k.c for k in self.klines[-100:]]
+        # 根据指标设置的参数，取最大值，用来获取要计算的价格序列
+        idx_keys = [
+            'idx_macd_fast',
+            'idx_macd_slow',
+            'idx_macd_signal',
+            'idx_boll_period',
+            'idx_ma_period',
+        ]
+        p_len = 0
+        for _k in idx_keys:
+            p_len = max(p_len, self.config[_k])
+
+        prices = [k.c for k in self.klines[-(p_len + 10):]]
         # 计算 macd
         macd_dif, macd_dea, macd_hist = ta.MACD(np.array(prices),
                                                 fastperiod=self.config['idx_macd_fast'],
@@ -523,9 +607,10 @@ class CL:
                 self.idx['boll']['up'].append(boll_up[-i])
                 self.idx['boll']['mid'].append(boll_mid[-i])
                 self.idx['boll']['low'].append(boll_low[-i])
-        #
+
         # self.idx = {
         #     'macd': macd,
+        #     'ma': ma,
         #     'boll': {'up': boll_up, 'mid': boll_mid, 'low': boll_low}
         # }
         return True
@@ -749,12 +834,11 @@ class CL:
                     continue
                 bi.end = fx
                 bi.type = 'up' if bi.start.type == 'di' else 'down'
-                bi.high = max(bi.start.val, bi.end.val)
-                bi.low = min(bi.start.val, bi.end.val)
                 bi.done = fx.done
                 bi.td = False
                 bi.fx_num = bi.end.index - bi.start.index
                 self.process_line_ld(bi)  # 计算笔力度
+                self.process_line_hl(bi)  # 计算实际高低点
                 self.bis.append(bi)
                 return True
 
@@ -764,13 +848,13 @@ class CL:
             if _fx.real:
                 end_real_fx = _fx
                 break
-        if bi.end.real is False and bi.end.type == end_real_fx.type:
+        if (bi.end.real is False and bi.end.type == end_real_fx.type) \
+                or (bi.end.index == end_real_fx.index and bi.done != end_real_fx.done):
             bi.end = end_real_fx
-            bi.high = max(bi.start.val, bi.end.val)
-            bi.low = min(bi.start.val, bi.end.val)
             bi.done = end_real_fx.done
             bi.fx_num = bi.end.index - bi.start.index
             self.process_line_ld(bi)  # 计算笔力度
+            self.process_line_hl(bi)  # 计算实际高低点
             return True
 
         if bi.end.index < end_real_fx.index and bi.end.type != end_real_fx.type:
@@ -778,166 +862,175 @@ class CL:
             new_bi = BI(start=bi.end, end=end_real_fx)
             new_bi.index = self.bis[-1].index + 1
             new_bi.type = 'up' if new_bi.start.type == 'di' else 'down'
-            new_bi.high = max(new_bi.start.val, new_bi.end.val)
-            new_bi.low = min(new_bi.start.val, new_bi.end.val)
             new_bi.done = end_real_fx.done
             new_bi.td = False
             new_bi.fx_num = new_bi.end.index - new_bi.start.index
             self.process_line_ld(new_bi)  # 计算笔力度
+            self.process_line_hl(new_bi)  # 计算实际高低点
             self.bis.append(new_bi)
             return True
         return False
 
-    def process_xd(self):
+    def process_up_line(self, base_line_type='bi'):
         """
-        根据最后笔，生成特征序列，计算线段
+        根据最后笔或线段，生成特征序列，计算高级别线段
         """
-
-        if len(self.xds) == 0:
-            dings = self.cal_xd_xlfx(self.bis, 'ding')
-            dis = self.cal_xd_xlfx(self.bis, 'di')
-            if len(dings) <= 0 or len(dis) <= 0:
-                return False
-            xlfxs = dings + dis
-            xlfxs.sort(key=lambda xl: xl.bi.index)
-            xlfxs = self.merge_xd_xlfx(xlfxs)
-            if len(xlfxs) < 2:
-                return False
-
-            if xlfxs[0].type == 'di':
-                xd_type = 'up'
-                di_fx = xlfxs[0]
-                ding_fx = xlfxs[1]
-                done = ding_fx.done
-            else:
-                xd_type = 'down'
-                di_fx = xlfxs[1]
-                ding_fx = xlfxs[0]
-                done = di_fx.done
-
-            # 根据配置，是否显示未完成线段
-            if self.config['no_xd'] is False and done is False:
-                return False
-
-            start_bi = xlfxs[0].bi
-            end_bi = self.bis[xlfxs[1].bi.index - 1]
-            xd = XD(
-                start=start_bi.start,
-                end=end_bi.end,
-                start_bi=start_bi,
-                end_bi=end_bi,
-                _type=xd_type,
-                high=max(start_bi.high, end_bi.high),
-                low=min(start_bi.low, end_bi.low),
-                ding_fx=ding_fx,
-                di_fx=di_fx,
-                done=done,
-            )
-            self.process_line_ld(xd)
-            self.xds.append(xd)
-            return True
-
-        up_xd = self.xds[-1]
-        if up_xd.done is True:
-            dings = self.cal_xd_xlfx(self.bis[up_xd.end_bi.index:], 'ding')
-            dis = self.cal_xd_xlfx(self.bis[up_xd.end_bi.index:], 'di')
+        is_update = False
+        if base_line_type == 'bi':
+            up_lines = self.xds
+            base_lines = self.bis
+        elif base_line_type == 'xd':
+            up_lines = self.qss
+            base_lines = self.xds
         else:
-            dings = self.cal_xd_xlfx(self.bis[up_xd.start_bi.index:], 'ding')
-            dis = self.cal_xd_xlfx(self.bis[up_xd.start_bi.index:], 'di')
+            raise ('处理高级别线段类型错误：%s' % base_line_type)
 
-        if len(dings) == 0 and len(dis) == 0:
+        if len(base_lines) == 0:
             return False
 
-        if up_xd.type == 'up' and up_xd.done and len(dis) > 0:
-            # 上一个线段是向上的，找底分型
+        if len(up_lines) == 0:
+            bi_0 = base_lines[0]
+            start_fx = XLFX(
+                _type='di' if bi_0.type == 'up' else 'ding',
+                high=bi_0.high,
+                low=bi_0.low,
+                line=bi_0
+            )
+            end_fx = None
+
+            if start_fx.type == 'di':
+                # 有相同类型 序列分型，用最新的
+                dis = self.cal_line_xlfx(base_lines, 'di')
+                for di in dis:
+                    if di.line.index > start_fx.line.index:
+                        start_fx = di
+                # 找有没有 顶分型来终结的
+                dings = self.cal_line_xlfx(base_lines[start_fx.line.index:], 'ding')
+                for ding in dings:
+                    if ding.line.index - start_fx.line.index >= 2:
+                        # 形成新的线段
+                        end_fx = ding
+                        break
+            elif start_fx.type == 'ding':
+                dings = self.cal_line_xlfx(base_lines, 'ding')
+                for ding in dings:
+                    if ding.line.index > start_fx.line.index:
+                        start_fx = ding
+                # 找有没有 底分型来终结
+                dis = self.cal_line_xlfx(base_lines[start_fx.line.index:], 'di')
+                for di in dis:
+                    if di.line.index - start_fx.line.index >= 2:
+                        end_fx = di
+
+            if start_fx and end_fx:
+                start_line = start_fx.line
+                end_line = base_lines[end_fx.line.index - 1]
+                new_up_line = XD(
+                    start=start_line.start,
+                    end=end_line.end,
+                    start_line=start_line,
+                    end_line=end_line,
+                    _type='up' if end_fx.type == 'ding' else 'down',
+                    ding_fx=start_fx if start_fx.type == 'ding' else end_fx,
+                    di_fx=start_fx if start_fx.type == 'di' else end_fx,
+                    done=end_fx.done,
+                )
+                self.process_line_ld(new_up_line)
+                self.process_line_hl(new_up_line)
+                up_lines.append(new_up_line)
+                return True
+            else:
+                return False
+
+        up_line = up_lines[-1]
+
+        # 先检查是否有延续的 顶底分型
+        if up_line.type == 'up':
+            dings = self.cal_line_xlfx(base_lines[up_line.start_line.index:], 'ding')
+            # 上一个线段是向上的，之后又出现了顶分型，进行线段的修正
+            for ding in dings:
+                if ding.line.index >= up_line.end_line.index:
+                    end_line = base_lines[ding.line.index - 1]
+                    up_line.end = end_line.end
+                    up_line.end_line = end_line
+                    up_line.ding_fx = ding
+                    up_line.done = ding.done
+                    self.process_line_ld(up_line)
+                    self.process_line_hl(up_line)
+                    is_update = True
+        elif up_line.type == 'down':
+            dis = self.cal_line_xlfx(base_lines[up_line.start_line.index:], 'di')
+            # 上一个线段是向下的，之后有出现了底分型，进行线段的修正
             for di in dis:
-                # 根据配置，是否显示未完成线段
-                if self.config['no_xd'] is False and di.done is False:
-                    continue
-                if di.bi.index - up_xd.end_bi.index >= 2 and di.low < up_xd.high:
+                if di.line.index >= up_line.end_line.index:
+                    end_line = base_lines[di.line.index - 1]
+                    up_line.end = end_line.end
+                    up_line.end_line = end_line
+                    up_line.di_fx = di
+                    up_line.done = di.done
+                    self.process_line_ld(up_line)
+                    self.process_line_hl(up_line)
+                    is_update = True
+
+        # 在检查后续是否有相反的分型，形成新的线段
+        if up_line.type == 'up':
+            # 上一个线段是向上的，找底分型
+            dis = self.cal_line_xlfx(base_lines[up_line.end_line.index + 1:], 'di')
+            for di in dis:
+                if di.line.index - up_line.end_line.index >= 2:  # and di.low < up_xd.high:
                     # 判断第二种情况，有缺口，后续的分型继续 跌破/突破 前高/前低
-                    if up_xd.ding_fx.qk and up_xd.ding_fx.fx_high < di.fx_high:
-                        continue
-                    start_bi = self.bis[up_xd.end_bi.index + 1]
-                    end_bi = self.bis[di.bi.index - 1]
-                    xd = XD(
-                        start=start_bi.start,
-                        end=end_bi.end,
-                        start_bi=start_bi,
-                        end_bi=end_bi,
+                    # if up_xd.ding_fx.qk and up_xd.ding_fx.fx_high < di.fx_high:
+                    #     continue
+                    start_line = base_lines[up_line.end_line.index + 1]
+                    end_line = base_lines[di.line.index - 1]
+                    new_up_line = XD(
+                        start=start_line.start,
+                        end=end_line.end,
+                        start_line=start_line,
+                        end_line=end_line,
                         _type='down',
-                        high=max(start_bi.high, end_bi.high),
-                        low=min(start_bi.low, end_bi.low),
-                        index=up_xd.index + 1,
-                        ding_fx=up_xd.ding_fx,
+                        index=up_line.index + 1,
+                        ding_fx=up_line.ding_fx,
                         di_fx=di,
                         done=di.done
                     )
-                    self.process_line_ld(xd)
-                    self.xds.append(xd)
-                    return True
-        if up_xd.type == 'down' and up_xd.done and len(dings) > 0:
+                    self.process_line_ld(new_up_line)
+                    self.process_line_hl(new_up_line)
+                    # 将上一个线段标记为完成，TODO 在特殊情况 会有两个顶底未完成的情况（SZ.000685 日线）
+                    up_line.done = True
+                    up_lines.append(new_up_line)
+                    is_update = True
+                    break
+        elif up_line.type == 'down':
             # 上一个线段是向下的，找顶分型
+            dings = self.cal_line_xlfx(base_lines[up_line.end_line.index + 1:], 'ding')
             for ding in dings:
-                # 根据配置，是否显示未完成线段
-                if self.config['no_xd'] is False and ding.done is False:
-                    continue
-                if ding.bi.index - up_xd.end_bi.index >= 2 and ding.high > up_xd.low:
+                if ding.line.index - up_line.end_line.index >= 2:  # and ding.high > up_xd.low:
                     # 判断第二种情况，有缺口，后续的分型继续 跌破/突破 前高/前低
-                    if up_xd.di_fx.qk and up_xd.di_fx.fx_low > ding.fx_low:
-                        continue
-                    start_bi = self.bis[up_xd.end_bi.index + 1]
-                    end_bi = self.bis[ding.bi.index - 1]
-                    xd = XD(
-                        start=start_bi.start,
-                        end=end_bi.end,
-                        start_bi=start_bi,
-                        end_bi=end_bi,
+                    # if up_xd.di_fx.qk and up_xd.di_fx.fx_low > ding.fx_low:
+                    #     continue
+                    start_line = base_lines[up_line.end_line.index + 1]
+                    end_line = base_lines[ding.line.index - 1]
+                    new_up_line = XD(
+                        start=start_line.start,
+                        end=end_line.end,
+                        start_line=start_line,
+                        end_line=end_line,
                         _type='up',
-                        high=max(start_bi.high, end_bi.high),
-                        low=min(start_bi.low, end_bi.low),
-                        index=up_xd.index + 1,
+                        index=up_line.index + 1,
                         ding_fx=ding,
-                        di_fx=up_xd.di_fx,
+                        di_fx=up_line.di_fx,
                         done=ding.done
                     )
-                    self.process_line_ld(xd)
-                    self.xds.append(xd)
-                    return True
+                    self.process_line_ld(new_up_line)
+                    self.process_line_hl(new_up_line)
+                    # 将上一个线段标记为完成，TODO 在特殊情况 会有两个顶底未完成的情况（SZ.000685 日线）
+                    up_line.done = True
+                    up_lines.append(new_up_line)
+                    is_update = True
+                    break
 
-        if up_xd.type == 'up' and len(dings) > 0:
-            # 上一个线段是向上的，之后又出现了顶分型，进行线段的修正
-            for ding in dings:
-                # 根据配置，是否显示未完成线段
-                if self.config['no_xd'] is False and ding.done is False:
-                    continue
-                if ding.high >= up_xd.high:
-                    end_bi = self.bis[ding.bi.index - 1]
-                    up_xd.end = end_bi.end
-                    up_xd.end_bi = end_bi
-                    up_xd.high = ding.high
-                    up_xd.ding_fx = ding
-                    up_xd.done = ding.done
-                    self.process_line_ld(up_xd)
-            return True
-
-        if up_xd.type == 'down' and len(dis) > 0:
-            # 上一个线段是向下的，之后有出现了底分型，进行线段的修正
-            for di in dis:
-                # 根据配置，是否显示未完成线段
-                if self.config['no_xd'] is False and di.done is False:
-                    continue
-                if di.low <= up_xd.low:
-                    end_bi = self.bis[di.bi.index - 1]
-                    up_xd.end = end_bi.end
-                    up_xd.end_bi = end_bi
-                    up_xd.low = di.low
-                    up_xd.di_fx = di
-                    up_xd.done = di.done
-                    self.process_line_ld(up_xd)
-            return True
-
-        return False
+        return is_update
 
     def process_zs(self, run_types=None):
         """
@@ -949,97 +1042,110 @@ class CL:
             # 根据运行的中枢类型，获取对应的 线（笔 or 线段）
             if run_type == 'bi':
                 lines: List[LINE] = self.bis
+                up_lines: List[XD] = self.xds
                 zss: List[ZS] = self.bi_zss
             elif run_type == 'xd':
-                lines: List[LINE] = self.xds
+                lines: List[XD] = self.xds
+                up_lines: List[XD] = self.qss
                 zss: List[ZS] = self.xd_zss
             else:
                 raise Exception('计算中枢 run_type 定义错误 %s' % run_type)
 
             if len(lines) < 4:
                 return False
-            if len(zss) == 0:
-                _ls = lines[-4:]
-                _zs = self.create_zs(run_type, None, _ls)
-                if _zs:
-                    zss.append(_zs)
-                return True
 
-            line = lines[-1]
-            # 获取所有未完成的中枢，依次根据最新的笔进行重新计算
-            for _zs in zss:
-                if _zs.done:
-                    continue
-                if _zs.end.index == line.end.index:
-                    continue
-                # 调用创建中枢，属于更新一次中枢属性
-                self.create_zs(run_type, _zs, lines[_zs.lines[0].index:line.index + 1])
-                # 如当前线与中枢最后一线格了一线，则中枢已完成
-                if line.index - _zs.lines[-1].index > 1:
-                    _zs.done = True
-                    if len(_zs.lines) < 5:  # 中枢笔小于5线为无效中枢  进入一线 + 3 + 离开一线
-                        _zs.real = False
-
-            # 以新线为基础，创建中枢
-            _zs = self.create_zs(run_type, None, lines[-4:])
-            if _zs:
-                # 检查是否已经有这个中枢了
-                is_exists = False
-                for __zs in zss[::-1]:
-                    if __zs.start.index == _zs.start.index:
-                        is_exists = True
-                        break
-                if is_exists is False:
-                    _zs.index = zss[-1].index + 1
-                    zss.append(_zs)
+            if self.config['zs_type'] == 'bl':
+                self.__process_bl_zs(lines, zss, run_type)
+            elif self.config['zs_type'] == 'dn':
+                self.__process_dn_zs(lines, up_lines, zss, run_type)
+            else:
+                raise Exception('计算中枢类型错误 %s' % run_type)
 
         return True
 
-    def process_qs(self, run_types=None):
+    def __process_dn_zs(self, lines: List[LINE], up_lines: List[XD], zss: List[ZS], run_type: str):
         """
-        计算当前趋势（已经成型的）
+        计算端内的中枢
         """
-        if run_types is None:
-            return False
+        # 优先修正上一个段内的中枢
+        if len(up_lines) >= 2:
+            _up_l = up_lines[-2]
+            _run_lines = lines[_up_l.start_line.index:_up_l.end_line.index + 1]
+            _up_zss = [_zs for _zs in zss if _up_l.start.index <= _zs.start.index < _up_l.end.index]
+            _new_zss = self.create_dn_zs(run_type, _run_lines)
+            for _u_zs in _up_zss:
+                if _u_zs.start.index not in [_z.start.index for _z in _new_zss]:
+                    _u_zs.real = False
+                    continue
+                for _n_zs in _new_zss:
+                    if _u_zs.start.index == _n_zs.start.index:
+                        self.__copy_zs(_n_zs, _u_zs)
+                        _u_zs.done = True
 
-        for run_type in run_types:
-            if run_type == 'bi':
-                lines: List[BI] = self.bis
-                zss: List[ZS] = self.bi_zss
-                qss: List[QS] = self.bi_qss
-            elif run_type == 'xd':
-                lines: List[XD] = self.xds
-                zss: List[ZS] = self.xd_zss
-                qss: List[QS] = self.xd_qss
-            else:
-                raise Exception('计算趋势 run type 错误 %s' % run_type)
+        # 计算线段内的中枢
+        run_lines: List[LINE]
+        if len(up_lines) == 0:
+            run_lines = lines
+        else:
+            run_lines = lines[up_lines[-1].start_line.index:]
 
-            if len(zss) == 0:
-                return True
-            line = lines[-1]
-            # 最后一个趋势是否有延续
-            if len(qss) > 0:
-                end_qs = qss[-1]
-                zss = [_zs for _zs in zss if
-                       (end_qs.start_line.start.index <= _zs.start.index and _zs.end.index <= line.end.index)]
-                _qss = self.find_zs_qss(run_type, zss)
-                for _qs in _qss:
-                    if _qs.type == end_qs.type and \
-                            _qs.start_line.start.index == end_qs.start_line.start.index and \
-                            _qs.end_line.end.index != end_qs.end_line.index:
-                        end_qs.zss = _qs.zss
-                        end_qs.end_line = _qs.end_line
+        exists_zs = [_zs for _zs in zss if _zs.start.index >= run_lines[0].start.index]
+        new_zs = self.create_dn_zs(run_type, run_lines)
+        # 更新 or 移除 中枢
+        for _ex_zs in exists_zs:
+            if _ex_zs.start.index not in [_z.start.index for _z in new_zs]:
+                _ex_zs.real = False
+                continue
+            for _n_zs in new_zs:
+                if _n_zs.start.index == _ex_zs.start.index:
+                    self.__copy_zs(_n_zs, _ex_zs)
+        # 添加之前没有的中枢
+        for _n_zs in new_zs:
+            if _n_zs.start.index not in [_z.start.index for _z in exists_zs]:
+                _n_zs.index = zss[-1].index + 1 if len(zss) > 0 else 0
+                zss.append(_n_zs)
 
-            # 计算之后的中枢
-            start_line = qss[-1].end_line if len(qss) > 0 else lines[0]
-            zss = [_zs for _zs in zss if
-                   (start_line.start.index <= _zs.start.index and _zs.end.index <= line.end.index)]
-            _qss = self.find_zs_qss(run_type, zss)
-            for _qs in _qss:
-                if _qs.type == 'up' or _qs.type == 'down':
-                    # 只保留有方向的趋势，震荡趋势就不保存了
-                    qss.append(_qs)
+        return
 
+    def __process_bl_zs(self, lines: List[LINE], zss: List[ZS], run_type: str):
+        """
+        计算并处理遍历中枢
+        """
+
+        if len(zss) == 0:
+            _ls = lines[-4:]
+            _zs = self.create_zs(run_type, None, _ls)
+            if _zs:
+                zss.append(_zs)
+            return True
+
+        line = lines[-1]
+        # 获取所有未完成的中枢，依次根据最新的笔进行重新计算
+        for _zs in zss:
+            if _zs.done:
+                continue
+            if _zs.end.index == line.end.index:
+                continue
+            # 调用创建中枢，属于更新一次中枢属性
+            self.create_zs(run_type, _zs, lines[_zs.lines[0].index:line.index + 1])
+            # 如当前线与中枢最后一线格了一线，则中枢已完成
+            if line.index - _zs.lines[-1].index > 1:
+                _zs.done = True
+                if len(_zs.lines) < 5:  # 中枢笔小于5线为无效中枢  进入一线 + 3 + 离开一线
+                    _zs.real = False
+
+        # 以新线为基础，创建中枢
+        _zs = self.create_zs(run_type, None, lines[-4:])
+        if _zs:
+            # 检查是否已经有这个中枢了
+            is_exists = False
+            for __zs in zss[::-1]:
+                if __zs.start.index == _zs.start.index:
+                    is_exists = True
+                    break
+            if is_exists is False:
+                _zs.index = zss[-1].index + 1
+                zss.append(_zs)
         return True
 
     def process_mmd(self, run_types=None):
@@ -1053,11 +1159,9 @@ class CL:
             if run_type == 'bi':
                 lines: List[BI] = self.bis
                 zss: List[ZS] = self.bi_zss
-                qss: List[QS] = self.bi_qss
             elif run_type == 'xd':
                 lines: List[XD] = self.xds
                 zss: List[ZS] = self.xd_zss
-                qss: List[QS] = self.xd_qss
             else:
                 raise Exception('记录买卖点 run_type 错误 ：%s' % run_type)
 
@@ -1072,10 +1176,13 @@ class CL:
             # 笔背驰添加
             line.add_bc(run_type, None, lines[-3], self.beichi_line(lines[-3], line))
             # 查找所有以当前线为结束的中枢
-            line_zss = [_zs for _zs in zss if (_zs.lines[-1].index == line.index and _zs.real and _zs.level == 0)]
+            line_zss: List[ZS] = [
+                _zs for _zs in zss
+                if (_zs.lines[-1].index == line.index and _zs.real and _zs.level == 0)
+            ]
             for _zs in line_zss:
                 line.add_bc('pz', _zs, _zs.lines[0], self.beichi_pz(_zs, line))
-                line.add_bc('qs', _zs, _zs.lines[0], self.beichi_qs(qss[-1] if len(qss) > 0 else None, _zs, line))
+                line.add_bc('qs', _zs, _zs.lines[0], self.beichi_qs(zss, _zs, line))
 
             # 买卖点的判断
             # 一类买卖点，有趋势背驰，记为一类买卖点
@@ -1092,10 +1199,10 @@ class CL:
                     continue
                 tx_line: [BI, XD] = _zs.lines[-3]
                 if _zs.lines[0].type == 'up' and line.type == 'up':
-                    if tx_line.high == _zs.gg and (tx_line.high > line.high or tx_line.bc_exists(['pz', 'qs'])):
+                    if tx_line.high == _zs.gg and (tx_line.high > line.high or line.bc_exists(['pz', 'qs'])):
                         line.add_mmd('2sell', _zs)
                 if _zs.lines[0].type == 'down' and line.type == 'down':
-                    if tx_line.low == _zs.dd and (tx_line.low < line.low or tx_line.bc_exists(['pz', 'qs'])):
+                    if tx_line.low == _zs.dd and (tx_line.low < line.low or line.bc_exists(['pz', 'qs'])):
                         line.add_mmd('2buy', _zs)
 
             # 类二买卖点，当前中枢的第一笔是二类买卖点，并且离开中枢的力度比进入的力度弱，则为类二买卖点
@@ -1120,8 +1227,10 @@ class CL:
                         line.add_mmd('l2sell', _zs)
 
             # 三类买卖点，需要找中枢结束笔是前一笔的中枢
-            line_3mmd_zss = [_zs for _zs in zss if
-                             (_zs.lines[-1].index == line.index - 1 and _zs.real and _zs.level == 0)]
+            line_3mmd_zss: List[ZS] = [
+                _zs for _zs in zss
+                if (_zs.lines[-1].index == line.index - 1 and _zs.real and _zs.level == 0)
+            ]
             for _zs in line_3mmd_zss:
                 if len(_zs.lines) < 5:
                     continue
@@ -1184,29 +1293,30 @@ class CL:
 
         return self.compare_ld_beichi(zs.lines[0].ld, now_line.ld)
 
-    def beichi_qs(self, qs: QS, zs: ZS, now_line: LINE):
+    def beichi_qs(self, zss: List[ZS], zs: ZS, now_line: LINE):
         """
         判断是否是趋势背驰，首先需要看之前是否有不重合的同向中枢，在进行背驰判断
         """
-        if qs is None:
-            # 无趋势无背驰
+        if zs.type not in ['up', 'down']:
             return False
 
-        if zs.lines[-1].index != now_line.index:
+        # 查找之前是否有同向的，并且级别相同的中枢
+        pre_zs = [
+            _zs for _zs in zss
+            if (_zs.lines[-1].index == zs.lines[0].index and _zs.type == zs.type and _zs.level == zs.level)
+        ]
+        if len(pre_zs) == 0:
             return False
-        # 趋势最后一个中枢，是否和当前中枢是一个（根据 index 判断）
-        if qs.zss[-1].index != zs.index or qs.zss[-1].lines[-1].index != now_line.index:
+        # 判断 高低点是否有重合
+        pre_ok_zs = []
+        for _zs in pre_zs:
+            if (_zs.type == 'up' and _zs.gg < zs.dd) or (_zs.type == 'down' and _zs.dd > zs.gg):
+                pre_ok_zs.append(_zs)
+
+        if len(pre_ok_zs) == 0:
             return False
-        # 最后两个中枢的级别要一致
-        if qs.zss[-1].level != qs.zss[-2].level:
-            return False
-        # 趋势中枢与笔方向是否一致
-        if qs.zss[-1].type != now_line.type:
-            return False
-        # 两个趋势之间的力度，与离开中枢的力度做对比
-        qj_ld = self.query_macd_ld(qs.zss[-2].end, qs.zss[-1].start)
-        qj_ld = {'macd': qj_ld}
-        return self.compare_ld_beichi(qj_ld, now_line.ld)
+
+        return self.compare_ld_beichi(zs.lines[0].ld, now_line.ld)
 
     def create_zs(self, zs_type: str, zs: [ZS, None], lines: List[LINE]) -> [ZS, None]:
         """
@@ -1214,42 +1324,76 @@ class CL:
         zs_type 标记中枢类型（笔中枢 or 线段中枢）
         lines 中，第一线是进入中枢的，不计算高低，最后一线不一定是最后一个出中枢的，如果是最后一个出中枢的，则不需要计算高低点
         """
-        if len(lines) < 3:
+        if len(lines) <= 3:
             return None
 
-        # 进入段要笔中枢第一段高或低
-        if lines[0].type == 'up' and lines[0].low > lines[1].low:
+        # 进入段要比中枢第一段高或低
+        # if lines[0].type == 'up' and lines[0].low > lines[1].low:
+        #     return None
+        # if lines[0].type == 'down' and lines[0].high < lines[1].high:
+        #     return None
+        def line_hl(_l: LINE):
+            if self.config['zs_qj'] == 'hl':
+                return [_l.high, _l.low]
+            else:
+                return [_l.ding_high(), _l.di_low()]
+
+        run_lines = []
+        zs_done = False
+        # 记录重叠线的最高最低值
+        _l_one_hl = line_hl(lines[0])
+        _high = _l_one_hl[0]
+        _low = _l_one_hl[1]
+        cross_qj = self.cross_qujian(line_hl(lines[1]), line_hl(lines[3]))
+        if cross_qj is None:
             return None
-        if lines[0].type == 'down' and lines[0].high < lines[1].high:
+        # 获取所有与中枢有重叠的线，计算中枢，只要有不重叠的，即为中枢结束
+        for _l in lines:
+            _l_hl = line_hl(_l)
+            if self.cross_qujian([cross_qj['max'], cross_qj['min']], _l_hl):
+                _high = max(_high, _l_hl[0])
+                _low = min(_low, _l_hl[1])
+                run_lines.append(_l)
+            else:
+                zs_done = True
+                break
+        # 看看中枢笔数是否足够
+        if len(run_lines) < 4:
             return None
+
+        # 如果最后一笔向上并且是最高的，或者最后一笔向下是最低点，则最后一笔不划归中枢，默认为中枢结束一笔，当然后续会扩展
+        _last_line = run_lines[-1]
+        _last_hl = line_hl(_last_line)
+        last_line_in_zs = True
+        if (_last_line.type == 'up' and _last_hl[0] == _high) \
+                or (_last_line.type == 'down' and _last_hl[1] == _low):
+            last_line_in_zs = False
 
         if zs is None:
-            zs = ZS(zs_type=zs_type, start=lines[1].start, _type='zd')
+            zs = ZS(zs_type=zs_type, start=run_lines[1].start, _type='zd')
+        zs.done = zs_done
+
         zs.lines = []
-        zs.add_line(lines[0])
+        zs.add_line(run_lines[0])
 
-        zs_fanwei = [lines[1].high, lines[1].low]
-        zs_gg = lines[1].high
-        zs_dd = lines[1].low
-        for i in range(1, len(lines)):
+        zs_fanwei = [cross_qj['max'], cross_qj['min']]
+        zs_gg = run_lines[1].high
+        zs_dd = run_lines[1].low
+
+        for i in range(1, len(run_lines)):
             # 当前线的交叉范围
-            _l = lines[i]
-            cross_fanwei = self.cross_qujian(zs_fanwei, [_l.high, _l.low])
+            _l = run_lines[i]
+            _l_hl = line_hl(_l)
+            cross_fanwei = self.cross_qujian(zs_fanwei, _l_hl)
             if cross_fanwei is None:
-                break
+                raise Exception('中枢不可有不交叉的地方')
 
-            # 下一线的交叉范围
-            if i < len(lines) - 1:
-                next_line = lines[i + 1]
-                next_fanwei = self.cross_qujian(zs_fanwei, [next_line.high, next_line.low])
+            if i == len(run_lines) - 1 and last_line_in_zs is False:
+                # 判断是最后一线，并且最后一线不在中枢里
+                pass
             else:
-                next_fanwei = True
-
-            if next_fanwei:
-                zs_gg = max(zs_gg, _l.high)
-                zs_dd = min(zs_dd, _l.low)
-                if i <= 2:
-                    zs_fanwei = [cross_fanwei['max'], cross_fanwei['min']]
+                zs_gg = max(zs_gg, _l_hl[0])
+                zs_dd = min(zs_dd, _l_hl[1])
                 # 根据笔数量，计算级别
                 zs.line_num = len(zs.lines) - 1
                 zs.level = int(zs.line_num / 9)
@@ -1261,10 +1405,6 @@ class CL:
                     zs.max_ld = zs.max_ld if self.compare_ld_beichi(zs.max_ld, _l.ld) else _l.ld
             zs.add_line(_l)
 
-        # 看看中枢笔数是否足够
-        if len(zs.lines) < 4:
-            return None
-
         zs.zg = zs_fanwei[0]
         zs.zd = zs_fanwei[1]
         zs.gg = zs_gg
@@ -1272,9 +1412,11 @@ class CL:
 
         # 计算中枢方向
         if zs.lines[0].type == zs.lines[-1].type:
-            if zs.lines[0].type == 'up' and zs.lines[0].low < zs.dd and zs.lines[-1].high >= zs.gg:
+            _l_start_hl = line_hl(zs.lines[0])
+            _l_end_hl = line_hl(zs.lines[-1])
+            if zs.lines[0].type == 'up' and _l_start_hl[1] <= zs.dd and _l_end_hl[0] >= zs.gg:
                 zs.type = zs.lines[0].type
-            elif zs.lines[0].type == 'down' and zs.lines[0].high > zs.gg and zs.lines[-1].low <= zs.dd:
+            elif zs.lines[0].type == 'down' and _l_start_hl[0] >= zs.gg and _l_end_hl[1] <= zs.dd:
                 zs.type = zs.lines[0].type
             else:
                 zs.type = 'zd'
@@ -1283,6 +1425,28 @@ class CL:
 
         return zs
 
+    def create_dn_zs(self, zs_type: str, lines: List[LINE]) -> List[ZS]:
+        """
+        计算端内同向中枢
+        """
+        zss: List[ZS] = []
+        if len(lines) <= 4:
+            return zss
+
+        start = 0
+        while True:
+            run_lines = lines[start:]
+            if len(run_lines) == 0:
+                break
+            zs = self.create_zs(zs_type, None, run_lines)
+            if zs is None:
+                start += 1
+            else:
+                zss.append(zs)
+                start += len(zs.lines) - 1
+
+        return zss
+
     def process_line_ld(self, line: LINE):
         """
         处理并计算线（笔、线段）的力度
@@ -1290,6 +1454,15 @@ class CL:
         line.ld = {
             'macd': self.query_macd_ld(line.start, line.end)
         }
+        return True
+
+    def process_line_hl(self, line: LINE):
+        """
+        处理并计算线（笔、线段）实际高低点
+        """
+        hl = self.__fx_qj_high_low(line.start, line.end)
+        line.high = hl['high']
+        line.low = hl['low']
         return True
 
     def query_macd_ld(self, start_fx: FX, end_fx: FX):
@@ -1324,15 +1497,49 @@ class CL:
             'hist': {'sum': hist_sum, 'up_sum': hist_up_sum, 'down_sum': hist_down_sum, 'end': end_hist},
         }
 
-    @staticmethod
-    def cal_xd_xlfx(bis: List[BI], fx_type='ding'):
+    def __fx_qj_high_low(self, start: FX, end: FX):
         """
-        计算线段序列分型
+        获取分型区间实际的 高低点
+        """
+        klines = self.klines[start.k.k_index:end.k.k_index + 1]
+        k_h = [_k.h for _k in klines]
+        k_l = [_k.l for _k in klines]
+        high = np.array(k_h).max()
+        low = np.array(k_l).min()
+        return {'high': high, 'low': low}
+
+    @staticmethod
+    def __copy_zs(copy_zs: ZS, to_zs: ZS):
+        """
+        复制一个中枢的属性到另外一个中枢
+        """
+        to_zs.zs_type = copy_zs.zs_type
+        to_zs.start = copy_zs.start
+        to_zs.lines = copy_zs.lines
+        to_zs.end = copy_zs.end
+        to_zs.zg = copy_zs.zg
+        to_zs.zd = copy_zs.zd
+        to_zs.gg = copy_zs.gg
+        to_zs.dd = copy_zs.dd
+        to_zs.type = copy_zs.type
+        to_zs.line_num = copy_zs.line_num
+        to_zs.level = copy_zs.level
+        to_zs.max_ld = copy_zs.max_ld
+        to_zs.done = copy_zs.done
+        to_zs.real = copy_zs.real
+        return
+
+    @staticmethod
+    def cal_line_xlfx(lines: List[LINE], fx_type='ding') -> List[XLFX]:
+        """
+        计算线的序列分型
+        todo 这里用线的 顶底高低点 计算特征序列
         """
         xulie = []
-        for bi in bis:
-            if (fx_type == 'ding' and bi.type == 'down') or (fx_type == 'di' and bi.type == 'up'):
-                now_xl = {'max': bi.high, 'min': bi.low, 'bi': bi}
+        for line in lines:
+            if (fx_type == 'ding' and line.type == 'down') or (fx_type == 'di' and line.type == 'up'):
+                now_xl = {'max': line.ding_high(), 'min': line.di_low(), 'line': line,
+                          'line_bad': False}  # line_bad 标识是否笔破坏
                 if len(xulie) == 0:
                     xulie.append(now_xl)
                     continue
@@ -1341,18 +1548,19 @@ class CL:
 
                 if up_xl['max'] >= now_xl['max'] and up_xl['min'] <= now_xl['min']:
                     if qs == 'up':
-                        now_xl['bi'] = now_xl['bi'] if now_xl['max'] >= up_xl['max'] else up_xl['bi']
+                        now_xl['line'] = now_xl['line'] if now_xl['max'] >= up_xl['max'] else up_xl['line']
                         now_xl['max'] = max(up_xl['max'], now_xl['max'])
                         now_xl['min'] = max(up_xl['min'], now_xl['min'])
                     else:
-                        now_xl['bi'] = now_xl['bi'] if now_xl['min'] <= up_xl['min'] else up_xl['bi']
+                        now_xl['line'] = now_xl['line'] if now_xl['min'] <= up_xl['min'] else up_xl['line']
                         now_xl['max'] = min(up_xl['max'], now_xl['max'])
                         now_xl['min'] = min(up_xl['min'], now_xl['min'])
 
                     del (xulie[-1])
                     xulie.append(now_xl)
-                elif up_xl['max'] <= now_xl['max'] and up_xl['min'] >= now_xl['min']:
-                    # 强包含，之后的特征序列包含前面的，形成强转折，这时不处理包含关系
+                elif up_xl['max'] < now_xl['max'] and up_xl['min'] > now_xl['min']:
+                    # 强包含，之后的特征序列包含前面的，形成强转折，这时不处理包含关系，同时也形成了笔破坏
+                    now_xl['line_bad'] = True
                     xulie.append(now_xl)
                 else:
                     xulie.append(now_xl)
@@ -1372,16 +1580,18 @@ class CL:
                 fx_high = max(up_xl['max'], now_xl['max'], next_xl['max'])
                 fx_low = min(up_xl['min'], now_xl['min'], now_xl['min'])
 
-                if fx_type == 'ding' and up_xl['max'] <= now_xl['max'] and now_xl['max'] >= next_xl['max']:
+                if fx_type == 'ding' and up_xl['max'] < now_xl['max'] and now_xl['max'] > next_xl['max']:
                     now_xl['type'] = 'ding'
                     xlfxs.append(
-                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['line'], qk=qk, line_bad=now_xl['line_bad'],
+                             fx_high=fx_high, fx_low=fx_low,
                              done=True)
                     )
-                if fx_type == 'di' and up_xl['min'] >= now_xl['min'] and now_xl['min'] <= next_xl['min']:
+                if fx_type == 'di' and up_xl['min'] > now_xl['min'] and now_xl['min'] < next_xl['min']:
                     now_xl['type'] = 'di'
                     xlfxs.append(
-                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['line'], qk=qk, line_bad=now_xl['line_bad'],
+                             fx_high=fx_high, fx_low=fx_low,
                              done=True)
                     )
 
@@ -1390,52 +1600,22 @@ class CL:
                 fx_high = max(up_xl['max'], now_xl['max'])
                 fx_low = min(up_xl['min'], now_xl['min'])
 
-                if fx_type == 'ding' and up_xl['max'] <= now_xl['max']:
+                if fx_type == 'ding' and up_xl['max'] < now_xl['max']:
                     now_xl['type'] = 'ding'
                     xlfxs.append(
-                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                        XLFX('ding', now_xl['max'], now_xl['min'], now_xl['line'], qk=qk, line_bad=now_xl['line_bad'],
+                             fx_high=fx_high, fx_low=fx_low,
                              done=False)
                     )
-                if fx_type == 'di' and up_xl['min'] >= now_xl['min']:
+                if fx_type == 'di' and up_xl['min'] > now_xl['min']:
                     now_xl['type'] = 'di'
                     xlfxs.append(
-                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['bi'], qk=qk, fx_high=fx_high, fx_low=fx_low,
+                        XLFX('di', now_xl['max'], now_xl['min'], now_xl['line'], qk=qk, line_bad=now_xl['line_bad'],
+                             fx_high=fx_high, fx_low=fx_low,
                              done=False)
                     )
 
         return xlfxs
-
-    @staticmethod
-    def merge_xd_xlfx(xlfxs: List[XLFX]):
-        """
-        合并线段的顶底序列分型，过滤掉无效的分型
-        """
-        real_xl_fxs = []
-        for xl in xlfxs:
-            if len(real_xl_fxs) == 0:
-                real_xl_fxs.append(xl)
-                continue
-            up_xl = real_xl_fxs[-1]
-            if up_xl.type == 'ding' and xl.type == 'ding':
-                # 两个顶序列分型
-                if xl.high > up_xl.high:
-                    del (real_xl_fxs[-1])
-                    real_xl_fxs.append(xl)
-            elif up_xl.type == 'di' and xl.type == 'di':
-                # 两个低序列分型
-                if xl.low < up_xl.low:
-                    del (real_xl_fxs[-1])
-                    real_xl_fxs.append(xl)
-            elif up_xl.type == 'ding' and xl.type == 'di' and up_xl.high < xl.low:
-                continue
-            elif up_xl.type == 'di' and xl.type == 'ding' and up_xl.low > xl.high:
-                continue
-            elif xl.bi.index - up_xl.bi.index < 3:  # 不足3笔
-                continue
-            else:
-                real_xl_fxs.append(xl)
-
-        return real_xl_fxs
 
     @staticmethod
     def compare_ld_beichi(one_ld: dict, two_ld: dict):
@@ -1520,53 +1700,53 @@ class CL:
 
         return cl_klines
 
-    @staticmethod
-    def find_zs_qss(qs_type: str, zss: List[ZS]) -> List[QS]:
-        """
-        查找中枢列表 两两互不关联的中枢
-        """
-        qss = []
-        zss = sorted(zss, key=lambda z: z.index, reverse=False)
-
-        def copy_zs(_zs: ZS) -> ZS:
-            """
-            复制一个新的中枢对象
-            """
-            new_zs = ZS(
-                zs_type=zs.zs_type,
-                start=_zs.start, end=_zs.end, zg=_zs.zg, zd=_zs.zd, gg=_zs.gg, dd=_zs.dd, _type=_zs.type,
-                index=_zs.index, line_num=_zs.line_num, level=_zs.level
-            )
-            new_zs.lines = _zs.lines
-            return new_zs
-
-        for zs in zss:
-            if zs.type not in ['up', 'down']:
-                continue
-            qs = None
-            start_zs = zs
-            for next_zs in zss:
-                if next_zs.type != start_zs.type:
-                    continue
-                if next_zs.index <= start_zs.index:
-                    continue
-                if (start_zs.gg < next_zs.dd or start_zs.dd > next_zs.gg) and (
-                        next_zs.lines[0].index - start_zs.lines[-1].index <= 2):
-                    if qs is None:
-                        qs = QS(
-                            qs_type=qs_type,
-                            start_line=start_zs.lines[0],
-                            end_line=start_zs.lines[-1],
-                            zss=[copy_zs(start_zs)],
-                            _type=start_zs.type)
-                    qs.zss.append(copy_zs(next_zs))
-                    qs.end_bi = next_zs.lines[-1]
-                    start_zs = next_zs
-
-            if qs and len(qs.zss) >= 2:
-                qss.append(qs)
-
-        return qss
+    # @staticmethod
+    # def find_zs_qss(qs_type: str, zss: List[ZS]) -> List[QS]:
+    #     """
+    #     查找中枢列表 两两互不关联的中枢
+    #     """
+    #     qss = []
+    #     zss = sorted(zss, key=lambda z: z.index, reverse=False)
+    #
+    #     def copy_zs(_zs: ZS) -> ZS:
+    #         """
+    #         复制一个新的中枢对象
+    #         """
+    #         new_zs = ZS(
+    #             zs_type=zs.zs_type,
+    #             start=_zs.start, end=_zs.end, zg=_zs.zg, zd=_zs.zd, gg=_zs.gg, dd=_zs.dd, _type=_zs.type,
+    #             index=_zs.index, line_num=_zs.line_num, level=_zs.level
+    #         )
+    #         new_zs.lines = _zs.lines
+    #         return new_zs
+    #
+    #     for zs in zss:
+    #         if zs.type not in ['up', 'down']:
+    #             continue
+    #         qs = None
+    #         start_zs = zs
+    #         for next_zs in zss:
+    #             if next_zs.type != start_zs.type:
+    #                 continue
+    #             if next_zs.index <= start_zs.index:
+    #                 continue
+    #             if (start_zs.gg < next_zs.dd or start_zs.dd > next_zs.gg) and (
+    #                     next_zs.lines[0].index - start_zs.lines[-1].index <= 2):
+    #                 if qs is None:
+    #                     qs = QS(
+    #                         qs_type=qs_type,
+    #                         start_line=start_zs.lines[0],
+    #                         end_line=start_zs.lines[-1],
+    #                         zss=[copy_zs(start_zs)],
+    #                         _type=start_zs.type)
+    #                 qs.zss.append(copy_zs(next_zs))
+    #                 qs.end_bi = next_zs.lines[-1]
+    #                 start_zs = next_zs
+    #
+    #         if qs and len(qs.zss) >= 2:
+    #             qss.append(qs)
+    #
+    #     return qss
 
 
 def batch_cls(code, klines: Dict[str, pd.DataFrame], config: dict = None) -> List[CL]:

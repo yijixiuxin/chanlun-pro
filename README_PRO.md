@@ -34,7 +34,9 @@ chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，
 
 ### 实际运行效果展示
 
-![股票行情页面](https://github.com/yijixiuxin/chanlun/raw/main/images/stock.png)
+![沪深行情页面](https://github.com/yijixiuxin/chanlun/raw/main/images/stock.png)
+
+![港股行情页面](https://github.com/yijixiuxin/chanlun/raw/main/images/hk.png)
 
 ![期货行情页面](https://github.com/yijixiuxin/chanlun/raw/main/images/futures.png)
 
@@ -44,5 +46,9 @@ chanlun-pro 是基于 chanlun 包，扩展的行情数据可视化 WEB 项目，
 
 ![监控任务管理](https://github.com/yijixiuxin/chanlun/raw/main/images/check.png)
 
-![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test.png)
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test_1.png)
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test_2.png)
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test_3.png)
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test_4.png)
+![策略回测结果查看](https://github.com/yijixiuxin/chanlun/raw/main/images/back_test_5.png)
 
