@@ -743,7 +743,7 @@ class CL:
         for _fx in self.fxs[::-1]:
             if is_update and _fx.index == fx.index:
                 continue
-            fx_qj_high = _fx.val if fx_qj_low is None else max(fx_qj_high, _fx.val)
+            fx_qj_high = _fx.val if fx_qj_high is None else max(fx_qj_high, _fx.val)
             fx_qj_low = _fx.val if fx_qj_low is None else min(fx_qj_low, _fx.val)
             if _fx.real:
                 up_fx = _fx
