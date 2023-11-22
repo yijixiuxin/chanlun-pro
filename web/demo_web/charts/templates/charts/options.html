@@ -1,0 +1,255 @@
+{# 选项设置 #}
+<div class="ace-settings-container" id="ace-settings-container">
+    <div class="btn btn-app btn-xs btn-warning ace-settings-btn" id="ace-settings-btn">
+        <i class="ace-icon fa fa-tachometer bigger-130"></i>
+    </div>
+
+    <div class="ace-settings-box clearfix chart_setting" id="ace-settings-box">
+        <form class="form-horizontal" role="form">
+            <h4>缠论计算配置</h4>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">分型区间</label>
+                <div class="col-sm-9 show-tooltips" title="顶底分型区间计算依据">
+                    <select type="select" class="form-control" id="fx_qj">
+                        <option value="fx_qj_k">分型内原始K线高低区间</option>
+                        <option value="fx_qj_ck">分型内缠论K线高低区间</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">分型包含关系</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="影响顶底包含是否成笔">
+                    <select type="select" class="form-control" id="fx_bh">
+                        <option value="fx_bh_yes">接受所有包含关系</option>
+                        <option value="fx_bh_dingdi">顶不可以在底中</option>
+                        <option value="fx_bh_diding">底不可以在顶中</option>
+                        <option value="fx_bh_no">不允许所有包含关系</option>
+                        <option value="fx_bh_no_qbh">不允许前分型包含后分型</option>
+                        <option value="fx_bh_no_hbq">不允许后分型包含前分型</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">笔类型</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="成笔条件，老笔顶底至少5跟缠论K线；新笔顶底至少4跟缠论K线，5跟原始K线；顶底成笔，只要有分型即可成笔">
+                    <select type="select" class="form-control" id="bi_type">
+                        <option value="bi_type_old">老笔</option>
+                        <option value="bi_type_new">新笔</option>
+                        <option value="bi_type_jdb">简单笔</option>
+                        <option value="bi_type_dd">顶底成笔</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">笔标准化</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="笔的标准化，是否将笔的起始端点，画在笔内的最高最低之上">
+                    <select type="select" class="form-control" id="bi_bzh">
+                        <option value="bi_bzh_yes">标准化（画在高低点）</option>
+                        <option value="bi_bzh_no">不标准化（按照分型来）</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">次高低分型</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="之前的顶底分型不满足成笔，后一个分型高于或低于前一个分型，是否允许成笔">
+                    <select type="select" class="form-control" id="bi_fx_cgd">
+                        <option value="bi_fx_cgd_yes">允许次高低分型成笔</option>
+                        <option value="bi_fx_cgd_no">不允许次高低分型成笔</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">笔区间</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="笔区间计算依据，会影响线段的特征序列计算">
+                    <select type="select" class="form-control" id="bi_qj">
+                        <option value="bi_qj_dd">笔的起始端点</option>
+                        <option value="bi_qj_k">笔内原始K线最高最低</option>
+                        <option value="bi_qj_ck">笔内缠论K线最高最低</option>
+                    </select>
+                </div>
+            </div>
+{#            <div class="form-group">#}
+{#                <label class="col-sm-3 control-label no-padding-right">线段标准化</label>#}
+{#                <div class="col-sm-9 show-tooltips"#}
+{#                     title="影响线段的起始端点，标准化会导致一笔成段的出现">#}
+{#                    <select type="select" class="form-control" id="xd_bzh">#}
+{#                        <option value="xd_bzh_no">严格按照特征序列顶底端点</option>#}
+{#                        <option value="xd_bzh_yes">标准化线段画在高低端点</option>#}
+{#                    </select>#}
+{#                </div>#}
+{#            </div>#}
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">线段区间</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="线段区间计算依据，影响走势段的特征序列计算">
+                    <select type="select" class="form-control" id="xd_qj">
+                        <option value="xd_qj_dd">线段的起始端点</option>
+                        <option value="xd_qj_ck">线段内缠论K线高低点</option>
+                        <option value="xd_qj_k">线段内原始K线高低点</option>
+                    </select>
+                </div>
+            </div>
+{#            <div class="form-group">#}
+{#                <label class="col-sm-3 control-label no-padding-right">走势段标准化</label>#}
+{#                <div class="col-sm-9 show-tooltips"#}
+{#                     title="影响走势段的起始端点，标准化会导致一段成走势段的出现">#}
+{#                    <select type="select" class="form-control" id="zsd_bzh">#}
+{#                        <option value="zsd_bzh_no">严格按照特征序列顶底端点</option>#}
+{#                        <option value="zsd_bzh_yes">标准化走势画在高低端点</option>#}
+{#                    </select>#}
+{#                </div>#}
+{#            </div>#}
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">走势段区间</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="走势段区间计算依据，影响走势段中枢计算">
+                    <select type="select" class="form-control" id="zsd_qj">
+                        <option value="zsd_qj_dd">线段的起始端点</option>
+                        <option value="zsd_qj_ck">线段内缠论K线高低点</option>
+                        <option value="zsd_qj_k">线段内原始K线高低点</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">笔中枢类型</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
+                    <select type="select" class="form-control" id="zs_bi_type">
+                        <option value="zs_type_bz">标准中枢</option>
+                        <option value="zs_type_dn">段内中枢</option>
+                        <option value="zs_type_fx">方向中枢</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">走势中枢类型</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
+                    <select type="select" class="form-control" id="zs_xd_type">
+                        <option value="zs_type_bz">标准中枢</option>
+                        <option value="zs_type_dn">段内中枢</option>
+                        <option value="zs_type_fx">方向中枢</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">中枢区间</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="中枢区间，用来计算 高高、低低、中枢高点、中枢低点的依据">
+                    <select type="select" class="form-control" id="zs_qj">
+                        <option value="zs_qj_dd">中枢元素的顶底端点</option>
+                        <option value="zs_qj_ck">中枢元素的缠论K线高低点</option>
+                        <option value="zs_qj_k">中枢元素的原始K线高低点</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right">中枢位置关系</label>
+                <div class="col-sm-9 show-tooltips"
+                     title="计算两个中枢的位置关系，来判断是上涨还是下跌趋势">
+                    <select type="select" class="form-control" id="zs_wzgx">
+                        <option value="zs_wzgx_zgd">宽松比较(zg/zd)</option>
+                        <option value="zs_wzgx_zggdd">较为宽松(zg/dd zd/gg)</option>
+                        <option value="zs_wzgx_gd">严格比较(gg/dd)</option>
+                    </select>
+                </div>
+            </div>
+            <hr style="clear:both;"/>
+            <h4>画图配置</h4>
+            <div class="controls col-xs-12">
+                <div class="row">
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_bi_zs">
+                            <span class="lbl">画笔中枢</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_xd_zs">
+                            <span class="lbl">画线段中枢</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_bi_mmd">
+                            <span class="lbl">画笔买卖点</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_xd_mmd">
+                            <span class="lbl">画线段买卖点</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_bi_bc">
+                            <span class="lbl">画笔背驰</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_xd_bc">
+                            <span class="lbl">画线段背驰</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_ma">
+                            <span class="lbl">画均线</span>
+                        </label>
+                    </div>
+
+                    <div class="col-xs-3">
+                        <label>
+                            <input name="form-field-checkbox" type="checkbox" value="1" class="ace" id="show_boll">
+                            <span class="lbl">画布林线</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <hr style="clear:both;"/>
+            <h4>指标配置</h4>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right show-tooltips"
+                       title="MACD 参数 （快线、慢线、移动平均周期）">MACD参数</label>
+                <div class="col-sm-9 form-inline">
+                    <input type="text" class="input-small" placeholder="MACD 快线" id="idx_macd_fast">
+                    <input type="text" class="input-small" placeholder="MACD 慢线" id="idx_macd_slow">
+                    <input type="text" class="input-small" placeholder="MACD 移动平均周期" id="idx_macd_signal">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right show-tooltips"
+                       title="均线参数">均线参数</label>
+                <div class="col-sm-9">
+                    <input type="text" class="input-small" placeholder="均线" id="idx_ma_period">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label no-padding-right show-tooltips"
+                       title="布林线参数">布林线参数</label>
+                <div class="col-sm-9">
+                    <input type="text" class="input-small" placeholder="布林线" id="idx_boll_period">
+                </div>
+            </div>
+        </form>
+    </div><!-- /.ace-settings-box -->
+</div><!-- /.ace-settings-container -->

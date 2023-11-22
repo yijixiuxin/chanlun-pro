@@ -1,0 +1,75 @@
+{
+	"SSE" : 
+	{
+		"STK" : 
+		{
+			"category" : 0,
+			"covermode" : 0,
+			"exchg" : "SSE",
+			"holiday" : "CHINA",
+			"name" : "��֤��Ʊ",
+			"precision" : 2,
+			"pricemode" : 1,
+			"pricetick" : 0.01,
+			"session" : "SD0930",
+			"volscale" : 1,
+			"trademode": 2
+		},
+		"IDX" : 
+		{
+			"category" : 0,
+			"covermode" : 0,
+			"exchg" : "SSE",
+			"holiday" : "CHINA",
+			"name" : "��ָ֤��",
+			"precision" : 2,
+			"pricemode" : 1,
+			"pricetick" : 0.01,
+			"session" : "SD0930",
+			"volscale" : 1
+		},
+        "ETF" : 
+		{
+			"category" : 0,
+			"covermode" : 0,
+			"exchg" : "SSE",
+			"holiday" : "CHINA",
+			"name" : "��֤ETF",
+			"precision" : 2,
+			"pricemode" : 1,
+			"pricetick" : 0.01,
+			"session" : "SD0930",
+			"volscale" : 1
+		}
+	},
+	"SZSE" : 
+	{
+		"STK" : 
+		{
+			"category" : 0,
+			"covermode" : 0,
+			"exchg" : "SZSE",
+			"holiday" : "CHINA",
+			"name" : "��֤��Ʊ",
+			"precision" : 2,
+			"pricemode" : 1,
+			"pricetick" : 0.01,
+			"session" : "SD0930",
+			"volscale" : 1,
+			"trademode": 2
+		},
+		"IDX" : 
+		{
+			"category" : 0,
+			"covermode" : 0,
+			"exchg" : "SZSE",
+			"holiday" : "CHINA",
+			"name" : "��ָ֤��",
+			"precision" : 2,
+			"pricemode" : 1,
+			"pricetick" : 0.01,
+			"session" : "SD0930",
+			"volscale" : 1
+		}
+	}
+}

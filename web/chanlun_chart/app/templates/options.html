@@ -1,0 +1,665 @@
+<!DOCTYPE HTML>
+<html lang="zh">
+<head>
+    <title>缠论配置项</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}"/>
+    <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+</head>
+<body class="layui-fluid">
+
+<form class="layui-form layui-row cl_config_setting" role="form">
+
+    <input type="hidden" name="code" value="{{ code }}" lay-filter="cl_config"/>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">市场</label>
+        <div class="layui-input-block" title="当前市场">
+            <label for="kline_type">
+                <select type="select" name="market" lay-filter="cl_config" disabled>
+                    <option value="a" {% if market == 'a' %} selected {% endif %}>沪深A股</option>
+                    <option value="hk" {% if market == 'hk' %} selected {% endif %}>港股</option>
+                    <option value="futures" {% if market == 'futures' %} selected {% endif %}>期货</option>
+                    <option value="us" {% if market == 'us' %} selected {% endif %}>美股</option>
+                    <option value="currency" {% if market == 'currency' %} selected {% endif %}>数字货币</option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">使用配置</label>
+        <div class="layui-input-block" title="使用配置">
+            <label for="kline_type">
+                <select type="select" name="config_use_type" lay-filter="cl_config">
+                    <option value="common" {% if config_use_type == 'common' %} selected {% endif %}>通用配置</option>
+                    <option value="custom" {% if config_use_type == 'custom' %} selected {% endif %}>
+                        {{ code }}独立配置
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">K线类型</label>
+        <div class="layui-input-block" title="K线类型，平均K线的高开收低与默认的不同">
+            <label for="kline_type">
+                <select type="select" name="kline_type" lay-filter="cl_config">
+                    <option value="kline_default" {% if kline_type == 'kline_default' %} selected {% endif %}>默认K线
+                    </option>
+                    <option value="kline_heikin_ashi" {% if kline_type == 'kline_heikin_ashi' %} selected {% endif %}>
+                        平均K线
+                    </option>
+                    <option value="kline_chanlun" {% if kline_type == 'kline_chanlun' %} selected {% endif %}>
+                        缠论K线
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    
+    <div class="layui-form-item">
+        <label class="layui-form-label">分型区域高低</label>
+        <div class="layui-input-block layui-row" style="display: flex;">
+            <div class="layui-col-xs6" title="分型高低区域">
+                <label for="fx_qy">
+                    <select type="select" name="fx_qy" lay-filter="cl_config">
+                        <option value="fx_qy_three" {% if fx_qy == 'fx_qy_three' %} selected {% endif %}>分型三根K线
+                        </option>
+                        <option value="fx_qy_middle" {% if fx_qy == 'fx_qy_middle' %} selected {% endif %}>分型中间K线
+                        </option>
+                    </select>
+                </label>
+            </div>
+            <div class="layui-col-xs6" title="顶底分型区间计算依据">
+                <label for="fx_qj">
+                    <select type="select" name="fx_qj" lay-filter="cl_config">
+                        <option value="fx_qj_k" {% if fx_qj == 'fx_qj_k' %} selected {% endif %}>分型内原始K线高低区间
+                        </option>
+                        <option value="fx_qj_ck" {% if fx_qj == 'fx_qj_ck' %} selected {% endif %}>分型内缠论K线高低区间
+                        </option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">分型包含关系</label>
+        <div class="layui-input-block"
+             title="影响顶底包含是否成笔">
+            <label for="fx_bh">
+                <select type="select" class="form-control" name="fx_bh" lay-filter="cl_config">
+                    <option value="fx_bh_yes" {% if fx_bh == 'fx_bh_yes' %} selected {% endif %}>接受所有包含关系
+                    </option>
+                    <option value="fx_bh_dingdi" {% if fx_bh == 'fx_bh_dingdi' %} selected {% endif %}>顶不可以在底中
+                    </option>
+                    <option value="fx_bh_diding" {% if fx_bh == 'fx_bh_diding' %} selected {% endif %}>底不可以在顶中
+                    </option>
+                    <option value="fx_bh_no" {% if fx_bh == 'fx_bh_no' %} selected {% endif %}>不允许所有包含关系
+                    </option>
+                    <option value="fx_bh_no_qbh" {% if fx_bh == 'fx_bh_no_qbh' %} selected {% endif %}>
+                        不允许前分型包含后分型
+                    </option>
+                    <option value="fx_bh_no_hbq" {% if fx_bh == 'fx_bh_no_hbq' %} selected {% endif %}>
+                        不允许后分型包含前分型
+                    </option>
+                    <option value="fx_cd_no" {% if fx_bh == 'fx_cd_no' %} selected {% endif %}>
+                        顶底不重叠
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔类型</label>
+        <div class="layui-input-block layui-row" style="display: flex;">
+            <div class="layui-col-xs6"
+                 title="成笔条件，老笔顶底至少5跟缠论K线；新笔顶底至少4跟缠论K线，5跟原始K线；简单笔3跟原始K线即可成笔；顶底成笔，只要有分型即可成笔">
+                <label for="bi_type">
+                    <select type="select" class="form-control" name="bi_type" lay-filter="cl_config">
+                        <option value="bi_type_old" {% if bi_type == 'bi_type_old' %} selected {% endif %}>老笔</option>
+                        <option value="bi_type_new" {% if bi_type == 'bi_type_new' %} selected {% endif %}>新笔</option>
+                        <option value="bi_type_jdb" {% if bi_type == 'bi_type_jdb' %} selected {% endif %}>简单笔
+                        </option>
+                        <option value="bi_type_dd" {% if bi_type == 'bi_type_dd' %} selected {% endif %}>顶底成笔
+                        </option>
+                    </select>
+                </label>
+            </div>
+            <div class="layui-col-xs6"
+                 title="笔的标准化，是否将笔的起始端点，画在笔内的最高最低之上">
+                <label for="bi_bzh">
+                    <select type="select" class="form-control" name="bi_bzh" lay-filter="cl_config">
+                        <option value="bi_bzh_yes" {% if bi_bzh == 'bi_bzh_yes' %} selected {% endif %}>标准化（画在高低点）
+                        </option>
+                        <option value="bi_bzh_no" {% if bi_bzh == 'bi_bzh_no' %} selected {% endif %}>不标准化（按照分型来）
+                        </option>
+                    </select>
+                </label>
+            </div>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">次高低分型</label>
+        <div class="layui-input-block"
+             title="之前的顶底分型不满足成笔，后一个分型高于或低于前一个分型，是否允许成笔">
+            <label for="bi_fx_cgd">
+                <select type="select" class="form-control" name="bi_fx_cgd" lay-filter="cl_config">
+                    <option value="bi_fx_cgd_yes" {% if bi_fx_cgd == 'bi_fx_cgd_yes' %} selected {% endif %}>允许次高低分型成笔
+                    </option>
+                    <option value="bi_fx_cgd_no" {% if bi_fx_cgd == 'bi_fx_cgd_no' %} selected {% endif %}>不允许次高低分型成笔
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔区间</label>
+        <div class="layui-input-block"
+             title="笔区间计算依据，会影响线段的特征序列计算">
+            <label for="bi_qj">
+                <select type="select" class="form-control" name="bi_qj" lay-filter="cl_config">
+                    <option value="bi_qj_dd" {% if bi_qj == 'bi_qj_dd' %} selected {% endif %}>笔的起始端点</option>
+                    <option value="bi_qj_k" {% if bi_qj == 'bi_qj_k' %} selected {% endif %}>笔内原始K线最高最低
+                    </option>
+                    <option value="bi_qj_ck" {% if bi_qj == 'bi_qj_ck' %} selected {% endif %}>笔内缠论K线最高最低
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">线段区间</label>
+        <div class="layui-input-block"
+             title="线段区间计算依据，影响走势段的特征序列计算">
+            <label for="xd_qj">
+                <select type="select" class="form-control" name="xd_qj" lay-filter="cl_config">
+                    <option value="xd_qj_dd" {% if xd_qj == 'xd_qj_dd' %} selected {% endif %}>线段的起始端点</option>
+                    <option value="xd_qj_ck" {% if xd_qj == 'xd_qj_ck' %} selected {% endif %}>线段内缠论K线高低点
+                    </option>
+                    <option value="xd_qj_k" {% if xd_qj == 'xd_qj_k' %} selected {% endif %}>线段内原始K线高低点
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">走势段区间</label>
+        <div class="layui-input-block"
+             title="走势段区间计算依据，影响走势段中枢计算">
+            <label for="zsd_qj">
+                <select type="select" class="form-control" name="zsd_qj" lay-filter="cl_config">
+                    <option value="zsd_qj_dd" {% if zsd_qj == 'zsd_qj_dd' %} selected {% endif %}>线段的起始端点
+                    </option>
+                    <option value="zsd_qj_ck" {% if zsd_qj == 'zsd_qj_ck' %} selected {% endif %}>线段内缠论K线高低点
+                    </option>
+                    <option value="zsd_qj_k" {% if zsd_qj == 'zsd_qj_k' %} selected {% endif %}>线段内原始K线高低点
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔中枢类型</label>
+        <div class="layui-input-block"
+             title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
+            <label for="zs_bi_type">
+                <input type="checkbox" name="zs_bi_type" value="zs_type_bz" title="标准中枢" lay-filter="cl_config"
+                        {% if 'zs_type_bz' in zs_bi_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_bi_type" value="zs_type_dn" title="段内中枢" lay-filter="cl_config"
+                        {% if 'zs_type_dn' in zs_bi_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_bi_type" value="zs_type_fx" title="方向中枢" lay-filter="cl_config"
+                        {% if 'zs_type_fx' in zs_bi_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_bi_type" value="zs_type_fl" title="分类中枢" lay-filter="cl_config"
+                        {% if 'zs_type_fl' in zs_bi_type %} checked {% endif %} />
+            </label>
+        </div>
+    </div>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">线段中枢类型</label>
+        <div class="layui-input-block"
+             title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
+            <label for="zs_xd_type">
+                <input type="checkbox" name="zs_xd_type" value="zs_type_bz" title="标准中枢" lay-filter="cl_config"
+                        {% if 'zs_type_bz' in zs_xd_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_xd_type" value="zs_type_dn" title="段内中枢" lay-filter="cl_config"
+                        {% if 'zs_type_dn' in zs_xd_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_xd_type" value="zs_type_fx" title="方向中枢" lay-filter="cl_config"
+                        {% if 'zs_type_fx' in zs_xd_type %} checked {% endif %} />
+                <input type="checkbox" name="zs_xd_type" value="zs_type_fl" title="分类中枢" lay-filter="cl_config"
+                        {% if 'zs_type_fl' in zs_xd_type %} checked {% endif %} />
+            </label>
+        </div>
+    </div>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">中枢区间</label>
+        <div class="layui-input-block"
+             title="中枢区间，用来计算 高高、低低、中枢高点、中枢低点的依据">
+            <label for="zs_qj">
+                <select type="select" class="form-control" name="zs_qj" lay-filter="cl_config">
+                    <option value="zs_qj_dd" {% if zs_qj == 'zs_qj_dd' %} selected {% endif %}>中枢元素的顶底端点
+                    </option>
+                    <option value="zs_qj_ck" {% if zs_qj == 'zs_qj_ck' %} selected {% endif %}>中枢元素的缠论K线高低点
+                    </option>
+                    <option value="zs_qj_k" {% if zs_qj == 'zs_qj_k' %} selected {% endif %}>中枢元素的原始K线高低点
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">中枢位置关系</label>
+        <div class="layui-input-block"
+             title="计算两个中枢的位置关系，来判断是上涨还是下跌趋势">
+            <label for="zs_wzgx">
+                <select type="select" class="form-control" name="zs_wzgx" lay-filter="cl_config">
+                    <option value="zs_wzgx_zgd" {% if zs_wzgx == 'zs_wzgx_zgd' %} selected {% endif %}>
+                        宽松比较(zg/zd)
+                    </option>
+                    <option value="zs_wzgx_zggdd" {% if zs_wzgx == 'zs_wzgx_zggdd' %} selected {% endif %}>
+                        较为宽松(zg/dd zd/gg)
+                    </option>
+                    <option value="zs_wzgx_gd" {% if zs_wzgx == 'zs_wzgx_gd' %} selected {% endif %}>
+                        严格比较(gg/dd)
+                    </option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <hr class="layui-border-orange">
+    <h4>缠论高级配置</h4>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">低转高级别</label>
+        <div class="layui-input-block"
+             title="是否开启低级别数据转高级别图表展示功能，不支持港股与美股">
+            <label for="allow_split_one_line_to_xd">
+                <select type="select" class="form-control" name="enable_kchart_low_to_high" lay-filter="cl_config">
+                    <option value="0" {% if enable_kchart_low_to_high == '0' %} selected {% endif %}>关闭</option>
+                    <option value="1" {% if enable_kchart_low_to_high == '1' %} selected {% endif %}>开启</option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">拆分单笔成段</label>
+        <div class="layui-input-block"
+             title="特殊情况，拆分线段时，是否允许单笔成段">
+            <label for="allow_split_one_line_to_xd">
+                <select type="select" class="form-control" name="allow_split_one_line_to_xd" lay-filter="cl_config">
+                    <option value="0" {% if allow_split_one_line_to_xd == '0' %} selected {% endif %}>关闭</option>
+                    <option value="1" {% if allow_split_one_line_to_xd == '1' %} selected {% endif %}>开启</option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">分型严格处理</label>
+        <div class="layui-input-block"
+             title="笔分型是否严格处理">
+            <label for="allow_bi_fx_strict">
+                <select type="select" class="form-control" name="allow_bi_fx_strict" lay-filter="cl_config">
+                    <option value="0" {% if allow_bi_fx_strict == '0' %} selected {% endif %}>关闭</option>
+                    <option value="1" {% if allow_bi_fx_strict == '1' %} selected {% endif %}>开启</option>
+                </select>
+            </label>
+
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">段内中枢拆分</label>
+        <div class="layui-input-block" title="段内中枢超几段进行拆分（包括进入离开段）">
+            <label for="xd_zs_max_lines_split">
+                <input type="text" class="layui-input" placeholder="段内中枢超几段进行拆分（包括进入离开段）"
+                       name="xd_zs_max_lines_split" lay-filter="cl_config"
+                       value="{{ xd_zs_max_lines_split }}" lay-verify="required"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔内重叠K线拆分</label>
+        <div class="layui-input-block"
+             title="笔内重叠K线超过N后进行拆分，20,2 表示笔内重叠K线>=20（允许2根不连续重叠）进行笔拆分；99,0 则表示不进行拆分，最小 13 根">
+            <label for="bi_split_k_cross_nums">
+                <input type="text" class="layui-input" lay-filter="cl_config"
+                       placeholder="20,2 表示笔内重叠K线>=20（允许2根不连续重叠）进行笔拆分"
+                       name="bi_split_k_cross_nums" lay-verify="required"
+                       value="{{ bi_split_k_cross_nums }}"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">分型检查K数量</label>
+        <div class="layui-input-block"
+             title="在指定的原始K线数量内，进行分型包含等规则的处理判断，超过则不在进行判断分型规则">
+            <label for="fx_check_k_nums">
+                <input type="text" class="layui-input" lay-verify="required"
+                       name="fx_check_k_nums" lay-filter="cl_config"
+                       value="{{ fx_check_k_nums }}"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">MACD参数</label>
+        <div class="layui-input-inline" title="用于计算背驰">
+            <label for="idx_macd_fast">
+                <input type="text" class="layui-input" lay-verify="required"
+                       name="idx_macd_fast" lay-filter="cl_config"
+                       value="{{ idx_macd_fast }}"/>
+            </label>
+        </div>
+        <div class="layui-input-inline" title="用于计算背驰">
+            <label for="idx_macd_slow">
+                <input type="text" class="layui-input" lay-verify="required"
+                       name="idx_macd_slow" lay-filter="cl_config"
+                       value="{{ idx_macd_slow }}"/>
+            </label>
+        </div>
+        <div class="layui-input-inline" title="用于计算背驰">
+            <label for="idx_macd_signal">
+                <input type="text" class="layui-input" lay-verify="required"
+                       name="idx_macd_signal" lay-filter="cl_config"
+                       value="{{ idx_macd_signal }}"/>
+            </label>
+        </div>
+    </div>
+
+    <hr class="layui-border-orange">
+    <h4>买卖点配置</h4>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_qs_1mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_qs_1mmd"
+               title="两中枢及以上趋势背驰，产生一类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_not_qs_3mmd_1mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_not_qs_3mmd_1mmd"
+               title="非趋势，产生三类买卖点，后续创新高/新低且背驰，产生一类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_qs_3mmd_1mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_qs_3mmd_1mmd"
+               title="趋势，产生三类买卖点，后续创新高/新低且背驰，产生一类买卖点"
+        />
+
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_qs_not_lh_2mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_qs_not_lh_2mmd"
+               title="趋势，不创新高/新低，产生二类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_qs_bc_2mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_qs_bc_2mmd"
+               title="趋势，新高/新低后，下一段与新高/新低段比较背驰后，产生二类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_3mmd_not_lh_bc_2mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_3mmd_not_lh_bc_2mmd"
+               title="趋势，三类买卖点后，后续段不创新高/新低，或者有背驰，产生二类买卖点"
+        />
+    </div>
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_1mmd_not_lh_2mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_1mmd_not_lh_2mmd"
+               title="之前有一类买卖点，后续不创新高/新低，产生二类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_3mmd_xgxd_not_bc_2mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_3mmd_xgxd_not_bc_2mmd"
+               title="三类买卖点后创新高/新低且不背驰，后不创新高/新低且背驰，产生二类买卖点"
+        />
+    </div>
+
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_not_in_zs_3mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_not_in_zs_3mmd"
+               title="回调不进入中枢的(中枢小于9段)，产生三类买卖点"
+        />
+    </div>
+    <div class="layui-form-item">
+        <input type="checkbox" value="1" lay-filter="cl_config"
+                {% if cl_mmd_cal_not_in_zs_gt_9_3mmd == '1' %} checked {% endif %}
+               name="cl_mmd_cal_not_in_zs_gt_9_3mmd"
+               title="回调不进入中枢的(中枢大于等于9段)，产生三类买卖点"
+        />
+    </div>
+
+
+    <hr class="layui-border-orange"/>
+    <h4>画图配置</h4>
+    <div class="layui-form-item">
+        <div class="layui-row">
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_bi == '1' %} checked {% endif %}
+                       name="chart_show_bi" title="笔"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_xd == '1' %} checked {% endif %}
+                       name="chart_show_xd" title="线段"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_zsd == '1' %} checked {% endif %}
+                       name="chart_show_zsd" title="走势段"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_qsd == '1' %} checked {% endif %}
+                       name="chart_show_qsd" title="趋势段"/>
+            </div>
+
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_bi_zs == '1' %} checked {% endif %}
+                       name="chart_show_bi_zs" title="笔中枢"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_xd_zs == '1' %} checked {% endif %}
+                       name="chart_show_xd_zs" title="线段中枢"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_zsd_zs == '1' %} checked {% endif %}
+                       name="chart_show_zsd_zs" title="走势段中枢"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_qsd_zs == '1' %} checked {% endif %}
+                       name="chart_show_qsd_zs" title="趋势段中枢"/>
+            </div>
+
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_bi_mmd == '1' %} checked {% endif %}
+                       name="chart_show_bi_mmd" title="笔买卖点"/>
+            </div>
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_xd_mmd == '1' %} checked {% endif %}
+                       name="chart_show_xd_mmd" title="线段买卖点"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_zsd_mmd == '1' %} checked {% endif %}
+                       name="chart_show_zsd_mmd" title="走势段买卖点"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_qsd_mmd == '1' %} checked {% endif %}
+                       name="chart_show_qsd_mmd" title="趋势段买卖点"/>
+            </div>
+
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_bi_bc == '1' %} checked {% endif %}
+                       name="chart_show_bi_bc" title="笔背驰"/>
+            </div>
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_xd_bc == '1' %} checked {% endif %}
+                       name="chart_show_xd_bc" title="线段背驰"/>
+            </div>
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_zsd_bc == '1' %} checked {% endif %}
+                       name="chart_show_zsd_bc" title="走势段背驰"/>
+            </div>
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_qsd_bc == '1' %} checked {% endif %}
+                       name="chart_show_qsd_bc" title="趋势段背驰"/>
+            </div>
+
+            <div class="layui-col-xs3">
+                <input type="checkbox" value="1" lay-filter="cl_config"
+                        {% if chart_show_fx == '1' %} checked {% endif %}
+                       name="chart_show_fx" title="分型"/>
+            </div>
+        </div>
+    </div>
+
+    <hr class="layui-border-orange"/>
+    <h4>个人定制，不特殊说明，不明白使用默认配置即可</h4>
+    <div class="layui-form-item">
+        <label class="layui-form-label">K线缺口</label>
+        <div class="layui-input-block" title="K线缺口处理方式">
+            <label for="kline_qk">
+                <select type="select" name="kline_qk" lay-filter="cl_config">
+                    <option value="none" {% if kline_qk == 'none' %} selected {% endif %}>默认方式
+                    </option>
+                    <option value="ck" {% if kline_qk == 'ck' %} selected {% endif %}>缠论K线缺口</option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="save_cl_config">保存配置</button>
+    </div>
+</form>
+
+<script>
+
+    $(function () {
+        function save_cl_config() {
+            let cl_config = {'is_del': 'false'};
+            $.each($('[lay-filter="cl_config"]'), function (i, obj) {
+                var _name = $(obj).attr('name');
+                var _type = $(obj).attr('type');
+                var _val = $(this).val();
+                if (_type === 'checkbox') {
+                    _val = $('input[name="' + _name + '"]:checked').map(function () {
+                        return this.value;
+                    }).get().join(",");
+                }
+                if (_name === 'zs_bi_type' && _val === '') {
+                    layer.msg('笔中枢类型 必须选择一个');
+                    return false;
+                }
+                if (_name === 'zs_xd_type' && _val === '') {
+                    layer.msg('线段中枢类型 必须选择一个');
+                    return false;
+                }
+                cl_config[_name] = _val
+            });
+            console.log(cl_config);
+            $.ajax({
+                type: "POST",
+                url: "/set_cl_config",
+                data: cl_config,
+                dataType: 'json',
+                traditional: true,
+                success: function (result) {
+                    if (result['ok'] === true) {
+                        layer.msg('缠论配置变更成功');
+                    } else {
+                        layer.msg('缠论配置变更失败');
+                    }
+                }
+            });
+        }
+
+        layui.use(function () {
+            var form = layui.form;
+            var layer = layui.layer;
+            // 提交事件
+            form.on('submit(save_cl_config)', function (data) {
+                save_cl_config();
+                return false; // 阻止默认 form 跳转
+            });
+            // 独立配置删除
+            form.on('select(cl_config)', function (data) {
+                var config_use_type = '{{ config_use_type }}';
+                if (config_use_type === 'custom') {
+                    if (data.elem.name === 'config_use_type' && data.value === 'common') {
+                        layer.confirm('确定将{{ code }}独立配置修改为通用配置吗？', {
+                            btn: ['确定', '关闭'] //按钮
+                        }, function () {
+                            $.ajax({
+                                type: "POST",
+                                url: "/set_cl_config",
+                                data: {'market': '{{ market }}', 'code': '{{ code }}', 'is_del': 'true'},
+                                dataType: 'json',
+                                traditional: true,
+                                success: function (result) {
+                                    if (result['ok'] === true) {
+                                        location.reload();
+                                    } else {
+                                        layer.msg('独立配置删除失败！');
+                                    }
+                                    layer.closeLast('dialog');
+                                }
+                            });
+                        }, function () {
+                            layer.closeLast('dialog');
+                        });
+                    }
+                }
+            });
+        });
+
+    });
+
+
+</script>
+</body>
+</html>

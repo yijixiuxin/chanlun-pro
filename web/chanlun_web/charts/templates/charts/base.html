@@ -1,0 +1,229 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    <meta charset="utf-8"/>
+    <title>缠论解盘</title>
+
+    <meta name="description" content="overview &amp; stats"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+
+    <script src="{% static 'js/echarts.min.js' %}" type="text/javascript"></script>
+
+    <!-- bootstrap & fontawesome -->
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}"/>
+    <link rel="stylesheet" href="{% static 'font-awesome/4.5.0/css/font-awesome.min.css' %}"/>
+
+    <!-- page specific plugin styles -->
+    <link rel="stylesheet" href="{% static 'css/jquery-ui.min.css' %}"/>
+
+    <!-- text fonts -->
+    <link rel="stylesheet" href="{% static 'css/fonts.googleapis.com.css' %}"/>
+
+    <!-- ace styles -->
+    <link rel="stylesheet" href="{% static 'css/ace.min.css' %}" class="ace-main-stylesheet" id="main-ace-style"/>
+
+    <!--[if lte IE 9]>
+    <link rel="stylesheet" href="{% static 'css/ace-part2.min.css' %}" class="ace-main-stylesheet"/>
+    <![endif]-->
+    <link rel="stylesheet" href="{% static 'css/ace-skins.min.css' %}"/>
+    <link rel="stylesheet" href="{% static 'css/ace-rtl.min.css' %}"/>
+
+    <!--[if lte IE 9]>
+    <link rel="stylesheet" href="{% static 'css/ace-ie.min.css' %}"/>
+    <![endif]-->
+
+    <!-- inline styles related to this page -->
+
+    <!-- ace settings handler -->
+    <script src="{% static 'js/ace-extra.min.js' %}"></script>
+
+    <!-- HTML5shiv and Respond.js for IE8 to support HTML5 elements and media queries -->
+
+    <!--[if lte IE 8]>
+    <script src="{% static 'js/html5shiv.min.js' %}"></script>
+    <script src="{% static 'js/respond.min.js' %}"></script>
+    <![endif]-->
+    <link rel="stylesheet" href="{% static 'css/chosen.min.css' %}"/>
+
+    <link rel="stylesheet" href="{% static 'css/bootstrap-datetimepicker.min.css' %}"/>
+
+    <link href="{% static 'css/jquery.dataTables.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/app.css' %}" rel="stylesheet">
+
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?e832d45f5217b78a3a6475109ea2d771";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+
+</head>
+
+<body class="no-skin">
+<div id="navbar" class="navbar navbar-default          ace-save-state">
+    <div class="navbar-container ace-save-state" id="navbar-container">
+        <button type="button" class="navbar-toggle menu-toggler pull-left" id="menu-toggler" data-target="#sidebar">
+            <span class="sr-only">Toggle sidebar</span>
+
+            <span class="icon-bar"></span>
+
+            <span class="icon-bar"></span>
+
+            <span class="icon-bar"></span>
+        </button>
+
+        <div class="navbar-header pull-left">
+            <a href="/" class="navbar-brand">
+                <small>
+                    <i class="fa fa-leaf"></i>
+                    缠论解盘
+                </small>
+            </a>
+        </div>
+
+        <div class="navbar-buttons navbar-header pull-left" role="navigation">
+            {#            顶部菜单列表#}
+            <ul class="nav ace-nav">
+                <li class="dropdown-modal {% if nav == 'stock' %}purple{% endif %}">
+                    <a href="/">沪深行情</a>
+                </li>
+                <li class="dropdown-modal {% if nav == 'hk' %}purple{% endif %}">
+                    <a href="/hk/index">港股行情</a>
+                </li>
+                <li class="dropdown-modal {% if nav == 'futures' %}purple{% endif %}">
+                    <a href="/futures/index">期货行情</a>
+                </li>
+                <li class="dropdown-modal {% if nav == 'us' %}purple{% endif %}">
+                    <a href="/us/index">美股行情</a>
+                </li>
+                <li class="dropdown-modal {% if nav == 'currency' %}purple{% endif %}">
+                    <a href="/currency/index">数字货币行情</a>
+                </li>
+                {#                <li class="dropdown-modal {% if nav == 'dl_ranks' %}purple{% endif %}">#}
+                {#                    <a href="/stock/dl_ranks">股票动量排行</a>#}
+                {#                </li>#}
+                <li class="dropdown-modal {% if nav == 'back' %}purple{% endif %}">
+                    <a href="/back/index">行情回放练习</a>
+                </li>
+                <li class="dropdown-modal {% if nav == 'tasks' %}purple{% endif %}">
+                    <a href="/tasks/index">任务配置</a>
+                </li>
+                <li class="dropdown-modal">
+                    <a href="/tv_chart" target="_blank">TV图表<sub>beta</sub></a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="navbar-buttons navbar-header pull-right" role="navigation">
+            {% block options %}
+                <ul class="nav ace-nav">
+
+                </ul>
+            {% endblock %}
+        </div>
+    </div><!-- /.navbar-container -->
+</div>
+
+<div class="main-container ace-save-state" id="main-container">
+    <script type="text/javascript">
+        try {
+            ace.settings.loadState('main-container')
+        } catch (e) {
+        }
+    </script>
+
+    <div id="sidebar" class="sidebar responsive ace-save-state">
+        {% block sidebar %}
+            侧边栏
+        {% endblock %}
+    </div>
+
+    <div class="main-content">
+        <div class="main-content-inner">
+            <div class="page-content">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    {% block content %}
+                        内容
+                    {% endblock %}
+                </div><!-- /.row -->
+                <!-- PAGE CONTENT ENDS -->
+            </div><!-- /.page-content -->
+        </div>
+    </div><!-- /.main-content -->
+
+    <div id="loading" style="width: 200px; height: 50px; position: fixed; left: 0; bottom: 0;"></div>
+
+</div><!-- /.main-container -->
+
+<!-- basic scripts -->
+
+<!--[if !IE]> -->
+<script src="{% static 'js/jquery-2.1.4.min.js' %}"></script>
+
+<!-- <![endif]-->
+
+<!--[if IE]>
+<script src="{% static 'js/jquery-1.11.3.min.js' %}"></script>
+<![endif]-->
+<script type="text/javascript">
+    if ('ontouchstart' in document.documentElement) document.write("<script src='{% static 'js/jquery.mobile.custom.min.js' %}'>" + "<" + "/script>");
+</script>
+<script src="{% static 'js/bootstrap.min.js' %}"></script>
+
+<!-- page specific plugin scripts -->
+<script src="{% static 'js/jquery-ui.min.js' %}"></script>
+
+<!--[if lte IE 8]>
+<script src="{% static 'js/excanvas.min.js' %}"></script>
+<![endif]-->
+<script src="{% static 'js/jquery-ui.custom.min.js' %}"></script>
+<script src="{% static 'js/jquery.ui.touch-punch.min.js' %}"></script>
+<script src="{% static 'js/jquery.easypiechart.min.js' %}"></script>
+<script src="{% static 'js/jquery.sparkline.index.min.js' %}"></script>
+<script src="{% static 'js/jquery.flot.min.js' %}"></script>
+<script src="{% static 'js/jquery.flot.pie.min.js' %}"></script>
+<script src="{% static 'js/jquery.flot.resize.min.js' %}"></script>
+<script src="{% static 'js/chosen.jquery.min.js' %}"></script>
+<!-- ace scripts -->
+<script src="{% static 'js/ace-elements.min.js' %}"></script>
+<script src="{% static 'js/ace.min.js' %}"></script>
+<script src="{% static 'js/moment.min.js' %}"></script>
+<script src="{% static 'js/bootstrap-datetimepicker.min.js' %}"></script>
+
+<script src="{% static 'js/message.js' %}"></script>
+<script src="{% static 'js/jquery.cookie.min.js' %}"></script>
+<script src="{% static 'js/jquery.quicksearch.min.js' %}"></script>
+<script src="{% static 'js/jquery.loading.min.js' %}"></script>
+<script src="{% static 'js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'js/jquery-typeahead.js' %}"></script>
+<script src="{% static 'js/bloodhound.min.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+
+<script type="application/javascript">
+    jQuery(function ($) {
+        //tooltips
+        $(".show-tooltips").tooltip({
+            show: {
+                effect: "slideDown",
+                delay: 250
+            }
+        });
+    });
+
+</script>
+<!-- inline scripts related to this page -->
+{% block js %}
+    <script type="text/javascript">
+        jQuery(function ($) {
+
+        })
+    </script>
+{% endblock %}
+</body>
+</html>
