@@ -1,31 +1,31 @@
 @echo off
 
-rem anaconda çš„å®‰è£…ç›®å½• 
+rem anaconda µÄ°²×°Ä¿Â¼ 
 set conda_path=%USERPROFILE%\anaconda3
-rem è®¾ç½®åˆ›å»ºçš„ç¯å¢ƒåç§°
+rem ÉèÖÃ´´½¨µÄ»·¾³Ãû³Æ
 set conda_env_name=chanlun_test
-rem è®¾ç½® conda.exe å¯æ‰§è¡Œæ–‡ä»¶çš„è·¯å¾„
+rem ÉèÖÃ conda.exe ¿ÉÖ´ĞĞÎÄ¼şµÄÂ·¾¶
 set conda_exe=%conda_path%\Scripts\conda.exe
-rem åˆ›å»ºç¯å¢ƒåçš„ pip åœ°å€
+rem ´´½¨»·¾³ºóµÄ pip µØÖ·
 set conda_pip=%conda_path%\envs\%conda_env_name%\Scripts\pip.exe
 
-rem æ£€æŸ¥æ–‡ä»¶æ˜¯å¦å­˜åœ¨
+rem ¼ì²éÎÄ¼şÊÇ·ñ´æÔÚ
 if not exist %conda_path% (
-  echo é”™è¯¯:æœªæ‰¾åˆ° conda å®‰è£…ç›®å½•ï¼Œå¯ç¼–è¾‘æ­¤æ–‡ä»¶ï¼Œä¿®æ”¹ conda_path ä¸º Anaconda çš„å®é™…å®‰è£…è·¯å¾„
+  echo ´íÎó:Î´ÕÒµ½ conda °²×°Ä¿Â¼£¬¿É±à¼­´ËÎÄ¼ş£¬ĞŞ¸Ä conda_path Îª Anaconda µÄÊµ¼Ê°²×°Â·¾¶
   echo %conda_path%
   set /p dummy=
 ) else (
-   echo Anaconda å®‰è£…è·¯å¾„ï¼š%conda_path%
-   echo åˆ›å»ºç¯å¢ƒåç§°ï¼š%conda_env_name%
+   echo Anaconda °²×°Â·¾¶£º%conda_path%
+   echo ´´½¨»·¾³Ãû³Æ£º%conda_env_name%
 
-   echo è®¾ç½®Condaå›½å†…æº
+   echo ÉèÖÃConda¹úÄÚÔ´
    %conda_exe% config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
    %conda_exe% config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
    
-   rem åˆ é™¤ç¯å¢ƒ
+   rem É¾³ı»·¾³
    %conda_exe% remove -n %conda_env_name% -y --all
     
-   echo åˆ›å»º %conda_env_name% ç¯å¢ƒå¹¶å®‰è£…ä¾èµ–
+   echo ´´½¨ %conda_env_name% »·¾³²¢°²×°ÒÀÀµ
    %conda_exe% create -y -n %conda_env_name% python=3.10
    %conda_exe% activate chanlun
    %conda_exe% install -y pandas requests numpy redis matplotlib pymysql
@@ -35,6 +35,6 @@ if not exist %conda_path% (
    %conda_pip% install wheel
    %conda_pip% install package/pytdx-1.72r2-py3-none-any.whl
 
-   echo è„šæœ¬æ‰§è¡Œå®Œæˆ,æŒ‰ Enter é”®é€€å‡º...
+   echo ½Å±¾Ö´ĞĞÍê³É,°´ Enter ¼üÍË³ö...
    set /p dummy=
 )
