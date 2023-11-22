@@ -1,0 +1,253 @@
+<!DOCTYPE HTML>
+<html lang="zh">
+<head>
+    <title>提醒配置</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}"/>
+    <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+</head>
+<body class="layui-fluid">
+
+<form class="layui-form layui-row alert_add" role="form" style="padding: 20px;">
+    <input type="hidden" name="id" value="{{ id }}" lay-filter="alert_config"/>
+
+    <div class="layui-form-item">
+        <label class="layui-form-label">市场</label>
+        <div class="layui-input-block" title="当前市场">
+            <label for="kline_type">
+                <select type="select" name="market" lay-filter="alert_config" disabled>
+                    <option value="a" {% if market == 'a' %} selected {% endif %}>沪深A股</option>
+                    <option value="hk" {% if market == 'hk' %} selected {% endif %}>港股</option>
+                    <option value="futures" {% if market == 'futures' %} selected {% endif %}>期货</option>
+                    <option value="us" {% if market == 'us' %} selected {% endif %}>美股</option>
+                    <option value="currency" {% if market == 'currency' %} selected {% endif %}>数字货币</option>
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">监控名称</label>
+        <div class="layui-input-block">
+            <label for="alert_name">
+                <input type="text" name="alert_name" value="{{ alert_name }}" placeholder="请输入监控的名称"
+                       class="layui-input" lay-verify="required"
+                       lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">间隔分钟数</label>
+        <div class="layui-input-block" title="设置每几分钟检测一次">
+            <label for="alert_name">
+                <input type="text" name="interval_minutes" value="{{ interval_minutes }}"
+                       placeholder="设置每几分钟检测一次"
+                       lay-filter="alert_config" lay-verify="required"
+                       class="layui-input"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">自选组</label>
+        <div class="layui-input-block"
+             title="自选组">
+            <label for="zixuan_group">
+                <select type="select" class="form-control" name="zixuan_group" lay-filter="alert_config">
+                    {% for zg in zixuan_groups %}
+                        <option value="{{ zg['name'] }}" {% if zg['name'] == zixuan_group %}
+                                selected {% endif %}>{{ zg['name'] }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">行情周期</label>
+        <div class="layui-input-block"
+             title="行情周期">
+            <label for="frequency">
+                <select type="select" class="form-control" name="frequency" lay-filter="alert_config">
+                    {% for f, v in frequencys.items() %}
+                        <option value="{{ f }}" {% if frequency == f %} selected {% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔背驰警报</label>
+        <div class="layui-input-block"
+             title="笔背驰警报">
+            <label for="check_bi_bc">
+                <input type="checkbox" name="check_bi_bc" {% if 'bi' in check_bi_bc.split(',') %} checked {% endif %}
+                       value="bi"
+                       title="笔背驰" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_bc" {% if 'pz' in check_bi_bc.split(',') %} checked {% endif %}
+                       value="pz"
+                       title="笔盘整背驰" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_bc" {% if 'qs' in check_bi_bc.split(',') %} checked {% endif %}
+                       value="qs"
+                       title="笔趋势背驰" lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">笔买卖点警报</label>
+        <div class="layui-input-block"
+             title="笔买卖点警报">
+            <label for="check_bi_mmd">
+                <input type="checkbox" name="check_bi_mmd" value="1buy"  {% if '1buy' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="一买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="2buy" {% if '2buy' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="二买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="l2buy" {% if 'l2buy' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="类二买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="3buy" {% if '3buy' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="三买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="l3buy" {% if 'l3buy' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="类三买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="1sell" {% if '1sell' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="一卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="2sell" {% if '2sell' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="二卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="l2sell" {% if 'l2sell' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="类二卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="3sell" {% if '3sell' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="三卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_bi_mmd" value="l3sell" {% if 'l3sell' in check_bi_mmd.split(',') %}
+                       checked {% endif %} title="类三卖" lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">线段背驰警报</label>
+        <div class="layui-input-block"
+             title="线段背驰警报">
+            <label for="check_xd_bc">
+                <input type="checkbox" name="check_xd_bc" value="xd" {% if 'xd' in check_xd_bc.split(',') %}
+                       checked {% endif %}
+                       title="线段背驰" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_bc" value="pz" {% if 'pz' in check_xd_bc.split(',') %}
+                       checked {% endif %}
+                       title="线段盘整背驰" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_bc" value="qs" {% if 'qs' in check_xd_bc.split(',') %}
+                       checked {% endif %}
+                       title="线段趋势背驰" lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">线段买卖点警报</label>
+        <div class="layui-input-block"
+             title="线段买卖点警报">
+            <label for="check_xd_mmd">
+                <input type="checkbox" name="check_xd_mmd" value="1buy" {% if '1buy' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="一买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="2buy" {% if '2buy' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="二买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="l2buy" {% if 'l2buy' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="类二买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="3buy" {% if '3buy' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="三买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="l3buy" {% if 'l3buy' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="类三买" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="1sell" {% if '1sell' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="一卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="2sell" {% if '2sell' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="二卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="l2sell" {% if 'l2sell' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="类二卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="3sell" {% if '3sell' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="三卖" lay-filter="alert_config"/>
+                <input type="checkbox" name="check_xd_mmd" value="l3sell" {% if 'l3sell' in check_xd_mmd.split(',') %}
+                       checked {% endif %} title="类三卖" lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">发送消息</label>
+        <div class="layui-input-block"
+             title="启用">
+            <label for="is_send_msg">
+                <input type="radio" name="is_send_msg" value="1" title="发送" {% if is_send_msg == '1' %}
+                       checked {% endif %}
+                       lay-filter="alert_config"/>
+                <input type="radio" name="is_send_msg" value="0" title="不发送" {% if is_send_msg == '0' %}
+                       checked {% endif %}
+                       lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <label class="layui-form-label">启用</label>
+        <div class="layui-input-block"
+             title="启用">
+            <label for="enable">
+                <input type="radio" name="enable" value="1" title="启用" {% if enable == '1' %} checked {% endif %}
+                       lay-filter="alert_config"/>
+                <input type="radio" name="enable" value="0" title="禁用" {% if enable == '0' %} checked {% endif %}
+                       lay-filter="alert_config"/>
+            </label>
+        </div>
+    </div>
+    <div class="layui-form-item">
+        <button class="layui-btn layui-btn-fluid" lay-submit lay-filter="save_alert">添加警报配置</button>
+    </div>
+</form>
+
+<script>
+    $(function () {
+        function save_alert() {
+            let alert_config = {}
+            $.each($('[lay-filter="alert_config"]'), function (i, obj) {
+                let _name = $(obj).attr('name');
+                let _type = $(obj).attr('type');
+                let _val = $(this).val();
+                if (_type === 'checkbox') {
+                    _val = $('input[name="' + _name + '"]:checked').map(function () {
+                        return this.value;
+                    }).get().join(",");
+                }
+                if (_type === 'radio') {
+                    _val = $('input[name="' + _name + '"]:checked').val();
+                }
+                alert_config[_name] = _val
+            });
+            if (alert_config['check_bi_bc'] === '' && alert_config['check_bi_mmd'] === '' && alert_config['check_xd_bc'] === '' && alert_config['check_xd_mmd'] === '') {
+                layer.msg('警报项目必须至少选择一项');
+                return false;
+            }
+            console.log(alert_config);
+            $.ajax({
+                type: "POST",
+                url: "/alert_save",
+                data: alert_config,
+                dataType: 'json',
+                traditional: true,
+                success: function (result) {
+                    if (result['ok'] === true) {
+                        let index = parent.layer.getFrameIndex(window.name); // 获取当前 iframe 层的索引
+                        parent.layer.msg('报警设置 增加/修改 成功');
+                        parent.layer.close(index); // 关闭当前 iframe 弹层
+                    } else {
+                        layer.msg('报警设置 增加/修改 失败');
+                    }
+                }
+            });
+        }
+
+        layui.use(function () {
+            const form = layui.form;
+            const layer = layui.layer;
+            // 提交事件
+            form.on('submit(save_alert)', function (data) {
+                save_alert();
+                return false; // 阻止默认 form 跳转
+            });
+        });
+    });
+
+
+</script>
+</body>
+</html>

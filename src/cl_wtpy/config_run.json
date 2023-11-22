@@ -1,0 +1,20 @@
+{
+    "env": "cta",
+    "replayer": {
+        "basefiles": {
+            "commodity": "./common/commodities.json",
+            "contract": "./common/contracts.json",
+            "holiday": "./common/holidays.json",
+            "hot": "./common/hots.json",
+            "second": "./common/seconds.json",
+            "session": "./common/sessions.json"
+        },
+        "etime": 201912011500,
+        "fees": "./common/fees.json",
+        "mode": "csv",
+        "stime": 201909100930,
+        "store": {
+            "path": "./storage/"
+        }
+    }
+}

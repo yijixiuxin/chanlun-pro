@@ -1,0 +1,68 @@
+site_name: Chanlun-PRO 项目
+site_author: wangxu
+site_description: '基于缠论的市场行情分析工具'
+site_url: http://www.chanlun-trader.com
+
+repo_name: 'GitHub'
+repo_url: 'https://github.com/yijixiuxin/chanlun-pro'
+edit_uri: 'blob/master/cookbook/docs/'
+
+markdown_extensions:
+  - toc:
+      permalink: True
+  - admonition
+  - def_list
+
+plugins:
+  - search
+
+nav:
+  - 功能: 功能.md
+  - Windows Version: WINDOWS_VERSION.md
+  - 计算性能: 计算性能.md
+  - 售价与联系方式: 售价与联系方式.md
+  - 项目展示: 项目展示.md
+  - 更新日志: UPDATE.md
+  - FAQ: FAQ.md
+  - 安装:
+      - 第三方账号依赖: 第三方账号依赖.md
+      - 服务依赖: 服务依赖.md
+      - Windows 安装文档: Windows安装文档.md
+      - Ubuntu 安装文档: Ubuntu安装文档.md
+      - Mac 安装文档: Mac安装文档.md
+      - 配置文件说明: 配置文件说明.md
+      - 授权方式: 授权方式.md
+      - Web页面功能: Web页面功能.md
+      - JupyterLab 安装与使用: JupyterLab安装与使用.md
+      - 消息推送支持图片: 消息推送支持图片.md
+  - 缠论配置项说明: 缠论配置项说明.md
+  - 缠论买卖点和背驰规则: 缠论买卖点和背驰规则.md
+  - 缠论数据对象与方法: 缠论数据对象与方法.md
+  - 支持的交易市场: 支持的交易市场.md
+  - 历史行情下载: 历史行情下载.md
+  - 策略回测与实盘:
+      - 选股策略: 选股策略.md
+      - 策略编写与运行: 策略编写与运行.md
+      - 策略缠论参数优化: 策略缠论参数优化.md
+      - 实盘: 实盘.md
+      - VNPY使用指南: vnpy使用指南.md
+      - 掘金量化使用: 掘金量化使用文档.md
+  - 策略示例:
+      - 基于线段的中枢震荡策略: 基于线段的中枢震荡策略.md
+      - 多中枢类型相同买卖点策略: 多中枢类型相同买卖点策略.md
+      - 合成自定义K线数据（分钟）: 合成自定义K线数据（分钟）.md
+
+theme:
+  name: readthedocs
+  highlightjs: true
+  hljs_languages:
+    - python
+    - yaml
+    - rust
+  include_homepage_in_sidebar: True  # 在侧边栏菜单中列出主页。
+  prev_next_buttons_location: both # 设置 “Next” 和 “Previous” 按钮的位置：bottom, top, both , or none
+  navigation_depth: 4 # 侧边栏导航标题最大层级，默认4
+  collapse_navigation: True # 只在当前页面的侧边栏中包含页面标题。
+  titles_only: False # 只在侧边栏中包括文章标题，不包括所有子标题。默认值:False。
+  sticky_navigation: True #侧边栏在滚动页面时随主页内容滚动
+  locale: zh_CN # 语言配置，需要安装mkdocs[i18n]：pip install mkdocs[i18n]
