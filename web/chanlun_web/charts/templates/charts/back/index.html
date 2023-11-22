@@ -1,0 +1,176 @@
+{% extends 'charts/base.html' %}
+
+{% block options %}
+
+{% endblock %}
+
+{% block sidebar %}
+    <form class="back_form">
+        <div>
+            <button class="btn btn-info form_submit" type="submit">
+                开始回放
+            </button>
+        </div>
+        <div>
+            <label for="form-field-mask-1">
+                市场选择
+            </label>
+            <div class="input-group">
+                <label>
+                    <select class="form-control" name="market">
+                        <option value="currency" selected>数字货币</option>
+                        <option value="a">沪深股市</option>
+                        <option value="hk">香港股市</option>
+                        <option value="futures">期货市场</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+        <div>
+            <label for="form-field-mask-1">
+                代码
+            </label>
+            <div class="input-group">
+                <label>
+                    <input type="text" placeholder="代码" name="code" value="BTC/USDT"/>
+                </label>
+            </div>
+        </div>
+        <div>
+            <label for="form-field-mask-1">
+                周期<small class="text-success">英文 , 分割的多个周期</small>
+            </label>
+            <div class="input-group">
+                <label>
+                    <input type="text" placeholder="周期" name="frequencys" value="30m,5m"/>
+                </label>
+            </div>
+        </div>
+        <div>
+            <label for="form-field-mask-1">
+                开始时间
+            </label>
+            <div class="input-group">
+                <label>
+                    <input type="text" class="form-control datetime" value="2022-01-01 00:00:00" name="start"/>
+                </label>
+                <span class="input-group-addon"><i class="fa fa-clock-o bigger-110"></i></span>
+            </div>
+        </div>
+        <div>
+            <label for="form-field-mask-1">
+                结束时间
+            </label>
+            <div class="input-group">
+                <label>
+                    <input type="text" class="form-control datetime" value="2022-02-28 00:00:00" name="end"/>
+                </label>
+                <span class="input-group-addon"><i class="fa fa-clock-o bigger-110"></i></span>
+            </div>
+        </div>
+
+        <div>
+            <button class="btn btn-info form_submit" type="submit">
+                开始回放
+            </button>
+        </div>
+    </form>
+    <hr/>
+    <p class="bg-info">使用WEB已设置的缠论配置</p>
+    <p class="bg-info">每次更新数据会重新画图，画图比较耗时，可适当减少画图中的不必要的计算项</p>
+    <hr/>
+    <div class="btn-group btn-corner" id="next_btn">
+        <button class="btn btn-info next_frequency" value="0" data-frequency="-" disabled>-</button>
+    </div>
+    <hr/>
+{% endblock %}
+
+{% block content %}
+    <div style="width: 100%;">
+        <div class="btn-toolbar" role="toolbar" aria-label="周期选择">
+            <div class="btn-group btn-group-xs btn-corner" role="group" id="zq">
+            </div>
+        </div>
+        <div id="kline" class="kline_chart" style="width:99%;min-height: 620px;"></div>
+    </div>
+{% endblock %}
+
+
+{% block js %}
+    <script type="text/javascript">
+        $(
+            function () {
+                $('.kline_chart').css('height', String((getClientHeight() - 80)) + 'px');
+
+                var chart_klines = {}
+                var back_config = {}
+
+                var chart = echarts.init(document.getElementById('kline'), 'dark', {renderer: 'canvas'});
+                var zq = '';
+
+                $('.back_form').submit(function () {
+                    let frequencys = $('input[name=frequencys]').val().split(',')
+                    if (frequencys.length < 2) {
+                        alert('回放周期不能小于两个')
+                        return false
+                    }
+                    back_config = $(this).serialize();
+                    $('input').attr('disabled', true);
+                    $('select').attr('disabled', true);
+                    $('.form_submit').attr('disabled', true);
+
+                    $('#next_btn').html('')
+                    $('#zq_high').html('')
+                    $('#zq_low').html('')
+                    for (let i = 0; i < frequencys.length; i++) {
+                        let f = frequencys[i];
+                        $('#next_btn').append('<button class="btn btn-xs btn-info next_frequency" value="0" data-frequency="' + f + '">' + f + '</button>  ');
+                        $('#zq').append('<button type="button" class="btn btn-xs btn-default" data-zq="' + f + '">' + f + '</button>');
+                    }
+                    zq = frequencys[0]
+                    fetchData_kline(frequencys[frequencys.length - 1]);
+                    return false
+                })
+
+                // 下一个
+                $("body").delegate('.next_frequency', 'click', function () {
+                    let frequency = $(this).attr('data-frequency');
+                    chart_klines = {}
+                    fetchData_kline(frequency);
+                });
+                // 周期选择
+                $("body").delegate('#zq button', 'click', function () {
+                    zq = $(this).attr('data-zq');
+                    $('#zq button').removeClass('active');
+                    $(this).addClass('active');
+                    chart.clear();
+                    if (chart_klines[zq] !== undefined) {
+                        chart.setOption(chart_klines[zq]);
+                    } else {
+                        fetchData_kline(zq)
+                    }
+                });
+
+                function fetchData_kline(frequency) {
+                    $('#loading').loading({theme: 'dark'});
+                    var post_data = back_config + '&frequency=' + frequency;
+                    $.ajax({
+                        type: "POST",
+                        url: '/back/kline',
+                        data: post_data,
+                        success: function (result) {
+                            if (result.length === 0) {
+                                alert('结束')
+                            } else {
+                                let chart_kline = (new Function("return " + result))();
+                                chart.setOption(chart_kline);
+                                chart_klines[frequency] = chart_kline
+                                $('#loading').loading('stop');
+                            }
+                        }
+                    });
+                }
+            }
+        );
+    </script>
+{% endblock %}
