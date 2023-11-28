@@ -21,7 +21,7 @@ tqdm
 ipywidgets
 snapshot_selenium
 pinyin
-pyarmor==7.7.4
+pyarmor
 setuptools
 
 futu-api

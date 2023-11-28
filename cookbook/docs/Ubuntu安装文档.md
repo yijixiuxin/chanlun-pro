@@ -2,14 +2,15 @@
 
 ---
 
-> Python 版本支持 3.7、3.8、3.9、3.10 （建议 3.10），不然运行会报 RuntimeError 错误
-
-> 前置条件    
+> Python 版本支持 3.8、3.9、3.10 （建议 3.10），不然运行会报 RuntimeError 错误  
+> 前置条件  
 > 已经安装 git、Anaconda、MySQL、Redis
 
 ### 1. 克隆项目到本地
 
         git clone https://github.com/yijixiuxin/chanlun-pro.git
+        # gitee 国内地址
+        # git clone https://gitee.com/wang-student/chanlun-pro.git
         cd chanlun-pro
 
 ### 2. pip 安装项目依赖包
@@ -45,11 +46,7 @@
          conda activate chanlun
          python check_env.py
 
-### 6. 执行以下命令获取本机 mac 地址，并发送给作者，获取授权许可文件，并放置在项目中的 `src/pytransform` 目录下
-
-         pip install pyarmor==7.7.4
-         pyarmor hdinfo
-         # 将 Default Mac address: "****"  内容发送给作者，获取授权文件
+### 6. 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
 
 ### 7. 到 `web/chanlun_chart` 目录，启动 web 服务
 
