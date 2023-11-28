@@ -252,20 +252,20 @@ if __name__ == "__main__":
     bkgn.reload_ths_bkgn()
 
     # 所有行业概念
-    hys, gns = bkgn.file_bkgns()
-    all_hy_names = []
-    all_gn_names = []
-    for _c, _v in hys.items():
-        all_hy_names += _v
-        all_hy_names = list(set(all_hy_names))
-    for _c, _v in gns.items():
-        all_gn_names += _v
-        all_gn_names = list(set(all_gn_names))
+    # hys, gns = bkgn.file_bkgns()
+    # all_hy_names = []
+    # all_gn_names = []
+    # for _c, _v in hys.items():
+    #     all_hy_names += _v
+    #     all_hy_names = list(set(all_hy_names))
+    # for _c, _v in gns.items():
+    #     all_gn_names += _v
+    #     all_gn_names = list(set(all_gn_names))
 
-    print("行业")
-    print(all_hy_names)
-    print("概念")
-    print(all_gn_names)
+    # print("行业")
+    # print(all_hy_names)
+    # print("概念")
+    # print(all_gn_names)
 
     # '养殖业', '机场航运', '钢铁', '肉制品', '其他食品', '物流', '产业地产', '油服工程',
     # '软饮料', '饲料', '棉纺', '医疗服务', '机器人', '改性塑料', '保险及其他',
@@ -372,8 +372,8 @@ if __name__ == "__main__":
     # 'MSCI概念', '固态电池', '俄乌冲突概念', 'CRO概念'
 
     # 获取代码的板块概念信息
-    # code_bkgn = bkgn.get_code_bkgn("301080")
-    # print(code_bkgn)
+    code_bkgn = bkgn.get_code_bkgn("600895")
+    print(code_bkgn)
 
     # 根据行业获取其中的代码
     # codes = bkgn.get_codes_by_hy('珠宝首饰')

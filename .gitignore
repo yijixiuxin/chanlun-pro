@@ -154,7 +154,7 @@ predict
 **/my
 my_**.py
 my_**.ipynb
-**/license.lic
+src/pyarmor_runtime_005445/pyarmor.rkey
 /src/cl_vnpy/.vntrader
 /src/cl_myquant/gmcache
 # 无用的排除

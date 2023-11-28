@@ -3,7 +3,7 @@
 rem anaconda 的安装目录 
 set conda_path=%USERPROFILE%\anaconda3
 rem 设置创建的环境名称
-set conda_env_name=chanlun_test
+set conda_env_name=chanlun
 rem 设置 conda.exe 可执行文件的路径
 set conda_exe=%conda_path%\Scripts\conda.exe
 rem 创建环境后的 pip 地址
@@ -27,7 +27,7 @@ if not exist %conda_path% (
     
    echo 创建 %conda_env_name% 环境并安装依赖
    %conda_exe% create -y -n %conda_env_name% python=3.10
-   %conda_exe% activate chanlun
+   %conda_exe% activate %conda_env_name%
    %conda_exe% install -y pandas requests numpy redis matplotlib pymysql
    %conda_exe% install -y -c conda-forge ta-lib  ipywidgets
    %conda_pip% config set global.index-url https://mirrors.aliyun.com/pypi/simple/
