@@ -484,11 +484,6 @@ class BI(LINE):
         """
         return False
 
-        self.default_zs_type: str = default_zs_type
-        # 记录不同中枢下的背驰和买卖点
-        self.zs_type_mmds: Dict[str, List[MMD]] = {}
-        self.zs_type_bcs: Dict[str, List[BC]] = {}
-
     def __str__(self):
         return f"index: {self.index} type: {self.type} FX: ({self.start.k.date} - {self.end.k.date}) high: {self.high} low: {self.low} done: {self.is_done()}"
 

@@ -21,8 +21,7 @@
          conda activate chanlun
              
          # conda 安装相关的库会比较方便
-         conda install -y pandas requests numpy redis matplotlib pymysql  
-         conda install -y -c conda-forge ta-lib  ipywidgets  
+         conda install -y -c conda-forge ta-lib  
              
          # PIP 安装项目依赖包
          pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/

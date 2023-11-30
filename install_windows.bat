@@ -28,8 +28,7 @@ if not exist %conda_path% (
    echo 创建 %conda_env_name% 环境并安装依赖
    %conda_exe% create -y -n %conda_env_name% python=3.10
    %conda_exe% activate %conda_env_name%
-   %conda_exe% install -y pandas requests numpy redis matplotlib pymysql
-   %conda_exe% install -y -c conda-forge ta-lib  ipywidgets
+   %conda_exe% install -y -c conda-forge ta-lib
    %conda_pip% config set global.index-url https://mirrors.aliyun.com/pypi/simple/
    %conda_pip% install -r requirements.txt
    %conda_pip% install wheel
