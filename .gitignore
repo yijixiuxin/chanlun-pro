@@ -148,6 +148,10 @@ predict
 **/.pytest_cache
 .vscode
 
+src/chanlun/py38
+src/chanlun/py39
+src/chanlun/py310
+
 # 配置文件排除
 /src/chanlun/config.py
 # 私有代码排除
