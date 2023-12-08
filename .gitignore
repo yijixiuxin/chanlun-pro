@@ -166,3 +166,6 @@ src/pyarmor_runtime_005445/pyarmor.rkey
 
 /web/chanlun_web/charts/static/datafeeds/udf/node_modules
 /web/chanlun_chart/app/static/datafeeds/udf/node_modules
+src/chanlun_ai/
+src/chanlun_strategy/
+src/core/
