@@ -1,7 +1,6 @@
 from typing import List, Dict
 
-from chanlun import config
-from chanlun import rd
+from chanlun.db import db
 from chanlun.exchange import get_exchange, Market
 
 
@@ -15,26 +14,45 @@ class ZiXuan(object):
         初始化
         """
         self.market_type = market_type
-        if market_type == 'a':
-            self.zixuan_list = config.STOCK_ZX
-        elif market_type == 'futures':
-            self.zixuan_list = config.FUTURES_ZX
-        elif market_type == 'currency':
-            self.zixuan_list = config.CURRENCY_ZX
-        elif market_type == 'hk':
-            self.zixuan_list = config.HK_ZX
-        elif market_type == 'us':
-            self.zixuan_list = config.US_ZX
-        else:
-            raise Exception('暂不支持的市场自选列表')
+        self.zixuan_list = self.get_zx_groups()
 
-        self.zx_names = [_zx['name'] for _zx in self.zixuan_list]
+        self.zx_names = [_zx["name"] for _zx in self.zixuan_list]
+
+    def get_zx_groups(self):
+        # 获取自选分组
+        zx_groups = db.zx_get_groups(self.market_type)
+        if len(zx_groups) == 0:
+            db.zx_add_group(self.market_type, "我的关注")
+            zx_groups = db.zx_get_groups(self.market_type)
+        return [{"name": _g.zx_group} for _g in zx_groups]
+
+    def add_zx_group(self, zx_group_name):
+        if zx_group_name in ["我的关注"]:
+            return False
+        if zx_group_name in [_z["name"] for _z in self.zixuan_list]:
+            return False
+        db.zx_add_group(self.market_type, zx_group_name)
+        self.zixuan_list = self.get_zx_groups()
+        self.zx_names = [_zx["name"] for _zx in self.zixuan_list]
+        return True
+
+    def del_zx_group(self, zx_group_name):
+        if zx_group_name in ["我的关注"]:
+            return False
+        self.clear_zx_stocks(zx_group_name)
+        db.zx_del_group(self.market_type, zx_group_name)
+        self.zixuan_list = self.get_zx_groups()
+        self.zx_names = [_zx["name"] for _zx in self.zixuan_list]
+        return True
 
     def query_all_zs_stocks(self):
         """
         查询自选分组下所有的代码信息
         """
-        return [{'zx_name': zx_name, 'stocks': self.zx_stocks(zx_name)} for zx_name in self.zx_names]
+        return [
+            {"zx_name": zx_name, "stocks": self.zx_stocks(zx_name)}
+            for zx_name in self.zx_names
+        ]
 
     def zx_stocks(self, zx_group) -> List[Dict[str, str]]:
         """
@@ -42,9 +60,20 @@ class ZiXuan(object):
         """
         if zx_group not in self.zx_names:
             return []
-        return rd.zx_query(self.market_type, zx_group)
+        stocks = db.zx_get_group_stocks(self.market_type, zx_group)
+        return [
+            {
+                "code": _stock.stock_code,
+                "name": _stock.stock_name,
+                "color": _stock.stock_color,
+                "memo": _stock.stock_memo,
+            }
+            for _stock in stocks
+        ]
 
-    def add_stock(self, zx_group: str, code: str, name: str, location='top', color=''):
+    def add_stock(
+        self, zx_group: str, code: str, name: str, location="bottom", color="", memo=""
+    ):
         """
         添加自选
 
@@ -58,105 +87,76 @@ class ZiXuan(object):
         if zx_group not in self.zx_names:
             return False
         # 如果名称为空，则自动进行获取
-        if name is None or name == '' or name == 'undefined':
+        if name is None or name == "" or name == "undefined":
             try:
                 ex = get_exchange(Market(self.market_type))
                 stock_info = ex.stock_info(code)
-                name = stock_info['name']
+                name = stock_info["name"]
             except Exception:
                 pass
-        # 先删除原来的，如果有的话
-        self.del_stock(zx_group, code)
-        stocks = self.zx_stocks(zx_group)
-        if location == 'top':
-            stocks.insert(0, {'code': code, 'name': name, 'color': color})
-        else:
-            stocks.append({'code': code, 'name': name, 'color': color})
-        rd.zx_save(self.market_type, zx_group, stocks)
+        db.zx_add_group_stock(
+            self.market_type, zx_group, code, name, memo, color, location
+        )
         return True
 
     def del_stock(self, zx_group, code):
         """
         删除自选中的代码
         """
-        if zx_group not in self.zx_names:
-            return False
-        stocks = self.zx_stocks(zx_group)
-        del_index = next((i for i in range(len(stocks)) if stocks[i]['code'] == code), None)
-
-        if del_index is not None:
-            del (stocks[del_index])
-            rd.zx_save(self.market_type, zx_group, stocks)
+        db.zx_del_group_stock(self.market_type, zx_group, code)
         return True
 
     def color_stock(self, zx_group, code, color):
         """
         给指定的代码加上颜色
         """
-        stocks = self.zx_stocks(zx_group)
-        for s in stocks:
-            if s['code'] == code:
-                s['color'] = color
-        rd.zx_save(self.market_type, zx_group, stocks)
+        db.zx_update_stock_color(self.market_type, zx_group, code, color)
         return True
 
     def rename_stock(self, zx_group, code, rename):
         """
         修改指定代码的自选名称
         """
-        stocks = self.zx_stocks(zx_group)
-        for s in stocks:
-            if s['code'] == code:
-                s['name'] = rename
-        rd.zx_save(self.market_type, zx_group, stocks)
+        db.zx_update_stock_name(self.market_type, zx_group, code, rename)
         return True
 
     def sort_top_stock(self, zx_group, code):
         """
         将股票排在最上面
         """
-        stocks = self.zx_stocks(zx_group)
-        for s in stocks:
-            if s['code'] == code:
-                self.add_stock(zx_group, s['code'], s['name'], 'top', s['color'])
-                break
+        db.zx_stock_sort_top(self.market_type, zx_group, code)
         return True
 
     def sort_bottom_stock(self, zx_group, code):
         """
         将股票排在最下面
         """
-        stocks = self.zx_stocks(zx_group)
-        for s in stocks:
-            if s['code'] == code:
-                self.add_stock(zx_group, s['code'], s['name'], 'bottom', s['color'])
-                break
+        db.zx_stock_sort_bottom(self.market_type, zx_group, code)
         return True
 
     def clear_zx_stocks(self, zx_group):
         """
         清空自选组内的股票
         """
-        stocks = self.zx_stocks(zx_group)
-        for s in stocks:
-            self.del_stock(zx_group, s['code'])
+        db.zx_clear_by_group(self.market_type, zx_group)
         return True
 
     def query_code_zx_names(self, code):
         """
         查询代码所在的自选分组
         """
-        res = []
-        for zx_name in self.zx_names:
-            stocks = self.zx_stocks(zx_name)
-            if code in [_s['code'] for _s in stocks]:
-                res.append({'zx_name': zx_name, 'code': code, 'exists': 1})
-            else:
-                res.append({'zx_name': zx_name, 'code': code, 'exists': 0})
+        exists_group = db.zx_query_group_by_code(self.market_type, code)
+        res_zx_group = [
+            {
+                "zx_name": _g["name"],
+                "code": code,
+                "exists": 1 if _g["name"] in exists_group else 0,
+            }
+            for _g in self.zixuan_list
+        ]
+        return res_zx_group
 
-        return res
 
-
-if __name__ == '__main__':
-    zx = ZiXuan('a')
-    zx.add_stock('强势', 'SH.880540', '创投概念')
+if __name__ == "__main__":
+    zx = ZiXuan("currency")
+    zx.add_stock("我的关注", "LTC/USDT", None)

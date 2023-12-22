@@ -1,35 +1,40 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html lang="zh">
-<head>
-    <title>当前任务</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}"/>
-    <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
-    <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
-</head>
-<body class="layui-fluid">
-<table class="layui-hide" id="table-jobs"></table>
 
-<script>
+<head>
+  <title>当前任务</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+  <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+  {% include 'dark.html' %}
+</head>
+
+<body class="layui-fluid">
+  <table class="layui-hide" id="table-jobs"></table>
+
+  <script>
     $(function () {
-        layui.use('table', function () {
-            var table = layui.table;
-            // 已知数据渲染
-            table.render({
-                elem: '#table-jobs',
-                cols: [[ //标题栏
-                    {field: 'name', title: '任务名称', width: 120},
-                    {field: 'state', title: '状态', width: 100},
-                    {field: 'update_dt', title: '上次执行时间', width: 160},
-                    {field: 'next_run_dt', title: '下次执行时间', width: 160},
-                ]],
-                data: {{ jobs | tojson }},
-                //skin: 'line', // 表格风格
-                //even: true,
-                page: false, // 是否显示分页
-            });
-        });
-    });
-</script>
+      layui.use('table', function () {
+        var table = layui.table;
+        // 已知数据渲染
+        table.render({
+          elem: '#table-jobs',
+          cols: [[ //标题栏
+            { field: 'name', title: '任务名称', width: 300 },
+            { field: 'state', title: '状态', width: 100 },
+            { field: 'update_dt', title: '上次执行时间', width: 160 },
+            { field: 'next_run_dt', title: '下次执行时间', width: 160 },
+          ]],
+          data: {{ jobs | tojson }},
+      //skin: 'line', // 表格风格
+      //even: true,
+      page: false, // 是否显示分页
+              });
+          });
+      });
+  </script>
 </body>
+
 </html>

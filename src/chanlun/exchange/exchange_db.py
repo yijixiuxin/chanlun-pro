@@ -1,13 +1,11 @@
-import contextlib
 import datetime
 from typing import List, Dict
 
 import pandas as pd
-import pymysql
 import pytz
-from dbutils.pooled_db import PooledDB
+from chanlun import fun
+from chanlun.db import db
 
-from chanlun import config
 from chanlun.exchange.exchange import (
     Exchange,
     convert_futures_kline_frequency,
@@ -16,24 +14,6 @@ from chanlun.exchange.exchange import (
     convert_currency_kline_frequency,
     Tick,
 )
-
-if config.DB_HOST != "":
-    g_pool_db = PooledDB(
-        pymysql,
-        mincached=1,
-        maxcached=3,
-        maxshared=3,
-        maxconnections=3,
-        blocking=True,
-        host=config.DB_HOST,
-        port=config.DB_PORT,
-        user=config.DB_USER,
-        passwd=config.DB_PWD,
-        db=config.DB_DATABASE,
-        charset="utf8",
-    )
-else:
-    g_pool_db = None
 
 
 class ExchangeDB(Exchange):
@@ -131,78 +111,6 @@ class ExchangeDB(Exchange):
             }
         return ["d", "30m", "5m"]
 
-    def table(self, code):
-        """
-        根据 code  获取对应的数据表名称
-        :param code:
-        :return:
-        """
-        if self.market == "hk":
-            return "stock_klines_" + code.replace(".", "_").lower()
-        elif self.market == "a":
-            return "a_stock_klines_" + code.replace(".", "_").lower()[:7]
-        elif self.market == "us":
-            return "us_klines_" + code.lower()[0]
-        elif self.market == "currency":
-            return "currency_klines_" + code.replace("/", "_").lower()
-        elif self.market == "futures":
-            return "futures_klines_" + code.replace(".", "_").replace("@", "_").lower()
-
-    def create_tables(self, codes):
-        """
-        批量创建表
-        :return:
-        """
-        global g_pool_db
-
-        # 沪深 A 股的建表语句，增加 code，避免创建太多表
-        code_sql = """
-        create table %s (
-                        code VARCHAR(12) not null,
-                        dt DATETIME not null,
-                        f VARCHAR(5) not null,
-                        h decimal(20,8) not null,
-                        l decimal(20, 8) not null,
-                        o decimal(20, 8) not null,
-                        c decimal(20, 8) not null,
-                        v decimal(28, 8) not null,
-                        UNIQUE INDEX dt_f (code, dt, f)
-                    )
-        """
-
-        # 香港与数字货币，每个 code 创建一个表
-        no_code_sql = """
-        create table %s (
-                        dt DATETIME not null,
-                        f VARCHAR(5) not null,
-                        h decimal(20,8) not null,
-                        l decimal(20, 8) not null,
-                        o decimal(20, 8) not null,
-                        c decimal(20, 8) not null,
-                        v decimal(28, 8) not null,
-                        UNIQUE INDEX dt_f (dt, f)
-                    )
-        """
-
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        create_tables = []
-        for code in codes:
-            create_tables.append(self.table(code))
-        create_tables = list(set(create_tables))
-        for table in create_tables:
-            with contextlib.suppress(Exception):
-                # 删除并重新创建
-                # cursor.execute(f'drop table {table}')
-                create_sql = (
-                    code_sql % table
-                    if self.market in ["a", "us", "hk"]
-                    else no_code_sql % table
-                )
-                cursor.execute(create_sql)
-        cursor.close()
-        db.close()
-
     def query_last_datetime(self, code, frequency) -> [None, str]:
         """
         查询交易对儿最后更新时间
@@ -210,31 +118,7 @@ class ExchangeDB(Exchange):
         :param code:
         :return:
         """
-        global g_pool_db
-
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        table = self.table(code)
-        if self.market in ["a", "hk", "us"]:
-            cursor.execute(
-                "select dt from %s where code = '%s' and f = '%s' order by dt desc limit 1"
-                % (table, code, frequency)
-            )
-        else:
-            cursor.execute(
-                "select dt from %s where f = '%s' order by dt desc limit 1"
-                % (table, frequency)
-            )
-
-        dt = cursor.fetchone()
-        cursor.close()
-        db.close()
-        if dt is not None:
-            if self.market == "a":
-                return dt[0].strftime("%Y-%m-%d")
-            else:
-                return dt[0].strftime("%Y-%m-%d %H:%M:%S")
-        return None
+        return db.klines_last_datetime(self.market, code, frequency)
 
     def insert_klines(self, code, frequency, klines):
         """
@@ -244,93 +128,18 @@ class ExchangeDB(Exchange):
         :param klines:
         :return:
         """
-        global g_pool_db
+        db.klines_insert(self.market, code, frequency, klines)
+        return True
 
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        table = self.table(code)
-        if self.market in ["a", "hk", "us"]:
-            sql = f"replace into `{table}`(`code`, `dt`, `f`, `h`, `l`, `o`, `c`, `v`) values (%s, %s, %s, %s, %s, %s, %s, %s)"
-        else:
-            sql = f"replace into `{table}`(`dt`, `f`, `h`, `l`, `o`, `c`, `v`) values (%s, %s, %s, %s, %s, %s, %s)"
-        data_all = []
-        for kline in klines.iterrows():
-            k = kline[1]
-            if self.market in ["a", "hk", "us"]:
-                data_all.append(
-                    (
-                        code,
-                        k["date"].strftime("%Y-%m-%d %H:%M:%S"),
-                        frequency,
-                        k["high"],
-                        k["low"],
-                        k["open"],
-                        k["close"],
-                        k["volume"],
-                    )
-                )
-            else:
-                data_all.append(
-                    (
-                        k["date"].strftime("%Y-%m-%d %H:%M:%S"),
-                        frequency,
-                        k["high"],
-                        k["low"],
-                        k["open"],
-                        k["close"],
-                        k["volume"],
-                    )
-                )
-        cursor.executemany(sql, data_all)
-        db.commit()
-        return
-
-    def del_klines(self, code, frequency, _datetime):
+    def del_klines(self, code, frequency, _datetime: datetime.datetime):
         """
         删除一条记录
         """
-        global g_pool_db
-
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        table = self.table(code)
-        if self.market in ["a", "hk", "us"]:
-            sql = "delete from %s where code='%s' and f = '%s' and dt='%s'" % (
-                table,
-                code,
-                frequency,
-                _datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            )
-        else:
-            sql = "delete from %s where f = '%s' and dt='%s'" % (
-                table,
-                frequency,
-                _datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            )
-        cursor.execute(sql)
-        db.commit()
+        db.klines_delete(self.market, code, frequency, _datetime)
         return
 
     def del_klines_by_code(self, code):
-        global g_pool_db
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        table = self.table(code)
-        if self.market in ["a", "hk", "us"]:
-            sql = "delete from %s where code='%s'" % (table, code)
-        else:
-            sql = "drop table `%s`" % table
-        cursor.execute(sql)
-        db.commit()
-        return
-
-    @staticmethod
-    def execute_sql(sql: str):
-        global g_pool_db
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        cursor.execute(sql)
-        db.commit()
+        db.klines_delete(self.market, code)
         return
 
     def klines(
@@ -343,59 +152,42 @@ class ExchangeDB(Exchange):
     ) -> [pd.DataFrame, None]:
         if args is None:
             args = {}
-        global g_pool_db
 
+        limit = 5000
         if start_date is not None and end_date is not None and "limit" not in args:
-            args["limit"] = None
-        if "limit" not in args:
-            args["limit"] = 5000
-
-        table = self.table(code)
-        if self.market in ["a", "hk", "us"]:
-            sql = "select dt, f, h, l, o, c, v from %s where code='%s' and f='%s'" % (
-                table,
-                code,
-                frequency,
-            )
-        else:
-            sql = "select dt, f, h, l, o, c, v from %s where f='%s'" % (
-                table,
-                frequency,
-            )
+            limit = None
         if start_date is not None:
-            sql += " and dt >= '%s'" % start_date
+            start_date = fun.str_to_datetime(start_date, tz=self.tz)
         if end_date is not None:
-            sql += " and dt <= '%s'" % end_date
-        if "order" in args and args["order"] == "asc":
-            sql += " order by dt asc"
-        else:
-            sql += " order by dt desc"
-
-        if args["limit"] is not None:
-            sql += f" limit {args['limit']}"
-
-        db = g_pool_db.connection()
-        cursor = db.cursor()
-        cursor.execute(sql)
-        klines = cursor.fetchall()
-        cursor.close()
-        db.close()
-        kline_pd = pd.DataFrame(
-            klines, columns=["date", "f", "high", "low", "open", "close", "volume"]
+            end_date = fun.str_to_datetime(end_date, tz=self.tz)
+        klines = db.klines_query(
+            self.market, code, frequency, start_date, end_date, limit
         )
-        kline_pd = kline_pd.iloc[::-1]
+        kline_pd = []
+        for _k in klines:
+            kline_pd.append(
+                {
+                    "code": _k.code,
+                    "date": _k.dt,
+                    "open": _k.o,
+                    "high": _k.h,
+                    "low": _k.l,
+                    "close": _k.c,
+                    "volume": _k.v,
+                }
+            )
+        if len(kline_pd) == 0:
+            kline_pd = pd.DataFrame(
+                [], columns=["date", "code", "high", "low", "open", "close", "volume"]
+            )
+            return kline_pd
+
+        kline_pd = pd.DataFrame(kline_pd)
         kline_pd["code"] = code
         kline_pd["date"] = pd.to_datetime(kline_pd["date"]).dt.tz_localize(
             self.tz
         )  # .map(lambda d: d.to_pydatetime())
         kline_pd["date"] = kline_pd["date"].apply(self.__convert_date)
-        kline_pd["open"] = kline_pd["open"].astype("float")
-        kline_pd["close"] = kline_pd["close"].astype("float")
-        kline_pd["high"] = kline_pd["high"].astype("float")
-        kline_pd["low"] = kline_pd["low"].astype("float")
-        kline_pd["volume"] = kline_pd["volume"].astype("float")
-
-        kline_pd = kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
         kline_pd = kline_pd.reset_index(drop=True)
 
         return kline_pd
@@ -481,14 +273,14 @@ class ExchangeDB(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeDB("us")
+    ex = ExchangeDB("a")
     # ticks = ex.ticks(['SHSE.000001'])
     # print(ticks)
 
     klines = ex.klines(
-        "AAPL",
+        "SZ.000001",
         "d",
-        start_date="1990-01-01 00:00:00",
-        args={"limit": 10, "order": "asc"},
+        # start_date="2023-12-01 00:00:00",
+        args={"limit": 100},
     )
     print(klines.tail(20))
