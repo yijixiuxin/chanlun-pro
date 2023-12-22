@@ -2,6 +2,17 @@ from enum import Enum
 from chanlun import config
 
 from chanlun.exchange.exchange import Exchange
+from chanlun.exchange.exchange_tdx import ExchangeTDX
+from chanlun.exchange.exchange_baostock import ExchangeBaostock
+from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.exchange.exchange_tdx_hk import ExchangeTDXHK
+from chanlun.exchange.exchange_tdx_futures import ExchangeTDXFutures
+from chanlun.exchange.exchange_binance import ExchangeBinance
+from chanlun.exchange.exchange_zb import ExchangeZB
+
+from chanlun.exchange.exchange_ib import ExchangeIB
+from chanlun.exchange.exchange_tdx_us import ExchangeTDXUS
+
 
 # 全局保存交易所对象，避免创建多个交易所对象
 g_exchange_obj = {}
@@ -30,20 +41,14 @@ def get_exchange(market: Market) -> Exchange:
     if market == Market.A:
         # 沪深 A股 交易所
         if config.EXCHANGE_A == "tdx":
-            from chanlun.exchange.exchange_tdx import ExchangeTDX
-
             g_exchange_obj[market.value] = ExchangeTDX()
         elif config.EXCHANGE_A == "futu":
             from chanlun.exchange.exchange_futu import ExchangeFutu
 
             g_exchange_obj[market.value] = ExchangeFutu()
         elif config.EXCHANGE_A == "baostock":
-            from chanlun.exchange.exchange_baostock import ExchangeBaostock
-
             g_exchange_obj[market.value] = ExchangeBaostock()
         elif config.EXCHANGE_A == "db":
-            from chanlun.exchange.exchange_db import ExchangeDB
-
             g_exchange_obj[market.value] = ExchangeDB("a")
         else:
             raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
@@ -51,16 +56,12 @@ def get_exchange(market: Market) -> Exchange:
     elif market == Market.HK:
         # 港股 交易所
         if config.EXCHANGE_HK == "tdx_hk":
-            from chanlun.exchange.exchange_tdx_hk import ExchangeTDXHK
-
             g_exchange_obj[market.value] = ExchangeTDXHK()
         elif config.EXCHANGE_HK == "futu":
             from chanlun.exchange.exchange_futu import ExchangeFutu
 
             g_exchange_obj[market.value] = ExchangeFutu()
         elif config.EXCHANGE_HK == "db":
-            from chanlun.exchange.exchange_db import ExchangeDB
-
             g_exchange_obj[market.value] = ExchangeDB("hk")
         else:
             raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
@@ -72,12 +73,8 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeTq()
         elif config.EXCHANGE_FUTURES == "tdx_futures":
-            from chanlun.exchange.exchange_tdx_futures import ExchangeTDXFutures
-
             g_exchange_obj[market.value] = ExchangeTDXFutures()
         elif config.EXCHANGE_FUTURES == "db":
-            from chanlun.exchange.exchange_db import ExchangeDB
-
             g_exchange_obj[market.value] = ExchangeDB("futures")
         else:
             raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")
@@ -85,16 +82,10 @@ def get_exchange(market: Market) -> Exchange:
     elif market == Market.CURRENCY:
         # 数字货币 交易所
         if config.EXCHANGE_CURRENCY == "binance":
-            from chanlun.exchange.exchange_binance import ExchangeBinance
-
             g_exchange_obj[market.value] = ExchangeBinance()
         elif config.EXCHANGE_CURRENCY == "zb":
-            from chanlun.exchange.exchange_zb import ExchangeZB
-
             g_exchange_obj[market.value] = ExchangeZB()
         elif config.EXCHANGE_CURRENCY == "db":
-            from chanlun.exchange.exchange_db import ExchangeDB
-
             g_exchange_obj[market.value] = ExchangeDB("currency")
         else:
             raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY}")
@@ -110,16 +101,10 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangePolygon()
         elif config.EXCHANGE_US == "ib":
-            from chanlun.exchange.exchange_ib import ExchangeIB
-
             g_exchange_obj[market.value] = ExchangeIB()
         elif config.EXCHANGE_US == "tdx_us":
-            from chanlun.exchange.exchange_tdx_us import ExchangeTDXUS
-
             g_exchange_obj[market.value] = ExchangeTDXUS()
         elif config.EXCHANGE_US == "db":
-            from chanlun.exchange.exchange_db import ExchangeDB
-
             g_exchange_obj[market.value] = ExchangeDB("us")
         else:
             raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")

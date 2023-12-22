@@ -1,7 +1,8 @@
 import datetime
 
-from chanlun import rd, fun
+from chanlun import fun, utils
 from chanlun import zixuan
+from chanlun.db import db
 from chanlun.exchange.exchange_tdx import ExchangeTDX
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.base import Operation, POSITION
@@ -20,10 +21,12 @@ class TraderAStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(name=name, mode='real', is_stock=True, is_futures=False, log=log)
+        super().__init__(
+            name=name, mode="real", is_stock=True, is_futures=False, log=log
+        )
         self.ex = ExchangeTDX()
 
-        self.zx = zixuan.ZiXuan('a')
+        self.zx = zixuan.ZiXuan("a")
 
     # 做多买入
     def open_buy(self, code, opt: Operation, amount: float = None):
@@ -41,23 +44,23 @@ class TraderAStock(BackTestTrader):
         amount = amount - amount % 100
 
         msg = f"股票买入 {code}-{stock['name']} 价格 {price} 数量 {amount} 原因 {opt.msg}"
-        fun.send_dd_msg('a', msg)
+        utils.send_dd_msg("a", msg)
 
-        self.zx.add_stock('我的持仓', stock['code'], stock['name'])
+        self.zx.add_stock("我的持仓", stock["code"], stock["name"])
 
-        # 保存订单记录到 Redis 中，这样可以在图表中标识出买卖卖出的位置
-        save_order = {
-            'code': code,
-            'name': stock['name'],
-            'datetime': fun.datetime_to_str(datetime.datetime.now()),
-            'type': 'buy',
-            'price': price,
-            'amount': amount,
-            'info': opt.msg
-        }
-        rd.order_save('a', code, save_order)
+        # 保存订单记录到 数据库 中，这样可以在图表中标识出买卖卖出的位置
+        db.order_save(
+            "a",
+            code,
+            stock["name"],
+            "buy",
+            price,
+            amount,
+            opt.msg,
+            datetime.datetime.now(),
+        )
 
-        return {'price': price, 'amount': amount}
+        return {"price": price, "amount": amount}
 
     # 做空卖出
     def open_sell(self, code, opt: Operation, amount: float = None):
@@ -74,23 +77,23 @@ class TraderAStock(BackTestTrader):
 
         price = tick[code].last
         msg = f"股票卖出 {code}-{stock['name']} 价格 {price} 数量 {pos.amount} 原因 {opt.msg}"
-        fun.send_dd_msg('a', msg)
+        utils.send_dd_msg("a", msg)
 
-        self.zx.del_stock('我的持仓', stock['code'])
+        self.zx.del_stock("我的持仓", stock["code"])
 
-        # 保存订单记录到 Redis 中
-        save_order = {
-            'code': code,
-            'name': stock['name'],
-            'datetime': fun.datetime_to_str(datetime.datetime.now()),
-            'type': 'sell',
-            'price': price,
-            'amount': pos.amount,
-            'info': opt.msg
-        }
-        rd.order_save('a', code, save_order)
+        # 保存订单记录到 数据库 中
+        db.order_save(
+            "a",
+            code,
+            stock["name"],
+            "sell",
+            price,
+            pos.amount,
+            opt.msg,
+            datetime.datetime.now(),
+        )
 
-        return {'price': price, 'amount': pos.amount}
+        return {"price": price, "amount": pos.amount}
 
     # 做空平仓
     def close_sell(self, code, pos: POSITION, opt):

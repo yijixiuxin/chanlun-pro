@@ -14,6 +14,7 @@ tenacity
 qiniu
 flask
 gevent
+sqlalchemy
 
 mytt
 matplotlib
@@ -25,7 +26,7 @@ pyarmor
 setuptools
 
 futu-api
-ccxt~=2.7.12
+ccxt~=4.1.95
 baostock
 polygon-api-client
 alpaca-py

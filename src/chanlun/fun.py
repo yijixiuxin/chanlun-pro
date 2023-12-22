@@ -1,15 +1,12 @@
-import base64
-import hashlib
-import hmac
 import logging
 import time
-import urllib.parse
+import pathlib
 
 import pytz
-import requests
+from functools import wraps
 
-from chanlun import config
 from chanlun.cl_interface import *
+from chanlun.config import get_data_path
 
 # 统一时区
 __tz = pytz.timezone("Asia/Shanghai")
@@ -19,6 +16,9 @@ def get_logger(filename=None, level=logging.INFO) -> logging.Logger:
     """
     获取一个日志记录的对象
     """
+    log_path = get_data_path() / "logs"
+    if log_path.is_dir() is False:
+        log_path.mkdir(parents=True)
     logger = logging.getLogger(f"{filename}")
     logger.setLevel(level)
     fmt = logging.Formatter("%(asctime)s - %(levelname)s : %(message)s")
@@ -36,65 +36,25 @@ def get_logger(filename=None, level=logging.INFO) -> logging.Logger:
         logger.addHandler(stream_handler)
 
     if filename and file_exists is False:
-        file_handler = logging.FileHandler(filename=filename, encoding="utf-8")
+        file_handler = logging.FileHandler(
+            filename=str(log_path / filename), encoding="utf-8"
+        )
         file_handler.setFormatter(fmt)
         logger.addHandler(file_handler)
 
     return logger
 
 
-def send_dd_msg(market: str, msg: Union[str, dict]):
-    """
-    发送钉钉消息
-    https://open.dingtalk.com/document/robots/custom-robot-access
+def singleton(cls):
+    instance = {}
 
-    :param market:
-    :param msg: 如果类型是 str 则发送文本消息，dict 发送 markdown 消息 (dict demo {'title': '标题', 'text': 'markdown内容'})
-    :return:
-    """
-    dd_info = None
-    if market == "a":
-        dd_info = config.DINGDING_KEY_A
-    elif market == "hk":
-        dd_info = config.DINGDING_KEY_HK
-    elif market == "us":
-        dd_info = config.DINGDING_KEY_US
-    elif market == "currency":
-        dd_info = config.DINGDING_KEY_CURRENCY
-    elif market == "futures":
-        dd_info = config.DINGDING_KEY_FUTURES
-    else:
-        raise Exception("没有配置钉钉的信息")
+    @wraps(cls)
+    def wrapper(*args, **kwargs):
+        if cls not in instance:
+            instance[cls] = cls(*args, **kwargs)
+        return instance[cls]
 
-    url = "https://oapi.dingtalk.com/robot/send?access_token=%s&timestamp=%s&sign=%s"
-
-    def sign():
-        timestamp = str(round(time.time() * 1000))
-        secret = dd_info["secret"]
-        secret_enc = secret.encode("utf-8")
-        string_to_sign = "{}\n{}".format(timestamp, secret)
-        string_to_sign_enc = string_to_sign.encode("utf-8")
-        hmac_code = hmac.new(
-            secret_enc, string_to_sign_enc, digestmod=hashlib.sha256
-        ).digest()
-        _sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-        return timestamp, _sign
-
-    t, s = sign()
-    url = url % (dd_info["token"], t, s)
-    if isinstance(msg, str):
-        res = requests.post(
-            url,
-            json={
-                "msgtype": "text",
-                "text": {"content": msg},
-            },
-        )
-    else:
-        res = requests.post(url, json={"msgtype": "markdown", "markdown": msg})
-
-    # print(res.text)
-    return True
+    return wrapper
 
 
 def timeint_to_str(_t, _format="%Y-%m-%d %H:%M:%S", tz=__tz):

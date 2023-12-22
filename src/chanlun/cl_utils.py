@@ -1,13 +1,13 @@
-import json
 
-from chanlun import rd, fun
+from chanlun import fun
 from chanlun.cl_interface import *
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
+from chanlun.db import db
 
 
 def web_batch_get_cl_datas(
-        market: str, code: str, klines: Dict[str, pd.DataFrame], cl_config: dict = None
+    market: str, code: str, klines: Dict[str, pd.DataFrame], cl_config: dict = None
 ) -> List[ICL]:
     """
     WEB端批量计算并获取 缠论 数据
@@ -32,8 +32,8 @@ def cal_klines_macd_infos(start_k: Kline, end_k: Kline, cd: ICL) -> MACD_INFOS:
     infos = MACD_INFOS()
 
     idx = cd.get_idx()
-    dea = np.array(idx['macd']['dea'][start_k.index:end_k.index + 1])
-    dif = np.array(idx['macd']['dif'][start_k.index:end_k.index + 1])
+    dea = np.array(idx["macd"]["dea"][start_k.index : end_k.index + 1])
+    dif = np.array(idx["macd"]["dif"][start_k.index : end_k.index + 1])
     if len(dea) < 2 or len(dif) < 2:
         return infos
     zero = np.zeros(len(dea))
@@ -56,8 +56,8 @@ def cal_line_macd_infos(line: LINE, cd: ICL) -> MACD_INFOS:
     infos = MACD_INFOS()
 
     idx = cd.get_idx()
-    dea = np.array(idx['macd']['dea'][line.start.k.k_index:line.end.k.k_index + 1])
-    dif = np.array(idx['macd']['dif'][line.start.k.k_index:line.end.k.k_index + 1])
+    dea = np.array(idx["macd"]["dea"][line.start.k.k_index : line.end.k.k_index + 1])
+    dif = np.array(idx["macd"]["dif"][line.start.k.k_index : line.end.k.k_index + 1])
     if len(dea) < 2 or len(dif) < 2:
         return infos
     zero = np.zeros(len(dea))
@@ -92,7 +92,7 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
 
     # 最后一笔不是最高或最低
     direction = bis[-1].type
-    if direction == 'up':
+    if direction == "up":
         bi_max_val = max([_bi.high for _bi in bis])
         if bi_max_val != bis[-1].high:
             return False, False
@@ -101,14 +101,18 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
         if bi_min_val != bis[-1].low:
             return False, False
 
-    macd_idx = cd.get_idx()['macd']
+    macd_idx = cd.get_idx()["macd"]
     # 如果最后一笔内部没有找到 红绿柱子，则直接返回 True
-    if direction == 'up':
-        macd_up_hist_max_val = max(macd_idx['hist'][bis[-1].start.k.k_index:bis[-1].end.k.k_index + 1])
+    if direction == "up":
+        macd_up_hist_max_val = max(
+            macd_idx["hist"][bis[-1].start.k.k_index : bis[-1].end.k.k_index + 1]
+        )
         if macd_up_hist_max_val <= 0:
             return True, True
-    elif direction == 'down':
-        macd_down_hist_min_val = min(macd_idx['hist'][bis[-1].start.k.k_index:bis[-1].end.k.k_index + 1])
+    elif direction == "down":
+        macd_down_hist_min_val = min(
+            macd_idx["hist"][bis[-1].start.k.k_index : bis[-1].end.k.k_index + 1]
+        )
         if macd_down_hist_min_val >= 0:
             return True, True
 
@@ -116,42 +120,56 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
     start_k = cd.get_klines()[bis[0].start.k.k_index]
     end_k = cd.get_klines()[bis[-1].end.k.k_index]
     bis_macd_infos = cal_klines_macd_infos(start_k, end_k, cd)
-    if direction == 'up' and (bis_macd_infos.dea_up_cross_num == 0 or bis_macd_infos.dif_up_cross_num == 0):
+    if direction == "up" and (
+        bis_macd_infos.dea_up_cross_num == 0 or bis_macd_infos.dif_up_cross_num == 0
+    ):
         return False, False
-    if direction == 'down' and (bis_macd_infos.dif_down_cross_num == 0 or bis_macd_infos.dif_down_cross_num == 0):
+    if direction == "down" and (
+        bis_macd_infos.dif_down_cross_num == 0 or bis_macd_infos.dif_down_cross_num == 0
+    ):
         return False, False
 
     def get_macd_dump_info(start_fx: FX, end_fx: FX):
         # 获取给定区间内，hist dif dea 最大值，hist 出现的驼峰值列表
         start_k_index = start_fx.klines[0].k_index
-        end_k_index = end_fx.klines[-1].k_index if end_fx.klines[-1] is not None else end_fx.klines[1].k_index
+        end_k_index = (
+            end_fx.klines[-1].k_index
+            if end_fx.klines[-1] is not None
+            else end_fx.klines[1].k_index
+        )
         # 根据红绿柱子的边界获取
         while True:
-            if direction == 'up':
-                if start_k_index > 0 and macd_idx['hist'][start_k_index] > 0:
+            if direction == "up":
+                if start_k_index > 0 and macd_idx["hist"][start_k_index] > 0:
                     start_k_index -= 1
                 else:
                     break
-            if direction == 'down':
-                if start_k_index > 0 and macd_idx['hist'][start_k_index] < 0:
+            if direction == "down":
+                if start_k_index > 0 and macd_idx["hist"][start_k_index] < 0:
                     start_k_index -= 1
                 else:
                     break
         while True:
-            if direction == 'up':
-                if end_k_index < len(macd_idx['hist']) and macd_idx['hist'][end_k_index] > 0:
+            if direction == "up":
+                if (
+                    end_k_index < len(macd_idx["hist"])
+                    and macd_idx["hist"][end_k_index] > 0
+                ):
                     end_k_index += 1
                 else:
                     break
-            if direction == 'down':
-                if end_k_index < len(macd_idx['hist']) and macd_idx['hist'][end_k_index] < 0:
+            if direction == "down":
+                if (
+                    end_k_index < len(macd_idx["hist"])
+                    and macd_idx["hist"][end_k_index] < 0
+                ):
                     end_k_index += 1
                 else:
                     break
 
-        macd_hists = macd_idx['hist'][start_k_index:end_k_index + 1]
-        macd_difs = macd_idx['dif'][start_k_index:end_k_index + 1]
-        macd_deas = macd_idx['dea'][start_k_index:end_k_index + 1]
+        macd_hists = macd_idx["hist"][start_k_index : end_k_index + 1]
+        macd_difs = macd_idx["dif"][start_k_index : end_k_index + 1]
+        macd_deas = macd_idx["dea"][start_k_index : end_k_index + 1]
 
         max_hist = max_dif = max_dea = 0
         hist_dumps = []
@@ -160,21 +178,21 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
             _hist = macd_hists[i]
             _dif = macd_difs[i]
             _dea = macd_deas[i]
-            if direction == 'up' and _hist > 0:
+            if direction == "up" and _hist > 0:
                 _temp_dumps.append(_hist)
                 max_hist = max(max_hist, _hist)
-            if direction == 'up' and _dif > 0:
+            if direction == "up" and _dif > 0:
                 max_dif = max(max_dif, _dif)
-            if direction == 'up' and _dea > 0:
+            if direction == "up" and _dea > 0:
                 max_dea = max(max_dea, _dea)
-            if direction == 'down' and _hist < 0:
+            if direction == "down" and _hist < 0:
                 _temp_dumps.append(abs(_hist))
                 max_hist = max(max_hist, abs(_hist))
-            if direction == 'down' and _dif < 0:
+            if direction == "down" and _dif < 0:
                 max_dif = max(max_dif, abs(_dif))
-            if direction == 'down' and _dea < 0:
+            if direction == "down" and _dea < 0:
                 max_dea = max(max_dea, abs(_dea))
-            if (direction == 'up' and _hist < 0) or (direction == 'down' and _hist > 0):
+            if (direction == "up" and _hist < 0) or (direction == "down" and _hist > 0):
                 if len(_temp_dumps) > 0:
                     hist_dumps.append(_temp_dumps)
                     _temp_dumps = []
@@ -184,14 +202,17 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
         return max_hist, max_dif, max_dea, hist_dumps
 
     # 计算最后一笔的 macd 信息
-    last_bi_max_hist, last_bi_max_dif, last_bi_max_dea, last_bi_hist_dumps = get_macd_dump_info(
-        bis[-1].start, bis[-1].end
-    )
+    (
+        last_bi_max_hist,
+        last_bi_max_dif,
+        last_bi_max_dea,
+        last_bi_hist_dumps,
+    ) = get_macd_dump_info(bis[-1].start, bis[-1].end)
     last_bi_sum_hist = sum([sum(_hists) for _hists in last_bi_hist_dumps])
     # print(
     #     f'最后一笔macd 信息： max_hist {last_bi_max_hist} max_dif {last_bi_max_dif} max_dea {last_bi_max_dea} sum_hist {last_bi_sum_hist}')
     # 根据中枢数量，来获取要比较的部分
-    zss = cd.create_dn_zs('bi', bis)
+    zss = cd.create_dn_zs("bi", bis)
     if len(zss) == 0:
         # 没有中枢，就用上一笔
         compare_start_fx = bis[-3].start
@@ -207,9 +228,12 @@ def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
             compare_start_fx = zss[-1].lines[0].start
             compare_end_fx = zss[-1].lines[-1].end
 
-    compare_max_hist, compare_max_dif, compare_max_dea, compare_hist_dumps = get_macd_dump_info(
-        compare_start_fx, compare_end_fx
-    )
+    (
+        compare_max_hist,
+        compare_max_dif,
+        compare_max_dea,
+        compare_hist_dumps,
+    ) = get_macd_dump_info(compare_start_fx, compare_end_fx)
     compare_max_sum_hist = max([sum(_hists) for _hists in compare_hist_dumps])
     # print(
     #     f'要比较的macd信息： max_hist {compare_max_hist} max_dif {compare_max_dif} max_dea {compare_max_dea} sum_hist {compare_max_sum_hist}')
@@ -229,8 +253,12 @@ def cal_zs_macd_infos(zs: ZS, cd: ICL) -> MACD_INFOS:
     计算中枢的macd信息
     """
     infos = MACD_INFOS()
-    dea = np.array(cd.get_idx()['macd']['dea'][zs.start.k.k_index:zs.end.k.k_index + 1])
-    dif = np.array(cd.get_idx()['macd']['dif'][zs.start.k.k_index:zs.end.k.k_index + 1])
+    dea = np.array(
+        cd.get_idx()["macd"]["dea"][zs.start.k.k_index : zs.end.k.k_index + 1]
+    )
+    dif = np.array(
+        cd.get_idx()["macd"]["dif"][zs.start.k.k_index : zs.end.k.k_index + 1]
+    )
     if len(dea) < 2 or len(dif) < 2:
         return infos
     zero = np.zeros(len(dea))
@@ -251,105 +279,104 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
     查询指定市场和标的下的缠论和画图配置
     """
     # 如果是期货，代码进行特殊处理，只保留核心的交易所和品种信息，其他的去掉
-    if market == 'futures':
-        code = code.upper().replace('KQ.M@', '')
-        code = ''.join([i for i in code if not i.isdigit()])
+    if market == "futures":
+        code = code.upper().replace("KQ.M@", "")
+        code = "".join([i for i in code if not i.isdigit()])
 
-    config: str = rd.Robj().hget(f'config_{market}', code)
+    config: dict = db.cache_get(f"cl_config_{market}_{code}")
     if config is None:
-        config: str = rd.Robj().hget(f'config_{market}', 'common')
+        config: dict = db.cache_get(f"cl_config_{market}_common")
     # 默认配置设置，用于在前台展示设置值
     default_config = {
-        'config_use_type': 'common',
+        "config_use_type": "common",
         # 缠论默认配置项
-        'kline_type': Config.KLINE_TYPE_DEFAULT.value,
-        'kline_qk': Config.KLINE_QK_NONE.value,
-        'fx_qj': Config.FX_QJ_K.value,
-        'fx_bh': Config.FX_BH_YES.value,
-        'bi_type': Config.BI_TYPE_OLD.value,
-        'bi_bzh': Config.BI_BZH_YES.value,
-        'bi_qj': Config.BI_QJ_DD.value,
-        'bi_fx_cgd': Config.BI_FX_CHD_YES.value,
+        "kline_type": Config.KLINE_TYPE_DEFAULT.value,
+        "kline_qk": Config.KLINE_QK_NONE.value,
+        "fx_qj": Config.FX_QJ_K.value,
+        "fx_bh": Config.FX_BH_YES.value,
+        "bi_type": Config.BI_TYPE_OLD.value,
+        "bi_bzh": Config.BI_BZH_YES.value,
+        "bi_qj": Config.BI_QJ_DD.value,
+        "bi_fx_cgd": Config.BI_FX_CHD_YES.value,
         # 'xd_bzh': Config.XD_BZH_NO.value, # TODO 移除配置
-        'xd_qj': Config.XD_QJ_DD.value,
+        "xd_qj": Config.XD_QJ_DD.value,
         # 'zsd_bzh': Config.ZSD_BZH_NO.value, # TODO 移除配置
-        'zsd_qj': Config.ZSD_QJ_DD.value,
-        'zs_bi_type': [Config.ZS_TYPE_BZ.value],
-        'zs_xd_type': [Config.ZS_TYPE_BZ.value],
-        'zs_qj': Config.ZS_QJ_DD.value,
-        'zs_wzgx': Config.ZS_WZGX_ZGGDD.value,
-        'zs_optimize': '0',
-        'idx_macd_fast': 12,
-        'idx_macd_slow': 26,
-        'idx_macd_signal': 9,
+        "zsd_qj": Config.ZSD_QJ_DD.value,
+        "zs_bi_type": [Config.ZS_TYPE_BZ.value],
+        "zs_xd_type": [Config.ZS_TYPE_BZ.value],
+        "zs_qj": Config.ZS_QJ_DD.value,
+        "zs_wzgx": Config.ZS_WZGX_ZGGDD.value,
+        "zs_optimize": "0",
+        "idx_macd_fast": 12,
+        "idx_macd_slow": 26,
+        "idx_macd_signal": 9,
         # 缠论高级配置
-        'fx_qy': Config.FX_QY_THREE.value,
-        'xd_zs_max_lines_split': 11,
-        'allow_split_one_line_to_xd': '1',
-        'allow_bi_fx_strict': '0',
-        'enable_kchart_low_to_high': '0',
-        'bi_split_k_cross_nums': '20,1',
-        'fx_check_k_nums': 13,
+        "fx_qy": Config.FX_QY_THREE.value,
+        "xd_zs_max_lines_split": 11,
+        "allow_split_one_line_to_xd": "1",
+        "allow_bi_fx_strict": "0",
+        "enable_kchart_low_to_high": "0",
+        "bi_split_k_cross_nums": "20,1",
+        "fx_check_k_nums": 13,
         # 买卖点配置
         # 两中枢及以上趋势背驰，产生一类买卖点
-        'cl_mmd_cal_qs_1mmd': '1',
+        "cl_mmd_cal_qs_1mmd": "1",
         # 非趋势，产生三类买卖点，后续创新高/新低且背驰，产生一类买卖点
-        'cl_mmd_cal_not_qs_3mmd_1mmd': '1',
+        "cl_mmd_cal_not_qs_3mmd_1mmd": "1",
         # 趋势，产生三类买卖点，后续创新高/新低且背驰，产生一类买卖点
-        'cl_mmd_cal_qs_3mmd_1mmd': '1',
+        "cl_mmd_cal_qs_3mmd_1mmd": "1",
         # 趋势，不创新高/新低，产生二类买卖点
-        'cl_mmd_cal_qs_not_lh_2mmd': '1',
+        "cl_mmd_cal_qs_not_lh_2mmd": "1",
         # 趋势，新高/新低后，下一段与新高/新低段比较背驰后，产生二类买卖点
-        'cl_mmd_cal_qs_bc_2mmd': '1',
+        "cl_mmd_cal_qs_bc_2mmd": "1",
         # 趋势，三类买卖点后，后续段不创新高/新低，或者有背驰，产生二类买卖点
-        'cl_mmd_cal_3mmd_not_lh_bc_2mmd': '1',
+        "cl_mmd_cal_3mmd_not_lh_bc_2mmd": "1",
         # 之前有一类买卖点，后续不创新高/新低，产生二类买卖点
-        'cl_mmd_cal_1mmd_not_lh_2mmd': '1',
+        "cl_mmd_cal_1mmd_not_lh_2mmd": "1",
         # 三类买卖点后创新高/新低且不背驰，后续段不创新高/新低且背驰，产生二类买卖点
-        'cl_mmd_cal_3mmd_xgxd_not_bc_2mmd': '1',
+        "cl_mmd_cal_3mmd_xgxd_not_bc_2mmd": "1",
         # 回调不进入中枢的，产生三类买卖点
-        'cl_mmd_cal_not_in_zs_3mmd': '1',
+        "cl_mmd_cal_not_in_zs_3mmd": "1",
         # 回调不进入中枢的(中枢大于等于9段)，产生三类买卖点
-        'cl_mmd_cal_not_in_zs_gt_9_3mmd': '1',
+        "cl_mmd_cal_not_in_zs_gt_9_3mmd": "1",
         # 画图默认配置
-        'chart_show_infos': '1',
-        'chart_show_fx': '1',
-        'chart_show_bi': '1',
-        'chart_show_xd': '1',
-        'chart_show_zsd': '1',
-        'chart_show_qsd': '0',
-        'chart_show_bi_zs': '1',
-        'chart_show_xd_zs': '1',
-        'chart_show_zsd_zs': '1',
-        'chart_show_qsd_zs': '0',
-        'chart_show_bi_mmd': '1',
-        'chart_show_xd_mmd': '1',
-        'chart_show_zsd_mmd': '1',
-        'chart_show_qsd_mmd': '1',
-        'chart_show_bi_bc': '1',
-        'chart_show_xd_bc': '1',
-        'chart_show_zsd_bc': '1',
-        'chart_show_qsd_bc': '1',
-        'chart_show_ma': '1',
-        'chart_show_boll': '1',
-        'chart_show_futu': 'macd',
-        'chart_show_atr_stop_loss': False,
-        'chart_show_ld': 'xd',
-        'chart_kline_nums': 1000,
-        'chart_idx_ma_period': '120,250',
-        'chart_idx_vol_ma_period': '5,60',
-        'chart_idx_boll_period': 20,
-        'chart_idx_rsi_period': 14,
-        'chart_idx_atr_period': 14,
-        'chart_idx_atr_multiplier': 1.5,
-        'chart_idx_cci_period': 14,
-        'chart_idx_kdj_period': '9,3,3',
-        'chart_qstd': 'xd,0',
+        "chart_show_infos": "1",
+        "chart_show_fx": "1",
+        "chart_show_bi": "1",
+        "chart_show_xd": "1",
+        "chart_show_zsd": "1",
+        "chart_show_qsd": "0",
+        "chart_show_bi_zs": "1",
+        "chart_show_xd_zs": "1",
+        "chart_show_zsd_zs": "1",
+        "chart_show_qsd_zs": "0",
+        "chart_show_bi_mmd": "1",
+        "chart_show_xd_mmd": "1",
+        "chart_show_zsd_mmd": "1",
+        "chart_show_qsd_mmd": "1",
+        "chart_show_bi_bc": "1",
+        "chart_show_xd_bc": "1",
+        "chart_show_zsd_bc": "1",
+        "chart_show_qsd_bc": "1",
+        "chart_show_ma": "1",
+        "chart_show_boll": "1",
+        "chart_show_futu": "macd",
+        "chart_show_atr_stop_loss": False,
+        "chart_show_ld": "xd",
+        "chart_kline_nums": 1000,
+        "chart_idx_ma_period": "120,250",
+        "chart_idx_vol_ma_period": "5,60",
+        "chart_idx_boll_period": 20,
+        "chart_idx_rsi_period": 14,
+        "chart_idx_atr_period": 14,
+        "chart_idx_atr_multiplier": 1.5,
+        "chart_idx_cci_period": 14,
+        "chart_idx_kdj_period": "9,3,3",
+        "chart_qstd": "xd,0",
     }
 
     if config is None:
         return default_config
-    config: Dict[str, object] = json.loads(config)
     for _key, _val in default_config.items():
         if _key not in config.keys():
             config[_key] = _val
@@ -362,16 +389,16 @@ def set_cl_chart_config(market: str, code: str, config: Dict[str, object]) -> bo
     设置指定市场和标的下的缠论和画图配置
     """
     # 如果是期货，代码进行特殊处理，只保留核心的交易所和品种信息，其他的去掉
-    if market == 'futures':
-        code = code.upper().replace('KQ.M@', '')
-        code = ''.join([i for i in code if not i.isdigit()])
+    if market == "futures":
+        code = code.upper().replace("KQ.M@", "")
+        code = "".join([i for i in code if not i.isdigit()])
 
     # 读取原来的配置，使用新的配置项进行覆盖，并保存
     old_config = query_cl_chart_config(market, code)
-    if config['config_use_type'] == 'custom' and code is None:
+    if config["config_use_type"] == "custom" and code is None:
         return False
-    elif config['config_use_type'] == 'common':
-        rd.Robj().hdel(f'config_{market}', code)
+    elif config["config_use_type"] == "common":
+        db.cache_del(f"cl_config_{market}_{code}")
 
     for new_key, new_val in config.items():
         if new_key in old_config.keys():
@@ -379,8 +406,9 @@ def set_cl_chart_config(market: str, code: str, config: Dict[str, object]) -> bo
         else:
             old_config[new_key] = new_val
 
-    rd.Robj().hset(
-        f'config_{market}', code if config['config_use_type'] == 'custom' else 'common', json.dumps(old_config)
+    db.cache_set(
+        f"cl_config_{market}_{code if config['config_use_type'] == 'custom' else 'common'}",
+        old_config,
     )
     return True
 
@@ -390,15 +418,17 @@ def del_cl_chart_config(market: str, code: str) -> bool:
     删除指定市场标的的独立配置项
     """
     # 如果是期货，代码进行特殊处理，只保留核心的交易所和品种信息，其他的去掉
-    if market == 'futures':
-        code = code.upper().replace('KQ.M@', '')
-        code = ''.join([i for i in code if not i.isdigit()])
+    if market == "futures":
+        code = code.upper().replace("KQ.M@", "")
+        code = "".join([i for i in code if not i.isdigit()])
 
-    rd.Robj().hdel(f'config_{market}', code)
+    db.cache_del(f"cl_config_{market}_{code}")
     return True
 
 
-def kcharts_frequency_h_l_map(market: str, frequency) -> Tuple[Union[None, str], Union[None, str]]:
+def kcharts_frequency_h_l_map(
+    market: str, frequency
+) -> Tuple[Union[None, str], Union[None, str]]:
     """
     将原周期，转换为新的周期进行图表展示
     按照设置好的对应关系进行返回
@@ -407,13 +437,26 @@ def kcharts_frequency_h_l_map(market: str, frequency) -> Tuple[Union[None, str],
     """
     # 高级别对应的低级别关系
     market_frequencs_map = {
-        'a': {
-            'm': 'w', 'w': 'd', 'd': '30m', '120m': '15m', '60m': '15m',
-            '30m': '5m', '15m': '5m', '5m': '1m'
+        "a": {
+            "m": "w",
+            "w": "d",
+            "d": "30m",
+            "120m": "15m",
+            "60m": "15m",
+            "30m": "5m",
+            "15m": "5m",
+            "5m": "1m",
         },
-        'futures': {
-            'w': 'd', 'd': '60m', '60m': '10m', '30m': '5m', '15m': '3m', '10m': '2m',
-            '6m': '1m', '5m': '1m', '3m': '1m',
+        "futures": {
+            "w": "d",
+            "d": "60m",
+            "60m": "10m",
+            "30m": "5m",
+            "15m": "3m",
+            "10m": "2m",
+            "6m": "1m",
+            "5m": "1m",
+            "3m": "1m",
         },
         # TODO 港美股没有写周期转换的方法，先不支持呢
         # 'us': {
@@ -424,24 +467,31 @@ def kcharts_frequency_h_l_map(market: str, frequency) -> Tuple[Union[None, str],
         #     'y': 'm', 'm': 'w', 'w': 'd', 'd': '60m', '120m': '15m', '60m': '15m',
         #     '30m': '5m', '15m': '5m', '10m': '1m', '5m': '1m',
         # },
-        'currency': {
-            'w': 'd', 'd': '4h', '4h': '30m', '60m': '15m', '30m': '5m',
-            '15m': '5m', '10m': '2m', '5m': '1m', '3m': '1m',
+        "currency": {
+            "w": "d",
+            "d": "4h",
+            "4h": "30m",
+            "60m": "15m",
+            "30m": "5m",
+            "15m": "5m",
+            "10m": "2m",
+            "5m": "1m",
+            "3m": "1m",
         },
     }
 
     try:
-        return market_frequencs_map[market][frequency], f'{market}:{frequency}'
+        return market_frequencs_map[market][frequency], f"{market}:{frequency}"
     except Exception:
         return None, None
 
 
-def cl_qstd(cd: ICL, line_type='xd', line_num: int = 5):
+def cl_qstd(cd: ICL, line_type="xd", line_num: int = 5):
     """
     缠论线段的趋势通道
     基于已完成的最后 n 条线段，线段最高两个点，线段最低两个点连线，作为趋势通道线指导交易（不一定精确）
     """
-    lines = cd.get_xds() if line_type == 'xd' else cd.get_bis()
+    lines = cd.get_xds() if line_type == "xd" else cd.get_bis()
     qs_lines = []
     for i in range(1, len(lines)):
         xd = lines[-i]
@@ -454,58 +504,86 @@ def cl_qstd(cd: ICL, line_type='xd', line_num: int = 5):
         return None
 
     # 获取线段的高低点并排序
-    line_highs = [{'val': l.high, 'index': l.end.k.k_index, 'date': l.end.k.date} for l in qs_lines if l.type == 'up']
-    line_lows = [{'val': l.low, 'index': l.end.k.k_index, 'date': l.end.k.date} for l in qs_lines if l.type == 'down']
+    line_highs = [
+        {"val": l.high, "index": l.end.k.k_index, "date": l.end.k.date}
+        for l in qs_lines
+        if l.type == "up"
+    ]
+    line_lows = [
+        {"val": l.low, "index": l.end.k.k_index, "date": l.end.k.date}
+        for l in qs_lines
+        if l.type == "down"
+    ]
     if len(line_highs) < 2 or len(line_lows) < 2:
         return None
-    line_highs = sorted(line_highs, key=lambda v: v['val'], reverse=True)
-    line_lows = sorted(line_lows, key=lambda v: v['val'], reverse=False)
+    line_highs = sorted(line_highs, key=lambda v: v["val"], reverse=True)
+    line_lows = sorted(line_lows, key=lambda v: v["val"], reverse=False)
 
     def xl(one, two):
         # 计算斜率
-        k = (one['val'] - two['val']) / (one['index'] - two['index'])
+        k = (one["val"] - two["val"]) / (one["index"] - two["index"])
         return k
 
     qstd = {
-        'up': {'one': line_highs[0], 'two': line_highs[1], 'xl': xl(line_highs[0], line_highs[1])},
-        'down': {'one': line_lows[0], 'two': line_lows[1], 'xl': xl(line_lows[0], line_lows[1])},
+        "up": {
+            "one": line_highs[0],
+            "two": line_highs[1],
+            "xl": xl(line_highs[0], line_highs[1]),
+        },
+        "down": {
+            "one": line_lows[0],
+            "two": line_lows[1],
+            "xl": xl(line_lows[0], line_lows[1]),
+        },
     }
     # 图标上展示的坐标设置
     chart_up_start = {
-        'val': line_highs[0]['val'] - qstd['up']['xl'] * (line_highs[0]['index'] - qs_lines[-1].start.k.k_index),
-        'index': qs_lines[-1].start.k.k_index,
-        'date': qs_lines[-1].start.k.date
+        "val": line_highs[0]["val"]
+        - qstd["up"]["xl"] * (line_highs[0]["index"] - qs_lines[-1].start.k.k_index),
+        "index": qs_lines[-1].start.k.k_index,
+        "date": qs_lines[-1].start.k.date,
     }
     chart_up_end = {
-        'val': line_highs[0]['val'] - qstd['up']['xl'] * (line_highs[0]['index'] - cd.get_klines()[-1].index),
-        'index': cd.get_klines()[-1].index,
-        'date': cd.get_klines()[-1].date
+        "val": line_highs[0]["val"]
+        - qstd["up"]["xl"] * (line_highs[0]["index"] - cd.get_klines()[-1].index),
+        "index": cd.get_klines()[-1].index,
+        "date": cd.get_klines()[-1].date,
     }
     chart_down_start = {
-        'val': line_lows[0]['val'] - qstd['down']['xl'] * (line_lows[0]['index'] - qs_lines[-1].start.k.k_index),
-        'index': qs_lines[-1].start.k.k_index,
-        'date': qs_lines[-1].start.k.date
+        "val": line_lows[0]["val"]
+        - qstd["down"]["xl"] * (line_lows[0]["index"] - qs_lines[-1].start.k.k_index),
+        "index": qs_lines[-1].start.k.k_index,
+        "date": qs_lines[-1].start.k.date,
     }
     chart_down_end = {
-        'val': line_lows[0]['val'] - qstd['down']['xl'] * (line_lows[0]['index'] - cd.get_klines()[-1].index),
-        'index': cd.get_klines()[-1].index,
-        'date': cd.get_klines()[-1].date
+        "val": line_lows[0]["val"]
+        - qstd["down"]["xl"] * (line_lows[0]["index"] - cd.get_klines()[-1].index),
+        "index": cd.get_klines()[-1].index,
+        "date": cd.get_klines()[-1].date,
     }
-    qstd['up']['chart'] = {
-        'x': [chart_up_start['date'], chart_up_end['date']],
-        'y': [chart_up_start['val'], chart_up_end['val']],
-        'index': [chart_up_start['index'], chart_up_end['index']]
+    qstd["up"]["chart"] = {
+        "x": [chart_up_start["date"], chart_up_end["date"]],
+        "y": [chart_up_start["val"], chart_up_end["val"]],
+        "index": [chart_up_start["index"], chart_up_end["index"]],
     }
-    qstd['down']['chart'] = {
-        'x': [chart_down_start['date'], chart_down_end['date']],
-        'y': [chart_down_start['val'], chart_down_end['val']],
-        'index': [chart_down_start['index'], chart_down_start['index']]
+    qstd["down"]["chart"] = {
+        "x": [chart_down_start["date"], chart_down_end["date"]],
+        "y": [chart_down_start["val"], chart_down_end["val"]],
+        "index": [chart_down_start["index"], chart_down_start["index"]],
     }
 
     # 计算当前价格和趋势线的位置关系
-    now_point = {'val': cd.get_klines()[-1].c, 'index': cd.get_klines()[-1].index, 'date': cd.get_klines()[-1].date}
-    qstd['up']['now'] = 'up' if xl(chart_up_start, now_point) > qstd['up']['xl'] else 'down'
-    qstd['down']['now'] = 'up' if xl(chart_down_start, now_point) > qstd['down']['xl'] else 'down'
+    now_point = {
+        "val": cd.get_klines()[-1].c,
+        "index": cd.get_klines()[-1].index,
+        "date": cd.get_klines()[-1].date,
+    }
+    qstd["up"]["now"] = (
+        "up" if xl(chart_up_start, now_point) > qstd["up"]["xl"] else "down"
+    )
+    qstd["down"]["now"] = (
+        "up" if xl(chart_down_start, now_point) > qstd["down"]["xl"] else "down"
+    )
 
     return qstd
 
@@ -545,109 +623,160 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
     """
     # K线
     klines = [
-        {'date': k.date, 'high': k.h, 'low': k.l, 'open': k.o, 'close': k.c, 'volume': k.a}
+        {
+            "date": k.date,
+            "high": k.h,
+            "low": k.l,
+            "open": k.o,
+            "close": k.c,
+            "volume": k.a,
+        }
         for k in cd.get_klines()
     ]
     klines = pd.DataFrame(klines)
-    klines.loc[:, 'code'] = cd.get_code()
+    klines.loc[:, "code"] = cd.get_code()
     if to_frequency is not None:
         # 将数据转换成指定的周期数据
-        market = to_frequency.split(':')[0]
-        frequency = to_frequency.split(':')[1]
-        if market == 'a':
+        market = to_frequency.split(":")[0]
+        frequency = to_frequency.split(":")[1]
+        if market == "a":
             klines = exchange.convert_stock_kline_frequency(klines, frequency)
-        elif market == 'futures':
+        elif market == "futures":
             klines = exchange.convert_futures_kline_frequency(klines, frequency)
-        elif market == 'currency':
+        elif market == "currency":
             klines = exchange.convert_currency_kline_frequency(klines, frequency)
         else:
-            raise Exception(f'图表周期数据转换，不支持的市场 {market}')
+            raise Exception(f"图表周期数据转换，不支持的市场 {market}")
     # K 线数据
-    kline_ts = klines['date'].map(fun.datetime_to_int).tolist()
-    kline_cs = klines['close'].tolist()
-    kline_os = klines['open'].tolist()
-    kline_hs = klines['high'].tolist()
-    kline_ls = klines['low'].tolist()
-    kline_vs = klines['volume'].tolist()
-    
+    kline_ts = klines["date"].map(fun.datetime_to_int).tolist()
+    kline_cs = klines["close"].tolist()
+    kline_os = klines["open"].tolist()
+    kline_hs = klines["high"].tolist()
+    kline_ls = klines["low"].tolist()
+    kline_vs = klines["volume"].tolist()
+
     fx_data = []
-    if config['chart_show_fx'] == '1':
+    if config["chart_show_fx"] == "1":
         for fx in cd.get_fxs():
-            fx_data.append({
-                'points': [
-                    {'time': fun.datetime_to_int(fx.k.date), 'price': fx.val},
-                    {'time': fun.datetime_to_int(fx.k.date), 'price': fx.val}
-                ],
-                'text': fx.type
-            })
+            fx_data.append(
+                {
+                    "points": [
+                        {"time": fun.datetime_to_int(fx.k.date), "price": fx.val},
+                        {"time": fun.datetime_to_int(fx.k.date), "price": fx.val},
+                    ],
+                    "text": fx.type,
+                }
+            )
 
     bi_chart_data = []
-    if config['chart_show_bi'] == '1':
+    if config["chart_show_bi"] == "1":
         for bi in cd.get_bis():
-            bi_chart_data.append({
-                'points': [
-                    {'time': fun.datetime_to_int(bi.start.k.date), 'price': bi.start.val},
-                    {'time': fun.datetime_to_int(bi.end.k.date), 'price': bi.end.val},
-                ],
-                'linestyle': '0' if bi.is_done() else '1',
-            })
+            bi_chart_data.append(
+                {
+                    "points": [
+                        {
+                            "time": fun.datetime_to_int(bi.start.k.date),
+                            "price": bi.start.val,
+                        },
+                        {
+                            "time": fun.datetime_to_int(bi.end.k.date),
+                            "price": bi.end.val,
+                        },
+                    ],
+                    "linestyle": "0" if bi.is_done() else "1",
+                }
+            )
 
     xd_chart_data = []
-    if config['chart_show_xd'] == '1':
+    if config["chart_show_xd"] == "1":
         for xd in cd.get_xds():
-            xd_chart_data.append({
-                'points': [
-                    {'time': fun.datetime_to_int(xd.start.k.date), 'price': xd.start.val},
-                    {'time': fun.datetime_to_int(xd.end.k.date), 'price': xd.end.val},
-                ],
-                'linestyle': '0' if xd.is_done() else '1',
-            })
+            xd_chart_data.append(
+                {
+                    "points": [
+                        {
+                            "time": fun.datetime_to_int(xd.start.k.date),
+                            "price": xd.start.val,
+                        },
+                        {
+                            "time": fun.datetime_to_int(xd.end.k.date),
+                            "price": xd.end.val,
+                        },
+                    ],
+                    "linestyle": "0" if xd.is_done() else "1",
+                }
+            )
 
     zsd_chart_data = []
-    if config['chart_show_zsd'] == '1':
+    if config["chart_show_zsd"] == "1":
         for zsd in cd.get_zsds():
-            zsd_chart_data.append({
-                'points': [
-                    {'time': fun.datetime_to_int(zsd.start.k.date), 'price': zsd.start.val},
-                    {'time': fun.datetime_to_int(zsd.end.k.date), 'price': zsd.end.val},
-                ],
-                'linestyle': '0' if zsd.is_done() else '1',
-            })
+            zsd_chart_data.append(
+                {
+                    "points": [
+                        {
+                            "time": fun.datetime_to_int(zsd.start.k.date),
+                            "price": zsd.start.val,
+                        },
+                        {
+                            "time": fun.datetime_to_int(zsd.end.k.date),
+                            "price": zsd.end.val,
+                        },
+                    ],
+                    "linestyle": "0" if zsd.is_done() else "1",
+                }
+            )
 
     bi_zs_chart_data = []
-    if config['chart_show_bi_zs'] == '1':
-        for zs_type in config['zs_bi_type']:
+    if config["chart_show_bi_zs"] == "1":
+        for zs_type in config["zs_bi_type"]:
             for zs in cd.get_bi_zss(zs_type):
-                bi_zs_chart_data.append({
-                    'points': [
-                        {'time': fun.datetime_to_int(zs.start.k.date), 'price': zs.zg},
-                        {'time': fun.datetime_to_int(zs.end.k.date), 'price': zs.zd},
-                    ],
-                    'linestyle': '0' if zs.done else '1',
-                })
+                bi_zs_chart_data.append(
+                    {
+                        "points": [
+                            {
+                                "time": fun.datetime_to_int(zs.start.k.date),
+                                "price": zs.zg,
+                            },
+                            {
+                                "time": fun.datetime_to_int(zs.end.k.date),
+                                "price": zs.zd,
+                            },
+                        ],
+                        "linestyle": "0" if zs.done else "1",
+                    }
+                )
 
     xd_zs_chart_data = []
-    if config['chart_show_xd_zs'] == '1':
-        for zs_type in config['zs_xd_type']:
+    if config["chart_show_xd_zs"] == "1":
+        for zs_type in config["zs_xd_type"]:
             for zs in cd.get_xd_zss(zs_type):
-                xd_zs_chart_data.append({
-                    'points': [
-                        {'time': fun.datetime_to_int(zs.start.k.date), 'price': zs.zg},
-                        {'time': fun.datetime_to_int(zs.end.k.date), 'price': zs.zd},
-                    ],
-                    'linestyle': '0' if zs.done else '1',
-                })
+                xd_zs_chart_data.append(
+                    {
+                        "points": [
+                            {
+                                "time": fun.datetime_to_int(zs.start.k.date),
+                                "price": zs.zg,
+                            },
+                            {
+                                "time": fun.datetime_to_int(zs.end.k.date),
+                                "price": zs.zd,
+                            },
+                        ],
+                        "linestyle": "0" if zs.done else "1",
+                    }
+                )
 
     zsd_zs_chart_data = []
-    if config['chart_show_zsd_zs'] == '1':
+    if config["chart_show_zsd_zs"] == "1":
         for zs in cd.get_zsd_zss():
-            zsd_zs_chart_data.append({
-                'points': [
-                    {'time': fun.datetime_to_int(zs.start.k.date), 'price': zs.zg},
-                    {'time': fun.datetime_to_int(zs.end.k.date), 'price': zs.zd},
-                ],
-                'linestyle': '0' if zs.done else '1',
-            })
+            zsd_zs_chart_data.append(
+                {
+                    "points": [
+                        {"time": fun.datetime_to_int(zs.start.k.date), "price": zs.zg},
+                        {"time": fun.datetime_to_int(zs.end.k.date), "price": zs.zd},
+                    ],
+                    "linestyle": "0" if zs.done else "1",
+                }
+            )
 
     # 背驰信息
     bc_infos = {}
@@ -655,79 +784,107 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
     mmd_infos = {}
 
     lines = {
-        'bi': cd.get_bis(),
-        'xd': cd.get_xds(),
-        'zsd': cd.get_zsds(),
+        "bi": cd.get_bis(),
+        "xd": cd.get_xds(),
+        "zsd": cd.get_zsds(),
     }
-    line_type_map = {'bi': '笔', 'xd': '段', 'zsd': '走', 'qsd': '趋'}
-    bc_type_map = {'bi': 'BI', 'xd': 'XD', 'zsd': 'ZSD', 'qsd': 'QSD', 'pz': 'PZ',
-                   'qs': 'QS'}
+    line_type_map = {"bi": "笔", "xd": "段", "zsd": "走", "qsd": "趋"}
+    bc_type_map = {
+        "bi": "BI",
+        "xd": "XD",
+        "zsd": "ZSD",
+        "qsd": "QSD",
+        "pz": "PZ",
+        "qs": "QS",
+    }
     mmd_type_map = {
-        '1buy': '1B', '2buy': '2B', 'l2buy': 'L2B', '3buy': '3B', 'l3buy': 'L3B',
-        '1sell': '1S', '2sell': '2S', 'l2sell': 'L2S', '3sell': '3S', 'l3sell': 'L3S'
+        "1buy": "1B",
+        "2buy": "2B",
+        "l2buy": "L2B",
+        "3buy": "3B",
+        "l3buy": "L3B",
+        "1sell": "1S",
+        "2sell": "2S",
+        "l2sell": "L2S",
+        "3sell": "3S",
+        "l3sell": "L3S",
     }
     for line_type, ls in lines.items():
         for l in ls:
-            bcs = l.line_bcs('|')
+            bcs = l.line_bcs("|")
             if len(bcs) != 0 and l.end.k.date not in bc_infos.keys():
                 bc_infos[l.end.k.date] = {
-                    'price': l.end.val,
-                    'bc_infos': {_type: [] for _type in line_type_map.keys()}
+                    "price": l.end.val,
+                    "bc_infos": {_type: [] for _type in line_type_map.keys()},
                 }
-            if config[f'chart_show_{line_type}_bc'] == '1':
+            if config[f"chart_show_{line_type}_bc"] == "1":
                 for bc in bcs:
-                    bc_infos[l.end.k.date]['bc_infos'][line_type].append(bc_type_map[bc])
+                    bc_infos[l.end.k.date]["bc_infos"][line_type].append(
+                        bc_type_map[bc]
+                    )
 
-            mmds = l.line_mmds('|')
+            mmds = l.line_mmds("|")
             if len(mmds) != 0 and l.end.k.date not in mmd_infos.keys():
                 mmd_infos[l.end.k.date] = {
-                    'price': l.end.val,
-                    'mmd_infos': {_type: [] for _type in line_type_map.keys()}
+                    "price": l.end.val,
+                    "mmd_infos": {_type: [] for _type in line_type_map.keys()},
                 }
-            if config[f'chart_show_{line_type}_mmd'] == '1':
+            if config[f"chart_show_{line_type}_mmd"] == "1":
                 for mmd in mmds:
-                    mmd_infos[l.end.k.date]['mmd_infos'][line_type].append(mmd_type_map[mmd])
+                    mmd_infos[l.end.k.date]["mmd_infos"][line_type].append(
+                        mmd_type_map[mmd]
+                    )
 
     bc_chart_data = []
     for dt, bc in bc_infos.items():
-        bc_text = '/'.join([
-            f"{line_type_map[_type]}:{','.join(list(set(_bcs)))}" for _type, _bcs in bc['bc_infos'].items()
-            if len(_bcs) > 0
-        ])
+        bc_text = "/".join(
+            [
+                f"{line_type_map[_type]}:{','.join(list(set(_bcs)))}"
+                for _type, _bcs in bc["bc_infos"].items()
+                if len(_bcs) > 0
+            ]
+        )
         if len(bc_text) > 0:
-            bc_chart_data.append({
-                'points': {'time': fun.datetime_to_int(dt), 'price': bc['price']},
-                'text': bc_text
-            })
+            bc_chart_data.append(
+                {
+                    "points": {"time": fun.datetime_to_int(dt), "price": bc["price"]},
+                    "text": bc_text,
+                }
+            )
 
     mmd_chart_data = []
     for dt, mmd in mmd_infos.items():
-        mmd_text = '/'.join([
-            f"{line_type_map[_type]}:{','.join(list(set(_mmds)))}" for _type, _mmds in mmd['mmd_infos'].items()
-            if len(_mmds) > 0
-        ])
+        mmd_text = "/".join(
+            [
+                f"{line_type_map[_type]}:{','.join(list(set(_mmds)))}"
+                for _type, _mmds in mmd["mmd_infos"].items()
+                if len(_mmds) > 0
+            ]
+        )
         if len(mmd_text) > 0:
-            mmd_chart_data.append({
-                'points': {'time': fun.datetime_to_int(dt), 'price': mmd['price']},
-                'text': mmd_text
-            })
+            mmd_chart_data.append(
+                {
+                    "points": {"time": fun.datetime_to_int(dt), "price": mmd["price"]},
+                    "text": mmd_text,
+                }
+            )
 
     return {
-        't': kline_ts,
-        'c': kline_cs,
-        'o': kline_os,
-        'h': kline_hs,
-        'l': kline_ls,
-        'v': kline_vs,
-        'fxs': fx_data,
-        'bis': bi_chart_data,
-        'xds': xd_chart_data,
-        'zsds': zsd_chart_data,
-        'bi_zss': bi_zs_chart_data,
-        'xd_zss': xd_zs_chart_data,
-        'zsd_zss': zsd_zs_chart_data,
-        'bcs': bc_chart_data,
-        'mmds': mmd_chart_data,
+        "t": kline_ts,
+        "c": kline_cs,
+        "o": kline_os,
+        "h": kline_hs,
+        "l": kline_ls,
+        "v": kline_vs,
+        "fxs": fx_data,
+        "bis": bi_chart_data,
+        "xds": xd_chart_data,
+        "zsds": zsd_chart_data,
+        "bi_zss": bi_zs_chart_data,
+        "xd_zss": xd_zs_chart_data,
+        "zsd_zss": zsd_zs_chart_data,
+        "bcs": bc_chart_data,
+        "mmds": mmd_chart_data,
         # 'bc_marks': bc_marks,
     }
 
@@ -738,13 +895,13 @@ def bi_td(bi: BI, cd: ICL):
     """
     if bi.is_done() is False:
         return False
-    next_ks = cd.get_klines()[bi.end.klines[-1].k_index + 1:]
+    next_ks = cd.get_klines()[bi.end.klines[-1].k_index + 1 :]
     if len(next_ks) == 0:
         return False
     for _nk in next_ks:
-        if bi.type == 'up' and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
+        if bi.type == "up" and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
             return True
-        elif bi.type == 'down' and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
+        elif bi.type == "down" and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
             return True
 
     return False
@@ -754,7 +911,7 @@ def up_cross(one_list: np.array, two_list: np.array):
     """
     获取上穿信号列表
     """
-    assert len(one_list) == len(two_list), '信号输入维度不相等'
+    assert len(one_list) == len(two_list), "信号输入维度不相等"
     if len(one_list) < 2:
         return []
     cross = []
@@ -768,7 +925,7 @@ def down_cross(one_list: np.array, two_list: np.array):
     """
     获取下穿信号列表
     """
-    assert len(one_list) == len(two_list), '信号输入维度不相等'
+    assert len(one_list) == len(two_list), "信号输入维度不相等"
     if len(one_list) < 2:
         return []
     cross = []
@@ -797,7 +954,7 @@ def bi_qk_num(cd: ICL, bi: BI) -> Tuple[int, int]:
     """
     up_qk_num = 0
     down_qk_num = 0
-    _ks = cd.get_src_klines()[bi.start.k.k_index:bi.end.k.k_index + 1]
+    _ks = cd.get_src_klines()[bi.start.k.k_index : bi.end.k.k_index + 1]
     for i in range(1, len(_ks)):
         pre_k = _ks[i - 1]
         now_k = _ks[i]
@@ -812,10 +969,18 @@ def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
     """
     将缠论数据的普通K线，转换成平均K线数据，返回格式 pd.DataFrame
     """
-    cd_klines = [{
-        'code': _k['code'], 'date': _k['date'], 'high': _k['high'],
-        'open': _k['open'], 'low': _k['low'], 'close': _k['close'], 'volume': _k['volume']
-    } for _, _k in ks.iterrows()]
+    cd_klines = [
+        {
+            "code": _k["code"],
+            "date": _k["date"],
+            "high": _k["high"],
+            "open": _k["open"],
+            "low": _k["low"],
+            "close": _k["close"],
+            "volume": _k["volume"],
+        }
+        for _, _k in ks.iterrows()
+    ]
 
     mean_klines: list = []
     for i in range(len(cd_klines)):
@@ -828,67 +993,25 @@ def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
         # 收盘价 =（当前烛台的开盘价 + 最高价 + 最低价 + 收盘价）/4
         # 最大值（或最高价）= 当前周期的最高价、当前周期的平均 K 线图开盘价或收盘价中的最大值。
         # 最小值（或最低价）= 当前周期的最低价、当前周期的平均 K 线图开盘价或收盘价中的最小值
-        _open = (mk['open'] + mk['close']) / 2
-        _close = (nk['open'] + nk['high'] + nk['low'] + nk['close']) / 4
-        _high = max(nk['high'], _open, _close)
-        _low = min(nk['low'], _open, _close)
-        _volume = nk['volume']
-        mean_klines.append({
-            'code': nk['code'],
-            'date': nk['date'],
-            'high': _high,
-            'open': _open,
-            'low': _low,
-            'close': _close,
-            'volume': _volume
-        })
+        _open = (mk["open"] + mk["close"]) / 2
+        _close = (nk["open"] + nk["high"] + nk["low"] + nk["close"]) / 4
+        _high = max(nk["high"], _open, _close)
+        _low = min(nk["low"], _open, _close)
+        _volume = nk["volume"]
+        mean_klines.append(
+            {
+                "code": nk["code"],
+                "date": nk["date"],
+                "high": _high,
+                "open": _open,
+                "low": _low,
+                "close": _close,
+                "volume": _volume,
+            }
+        )
 
     return pd.DataFrame(mean_klines)
 
 
-if __name__ == '__main__':
-    from chanlun.exchange.exchange_db import ExchangeDB
-    from chanlun import cl
-
-    market = 'a'
-    code = 'SZ.000002'
-    ex = ExchangeDB(market)
-    cl_config = query_cl_chart_config(market, code)
-    klines = ex.klines(code, 'd')
-
-    cd = cl.CL(code, 'd', cl_config).process_klines(klines)
-
-    qstd = cl_qstd(cd, 'bi', 5)
-    print(qstd)
-    def cal_distance(chart, x):
-        x1 = chart['one']['index']
-        y1 = chart['one']['val']
-        x2 = chart['two']['index']
-        y2 = chart['two']['val']
-        # 计算直线方程的斜率k和截距b
-        if x2 - x1 == 0:
-            return 0
-        k = (y2 - y1) / (x2 - x1) 
-        b = y1 - k * x1
-        # 计算直线方程
-        line_func = lambda x: k * x + b  
-        
-        # 计算距离,加入判断正负
-        y3_line = line_func(x[0])
-        if x[1] > y3_line:
-            distance = (x[1] - y3_line) / math.sqrt(k**2 + 1)
-        else:
-            distance = -(y3_line - x[1]) / math.sqrt(k**2 + 1)
-        return distance
-
-    bi = cd.get_bis()[-1]
-    x = [bi.end.k.k_index, bi.end.val]
-
-    print('up distance ', x, cal_distance(qstd['up'], x))
-    print('down distance ', x, cal_distance(qstd['down'], x))
-
-    # tv_cd = cl_data_to_tv_chart(cd, cl_config)
-    # print(tv_cd)
-
-    # m_klines = klines_to_heikin_ashi_klines(klines)
-    # print(m_klines.tail())
+if __name__ == "__main__":
+    pass

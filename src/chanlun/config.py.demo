@@ -1,3 +1,5 @@
+import pathlib
+
 """
 服务总配置文件
 """
@@ -6,13 +8,17 @@
 WEB_HOST = '127.0.0.1'
 
 # WEB 登录密码，为空则无需进行登录
-LOGIN_PWD = 'cl123456'
+LOGIN_PWD = ''
+
+# 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
+DATA_PATH = ".chanlun_pro"
 
 # 代理服务器配置
 PROXY_HOST = '127.0.0.1'
-PROXY_PORT = '7890'
+PROXY_PORT = 7890
 
 # 数据库配置
+DB_TYPE = "sqlite"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填写 DB_DATABASE 即可
 DB_HOST = '127.0.0.1'
 DB_PORT = 3306
 DB_USER = 'chanlun'
@@ -82,28 +88,12 @@ DINGDING_KEY_US = {'token': '', 'secret': ''}
 DINGDING_KEY_CURRENCY = {'token': '', 'secret': ''}
 DINGDING_KEY_FUTURES = {'token': '', 'secret': ''}
 
-# 七牛云配置 (用于消息推送时的图片保存)
-QINIU_AK = ''
-QINIU_SK = ''
-QINIU_BUCKET_NAME = ''
-QINIU_PATH = ''
-QINIU_URL = 'http://**'
 
-# 自选组配置
-STOCK_ZX = [{'name': '我的持仓', 'short_name': '持'}, {'name': '今日关注', 'short_name': '今'}]
-HK_ZX = [{'name': '我的持仓', 'short_name': '持'}, {'name': '今日关注', 'short_name': '今'}]
-FUTURES_ZX = [{'name': '我的持仓', 'short_name': '持'}, {'name': '今日关注', 'short_name': '今'}]
-CURRENCY_ZX = [{'name': '我的持仓', 'short_name': '持'}, {'name': '今日关注', 'short_name': '今'}]
-US_ZX = [{'name': '我的持仓', 'short_name': '持'}, {'name': '今日关注', 'short_name': '今'}]
-
-"""
-缠论其他相关设置
-"""
-
-# 是否开启低级别数据转高级别图表展示功能
-# 高级别对应的低级别对照关系在 cl_utils.py kcharts_to_new_frequency 方法中，可自行按需求更改
-# 因为数据服务提供差异，级别不要设置太小，太小转高级别就没有多少数据了
-# 其中的对应关系倍数也不固定，基本在 3-8 区间内，也会因为数据提供API限制不会找到符合要求的低级别周期
-# 低级别转高级别方法在 chanlun.exchange.exchange.py convert_***_kline_frequency，也需要有对应的周期转换配置
-# 自己根据实际情况，根据经验自行设置
-enable_kchart_low_to_high = False
+def get_data_path():
+    # 获取项目数据的目录
+    data_path = pathlib.Path(DATA_PATH)
+    if DATA_PATH.startswith("."):
+        data_path = pathlib.Path().home() / DATA_PATH
+    if data_path.is_dir() is False:
+        data_path.mkdir(parents=True)
+    return data_path
