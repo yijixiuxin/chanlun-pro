@@ -1,37 +1,36 @@
 import time
+import akshare as ak
+
 from typing import Union
 
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from pytdx.util import best_ip
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from chanlun import fun
 
-from chanlun import rd
+from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.file_db import FileCacheDB
-
-g_all_stocks = []
-g_trade_days = None
+from chanlun.config import get_data_path
 
 
+@fun.singleton
 class ExchangeTDXHK(Exchange):
     """
     通达信香港行情接口
     """
 
+    g_all_stocks = []
+
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 redis 中
-        connect_ip = rd.Robj().get("tdxex_connect_ip")
-        # connect_ip = None # 手动重新选择最优服务器
-        if connect_ip is None:
-            connect_ip = self.reset_tdx_ip()
-            print("TDXEX 最优服务器：" + connect_ip)
-        self.connect_ip = {
-            "ip": connect_ip.split(":")[0],
-            "port": int(connect_ip.split(":")[1]),
-        }
+        # 选择最优的服务器，并保存到 cache 中
+        self.connect_info = db.cache_get("tdxex_connect_ip")
+        if self.connect_info is None:
+            self.connect_info = self.reset_tdx_ip()
+            print(f"TDXEX 最优服务器：{self.connect_info}")
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -44,7 +43,7 @@ class ExchangeTDXHK(Exchange):
         while True:
             try:
                 client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                     all_markets = client.get_markets()
                     for _m in all_markets:
                         if _m["category"] == 2:
@@ -61,14 +60,11 @@ class ExchangeTDXHK(Exchange):
         """
         重新选择tdx最优服务器
         """
-        connect_ip = best_ip.select_best_ip("future")
-        connect_ip = connect_ip["ip"] + ":" + str(connect_ip["port"])
-        rd.Robj().set("tdxex_connect_ip", connect_ip)
-        self.connect_ip = {
-            "ip": connect_ip.split(":")[0],
-            "port": int(connect_ip.split(":")[1]),
-        }
-        return connect_ip
+        connect_info = best_ip.select_best_ip("future")
+        connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
+        db.cache_set("tdxex_connect_ip", connect_info)
+        self.connect_info = connect_info
+        return connect_info
 
     def default_code(self):
         return "KH.00700"
@@ -91,15 +87,12 @@ class ExchangeTDXHK(Exchange):
         """
         使用 通达信的方式获取所有股票代码
         """
-        global g_all_stocks
-        if len(g_all_stocks) > 0:
-            return g_all_stocks
-        g_all_stocks = rd.get_ex("tdx_hk_all")
-        if g_all_stocks is not None:
-            return g_all_stocks
-        g_all_stocks = []
+        if len(self.g_all_stocks) > 0:
+            return self.g_all_stocks
+
+        __all_stocks = []
         client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             start_i = 0
             count = 1000
             market_map_short_names = {
@@ -110,7 +103,7 @@ class ExchangeTDXHK(Exchange):
                 for _i in instruments:
                     if _i["category"] != 2:
                         continue
-                    g_all_stocks.append(
+                    __all_stocks.append(
                         {
                             "code": f"{market_map_short_names[_i['market']]}.{_i['code']}",
                             "name": _i["name"],
@@ -120,12 +113,10 @@ class ExchangeTDXHK(Exchange):
                 if len(instruments) < count:
                     break
 
-        print(f"香港列表从 TDX 进行获取，共获取数量：{len(g_all_stocks)}")
+        self.g_all_stocks = __all_stocks
+        print(f"香港列表从 TDX 进行获取，共获取数量：{len(self.g_all_stocks)}")
 
-        if g_all_stocks:
-            rd.save_ex("tdx_hk_all", 24 * 60 * 60, g_all_stocks)
-
-        return g_all_stocks
+        return self.g_all_stocks
 
     def to_tdx_code(self, code):
         """
@@ -151,8 +142,6 @@ class ExchangeTDXHK(Exchange):
         """
         通达信，不支持按照时间查找
         """
-        _s_time = time.time()
-
         if args is None:
             args = {}
         if "pages" not in args.keys():
@@ -180,19 +169,19 @@ class ExchangeTDXHK(Exchange):
         # _time_s = time.time()
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if klines is None:
+            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                if klines_df is None:
                     # 获取 8*800 = 6400 条数据
-                    klines = pd.concat(
+                    klines_df = pd.concat(
                         [
                             client.to_df(
                                 client.get_instrument_bars(
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 700,
-                                    700,
+                                    (i - 1) * 800,
+                                    800,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -200,10 +189,8 @@ class ExchangeTDXHK(Exchange):
                         axis=0,
                         sort=False,
                     )
-                    klines.loc[:, "date"] = pd.to_datetime(
-                        klines["datetime"]
-                    ).dt.tz_localize(self.tz)
-                    klines.sort_values("date", inplace=True)
+                    klines_df.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                    klines_df.sort_values("date", inplace=True)
                 else:
                     for i in range(1, args["pages"] + 1):
                         # print(f'{code} 使用缓存，更新获取第 {i} 页')
@@ -212,32 +199,35 @@ class ExchangeTDXHK(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 700,
-                                700,
+                                (i - 1) * 800,
+                                800,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(
-                            _ks["datetime"]
-                        ).dt.tz_localize(self.tz)
+                        _ks.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = klines.iloc[-1]["date"]
-                        klines = pd.concat([klines, _ks], ignore_index=True)
+                        old_end_dt = klines_df.iloc[-1]["date"]
+                        klines_df = pd.concat([klines_df, _ks], ignore_index=True)
                         # 如果请求的第一个时间大于缓存的最后一个时间，退出
                         if old_end_dt >= new_start_dt:
                             break
 
             # 删除重复数据
-            klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(code, frequency, klines)
+            klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
+                "date"
+            )
+            self.fdb.save_tdx_klines(code, frequency, klines_df)
 
-            klines.loc[:, "code"] = code
-            klines.loc[:, "volume"] = klines["amount"]
+            klines_df.loc[:, "date"] = klines_df["date"].dt.tz_localize(self.tz)
+            klines_df = klines_df.sort_values("date")
+            klines_df.loc[:, "code"] = code
+            klines_df.loc[:, "volume"] = klines_df["amount"]
 
-            if frequency in {"y", "q", "m", "w", "d"}:
-                klines["date"] = klines["date"].apply(self.__convert_date)
-
-            return klines[["code", "date", "open", "close", "high", "low", "volume"]]
+            klines_df = klines_df[
+                ["code", "date", "open", "close", "high", "low", "volume"]
+            ]
+            klines_df = self.klines_qfq(code, klines_df)
+            return klines_df
         except TdxConnectionError:
             print("通达信连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
@@ -267,7 +257,7 @@ class ExchangeTDXHK(Exchange):
         """
         ticks = {}
         client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)
                 if _market is None:
@@ -316,6 +306,47 @@ class ExchangeTDXHK(Exchange):
             return True
         return False
 
+    def klines_qfq(self, code: str, klines: pd.DataFrame):
+        xdxr_path = get_data_path() / "xdxr"
+        if xdxr_path.is_dir() is False:
+            xdxr_path.mkdir()
+        xdxr_file = xdxr_path / f"hk_qfq_factor_{code.replace('.', '_')}.csv"
+        now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+        if (
+            xdxr_file.is_file() is False
+            or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d") != now_day
+        ):
+            qfq_factor_df = ak.stock_hk_daily(
+                symbol=code.split(".")[1], adjust="qfq-factor"
+            )
+            if qfq_factor_df is not None and len(qfq_factor_df) > 0:
+                qfq_factor_df.to_csv(xdxr_file, index=False)
+        else:
+            qfq_factor_df = pd.read_csv(xdxr_file)
+
+        if qfq_factor_df is None or len(qfq_factor_df) == 0:
+            return klines
+
+        qfq_factor_df["qfq_date"] = pd.to_datetime(
+            qfq_factor_df["date"]
+        ).dt.tz_localize(self.tz)
+        qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
+        qfq_factor_df = qfq_factor_df.drop(columns=["date"])
+
+        # 合并k线与复权因子，进行复权计算
+        df = pd.concat([klines, qfq_factor_df], axis=0)
+        df["qfq_date"].fillna(df["date"], inplace=True)
+        df.sort_values(by="qfq_date", inplace=True)
+        df["qfq_factor"].fillna(method="ffill", inplace=True)
+        df.dropna(inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
+        df["open"] = df["open"] * df["qfq_factor"]
+        df["high"] = df["high"] * df["qfq_factor"]
+        df["low"] = df["low"] * df["qfq_factor"]
+        df["close"] = df["close"] * df["qfq_factor"]
+        return df[["code", "date", "open", "high", "low", "close", "volume"]]
+
     @staticmethod
     def __convert_date(dt: datetime.datetime):
         # 通达信后对其，将日期及以上周期的时间统一设置为 16 点
@@ -339,14 +370,14 @@ class ExchangeTDXHK(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXHK()
-    # stocks = ex.all_stocks()
-    # print(len(stocks))
+    stocks = ex.all_stocks()
+    print(len(stocks))
     # print(stocks)
     #
     # print(ex.to_tdx_code('KH.00700'))
     #
-    klines = ex.klines("KH.00700", "d")
-    print(klines)
+    # klines = ex.klines("KH.00006", "d")
+    # print(klines)
 
     # ticks = ex.ticks(['KH.00700'])
     # print(ticks)

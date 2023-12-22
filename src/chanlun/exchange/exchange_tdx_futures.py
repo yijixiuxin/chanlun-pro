@@ -8,31 +8,30 @@ from pytdx.util import best_ip
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
 from chanlun import fun
-from chanlun import rd
+from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.file_db import FileCacheDB
 
-g_all_stocks = []
-g_trade_days = None
 
-
+@fun.singleton
 class ExchangeTDXFutures(Exchange):
     """
     通达信期货行情接口
     """
 
+    g_all_stocks = []
+
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 redis 中
-        connect_ip = rd.Robj().get('tdxex_connect_ip')
-        if connect_ip is None:
-            connect_ip = self.reset_tdx_ip()
-            print('TDXEX 最优服务器：' + connect_ip)
-        self.connect_ip = {'ip': connect_ip.split(':')[0], 'port': int(connect_ip.split(':')[1])}
+        # 选择最优的服务器，并保存到 cache 中
+        self.connect_info = db.cache_get("tdxex_connect_ip")
+        if self.connect_info is None:
+            self.connect_info = self.reset_tdx_ip()
+            print(f"TDXEX 最优服务器：{self.connect_info}")
 
         # 设置时区
-        self.tz = pytz.timezone('Asia/Shanghai')
+        self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
@@ -42,12 +41,14 @@ class ExchangeTDXFutures(Exchange):
         while True:
             try:
                 client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_ip['ip'], self.connect_ip['port']):
+                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                     all_markets = client.get_markets()
                     for _m in all_markets:
-                        if _m['category'] == 3:
-                            self.market_maps[_m['short_name']] = {
-                                'market': _m['market'], 'category': _m['category'], 'name': _m['name']
+                        if _m["category"] == 3:
+                            self.market_maps[_m["short_name"]] = {
+                                "market": _m["market"],
+                                "category": _m["category"],
+                                "name": _m["name"],
                             }
                 break
             except TdxConnectionError:
@@ -57,140 +58,186 @@ class ExchangeTDXFutures(Exchange):
         """
         重新选择tdx最优服务器
         """
-        connect_ip = best_ip.select_best_ip('future')
-        connect_ip = connect_ip['ip'] + ':' + str(connect_ip['port'])
-        rd.Robj().set('tdxex_connect_ip', connect_ip)
-        self.connect_ip = {'ip': connect_ip.split(':')[0], 'port': int(connect_ip.split(':')[1])}
-        return connect_ip
+        connect_info = best_ip.select_best_ip("future")
+        connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
+        db.cache_set("tdxex_connect_ip", connect_info)
+        self.connect_info = connect_info
+        return connect_info
 
     def default_code(self):
-        return 'QS.RBL9'
+        return "QS.RBL8"
 
     def support_frequencys(self):
         return {
-            'y': "Y", 'q': 'Q', 'm': 'M', 'w': 'W', 'd': 'D',
-            '60m': '60m', '30m': '30m', '15m': '15m', '5m': '5m', '1m': '1m'
+            "y": "Y",
+            "q": "Q",
+            "m": "M",
+            "w": "W",
+            "d": "D",
+            "60m": "60m",
+            "30m": "30m",
+            "15m": "15m",
+            "5m": "5m",
+            "1m": "1m",
         }
 
     def all_stocks(self):
         """
         使用 通达信的方式获取所有股票代码
         """
-        global g_all_stocks
-        if len(g_all_stocks) > 0:
-            return g_all_stocks
-        g_all_stocks = rd.get_ex('tdx_futures_all')
-        if g_all_stocks is not None:
-            return g_all_stocks
-        g_all_stocks = []
+        if len(self.g_all_stocks) > 0:
+            return self.g_all_stocks
+
+        __all_stocks = []
         client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_ip['ip'], self.connect_ip['port']):
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             start_i = 0
             count = 1000
-            market_map_short_names = {_m_i['market']: _m_s for _m_s, _m_i in self.market_maps.items()}
+            market_map_short_names = {
+                _m_i["market"]: _m_s
+                for _m_s, _m_i in self.market_maps.items()
+                if _m_s not in ["PH", "EG", "MA"]
+            }
             while True:
                 instruments = client.get_instrument_info(start_i, count)
                 for _i in instruments:
-                    if _i['category'] != 3 or _i['market'] not in market_map_short_names.keys():
+                    if (
+                        _i["category"] != 3
+                        or _i["market"] not in market_map_short_names.keys()
+                    ):
                         continue
 
-                    g_all_stocks.append({
-                        'code': f"{market_map_short_names[_i['market']]}.{_i['code']}",
-                        'name': _i['name'],
-                    })
+                    __all_stocks.append(
+                        {
+                            "code": f"{market_map_short_names[_i['market']]}.{_i['code']}",
+                            "name": _i["name"],
+                        }
+                    )
                 start_i += count
                 if len(instruments) < count:
                     break
 
-        print(f'期货列表从 TDX 进行获取，共获取数量：{len(g_all_stocks)}')
+        self.g_all_stocks = __all_stocks
+        print(f"期货列表从 TDX 进行获取，共获取数量：{len(self.g_all_stocks)}")
 
-        if g_all_stocks:
-            rd.save_ex('tdx_futures_all', 24 * 60 * 60, g_all_stocks)
-
-        return g_all_stocks
+        return self.g_all_stocks
 
     def to_tdx_code(self, code):
         """
         转换为 tdx 对应的代码
         """
-        code_infos = code.split('.')
+        code_infos = code.split(".")
         market_info = self.market_maps[code_infos[0]]
-        return market_info['market'], code_infos[1]
+        return market_info["market"], code_infos[1]
 
-    @retry(stop=stop_after_attempt(3), wait=wait_random(min=1, max=5), retry=retry_if_result(lambda _r: _r is None))
-    def klines(self, code: str, frequency: str,
-               start_date: str = None, end_date: str = None,
-               args=None) -> Union[pd.DataFrame, None]:
-
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random(min=1, max=5),
+        retry=retry_if_result(lambda _r: _r is None),
+    )
+    def klines(
+        self,
+        code: str,
+        frequency: str,
+        start_date: str = None,
+        end_date: str = None,
+        args=None,
+    ) -> Union[pd.DataFrame, None]:
         """
         通达信，不支持按照时间查找
         """
-        _s_time = time.time()
-
         if args is None:
             args = {}
-        if 'pages' not in args.keys():
-            args['pages'] = 8
+        if "pages" not in args.keys():
+            args["pages"] = 8
         else:
-            args['pages'] = int(args['pages'])
+            args["pages"] = int(args["pages"])
 
         frequency_map = {
-            'y': 11, 'q': 10, 'm': 6, 'w': 5, 'd': 9, '60m': 3, '30m': 2, '15m': 1, '5m': 0, '1m': 8
+            "y": 11,
+            "q": 10,
+            "m": 6,
+            "w": 5,
+            "d": 9,
+            "60m": 3,
+            "30m": 2,
+            "15m": 1,
+            "5m": 0,
+            "1m": 8,
         }
         market, tdx_code = self.to_tdx_code(code)
         if market is None or start_date is not None or end_date is not None:
-            print('通达信不支持的调用参数')
+            print("通达信不支持的调用参数")
             return None
 
         # _time_s = time.time()
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_ip['ip'], self.connect_ip['port']):
+            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines is None:
                     # 获取 8*800 = 6400 条数据
-                    klines = pd.concat([
-                        client.to_df(
-                            client.get_instrument_bars(frequency_map[frequency], market, tdx_code, (i - 1) * 700, 700)
-                        )
-                        for i in range(1, args['pages'] + 1)
-                    ], axis=0, sort=False)
+                    klines = pd.concat(
+                        [
+                            client.to_df(
+                                client.get_instrument_bars(
+                                    frequency_map[frequency],
+                                    market,
+                                    tdx_code,
+                                    (i - 1) * 800,
+                                    800,
+                                )
+                            )
+                            for i in range(1, args["pages"] + 1)
+                        ],
+                        axis=0,
+                        sort=False,
+                    )
                     if len(klines) == 0:
                         return pd.DataFrame([])
-                    klines['datetime'] = klines['datetime'].apply(self.fix_yp_date)
-                    klines.loc[:, 'date'] = pd.to_datetime(klines['datetime']).dt.tz_localize(self.tz)
-                    klines.sort_values('date', inplace=True)
+                    klines["datetime"] = klines["datetime"].apply(self.fix_yp_date)
+                    klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
+                    klines.sort_values("date", inplace=True)
                 else:
-                    for i in range(1, args['pages'] + 1):
+                    for i in range(1, args["pages"] + 1):
                         # print(f'{code} 使用缓存，更新获取第 {i} 页')
                         _ks = client.to_df(
-                            client.get_instrument_bars(frequency_map[frequency], market, tdx_code, (i - 1) * 700, 700)
+                            client.get_instrument_bars(
+                                frequency_map[frequency],
+                                market,
+                                tdx_code,
+                                (i - 1) * 800,
+                                800,
+                            )
                         )
-                        _ks['datetime'] = _ks['datetime'].apply(self.fix_yp_date)
-                        _ks.loc[:, 'date'] = pd.to_datetime(_ks['datetime']).dt.tz_localize(self.tz)
-                        _ks.sort_values('date', inplace=True)
-                        new_start_dt = _ks.iloc[0]['date']
-                        old_end_dt = klines.iloc[-1]['date']
+                        _ks["datetime"] = _ks["datetime"].apply(self.fix_yp_date)
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                        _ks.sort_values("date", inplace=True)
+                        new_start_dt = _ks.iloc[0]["date"]
+                        old_end_dt = klines.iloc[-1]["date"]
                         klines = pd.concat([klines, _ks], ignore_index=True)
                         # 如果请求的第一个时间大于缓存的最后一个时间，退出
                         if old_end_dt >= new_start_dt:
                             break
 
             # 删除重复数据
-            klines = klines.drop_duplicates(['date'], keep='last').sort_values('date')
+            klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
             self.fdb.save_tdx_klines(code, frequency, klines)
 
-            klines.loc[:, 'code'] = code
-            klines.loc[:, 'volume'] = klines['amount']
+            klines.loc[:, "code"] = code
+            klines.loc[:, "volume"] = klines["amount"]
+            klines.loc[:, "date"] = pd.to_datetime(klines["datetime"]).dt.tz_localize(
+                self.tz
+            )
 
-            if frequency in {'y', 'q', 'm', 'w', 'd'}:
-                klines['date'] = klines['date'].apply(self.__convert_date)
+            if frequency in {"y", "q", "m", "w", "d"}:
+                klines["date"] = klines["date"].apply(self.__convert_date)
 
-            return klines[['code', 'date', 'open', 'close', 'high', 'low', 'volume']]
+            return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
             self.reset_tdx_ip()
         except Exception as e:
-            print(f'tdx 获取行情异常 {code} Exception ：{str(e)}')
+            print(f"tdx 获取行情异常 {code} Exception ：{str(e)}")
             traceback.print_exc()
         finally:
             pass
@@ -203,11 +250,11 @@ class ExchangeTDXFutures(Exchange):
         修复夜盘的时间，tdx将夜盘的时间归类到了第二天，修复为前一天
         """
         if len(dt) == 19:
-            _format = '%Y-%m-%d %H:%M:%S'
+            _format = "%Y-%m-%d %H:%M:%S"
         elif len(dt) == 16:
-            _format = '%Y-%m-%d %H:%M'
+            _format = "%Y-%m-%d %H:%M"
         else:
-            _format = '%Y-%m-%d'
+            _format = "%Y-%m-%d"
         dt = fun.str_to_datetime(dt, _format)
         if dt.hour >= 21:
             dt = dt - datetime.timedelta(days=1)
@@ -218,13 +265,10 @@ class ExchangeTDXFutures(Exchange):
         获取股票名称
         """
         all_stock = self.all_stocks()
-        stock = [_s for _s in all_stock if _s['code'] == code]
+        stock = [_s for _s in all_stock if _s["code"] == code]
         if not stock:
             return None
-        return {
-            'code': stock[0]['code'],
-            'name': stock[0]['name']
-        }
+        return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """
@@ -234,7 +278,7 @@ class ExchangeTDXFutures(Exchange):
         """
         ticks = {}
         client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_ip['ip'], self.connect_ip['port']):
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)
                 if _market is None:
@@ -250,13 +294,20 @@ class ExchangeTDXFutures(Exchange):
                 if len(_quote) > 0:
                     _quote = _quote[0]
                     ticks[_code] = Tick(
-                        code=_code, last=_quote['price'],
-                        buy1=_quote['bid1'], sell1=_quote['ask1'],
-                        low=_quote['low'], high=_quote['high'],
-                        volume=_quote['zongliang'], open=_quote['open'],
+                        code=_code,
+                        last=_quote["price"],
+                        buy1=_quote["bid1"],
+                        sell1=_quote["ask1"],
+                        low=_quote["low"],
+                        high=_quote["high"],
+                        volume=_quote["zongliang"],
+                        open=_quote["open"],
                         rate=round(
-                            (_quote['price'] - _quote['pre_close']) / _quote['price'] * 100, 2
-                        )
+                            (_quote["price"] - _quote["pre_close"])
+                            / _quote["price"]
+                            * 100,
+                            2,
+                        ),
                     )
         return ticks
 
@@ -265,9 +316,13 @@ class ExchangeTDXFutures(Exchange):
         返回当前是否是交易时间
         TODO 简单判断 ：9-12 , 13:30-15:00 21:00-02:30
         """
-        hour = int(time.strftime('%H'))
-        minute = int(time.strftime('%M'))
-        if hour in {9, 10, 11, 14, 21, 22, 23, 0, 1} or (hour == 13 and minute >= 30) or (hour == 2 and minute <= 30):
+        hour = int(time.strftime("%H"))
+        minute = int(time.strftime("%M"))
+        if (
+            hour in {9, 10, 11, 14, 21, 22, 23, 0, 1}
+            or (hour == 13 and minute >= 30)
+            or (hour == 2 and minute <= 30)
+        ):
             return True
         return False
 
@@ -277,30 +332,33 @@ class ExchangeTDXFutures(Exchange):
         return dt.replace(hour=23, minute=0)
 
     def balance(self):
-        raise Exception('交易所不支持')
+        raise Exception("交易所不支持")
 
-    def positions(self, code: str = ''):
-        raise Exception('交易所不支持')
+    def positions(self, code: str = ""):
+        raise Exception("交易所不支持")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        raise Exception('交易所不支持')
+        raise Exception("交易所不支持")
 
     def stock_owner_plate(self, code: str):
-        raise Exception('交易所不支持')
+        raise Exception("交易所不支持")
 
     def plate_stocks(self, code: str):
-        raise Exception('交易所不支持')
+        raise Exception("交易所不支持")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     ex = ExchangeTDXFutures()
     # print(ex.market_maps)
-    # stocks = ex.all_stocks()
-    # print(len(stocks))
+    stocks = ex.all_stocks()
+    print(len(stocks))
+    # for s in stocks:
+    #     if s["code"][0:2] == "MA":
+    #         print(s)
     # print(stocks)
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines('QS.RB2310', 'd')
-    print(len(klines))
-    print(klines.tail(60))
+    # klines = ex.klines("QS.RBL8", "d")
+    # print(len(klines))
+    # print(klines.tail(60))

@@ -107,6 +107,9 @@ class BackTestKlines(MarketDatas):
                 end_date=fun.datetime_to_str(self.end_date),
                 args={"limit": None},
             )
+            if klines is None:
+                self.loop_datetime_list[_f] = []
+                continue
             self.loop_datetime_list[_f] = list(klines["date"].to_list())
             self.loop_datetime_list[_f].sort()
 
@@ -337,7 +340,7 @@ class BackTestKlines(MarketDatas):
         market_days_freq_maps = {
             "a": {
                 "w": 10000,
-                "d": 10000,
+                "d": 7000,
                 "120m": 500,
                 "4h": 500,
                 "60m": 100,

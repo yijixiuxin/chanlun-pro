@@ -1,5 +1,4 @@
 import json
-import os
 import random
 import time
 from typing import Tuple
@@ -9,6 +8,8 @@ from pytdx.hq import TdxHq_API
 from pytdx.params import TDXParams
 from tqdm.auto import tqdm
 
+from chanlun.config import get_data_path
+
 """
 股票板块概念
 """
@@ -16,9 +17,11 @@ from tqdm.auto import tqdm
 
 class StocksBKGN(object):
     def __init__(self):
-        self.file_name = (
-            os.path.split(os.path.realpath(__file__))[0] + "/stocks_bkgn.json"
-        )
+        self.file_path = get_data_path() / "json"
+        if self.file_path.is_dir() == False:
+            self.file_path.mkdir(parents=True)
+
+        self.file_name = self.file_path / "stocks_bkgn.json"
 
         self.cache_file_bk = None
 
@@ -194,9 +197,15 @@ class StocksBKGN(object):
 
     def file_bkgns(self) -> Tuple[dict, dict]:
         if self.cache_file_bk is None:
-            with open(self.file_name, "r", encoding="utf-8") as fp:
-                bkgns = json.load(fp)
-            self.cache_file_bk = bkgns
+            if self.file_name.is_file():
+                with open(self.file_name, "r", encoding="utf-8") as fp:
+                    bkgns = json.load(fp)
+                self.cache_file_bk = bkgns
+            else:
+                self.cache_file_bk = {
+                    "hy": {},
+                    "gn": {},
+                }
         return self.cache_file_bk["hy"], self.cache_file_bk["gn"]
 
     def get_code_bkgn(self, code: str):
@@ -372,8 +381,8 @@ if __name__ == "__main__":
     # 'MSCI概念', '固态电池', '俄乌冲突概念', 'CRO概念'
 
     # 获取代码的板块概念信息
-    code_bkgn = bkgn.get_code_bkgn("600895")
-    print(code_bkgn)
+    # code_bkgn = bkgn.get_code_bkgn("600895")
+    # print(code_bkgn)
 
     # 根据行业获取其中的代码
     # codes = bkgn.get_codes_by_hy('珠宝首饰')

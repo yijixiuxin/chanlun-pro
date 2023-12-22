@@ -148,24 +148,21 @@ predict
 **/.pytest_cache
 .vscode
 
-src/chanlun/py38
-src/chanlun/py39
-src/chanlun/py310
-
 # 配置文件排除
 /src/chanlun/config.py
 # 私有代码排除
+web/chanlun_kcm
+web/chanlun_web/charts/static/datafeeds/udf/node_modules
+web/chanlun_chart/app/static/datafeeds/udf/node_modules
+src/core
+src/chanlun_strategy
+src/chanlun_ai
 **/my
 my_**.py
 my_**.ipynb
 src/pyarmor_runtime_005445/pyarmor.rkey
-/src/cl_vnpy/.vntrader
-/src/cl_myquant/gmcache
+src/cl_vnpy/.vntrader
+src/cl_myquant/gmcache
 # 无用的排除
 /my_debug
 
-/web/chanlun_web/charts/static/datafeeds/udf/node_modules
-/web/chanlun_chart/app/static/datafeeds/udf/node_modules
-src/chanlun_ai/
-src/chanlun_strategy/
-src/core/

@@ -11,34 +11,31 @@ from pytdx.util import best_ip
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
 from chanlun import fun
-from chanlun import rd
 from chanlun.exchange.exchange import *
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
+from chanlun.db import db
+from chanlun.config import get_data_path
 
-g_all_stocks = []
-g_trade_days = None
 
-
+@fun.singleton
 class ExchangeTDX(Exchange):
     """
     通达信行情接口
     """
 
+    g_all_stocks = []
+
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 redis 中
-        connect_ip = rd.Robj().get("tdx_connect_ip")
-        # connect_ip = None # 手动重新选择最优服务器
-        if connect_ip is None:
-            connect_ip = self.reset_tdx_ip()
-            print("TDX 最优服务器：" + connect_ip)
-        self.connect_ip = {
-            "ip": connect_ip.split(":")[0],
-            "port": int(connect_ip.split(":")[1]),
-        }
+        # 选择最优的服务器，并保存到 cache 中
+        self.connect_info = db.cache_get("tdx_connect_ip")
+        # connect_info = None # 手动重新选择最优服务器
+        if self.connect_info is None:
+            self.connect_info = self.reset_tdx_ip()
+            print(f"TDX 最优服务器：{self.connect_info}")
 
         # 板块概念信息
         self.stock_bkgn = StocksBKGN()
@@ -54,14 +51,11 @@ class ExchangeTDX(Exchange):
         """
         重新选择tdx最优ip，并返回
         """
-        connect_ip = best_ip.select_best_ip("stock")
-        connect_ip = connect_ip["ip"] + ":" + str(connect_ip["port"])
-        rd.Robj().set("tdx_connect_ip", connect_ip)
-        self.connect_ip = {
-            "ip": connect_ip.split(":")[0],
-            "port": int(connect_ip.split(":")[1]),
-        }
-        return connect_ip
+        connect_info = best_ip.select_best_ip("stock")
+        connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
+        db.cache_set("tdx_connect_ip", connect_info)
+        self.connect_info = connect_info
+        return connect_info
 
     def default_code(self):
         return "SH.000001"
@@ -86,18 +80,15 @@ class ExchangeTDX(Exchange):
         """
         使用 通达信的方式获取所有股票代码
         """
-        global g_all_stocks
-        if len(g_all_stocks) > 0:
-            return g_all_stocks
-        g_all_stocks = rd.get_ex("stocks_all")
-        if g_all_stocks is not None:
-            return g_all_stocks
-        all_stocks = []
+        if len(self.g_all_stocks) > 0:
+            return self.g_all_stocks
+
+        __all_stocks = []
         __codes = []
         try:
             for market in range(2):
                 client = TdxHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                     count = client.get_security_count(market)
                     data = pd.concat(
                         [
@@ -118,19 +109,15 @@ class ExchangeTDX(Exchange):
                         if code in __codes:
                             continue
                         __codes.append(code)
-                        all_stocks.append({"code": code, "name": name, "type": _type})
+                        __all_stocks.append({"code": code, "name": name, "type": _type})
         except TdxConnectionError:
             print("通达信连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
             return self.all_stocks()
 
-        print(f"股票列表从 TDX 进行获取，共获取数量：{len(all_stocks)}")
-
-        if all_stocks:
-            rd.save_ex("stocks_all", 24 * 60 * 60, all_stocks)
-
-        g_all_stocks = all_stocks
-        return g_all_stocks
+        self.g_all_stocks = __all_stocks
+        print(f"股票列表从 TDX 进行获取，共获取数量：{len(self.g_all_stocks)}")
+        return self.g_all_stocks
 
     def to_tdx_code(self, code):
         """
@@ -169,8 +156,6 @@ class ExchangeTDX(Exchange):
         """
         通达信，不支持按照时间查找
         """
-        _s_time = time.time()
-
         if args is None:
             args = {}
         if "fq" not in args.keys():
@@ -209,7 +194,7 @@ class ExchangeTDX(Exchange):
         # _time_s = time.time()
         try:
             client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 if "index" in _type:
                     get_bars = client.get_index_bars
                 else:
@@ -343,7 +328,7 @@ class ExchangeTDX(Exchange):
             if _m is not None:
                 query_stocks.append((_m, _c))
         client = TdxHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             # 获取总数据量
             total_quotes = len(query_stocks)
             # 分批次获取数据
@@ -551,8 +536,7 @@ class ExchangeTDX(Exchange):
         """
         读取除权除息信息
         """
-        home_path = pathlib.Path.home()
-        xdxr_path = home_path / ".chanlun_pro" / "xdxr"
+        xdxr_path = get_data_path() / "xdxr"
         if xdxr_path.is_dir() is False:
             xdxr_path.mkdir()
         xdxr_file = xdxr_path / f"new_xdxr_{market}_{project_code}.pkl"
@@ -565,7 +549,7 @@ class ExchangeTDX(Exchange):
             need_update = True
         if need_update:
             client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_ip["ip"], self.connect_ip["port"]):
+            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 data = client.to_df(client.get_xdxr_info(market, code))
             if len(data) > 0:
                 data.loc[:, "date"] = (
@@ -677,11 +661,13 @@ class ExchangeTDX(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDX()
+    all_stocks = ex.all_stocks()
+    print(len(all_stocks))
 
-    s_time = time.time()
-    klines = ex.klines("SZ.002324", "d")
-    print(klines.tail())
-    print("use time : ", time.time() - s_time)
+    # s_time = time.time()
+    # klines = ex.klines("SZ.002324", "d")
+    # print(klines.tail())
+    # print("use time : ", time.time() - s_time)
     # 207735
     #
     # klines = ex.klines('SH.600498', '5m')
