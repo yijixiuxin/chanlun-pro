@@ -155,9 +155,6 @@ class ExchangeBinance(Exchange):
             klines = pd.concat([db_klines, online_klines], ignore_index=True)
             klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
             return klines[-10000::]
-        except pymysql.err.ProgrammingError:
-            self.db_exchange.create_tables([code])
-            return self.klines(code, frequency, start_date, end_date, args)
         except Exception as e:
             print(traceback.format_exc())
 
