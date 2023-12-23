@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+import sqlalchemy
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -897,15 +898,16 @@ class DB(object):
         mark_color: str,
     ):
         """
-        添加图表标记
+        添加代码在 tv 时间轴显示的信息
         :param market:
         :param stock_code:
         :param stock_name:
-        :param frequency:
-        :param mark_time:
-        :param mark_label:
-        :param mark_tooltip:
-        :param mark_shape:
+        :param frequency:   需要在什么周期显示，默认 ‘’，所有周期，可以是 'd', '30m', '5m' 这样之下指定周期下展示
+        :param mark_time:   int 时间戳
+        :param mark_label:  时间刻度标记的标签，英文字母，最大 两位
+        :param mark_tooltip:    工具提示内容
+        :param mark_shape:  "circle" | "earningUp" | "earningDown" | "earning" 形状
+        :param mark_color: 颜色 rgb，比如 'red'  '#FF0000'
         :return:
         """
         session = self.Session()
@@ -1139,11 +1141,19 @@ if __name__ == "__main__":
 
     # db.klines_insert("a", "SH.000001", "d", ex_klines)
 
-    klines = db.klines_query("a", "SH.000001", "d", end_date=datetime.datetime.now())
-    for k in klines[-10:]:
-        print(k.code, k.f, k.dt, k.o, k.c, k.v)
+    # klines = db.klines_query("a", "SH.000001", "d", end_date=datetime.datetime.now())
+    # for k in klines[-10:]:
+    #     print(k.code, k.f, k.dt, k.o, k.c, k.v)
 
     # last_dt = db.query_klines_last_datetime("a", "SH.000002", "d")
     # print(last_dt)
 
     # db.delete_klines("a", "SH.000001", "d")
+
+    # insp = sqlalchemy.inspect(db.engine)
+    # codes = ['SHFE.ao', 'DCE.jm', 'DCE.rr', 'DCE.j', 'DCE.v', 'DCE.fb', 'DCE.l', 'CZCE.PM', 'DCE.bb', 'CFFEX.TF', 'SHFE.ss', 'CZCE.RS', 'SHFE.au', 'CZCE.TC', 'DCE.c', 'SHFE.fu', 'CZCE.PF', 'SHFE.al', 'CFFEX.TS', 'DCE.cs', 'SHFE.wr', 'DCE.y', 'INE.sc', 'CZCE.WH', 'CZCE.WS', 'CZCE.PK', 'CZCE.WT', 'CZCE.OI', 'SHFE.ru', 'DCE.eg', 'SHFE.ag', 'INE.bc', 'SHFE.zn', 'CZCE.RI', 'CZCE.ME', 'SHFE.br', 'CZCE.UR', 'INE.lu', 'CZCE.JR', 'CZCE.RM', 'CZCE.SA', 'DCE.lh', 'INE.nr', 'CZCE.SR', 'CZCE.MA', 'SHFE.hc', 'DCE.b', 'CFFEX.TL', 'CFFEX.IH', 'CZCE.ZC', 'CZCE.PX', 'DCE.jd', 'GFEX.si', 'SHFE.sn', 'CZCE.AP', 'CZCE.ER', 'CZCE.RO', 'CFFEX.IM', 'CZCE.FG', 'SHFE.bu', 'CFFEX.IF', 'INE.ec', 'DCE.m', 'CZCE.LR', 'SHFE.cu', 'DCE.a', 'CZCE.TA', 'DCE.pp', 'CZCE.CY', 'SHFE.ni', 'DCE.i', 'SHFE.sp', 'CZCE.SM', 'DCE.pg', 'CZCE.CJ', 'SHFE.pb', 'CFFEX.T', 'CZCE.SH', 'CZCE.SF', 'CFFEX.IC', 'CZCE.CF', 'DCE.eb', 'GFEX.lc', 'DCE.p', 'SHFE.rb']
+    # for table in insp.get_table_names():
+    #     if table.startswith("futures_"):
+    #         for code in codes:
+    #             if table.replace('_', '.').lower().endswith(code.lower()):
+    #                 print(f"UPDATE `{table}` SET `code`='{code}';")

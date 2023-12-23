@@ -151,12 +151,8 @@ predict
 # 配置文件排除
 /src/chanlun/config.py
 # 私有代码排除
-web/chanlun_kcm
 web/chanlun_web/charts/static/datafeeds/udf/node_modules
 web/chanlun_chart/app/static/datafeeds/udf/node_modules
-src/core
-src/chanlun_strategy
-src/chanlun_ai
 **/my
 my_**.py
 my_**.ipynb

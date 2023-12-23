@@ -81,6 +81,8 @@ class ExchangeTDXUS(Exchange):
                 instruments = client.get_instrument_info(start_i, count)
                 for _i in instruments:
                     if _i["category"] == 13 and _i["market"] == 74:
+                        if "+" in _i["code"] or "=" in _i["code"] or "-" in _i["code"]:
+                            continue
                         __all_stocks.append(
                             {
                                 "code": _i["code"],
@@ -123,6 +125,9 @@ class ExchangeTDXUS(Exchange):
             args["pages"] = 5
         else:
             args["pages"] = int(args["pages"])
+
+        if "fq_type" not in args.keys():
+            args["fq_type"] = "qfq"
 
         frequency_map = {
             "y": 11,
@@ -189,6 +194,7 @@ class ExchangeTDXUS(Exchange):
                         if old_end_dt >= new_start_dt:
                             break
 
+            klines_df["date"] = pd.to_datetime(klines_df["datetime"])
             # 删除重复数据
             klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
                 "date"
@@ -207,7 +213,10 @@ class ExchangeTDXUS(Exchange):
             if frequency in ["10m", "2m"]:
                 klines_df = convert_us_tdx_kline_frequency(klines_df, frequency)
 
-            return self.klines_qfq(code, klines_df)
+            if args["fq_type"] == "qfq":
+                return self.klines_qfq(code, klines_df)
+            else:
+                return klines_df
         except TdxConnectionError:
             self.reset_tdx_ip()
         except Exception as e:
@@ -300,43 +309,48 @@ class ExchangeTDXUS(Exchange):
         return False
 
     def klines_qfq(self, code: str, klines: pd.DataFrame):
-        xdxr_path = get_data_path() / "xdxr"
-        if xdxr_path.is_dir() is False:
-            xdxr_path.mkdir()
-        xdxr_file = xdxr_path / f"us_qfq_factor_{code}.csv"
-        now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
-        if (
-            xdxr_file.is_file() is False
-            or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d") != now_day
-        ):
-            qfq_factor_df = ak.stock_us_daily(symbol=code, adjust="qfq-factor")
-            if qfq_factor_df is not None and len(qfq_factor_df) > 0:
-                qfq_factor_df.to_csv(xdxr_file, index=False)
-        else:
-            qfq_factor_df = pd.read_csv(xdxr_file)
+        try:
+            xdxr_path = get_data_path() / "xdxr"
+            if xdxr_path.is_dir() is False:
+                xdxr_path.mkdir()
+            xdxr_file = xdxr_path / f"us_qfq_factor_{code}.csv"
+            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+            if (
+                xdxr_file.is_file() is False
+                or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d")
+                != now_day
+            ):
+                qfq_factor_df = ak.stock_us_daily(symbol=code, adjust="qfq-factor")
+                if qfq_factor_df is not None and len(qfq_factor_df) > 0:
+                    qfq_factor_df.to_csv(xdxr_file, index=False)
+            else:
+                qfq_factor_df = pd.read_csv(xdxr_file)
 
-        if qfq_factor_df is None or len(qfq_factor_df) == 0:
+            if qfq_factor_df is None or len(qfq_factor_df) == 0:
+                return klines
+
+            qfq_factor_df["qfq_date"] = pd.to_datetime(
+                qfq_factor_df["date"]
+            ).dt.tz_localize(self.tz)
+            qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
+            qfq_factor_df = qfq_factor_df.drop(columns=["date", "adjust"])
+
+            # 合并k线与复权因子，进行复权计算
+            df = pd.concat([klines, qfq_factor_df], axis=0)
+            df["qfq_date"].fillna(df["date"], inplace=True)
+            df.sort_values(by="qfq_date", inplace=True)
+            df["qfq_factor"].fillna(method="ffill", inplace=True)
+            df.dropna(inplace=True)
+            df.reset_index(drop=True, inplace=True)
+
+            df["open"] = df["open"] * df["qfq_factor"]
+            df["high"] = df["high"] * df["qfq_factor"]
+            df["low"] = df["low"] * df["qfq_factor"]
+            df["close"] = df["close"] * df["qfq_factor"]
+            return df[["code", "date", "open", "high", "low", "close", "volume"]]
+        except Exception as e:
+            print(f"计算 {code} 复权数据异常：{e}")
             return klines
-
-        qfq_factor_df["qfq_date"] = pd.to_datetime(
-            qfq_factor_df["date"]
-        ).dt.tz_localize(self.tz)
-        qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
-        qfq_factor_df = qfq_factor_df.drop(columns=["date", "adjust"])
-
-        # 合并k线与复权因子，进行复权计算
-        df = pd.concat([klines, qfq_factor_df], axis=0)
-        df["qfq_date"].fillna(df["date"], inplace=True)
-        df.sort_values(by="qfq_date", inplace=True)
-        df["qfq_factor"].fillna(method="ffill", inplace=True)
-        df.dropna(inplace=True)
-        df.reset_index(drop=True, inplace=True)
-
-        df["open"] = df["open"] * df["qfq_factor"]
-        df["high"] = df["high"] * df["qfq_factor"]
-        df["low"] = df["low"] * df["qfq_factor"]
-        df["close"] = df["close"] * df["qfq_factor"]
-        return df[["code", "date", "open", "high", "low", "close", "volume"]]
 
     def balance(self):
         raise Exception("交易所不支持")
@@ -356,15 +370,15 @@ class ExchangeTDXUS(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXUS()
-    stocks = ex.all_stocks()
-    print(len(stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
     # print(stocks)
     #
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    # klines = ex.klines("TSLA", "d")
-    # print(klines)
+    klines = ex.klines("ABCS", "d")
+    print(klines)
 
     # ticks = ex.ticks([ex.default_code()])
     # print(ticks)
