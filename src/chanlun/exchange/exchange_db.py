@@ -154,6 +154,12 @@ class ExchangeDB(Exchange):
             args = {}
 
         limit = 5000
+        if "limit" in args.keys():
+            limit = int(args["limit"])
+        order = "desc"
+        if "order" in args.keys():
+            order = args["order"]
+
         if start_date is not None and end_date is not None and "limit" not in args:
             limit = None
         if start_date is not None:
@@ -161,7 +167,7 @@ class ExchangeDB(Exchange):
         if end_date is not None:
             end_date = fun.str_to_datetime(end_date, tz=self.tz)
         klines = db.klines_query(
-            self.market, code, frequency, start_date, end_date, limit
+            self.market, code, frequency, start_date, end_date, limit, order
         )
         kline_pd = []
         for _k in klines:
@@ -188,6 +194,7 @@ class ExchangeDB(Exchange):
             self.tz
         )  # .map(lambda d: d.to_pydatetime())
         kline_pd["date"] = kline_pd["date"].apply(self.__convert_date)
+        kline_pd.sort_values(by="date", inplace=True)
         kline_pd = kline_pd.reset_index(drop=True)
 
         return kline_pd
@@ -273,14 +280,15 @@ class ExchangeDB(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeDB("a")
+    ex = ExchangeDB("us")
     # ticks = ex.ticks(['SHSE.000001'])
     # print(ticks)
 
     klines = ex.klines(
-        "SZ.000001",
+        "AAAU",
         "d",
         # start_date="2023-12-01 00:00:00",
         args={"limit": 100},
     )
+    print(len(klines))
     print(klines.tail(20))

@@ -227,6 +227,7 @@ class DB(object):
         start_date: datetime.datetime = None,
         end_date: datetime.datetime = None,
         limit: int = 5000,
+        order: str = "desc",
     ) -> List:
         """
         获取k线数据
@@ -236,6 +237,7 @@ class DB(object):
         :param start_date:
         :param end_date:
         :param limit:
+        :param order:
         :return:
         """
         session = self.Session()
@@ -248,9 +250,12 @@ class DB(object):
             if end_date is not None:
                 filter += (table.dt <= end_date,)
             query = session.query(table).filter(*filter)
-            query = query.order_by(table.dt.asc())
+            if order == "desc":
+                query = query.order_by(table.dt.desc())
+            else:
+                query = query.order_by(table.dt.asc())
             if limit is not None:
-                query.limit(limit)
+                query = query.limit(limit)
         finally:
             session.close()
         return query.all()
