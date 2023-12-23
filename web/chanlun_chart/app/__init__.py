@@ -1071,7 +1071,7 @@ def create_app(test_config=None):
             market, task_name, frequencys, opt_type, zx_group
         )
 
-        return {"ok": run_res}
+        return {"ok": run_res, "msg": "选股任务已存在，请在当前任务中查看任务" if run_res is False else ""}
 
     @app.route("/setting", methods=["GET"])
     def setting():

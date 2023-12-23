@@ -307,45 +307,50 @@ class ExchangeTDXHK(Exchange):
         return False
 
     def klines_qfq(self, code: str, klines: pd.DataFrame):
-        xdxr_path = get_data_path() / "xdxr"
-        if xdxr_path.is_dir() is False:
-            xdxr_path.mkdir()
-        xdxr_file = xdxr_path / f"hk_qfq_factor_{code.replace('.', '_')}.csv"
-        now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
-        if (
-            xdxr_file.is_file() is False
-            or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d") != now_day
-        ):
-            qfq_factor_df = ak.stock_hk_daily(
-                symbol=code.split(".")[1], adjust="qfq-factor"
-            )
-            if qfq_factor_df is not None and len(qfq_factor_df) > 0:
-                qfq_factor_df.to_csv(xdxr_file, index=False)
-        else:
-            qfq_factor_df = pd.read_csv(xdxr_file)
+        try:
+            xdxr_path = get_data_path() / "xdxr"
+            if xdxr_path.is_dir() is False:
+                xdxr_path.mkdir()
+            xdxr_file = xdxr_path / f"hk_qfq_factor_{code.replace('.', '_')}.csv"
+            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+            if (
+                xdxr_file.is_file() is False
+                or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d")
+                != now_day
+            ):
+                qfq_factor_df = ak.stock_hk_daily(
+                    symbol=code.split(".")[1], adjust="qfq-factor"
+                )
+                if qfq_factor_df is not None and len(qfq_factor_df) > 0:
+                    qfq_factor_df.to_csv(xdxr_file, index=False)
+            else:
+                qfq_factor_df = pd.read_csv(xdxr_file)
 
-        if qfq_factor_df is None or len(qfq_factor_df) == 0:
+            if qfq_factor_df is None or len(qfq_factor_df) == 0:
+                return klines
+
+            qfq_factor_df["qfq_date"] = pd.to_datetime(
+                qfq_factor_df["date"]
+            ).dt.tz_localize(self.tz)
+            qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
+            qfq_factor_df = qfq_factor_df.drop(columns=["date"])
+
+            # 合并k线与复权因子，进行复权计算
+            df = pd.concat([klines, qfq_factor_df], axis=0)
+            df["qfq_date"].fillna(df["date"], inplace=True)
+            df.sort_values(by="qfq_date", inplace=True)
+            df["qfq_factor"].fillna(method="ffill", inplace=True)
+            df.dropna(inplace=True)
+            df.reset_index(drop=True, inplace=True)
+
+            df["open"] = df["open"] * df["qfq_factor"]
+            df["high"] = df["high"] * df["qfq_factor"]
+            df["low"] = df["low"] * df["qfq_factor"]
+            df["close"] = df["close"] * df["qfq_factor"]
+            return df[["code", "date", "open", "high", "low", "close", "volume"]]
+        except Exception as e:
+            print(f"计算 {code} 复权异常： {e}")
             return klines
-
-        qfq_factor_df["qfq_date"] = pd.to_datetime(
-            qfq_factor_df["date"]
-        ).dt.tz_localize(self.tz)
-        qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
-        qfq_factor_df = qfq_factor_df.drop(columns=["date"])
-
-        # 合并k线与复权因子，进行复权计算
-        df = pd.concat([klines, qfq_factor_df], axis=0)
-        df["qfq_date"].fillna(df["date"], inplace=True)
-        df.sort_values(by="qfq_date", inplace=True)
-        df["qfq_factor"].fillna(method="ffill", inplace=True)
-        df.dropna(inplace=True)
-        df.reset_index(drop=True, inplace=True)
-
-        df["open"] = df["open"] * df["qfq_factor"]
-        df["high"] = df["high"] * df["qfq_factor"]
-        df["low"] = df["low"] * df["qfq_factor"]
-        df["close"] = df["close"] * df["qfq_factor"]
-        return df[["code", "date", "open", "high", "low", "close", "volume"]]
 
     @staticmethod
     def __convert_date(dt: datetime.datetime):
