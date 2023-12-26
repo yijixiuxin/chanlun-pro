@@ -1077,14 +1077,13 @@ def create_app(test_config=None):
     def setting():
         # 查询配置
         proxy = db.cache_get("req_proxy")
-        dingding_setting = db.cache_get("dd_keys")
+        fs_setting = db.cache_get("fs_keys")
         set_config = {
-            "dd_token": dingding_setting["token"]
-            if dingding_setting is not None
+            "fs_app_id": fs_setting["fs_app_id"] if fs_setting is not None else "",
+            "fs_app_secret": fs_setting["fs_app_secret"]
+            if fs_setting is not None
             else "",
-            "dd_secret": dingding_setting["secret"]
-            if dingding_setting is not None
-            else "",
+            "fs_user_id": fs_setting["fs_user_id"] if fs_setting is not None else "",
             "proxy_host": proxy["host"] if proxy is not None else "",
             "proxy_port": proxy["port"] if proxy is not None else "",
         }
@@ -1096,12 +1095,13 @@ def create_app(test_config=None):
             "host": request.form["proxy_host"],
             "port": request.form["proxy_port"],
         }
-        dd_keys = {
-            "token": request.form["dd_token"],
-            "secret": request.form["dd_secret"],
+        fs_keys = {
+            "fs_app_id": request.form["fs_app_id"],
+            "fs_app_secret": request.form["fs_app_secret"],
+            "fs_user_id": request.form["fs_user_id"],
         }
         db.cache_set("req_proxy", proxy)
-        db.cache_set("dd_keys", dd_keys)
+        db.cache_set("fs_keys", fs_keys)
 
         return {"ok": True}
 

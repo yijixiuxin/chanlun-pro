@@ -1,4 +1,5 @@
 import itertools
+import talib
 from chanlun.cl_utils import *
 
 """
@@ -38,7 +39,10 @@ def xg_single_xd_and_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
     bi = cd.get_bis()[-1]
 
     if xd.mmd_exists(opt_mmd, "|") and bi.mmd_exists(opt_mmd, "|"):
-        return f"线段买点 【{xd.line_mmds('|')}】 笔买点【{bi.line_mmds('|')}】"
+        return {
+            "code": cd.get_code(),
+            "msg": f"线段买点 【{xd.line_mmds('|')}】 笔买点【{bi.line_mmds('|')}】",
+        }
     return None
 
 
@@ -66,7 +70,10 @@ def xg_multiple_xd_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
     if (high_xd.mmd_exists(opt_mmd, "|") or high_xd.bc_exists(["pz", "qs"], "|")) and (
         low_bi.mmd_exists(opt_mmd, "|") or low_bi.bc_exists(["pz", "qs"], "|")
     ):
-        return f"{high_data.get_frequency()} 线段买点【{high_xd.line_mmds('|')}】背驰【{high_xd.line_bcs('|')}】 {low_data.get_frequency()} 笔买点【{low_bi.line_mmds('|')}】背驰【{low_bi.line_bcs('|')}】"
+        return {
+            "code": high_data.get_code,
+            "msg": f"{high_data.get_frequency()} 线段买点【{high_xd.line_mmds('|')}】背驰【{high_xd.line_bcs('|')}】 {low_data.get_frequency()} 笔买点【{low_bi.line_mmds('|')}】背驰【{low_bi.line_bcs('|')}】",
+        }
 
     return None
 
@@ -92,7 +99,7 @@ def xg_single_xd_bi_zs_zf_5(cl_datas: List[ICL]):
         and kline.h > bi_zs.zg >= kline.l
         and (kline.c - kline.o) / kline.o > 0.05
     ):
-        return "线段向上，当前K线突破中枢高点，并且涨幅大于 5% 涨幅"
+        return {"code": cd.get_code(), "msg": "线段向上，当前K线突破中枢高点，并且涨幅大于 5% 涨幅"}
 
     return None
 
@@ -132,7 +139,7 @@ def xg_single_xd_bi_23_overlapped(cl_datas: List[ICL]):
         or overlapped_23_bi_2
         or overlapped_23_bi_3
     ):
-        return "线段向上，当前笔突破中枢高点后 2，3 买重叠"
+        return {"code": cd.get_code(), "msg": "线段向上，当前笔突破中枢高点后 2，3 买重叠"}
 
     return None
 
@@ -177,7 +184,10 @@ def xg_single_day_bc_and_up_jincha(cl_datas: List[ICL]):
         down_bis[-1].start.k.klines[0], cd.get_klines()[-1], cd
     )
     if macd_infos.gold_cross_num > 0:
-        return f"前down笔背驰 {down_bis[-2].line_bcs()} macd 在零轴之上，后续又出现金叉，可关注"
+        return {
+            "code": cd.get_code(),
+            "msg": f"前down笔背驰 {down_bis[-2].line_bcs()} macd 在零轴之上，后续又出现金叉，可关注",
+        }
     return None
 
 
@@ -225,7 +235,10 @@ def xg_multiple_low_level_12mmd(cl_datas: List[ICL], opt_type: list = []):
             break
 
     if exists_12_mmd:
-        return f"{high_data.get_frequency()} 背驰 {high_bi.line_bcs('|')} 买点 {high_bi.line_mmds('|')} 并且低级别出现12类买卖点"
+        return {
+            "code": high_data.get_code(),
+            "msg": f"{high_data.get_frequency()} 背驰 {high_bi.line_bcs('|')} 买点 {high_bi.line_mmds('|')} 并且低级别出现12类买卖点",
+        }
 
     return None
 
@@ -248,7 +261,7 @@ def xg_single_bi_1mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "1buy" and _m.zs.line_num < 9:
-                return f"{cd.get_frequency()} 出现本级别笔一买"
+                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔一买"}
 
     return None
 
@@ -270,7 +283,7 @@ def xg_single_bi_2mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "2buy" and _m.zs.line_num < 9:
-                return f"{cd.get_frequency()} 出现本级别笔二买"
+                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔二买"}
 
     return None
 
@@ -292,7 +305,7 @@ def xg_single_bi_3mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "3buy" and _m.zs.line_num < 9:
-                return f"{cd.get_frequency()} 出现本级别笔三买"
+                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔三买"}
 
     return None
 
@@ -327,7 +340,10 @@ def xg_single_bcmmd_next_di_fx_verif(cl_datas: List[ICL]):
                     cd.get_cl_klines()[-1].index - end_fx.k.index <= 3
                     and end_fx.val > bi.end.val
                 ):
-                    return f"{cd.get_frequency()} 出现背驰 {bi.line_bcs()}，并且后续出现验证底分型，可关注"
+                    return {
+                        "code": cd.get_code(),
+                        "msg": f"{cd.get_frequency()} 出现背驰 {bi.line_bcs()}，并且后续出现验证底分型，可关注",
+                    }
 
     return None
 
@@ -364,7 +380,10 @@ def xg_multiple_zs_tupo_low_3buy(cl_datas: List[ICL]):
 
     low_last_bi = low_cd.get_bis()[-1]
     if low_last_bi.mmd_exists(["3buy"]):
-        return f"{high_cd.get_frequency()} 中枢有可能突破，低级别出现三买，进行关注"
+        return {
+            "code": high_cd.get_code(),
+            "msg": f"{high_cd.get_frequency()} 中枢有可能突破，低级别出现三买，进行关注",
+        }
 
     return None
 
@@ -389,7 +408,7 @@ def xg_single_pre_bi_tk_and_3buy(cl_datas: List[ICL]):
     # 出现三类买点，并且前笔的高点大于等于中枢的 gg 点
     for mmd in now_bi.mmds:
         if mmd.name == "3buy" and pre_bi.high >= mmd.zs.gg:
-            return f"三买前一笔出现 {up_qk_num} 缺口，可重点关注"
+            return {"code": cd.get_code(), "msg": f"三买前一笔出现 {up_qk_num} 缺口，可重点关注"}
     return None
 
 
@@ -426,7 +445,7 @@ def xg_single_find_3buy_by_1buy(cl_datas: List[ICL], opt_type: list = []):
                 if _l.mmd_exists(
                     ["1buy"] if bi.type == "down" else ["1sell"], _zs_type
                 ):
-                    return f"出现三买，并且之前有出现一买"
+                    return {"code": cd.get_code(), "msg": f"出现三买，并且之前有出现一买"}
     return None
 
 
@@ -457,7 +476,26 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
         cd.zss_is_qs(dn_zss[-2], dn_zss[-1]) == "down"
         or cd.zss_is_qs(dn_zss[-3], dn_zss[-2]) == "down"
     ):
-        return "出现三买，并且之前有下跌趋势"
+        return {"code": cd.get_code(), "msg": "出现三买，并且之前有下跌趋势"}
+    return None
+
+
+def xg_single_ma_250(cl_datas: List[ICL], opt_type: list = []):
+    """
+    找最新价格在 ma 250 线的上下
+    周期：单周期
+    使用市场：沪深A股
+    作者：WX
+    """
+    opt_direction, opt_mmd = get_opt_types(opt_type)
+    cd = cl_datas[0]
+    closes = np.array([_k.c for _k in cd.get_src_klines()])
+    ma250 = talib.MA(closes, timeperiod=250)
+    close = cd.get_src_klines()[-1].c
+    if "up" in opt_direction and close > ma250[-1]:
+        return {"code": cd.get_code(), "msg": "最新价格高于250日均线"}
+    if "down" in opt_direction and close < ma250[-1]:
+        return {"code": cd.get_code(), "msg": "最新价格低于250日均线"}
     return None
 
 

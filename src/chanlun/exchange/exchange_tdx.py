@@ -35,7 +35,7 @@ class ExchangeTDX(Exchange):
         # connect_info = None # 手动重新选择最优服务器
         if self.connect_info is None:
             self.connect_info = self.reset_tdx_ip()
-            print(f"TDX 最优服务器：{self.connect_info}")
+            # print(f"最优服务器：{self.connect_info}")
 
         # 板块概念信息
         self.stock_bkgn = StocksBKGN()
@@ -111,12 +111,12 @@ class ExchangeTDX(Exchange):
                         __codes.append(code)
                         __all_stocks.append({"code": code, "name": name, "type": _type})
         except TdxConnectionError:
-            print("通达信连接失败，重新选择最优服务器")
+            print("连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
             return self.all_stocks()
 
         self.g_all_stocks = __all_stocks
-        print(f"股票列表从 TDX 进行获取，共获取数量：{len(self.g_all_stocks)}")
+        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
         return self.g_all_stocks
 
     def to_tdx_code(self, code):
@@ -188,7 +188,7 @@ class ExchangeTDX(Exchange):
             or start_date is not None
             or end_date is not None
         ):
-            print(f"{code} - {frequency} 通达信不支持的调用参数")
+            # print(f"{code} - {frequency} 不支持的调用参数")
             return None
 
         # _time_s = time.time()
@@ -261,11 +261,11 @@ class ExchangeTDX(Exchange):
 
             if frequency == "w":  # 周设置为每周一
                 ks["date"] = ks["date"].apply(self.get_monday)
-
             if frequency == "m":  # 月设置为每月的一号
                 ks["date"] = ks["date"].apply(lambda _d: _d.replace(day=1))
             if frequency == "y":  # 年设置为一月一号
                 ks["date"] = ks["date"].apply(lambda _d: _d.replace(month=1, day=1))
+            ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
 
             if frequency in ["120m", "10m", "2m"]:
                 ks = convert_stock_kline_frequency(ks, frequency)
@@ -277,14 +277,14 @@ class ExchangeTDX(Exchange):
             ks = ks[["code", "date", "open", "close", "high", "low", "volume"]]
             return ks
         except TdxConnectionError:
-            print("通达信连接失败，重新选择最优服务器")
+            print("连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
         except Exception as e:
-            print(f"tdx 获取行情异常 {code} Exception ：{str(e)}")
+            print(f"获取行情异常 {code} Exception ：{str(e)}")
             print(traceback.format_exc())
         finally:
             pass
-            # print(f'tdx 请求行情用时：{time.time() - _s_time}')
+            # print(f'请求行情用时：{time.time() - _s_time}')
         return None
 
     @staticmethod
@@ -661,12 +661,12 @@ class ExchangeTDX(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDX()
-    all_stocks = ex.all_stocks()
-    print(len(all_stocks))
+    # all_stocks = ex.all_stocks()
+    # print(len(all_stocks))
 
     # s_time = time.time()
-    # klines = ex.klines("SZ.002324", "d")
-    # print(klines.tail())
+    klines = ex.klines("SZ.000001", "w")
+    print(klines.tail())
     # print("use time : ", time.time() - s_time)
     # 207735
     #

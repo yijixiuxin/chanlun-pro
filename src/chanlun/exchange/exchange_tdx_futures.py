@@ -28,7 +28,7 @@ class ExchangeTDXFutures(Exchange):
         self.connect_info = db.cache_get("tdxex_connect_ip")
         if self.connect_info is None:
             self.connect_info = self.reset_tdx_ip()
-            print(f"TDXEX 最优服务器：{self.connect_info}")
+            # print(f"TDXEX 最优服务器：{self.connect_info}")
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -118,7 +118,7 @@ class ExchangeTDXFutures(Exchange):
                     break
 
         self.g_all_stocks = __all_stocks
-        print(f"期货列表从 TDX 进行获取，共获取数量：{len(self.g_all_stocks)}")
+        # print(f"期货获取数量：{len(self.g_all_stocks)}")
 
         return self.g_all_stocks
 
@@ -167,7 +167,7 @@ class ExchangeTDXFutures(Exchange):
         }
         market, tdx_code = self.to_tdx_code(code)
         if market is None or start_date is not None or end_date is not None:
-            print("通达信不支持的调用参数")
+            print("不支持的调用参数")
             return None
 
         # _time_s = time.time()
@@ -237,11 +237,11 @@ class ExchangeTDXFutures(Exchange):
         except TdxConnectionError:
             self.reset_tdx_ip()
         except Exception as e:
-            print(f"tdx 获取行情异常 {code} Exception ：{str(e)}")
+            print(f"获取行情异常 {code} Exception ：{str(e)}")
             traceback.print_exc()
         finally:
             pass
-            # print(f'tdx 请求行情用时：{time.time() - _s_time}')
+            # print(f'请求行情用时：{time.time() - _s_time}')
         return None
 
     @staticmethod

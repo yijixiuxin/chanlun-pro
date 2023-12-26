@@ -81,13 +81,24 @@ IB_PORT = 7497
 IB_CLIENT_ID = 1
 IB_ACCOUNT = 'DU6941075'
 
-# 钉钉消息配置
-DINGDING_KEY_A = {'token': '', 'secret': ''}
-DINGDING_KEY_HK = {'token': '', 'secret': ''}
-DINGDING_KEY_US = {'token': '', 'secret': ''}
-DINGDING_KEY_CURRENCY = {'token': '', 'secret': ''}
-DINGDING_KEY_FUTURES = {'token': '', 'secret': ''}
-
+# 飞书消息配置 (项目中新的消息推送使用飞书，user_id 是唯一的，不同的市场可以配置不同的机器人，没有设置则使用 default 的机器人)
+# 配置获取方法，在 web 页面的系统设置中有教程
+FEISHU_KEYS = {
+    "default": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "a": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "us": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "user_id": "86********",
+    "enable_img": False,
+}
 
 def get_data_path():
     # 获取项目数据的目录
