@@ -103,10 +103,11 @@ class TableByAlertRecord(Base):
     stock_code = Column(String(20), comment="标的")  # 标的
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
     frequency = Column(String(10), comment="提醒周期")  # 提醒周期
+    line_type = Column(String(5), comment="提醒线段的类型")  # 提醒线段的类型
     alert_msg = Column(Text, comment="提醒消息")  # 提醒消息
     bi_is_done = Column(String(10), comment="笔是否完成")  # 笔是否完成
     bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
-    line_dt = Column(DateTime, comment="提醒线段的结束时间")  # 提醒线段的结束时间
+    line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
 
 
@@ -805,12 +806,14 @@ class DB(object):
     def alert_record_save(
         self,
         market: str,
+        task_name: str,
         stock_code: str,
         stock_name: str,
         frequency: str,
         alert_msg: str,
         bi_is_done: str,
         bi_is_td: str,
+        line_type: str,
         line_dt: datetime.datetime,
     ):
         """
@@ -829,12 +832,14 @@ class DB(object):
         try:
             recored = TableByAlertRecord(
                 market=market,
+                task_name=task_name,
                 stock_code=stock_code,
                 stock_name=stock_name,
                 frequency=frequency,
                 alert_msg=alert_msg,
                 bi_is_done=bi_is_done,
                 bi_is_td=bi_is_td,
+                line_type=line_type,
                 line_dt=fun.str_to_datetime(fun.datetime_to_str(line_dt)),
                 alert_dt=datetime.datetime.now(),
             )
@@ -845,7 +850,12 @@ class DB(object):
         return True
 
     def alert_record_query_by_code(
-        self, market: str, stock_code: str, frequency: str, line_dt: datetime.datetime
+        self,
+        market: str,
+        stock_code: str,
+        frequency: str,
+        line_type: str,
+        line_dt: datetime.datetime,
     ) -> TableByAlertRecord:
         """
         查询预警记录
@@ -863,8 +873,10 @@ class DB(object):
                     TableByAlertRecord.market == market,
                     TableByAlertRecord.stock_code == stock_code,
                     TableByAlertRecord.frequency == frequency,
+                    TableByAlertRecord.line_type == line_type,
                     TableByAlertRecord.line_dt == line_dt,
                 )
+                .order_by(TableByAlertRecord.alert_dt.desc())
                 .first()
             )
         finally:
@@ -1162,3 +1174,8 @@ if __name__ == "__main__":
     #         for code in codes:
     #             if table.replace('_', '.').lower().endswith(code.lower()):
     #                 print(f"UPDATE `{table}` SET `code`='{code}';")
+
+    # record = db.alert_record_query_by_code(
+    #     "a", "SZ.300014", "5m", "bi", fun.str_to_datetime("2023-12-25 13:55:00")
+    # )
+    # print(record)

@@ -155,7 +155,7 @@ class ExchangeDB(Exchange):
 
         limit = 5000
         if "limit" in args.keys():
-            limit = int(args["limit"])
+            limit = args["limit"]
         order = "desc"
         if "order" in args.keys():
             order = args["order"]

@@ -113,8 +113,9 @@ def process_xuangu_task(
             except Exception as e:
                 tqdm.write(f"{market} {task_name} 执行 {_c} 异常 ：{e}")
         xg_stocks = zx.zx_stocks(to_zx_group)
-        utils.send_dd_msg(
+        utils.send_fs_msg(
             market,
+            f"选股任务：{xuangu_task_configs[task_name]['name']}",
             f"{xuangu_task_configs[task_name]['name']} 选股完成，选出 {len(xg_stocks)} 只代码",
         )
 

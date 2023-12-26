@@ -16,19 +16,28 @@
     <form class="layui-form layui-row setting_form" lay-filter="setting_form" role="form" style="padding: 20px;">
 
         <div class="layui-form-item">
-            <label class="layui-form-label">钉钉 Token</label>
-            <div class="layui-input-block" title="钉钉Token">
+            <label class="layui-form-label">飞书 App ID</label>
+            <div class="layui-input-block" title="飞书 App ID">
                 <div class="layui-input-block">
-                    <input type="text" name="dd_token" value="{{ dd_token }}" placeholder="请输入 钉钉Token"
+                    <input type="text" name="fs_app_id" value="{{ fs_app_id }}" placeholder="请输入 飞书 App ID"
                         autocomplete="off" class="layui-input">
                 </div>
             </div>
         </div>
         <div class="layui-form-item">
-            <label class="layui-form-label">钉钉 Secret</label>
-            <div class="layui-input-block" title="钉钉Token">
+            <label class="layui-form-label">飞书 App Secret</label>
+            <div class="layui-input-block" title="飞书 App Secret">
                 <div class="layui-input-block">
-                    <input type="text" name="dd_secret" value="{{ dd_secret }}" placeholder="请输入 钉钉Token"
+                    <input type="text" name="fs_app_secret" value="{{ fs_app_secret }}" placeholder="请输入 飞书 App Secret"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">飞书 User ID</label>
+            <div class="layui-input-block" title="飞书 User ID">
+                <div class="layui-input-block">
+                    <input type="text" name="fs_user_id" value="{{ fs_user_id }}" placeholder="请输入 飞书 User ID"
                         autocomplete="off" class="layui-input">
                 </div>
             </div>
@@ -62,38 +71,44 @@
 
     <blockquote class="layui-elem-quote layui-quote-nm">
         <h3>设置说明：</h3>
-        <p>行情监控任务，如有警报，并且配置了钉钉的 Token与 Secret 则会发送钉钉消息；</p>
+        <p>行情监控任务，如有警报，并且进行了飞书的配置，则会发送飞书消息；</p>
         <p>代理服务器，如果看数字货币行情，则无需进行设置；</p>
-        <h3>钉钉配置获取方式：</h3>
+        <h3>飞书配置获取方式：</h3>
         <div>
             <ol>
                 <li>
-                    下载手机版与电脑版 钉钉，并登录
+                    打开飞书开放平台：https://open.feishu.cn/，并进行注册登录；
                 </li>
                 <li>
-                    在手机版【发起群聊】，选择【面对面建群】，密码随便输入即可
+                    进入开发者后台：https://open.feishu.cn/app?lang=zh-CN，点击“创建企业自建应用”，输入自定义的名称和描述，选择自己喜欢的图标，进行“创建”；
                 </li>
                 <li>
-                    在电脑端找到刚刚在手机端创建的群，选择【群设置】 -> 【机器人】 -> 【添加机器人】
+                    “添加应用能力”，选择“机器人”进行添加；
                 </li>
                 <li>
-                    在 【添加机器人】页面选择 【自定义】
+                    “权限管理”，<br />
+                    搜索 “contact:user.employee_id” ，开通权限 “获取用户 userID”；<br />
+                    搜索 “im:message” ，开通权限 “获取与发送单聊、群组消息”；
                 </li>
                 <li>
-                    机器人名字可以自定义，安全设置中，勾选 【加签】，复制保存，这个就是项目中要用到的 钉钉Secret 字段
+                    版本管理与发布，选择“创建新版本”，输入版本号（例如：1.0.0），点击“发布”，“申请线上发布”；
                 </li>
                 <li>
-                    添加完成后，会出现 Webhook 字段展示，类似：https://oapi.dingtalk.com/robot/send?access_token=c94d7***
+                    “凭证与基础信息” 页面，复制 App ID 与 App Secret 到对应的设置框；
                 </li>
                 <li>
-                    链接中 access_token= 后面的内容：c94d7***，就是项目中要用到的 钉钉Token 字段
+                    获取 UserId
+                    字段方法，打开API调试台：https://open.feishu.cn/api-explorer/cli_a503a353effd100b?apiName=batch_get_id&from=op_doc_tab&project=contact&resource=user&version=v3
                 </li>
                 <li>
-                    之后将 钉钉Token 与 钉钉Secret 复制到 设置中，进行保存即可
+                    官方帮助文档：https://open.feishu.cn/document/faq/trouble-shooting/how-to-obtain-user-id
                 </li>
                 <li>
-                    <a href="https://open.dingtalk.com/document/robots/custom-robot-access"
-                        target="_blank">自定义机器人接入文档</a>
+                    点击 API 调试台左侧「查看鉴权凭证」中 tenant_access_token 中的「点击获取」（如果之前已经获取过，则可以点击刷新按钮刷新鉴权凭证。<br />
+                    点击右侧参数列表，将查询参数 Tab 中的 user_id_type 参数设置为 user_id。<br />
+                    切换至请求体 Tab，将请求体中的 ID 删除，并修改 mobiles 参数，设为你自己的手机号。<br />
+                    点击右侧「开始调试」，调用接口。调用成功后，在下方响应体中即可拿到你自己的 User ID。<br />
+                    将 user_id 复制并填入项目的 user_id 字段中。
                 </li>
             </ol>
         </div>
