@@ -12,5 +12,6 @@ class filter:
         self.target.flush()
 
 
+sys.stdin = filter(sys.stdin)
 sys.stdout = filter(sys.stdout)
 sys.stderr = filter(sys.stderr)

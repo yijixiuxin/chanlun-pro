@@ -58,6 +58,7 @@ class AlertTasks(object):
                 s: Dict[str, str] = s
                 cl_config = query_cl_chart_config(alert_config.market, s["code"])
                 monitor.monitoring_code(
+                    alert_config.task_name,
                     alert_config.market,
                     s["code"],
                     s["name"],

@@ -6,19 +6,22 @@ import time
 from typing import List
 
 from pyecharts.render import make_snapshot
-from qiniu import Auth, put_file
 from snapshot_selenium import snapshot
+
+import lark_oapi as lark
+from lark_oapi.api.im.v1 import *
 
 from chanlun import kcharts
 from chanlun.cl_interface import ICL
 from chanlun.cl_utils import web_batch_get_cl_datas, bi_td
 from chanlun.exchange import get_exchange, Market
-from chanlun.utils import send_dd_msg
+from chanlun.utils import send_fs_msg
 from chanlun import config
 from chanlun.db import db
 
 
 def monitoring_code(
+    task_name: str,
     market: str,
     code: str,
     name: str,
@@ -90,7 +93,7 @@ def monitoring_code(
                     "frequency": frequency,
                     "bi": end_bi,
                     "bi_td": bi_td(end_bi, cd),
-                    "line_dt": end_bi.end.k.date,
+                    "line_dt": end_bi.start.k.date,
                 }
                 for bc_type in check_types["bi_beichi"]
                 if end_bi.bc_exists([bc_type], "|")
@@ -102,7 +105,7 @@ def monitoring_code(
                     "frequency": frequency,
                     "bi": end_bi,
                     "bi_td": bi_td(end_bi, cd),
-                    "line_dt": end_bi.end.k.date,
+                    "line_dt": end_bi.start.k.date,
                 }
                 for mmd in check_types["bi_mmd"]
                 if end_bi.mmd_exists([mmd], "|")
@@ -116,7 +119,7 @@ def monitoring_code(
                         "type": f"线段 {end_xd.type} {bc_maps[bc_type]}",
                         "frequency": frequency,
                         "xd": end_xd,
-                        "line_dt": end_xd.end.k.date,
+                        "line_dt": end_xd.start.k.date,
                     }
                     for bc_type in check_types["xd_beichi"]
                     if end_xd.bc_exists([bc_type], "|")
@@ -127,23 +130,25 @@ def monitoring_code(
                         "type": f"线段 {mmd_maps[mmd]}",
                         "frequency": frequency,
                         "xd": end_xd,
-                        "line_dt": end_xd.end.k.date,
+                        "line_dt": end_xd.start.k.date,
                     }
                     for mmd in check_types["xd_mmd"]
                     if end_xd.mmd_exists([mmd], "|")
                 )
 
-    send_msgs = ""
+    send_msgs = []
     for jh in jh_msgs:
+        line_type = "bi"
         if "bi" in jh.keys():
             is_done = "笔完成" if jh["bi"].is_done() else "笔未完成"
             is_td = "停顿:" + ("Yes" if jh["bi_td"] else "No")
         else:
             is_done = "线段完成" if jh["xd"].is_done() else "线段未完成"
             is_td = ""
+            line_type = "xd"
 
         is_exists = db.alert_record_query_by_code(
-            market, code, jh["frequency"], jh["line_dt"]
+            market, code, jh["frequency"], line_type, jh["line_dt"]
         )
 
         if (
@@ -151,56 +156,56 @@ def monitoring_code(
             or is_exists.bi_is_done != is_done
             or is_exists.bi_is_td != is_td
         ) and is_send_msg:
-            msg = "【%s - %s】触发 %s (%s - %s) \n" % (
+            msg = f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td})"
+            send_msgs.append(msg)
+            db.alert_record_save(
+                market,
+                task_name,
+                code,
                 name,
                 jh["frequency"],
-                jh["type"],
+                msg,
                 is_done,
                 is_td,
-            )
-            send_msgs += msg
-            db.alert_record_save(
-                market, code, name, jh["frequency"], msg, is_done, is_td, jh["line_dt"]
+                line_type,
+                jh["line_dt"],
             )
 
     # 沪深A股，增加行业概念信息
-    if market == "a" and send_msgs != "":
+    if market == "a" and len(send_msgs) > 0:
         hygn = ex.stock_owner_plate(code)
         if len(hygn["HY"]) > 0:
-            send_msgs += "\n行业 : " + "/".join([_["name"] for _ in hygn["HY"]])
+            send_msgs.append("行业 : " + "/".join([_["name"] for _ in hygn["HY"]]))
         if len(hygn["GN"]) > 0:
-            send_msgs += "\n概念 : " + "/".join([_["name"] for _ in hygn["GN"]])
-    # print('Send_msgs: ', send_msgs)
+            send_msgs.append("概念 : " + "/".join([_["name"] for _ in hygn["GN"]]))
 
     # 添加图片
-    if send_msgs != "":
-        pics = []
+    if len(send_msgs) > 0:
         for cd in cl_datas:
             title = f"{name} - {cd.get_frequency()}"
-            pic = kchart_to_png(title, cd, cl_config)
-            if pic != "":
-                pics.append(pic)
-        if len(pics) > 0:
-            # 有图片，将 text 转换成 markdown 类型
-            for pic in pics:
-                send_msgs += f"\n![pic]({pic})"
-            send_msgs = {
-                "title": send_msgs.split("\n")[0],
-                "text": send_msgs.replace("\n", "\n\n"),
-            }
+            image_key = kchart_to_png(market, title, cd, cl_config)
+            if image_key != "":
+                send_msgs.append(image_key)
+    # 发送消息
     if len(send_msgs) > 0:
-        send_dd_msg(market, send_msgs)
+        send_fs_msg(market, f"{task_name} 监控提醒", send_msgs)
 
     return jh_msgs
 
 
-def kchart_to_png(title: str, cd: ICL, cl_config: dict) -> str:
+def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     """
     缠论数据保存图表并上传网络，返回访问地址
     """
     # 如果没有设置七牛云的 key，则不使用生成图片的功能
-    if config.QINIU_AK == "":
+    if config.FEISHU_KEYS["enable_img"] == False:
         return ""
+
+    fs_keys = (
+        config.FEISHU_KEYS[market]
+        if market in config.FEISHU_KEYS.keys()
+        else config.FEISHU_KEYS["default"]
+    )
 
     try:
         cl_config["chart_width"] = "1000px"
@@ -219,15 +224,47 @@ def kchart_to_png(title: str, cd: ICL, cl_config: dict) -> str:
         make_snapshot(snapshot, render_file, png_file, is_remove_html=True, delay=4)
 
         # 上传图片
-        q = Auth(config.QINIU_AK, config.QINIU_SK)
-        file_key = f"{config.QINIU_PATH}/{file_name}_{int(time.time())}.png"
-        token = q.upload_token(config.QINIU_BUCKET_NAME, file_key, 3600)
-        ret, info = put_file(token, file_key, png_file, version="v2")
+        # 创建client
+        client = (
+            lark.Client.builder()
+            .app_id(fs_keys["app_id"])
+            .app_secret(fs_keys["app_secret"])
+            .log_level(lark.LogLevel.INFO)
+            .build()
+        )
+        # 构造请求对象
+        with open(png_file, "rb") as img_fp:
+            request: CreateImageRequest = (
+                CreateImageRequest.builder()
+                .request_body(
+                    CreateImageRequestBody.builder()
+                    .image_type("message")
+                    .image(img_fp)
+                    .build()
+                )
+                .build()
+            )
+            # 发起请求
+            response: CreateImageResponse = client.im.v1.image.create(request)
 
         # 删除本地图片
         os.remove(png_file)
 
-        return config.QINIU_URL + "/" + ret["key"]
+        return response.data.image_key
     except Exception as e:
         print(f"{title} 生成并上传图片异常：{e}")
         return ""
+
+
+if __name__ == "__main__":
+    from chanlun.exchange.exchange_db import ExchangeDB
+    from chanlun.cl_utils import query_cl_chart_config
+    from chanlun import cl
+
+    ex = ExchangeDB("a")
+    cl_config = query_cl_chart_config("a", "SH.000001")
+    klines = ex.klines("SH.600519", "d")
+    cd = cl.CL("SH.600519", "d", cl_config).process_klines(klines)
+
+    image_key = kchart_to_png("a", "缠论数据", cd, cl_config)
+    print(image_key)

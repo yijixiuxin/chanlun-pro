@@ -15,6 +15,7 @@ qiniu
 flask
 gevent
 sqlalchemy
+lark-oapi
 
 mytt
 matplotlib
