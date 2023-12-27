@@ -2,6 +2,7 @@
 监控相关代码
 """
 import os
+import pathlib
 import time
 from typing import List
 
@@ -207,18 +208,21 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
         else config.FEISHU_KEYS["default"]
     )
 
+    png_path = config.get_data_path() / "png"
+    if png_path.is_dir() is False:
+        png_path.mkdir(parents=True)
+    cl_config["chart_width"] = "1000px"
+    cl_config["chart_heigh"] = "800px"
+    cl_config["chart_kline_nums"] = 600
+    file_name = (
+        cd.get_code().replace(".", "_").replace("/", "_").replace("@", "_")
+        + "_"
+        + cd.get_frequency()
+    )
+    cl_config["to_file"] = f"{file_name}_{int(time.time())}.html"
+    png_file = f"{str(png_path)}/{file_name}_{int(time.time())}.png"
+
     try:
-        cl_config["chart_width"] = "1000px"
-        cl_config["chart_heigh"] = "800px"
-
-        file_name = (
-            cd.get_code().replace(".", "_").replace("/", "_").replace("@", "_")
-            + "_"
-            + cd.get_frequency()
-        )
-        cl_config["to_file"] = f"{file_name}_{int(time.time())}.html"
-        png_file = f"{file_name}_{int(time.time())}.png"
-
         # 渲染并保存图片
         render_file = kcharts.render_charts(title, cd, config=cl_config)
         make_snapshot(snapshot, render_file, png_file, is_remove_html=True, delay=4)
@@ -246,14 +250,14 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
             )
             # 发起请求
             response: CreateImageResponse = client.im.v1.image.create(request)
-
-        # 删除本地图片
-        os.remove(png_file)
-
         return response.data.image_key
     except Exception as e:
         print(f"{title} 生成并上传图片异常：{e}")
         return ""
+    finally:
+        # 删除本地图片
+        if pathlib.Path(png_file).is_file():
+            os.remove(png_file)
 
 
 if __name__ == "__main__":

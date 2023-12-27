@@ -121,7 +121,7 @@ def send_fs_msg(market, title, contents: Union[str, list]):
         lark.Client.builder()
         .app_id(fs_key["app_id"])
         .app_secret(fs_key["app_secret"])
-        .log_level(lark.LogLevel.DEBUG)
+        .log_level(lark.LogLevel.WARNING)
         .build()
     )
     # https://open.feishu.cn/document/server-docs/im-v1/message-content-description/create_json
