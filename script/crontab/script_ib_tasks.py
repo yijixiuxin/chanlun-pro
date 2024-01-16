@@ -176,12 +176,17 @@ def run_tasks(client_id: int):
         else:
             # 读取代码所属交易所信息，在合约中添加
             contract = ib_insync.Stock(symbol=code, exchange="SMART", currency="USD")
-            details = get_ib().reqContractDetails(contract)
-            if len(details) > 0:
-                for d in details:
-                    if d.contract.currency == "USD":
-                        contract.primaryExchange = d.contract.primaryExchange
-                        break
+            primaryExchange = rd.Robj().hget("us_contract_details", code)
+            if primaryExchange is None:
+                details = get_ib().reqContractDetails(contract)
+                if len(details) > 0:
+                    for d in details:
+                        if d.contract.currency == "USD":
+                            primaryExchange = d.contract.primaryExchange
+                            rd.Robj().hset("us_contract_details", code, primaryExchange)
+                            break
+            if primaryExchange is not None:
+                contract.primaryExchange = primaryExchange
             return contract
 
     def get_code_by_contract(contract: ib_insync.Contract):
@@ -285,6 +290,6 @@ if __name__ == "__main__":
     with ProcessPoolExecutor(
         start_client_num, mp_context=get_context("spawn")
     ) as executor:
-        executor.map(run_tasks, [11, 12, 13, 14, 15])
+        executor.map(run_tasks, [21, 22, 23, 24, 25])
 
     # run_tasks(0)
