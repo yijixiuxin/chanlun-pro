@@ -24,15 +24,29 @@ class TdxBKGN:
         else:
             self.tdx_path = pathlib.Path(config.TDX_PATH)
 
+        # 获取所有板块指数代码
+        self.all_stocks = []
+
+        self.cache_hy = []
+        self.cache_gn = []
+
+    @staticmethod
+    def to_tdx_code(_c: str):
+        if _c[0] == "6":
+            return "SH." + _c
+        if _c[0] in ["0", "3"]:
+            return "SZ." + _c
+        return None
+
+    def load_all_stocks(self):
+        if len(self.all_stocks) != 0:
+            return True
         # 选择最优的服务器，并保存到 redis 中
         connect_info = db.cache_get("tdx_connect_ip")
         if connect_info is None:
             connect_info = best_ip.select_best_ip("stock")
             connect_info = {"ip": connect_info["ip"], "port": connect_info["port"]}
             db.cache_set("tdx_connect_ip", connect_info)
-
-        # 获取所有板块指数代码
-        self.all_stocks = []
         for market in range(2):
             client = TdxHq_API(raise_exception=True, auto_retry=True)
             with client.connect(connect_info["ip"], connect_info["port"]):
@@ -52,17 +66,7 @@ class TdxBKGN:
                         continue
                     code = f"SH.{str(code)}"
                     self.all_stocks.append({"code": code, "name": name})
-
-        self.cache_hy = []
-        self.cache_gn = []
-
-    @staticmethod
-    def to_tdx_code(_c: str):
-        if _c[0] == "6":
-            return "SH." + _c
-        if _c[0] in ["0", "3"]:
-            return "SZ." + _c
-        return None
+        return True
 
     def get_all_bkgn(self):
         """
@@ -89,6 +93,8 @@ class TdxBKGN:
 
         if len(self.cache_hy) > 0:
             return self.cache_hy
+
+        self.load_all_stocks()
 
         tdx_hy_file = self.tdx_path / "incon.dat"
         tdx_stock_file = self.tdx_path / "T0002" / "hq_cache" / "tdxhy.cfg"
@@ -156,6 +162,8 @@ class TdxBKGN:
 
         if len(self.cache_gn) > 0:
             return self.cache_gn
+
+        self.load_all_stocks()
 
         gn_name_map = {
             "锂电池": "锂电池概",

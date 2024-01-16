@@ -241,8 +241,7 @@ class DB(object):
         :param order:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             table = self.klines_tables(market, code)
             # 查询数据库
             filter = (table.code == code, table.f == frequency)
@@ -257,9 +256,7 @@ class DB(object):
                 query = query.order_by(table.dt.asc())
             if limit is not None:
                 query = query.limit(limit)
-        finally:
-            session.close()
-        return query.all()
+            return query.all()
 
     def klines_last_datetime(self, market, code, frequency):
         """
@@ -269,12 +266,12 @@ class DB(object):
         :param frequency:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             table = self.klines_tables(market, code)
             last_date = (
                 session.query(table.dt)
-                .where(table.code == code and table.freq == frequency)
+                .filter(table.code == code)
+                .filter(table.f == frequency)
                 .order_by(table.dt.desc())
                 .first()
             )
@@ -284,8 +281,6 @@ class DB(object):
                 return last_date[0].strftime("%Y-%m-%d")
             else:
                 return last_date[0].strftime("%Y-%m-%d %H:%M:%S")
-        finally:
-            session.close()
 
     def klines_insert(
         self, market: str, code: str, frequency: str, klines: pd.DataFrame
@@ -298,8 +293,7 @@ class DB(object):
         :param klines:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             table = self.klines_tables(market, code)
 
             # 如果是 sqlite ，则慢慢更新吧
@@ -357,8 +351,6 @@ class DB(object):
             upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
             session.execute(upsert_stmt)
             session.commit()
-        finally:
-            session.close()
 
         return True
 
@@ -377,8 +369,7 @@ class DB(object):
         :param dt:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             table = self.klines_tables(market, code)
             q = session.query(table).filter(table.code == code)
             if frequency is not None:
@@ -387,61 +378,52 @@ class DB(object):
                 q = q.filter(table.dt == dt)
             q.delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_get_groups(self, market: str) -> List[TableByZxGroup]:
         """
         获取自选分组
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             return (
                 session.query(TableByZxGroup)
                 .filter(TableByZxGroup.market == market)
                 .order_by(TableByZxGroup.add_dt.asc())
                 .all()
             )
-        finally:
-            session.close()
 
     def zx_add_group(self, market: str, zx_group: str) -> bool:
         """
         添加自选分组
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.add(
                 TableByZxGroup(
                     market=market, zx_group=zx_group, add_dt=datetime.datetime.now()
                 )
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_del_group(self, market: str, zx_group: str) -> bool:
         """
         删除自选分组
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByZxGroup).filter(
                 TableByZxGroup.market == market, TableByZxGroup.zx_group == zx_group
             ).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_get_group_stocks(self, market: str, zx_group: str) -> List[TableByZixuan]:
         """
         获取自选组下的股票列表
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             stocks = (
                 session.query(TableByZixuan)
                 .filter(TableByZixuan.zx_group == zx_group)
@@ -449,8 +431,6 @@ class DB(object):
                 .order_by(TableByZixuan.position.asc())
                 .all()
             )
-        finally:
-            session.close()
         return stocks
 
     def zx_add_group_stock(
@@ -463,8 +443,7 @@ class DB(object):
         color: str = "",
         location: str = "bottom",
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 添加前，统一删除在自选组下的股票信息
             session.query(TableByZixuan).filter(
                 TableByZixuan.market == market,
@@ -502,54 +481,46 @@ class DB(object):
             )
             session.add(zx_stock)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_del_group_stock(self, market: str, zx_group: str, stock_code: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
                 TableByZixuan.zx_group == zx_group
             ).filter(TableByZixuan.stock_code == stock_code).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_update_stock_color(
         self, market: str, zx_group: str, stock_code: str, color: str
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
                 TableByZixuan.zx_group == zx_group
             ).filter(TableByZixuan.stock_code == stock_code).update(
                 {"stock_color": color}, synchronize_session=False
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_update_stock_name(
         self, market: str, zx_group: str, stock_code: str, stock_name: str
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
                 TableByZixuan.zx_group == zx_group
             ).filter(TableByZixuan.stock_code == stock_code).update(
                 {"stock_name": stock_name}, synchronize_session=False
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_stock_sort_top(self, market: str, zx_group: str, stock_code: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # market、zx_group 结果下的 position + 1
             session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
                 TableByZixuan.zx_group == zx_group
@@ -563,13 +534,11 @@ class DB(object):
                 {"position": 0}, synchronize_session=False
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_stock_sort_bottom(self, market: str, zx_group: str, stock_code: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 获取 market zx_group 结果下最大的position
             max_position = (
                 session.query(func.max(TableByZixuan.position))
@@ -584,25 +553,21 @@ class DB(object):
                 {"position": max_position + 1}, synchronize_session=False
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_clear_by_group(self, market: str, zx_group: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 删除 market、zx_group 下所有的记录
             session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
                 TableByZixuan.zx_group == zx_group
             ).delete(synchronize_session=False)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def zx_query_group_by_code(self, market: str, stock_code: str) -> List[str]:
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 查询 market 下 stock_code 的所有去重的 zx_group 记录
             return [
                 _[0]
@@ -614,8 +579,6 @@ class DB(object):
                     .all()
                 )
             ]
-        finally:
-            session.close()
 
     def order_save(
         self,
@@ -628,8 +591,7 @@ class DB(object):
         order_memo: str,
         order_time: Union[str, datetime.datetime],
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 保存订单
             order = TableByOrder(
                 market=market,
@@ -643,13 +605,11 @@ class DB(object):
             )
             session.add(order)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def order_query_by_code(self, market: str, stock_code: str) -> List[TableByOrder]:
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 查询 market 下 stock_code 的所有订单
             orders = (
                 session.query(TableByOrder)
@@ -657,8 +617,7 @@ class DB(object):
                 .filter(TableByOrder.stock_code == stock_code)
                 .all()
             )
-        finally:
-            session.close()
+
         # {
         #     "code": "SH.000001",
         #     "datetime": "2021-10-19 10:09:51",
@@ -681,15 +640,13 @@ class DB(object):
         ]
 
     def order_clear_by_code(self, market: str, stock_code: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 清除 market 下 stock_code 的所有订单
             session.query(TableByOrder).filter(TableByOrder.market == market).filter(
                 TableByOrder.stock_code == stock_code
             ).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def task_save(
@@ -708,8 +665,7 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 保存任务
             session.add(
                 TableByAlertTask(
@@ -730,13 +686,11 @@ class DB(object):
                 )
             )
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def task_query(self, market: str = None, id: int = None) -> List[TableByAlertTask]:
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 查询任务
             query = session.query(TableByAlertTask)
             filter = ()
@@ -747,17 +701,13 @@ class DB(object):
             if len(filter) > 0:
                 return query.filter(*filter).all()
             return query.all()
-        finally:
-            session.close()
 
     def task_delete(self, id: int):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 删除任务
             session.query(TableByAlertTask).filter(TableByAlertTask.id == id).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def task_update(
@@ -776,8 +726,7 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByAlertTask).filter(
                 TableByAlertTask.market == market,
                 TableByAlertTask.task_name == task_name,
@@ -798,9 +747,6 @@ class DB(object):
                 }
             )
             session.commit()
-        finally:
-            session.close()
-
         return True
 
     def alert_record_save(
@@ -828,8 +774,7 @@ class DB(object):
         :param line_dt:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             recored = TableByAlertRecord(
                 market=market,
                 task_name=task_name,
@@ -845,8 +790,7 @@ class DB(object):
             )
             session.add(recored)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def alert_record_query_by_code(
@@ -865,8 +809,7 @@ class DB(object):
         :param dt:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             return (
                 session.query(TableByAlertRecord)
                 .filter(
@@ -879,8 +822,6 @@ class DB(object):
                 .order_by(TableByAlertRecord.alert_dt.desc())
                 .first()
             )
-        finally:
-            session.close()
 
     def alert_record_query(self, market: str) -> List[TableByAlertRecord]:
         """
@@ -891,16 +832,13 @@ class DB(object):
         :param dt:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             return (
                 session.query(TableByAlertRecord)
                 .filter(TableByAlertRecord.market == market)
                 .order_by(TableByAlertRecord.alert_dt.desc())
                 .limit(100)
             )
-        finally:
-            session.close()
 
     def marks_add(
         self,
@@ -927,8 +865,7 @@ class DB(object):
         :param mark_color: 颜色 rgb，比如 'red'  '#FF0000'
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 相同的 market,code/mark_time/mark_label 只能又一个，先删除一下
             session.query(TableByTVMarks).filter(
                 TableByTVMarks.market == market,
@@ -951,8 +888,7 @@ class DB(object):
             )
             session.add(mark)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def marks_query(
@@ -964,32 +900,27 @@ class DB(object):
         :param stock_code:
         :return:
         """
-        session = self.Session()
-        try:
+        with self.Session() as session:
             query = session.query(TableByTVMarks).filter(
                 TableByTVMarks.market == market,
                 TableByTVMarks.stock_code == stock_code,
             )
             if start_date is not None:
                 query = query.filter(TableByTVMarks.mark_time >= start_date)
-        finally:
-            session.close()
-        return query.order_by(TableByTVMarks.mark_time.asc()).all()
+
+            return query.order_by(TableByTVMarks.mark_time.asc()).all()
 
     def marks_del(self, market: str, mark_label: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByTVMarks).filter(
                 TableByTVMarks.market == market, TableByTVMarks.mark_label == mark_label
             ).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def cache_get(self, key: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             # 获取当前时间戳
             now = int(time.time())
             # 获取缓存数据
@@ -1003,28 +934,23 @@ class DB(object):
                 TableByCache.expire != 0, TableByCache.expire < now
             ).delete()
             session.commit()
-        finally:
-            session.close()
+
         return None
 
     def cache_set(self, key: str, val: dict, expire: int = 0):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByCache).filter(TableByCache.k == key).delete()
             cache = TableByCache(k=key, v=json.dumps(val), expire=expire)
             session.add(cache)
             session.commit()
-        finally:
-            session.close()
+
         return True
 
     def cache_del(self, key: str):
-        session = self.Session()
-        try:
+        with self.Session() as session:
             session.query(TableByCache).filter(TableByCache.k == key).delete()
             session.commit()
-        finally:
-            session.close()
+
         return True
 
 
