@@ -258,7 +258,7 @@ if __name__ == "__main__":
     """
     bkgn = StocksBKGN()
     # 重新更新并保存行业与板块信息
-    bkgn.reload_ths_bkgn()
+    # bkgn.reload_ths_bkgn()
 
     # 所有行业概念
     # hys, gns = bkgn.file_bkgns()
@@ -381,8 +381,8 @@ if __name__ == "__main__":
     # 'MSCI概念', '固态电池', '俄乌冲突概念', 'CRO概念'
 
     # 获取代码的板块概念信息
-    # code_bkgn = bkgn.get_code_bkgn("600895")
-    # print(code_bkgn)
+    code_bkgn = bkgn.get_code_bkgn("600895")
+    print(code_bkgn)
 
     # 根据行业获取其中的代码
     # codes = bkgn.get_codes_by_hy('珠宝首饰')

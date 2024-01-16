@@ -167,6 +167,9 @@ class ExchangeTDX(Exchange):
         else:
             args["pages"] = int(args["pages"])
 
+        if "use_disk" not in args.keys():
+            args["use_disk"] = False
+
         frequency_map = {
             "y": 11,
             "m": 6,
@@ -201,11 +204,33 @@ class ExchangeTDX(Exchange):
                     get_bars = client.get_security_bars
 
                 ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if ks is None:
-                    # 获取 8*800 = 6400 条数据
-                    ks = pd.concat(
-                        [
-                            client.to_df(
+                if args["use_disk"] is False:  # 如果只使用本地文件缓存，则无需进行网络请求
+                    if ks is None:
+                        # 获取 8*800 = 6400 条数据
+                        ks = pd.concat(
+                            [
+                                client.to_df(
+                                    get_bars(
+                                        frequency_map[frequency],
+                                        market,
+                                        tdx_code,
+                                        (i - 1) * 800,
+                                        800,
+                                    )
+                                )
+                                for i in range(1, args["pages"] + 1)
+                            ],
+                            axis=0,
+                            sort=False,
+                        )
+                        if len(ks) == 0:
+                            return pd.DataFrame([])
+                        ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
+                        ks.sort_values("date", inplace=True)
+                    else:
+                        for i in range(1, args["pages"] + 1):
+                            # print(f'{code} 使用缓存，更新获取第 {i} 页')
+                            _ks = client.to_df(
                                 get_bars(
                                     frequency_map[frequency],
                                     market,
@@ -214,37 +239,16 @@ class ExchangeTDX(Exchange):
                                     800,
                                 )
                             )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    if len(ks) == 0:
-                        return pd.DataFrame([])
-                    ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
-                    ks.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
-                            get_bars(
-                                frequency_map[frequency],
-                                market,
-                                tdx_code,
-                                (i - 1) * 800,
-                                800,
-                            )
-                        )
-                        if len(_ks) == 0:
-                            break
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = ks.iloc[-1]["date"]
-                        ks = pd.concat([ks, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
+                            if len(_ks) == 0:
+                                break
+                            _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                            _ks.sort_values("date", inplace=True)
+                            new_start_dt = _ks.iloc[0]["date"]
+                            old_end_dt = ks.iloc[-1]["date"]
+                            ks = pd.concat([ks, _ks], ignore_index=True)
+                            # 如果请求的第一个时间大于缓存的最后一个时间，退出
+                            if old_end_dt >= new_start_dt:
+                                break
 
             # 删除重复数据
             ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")

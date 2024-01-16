@@ -262,6 +262,15 @@ class FX:
         else:
             raise Exception(f"获取分型低点的区间类型错误 {qj_type}")
 
+    def fx_k_nums(self) -> int:
+        # 分型内原始K线的数量
+        k_nums = 0
+        for _ck in self.klines:
+            if _ck is None:
+                continue
+            k_nums += len(_ck.klines)
+        return k_nums
+
     def get_start_src_k(self) -> Kline:
         return self.klines[0].klines[0]
 

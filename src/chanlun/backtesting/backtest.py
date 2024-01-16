@@ -27,6 +27,7 @@ from chanlun.exchange.exchange import (
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,
 )
+from tqdm.auto import tqdm
 
 
 class BackTest:
@@ -234,8 +235,8 @@ class BackTest:
                     self.strategy.on_bt_loop_start(self)
                     self.trader.run(code)
                 except Exception as e:
-                    self.log.info(f"执行 {code} : {self.datas.now_date} 异常")
-                    self.log.info(traceback.format_exc())
+                    self.log.error(f"执行 {code} : {self.datas.now_date} 异常")
+                    self.log.error(traceback.format_exc())
                     # raise e
             if loop_callback_fun:
                 loop_callback_fun(self)
@@ -301,7 +302,7 @@ class BackTest:
             # 记录 资金变动历史
             balance_history = {}
             # 回测结果合并
-            for f in results:
+            for f in tqdm(results, desc="结果汇总"):
                 BT = BackTest()
                 BT.load(f)
                 # 汇总结果
