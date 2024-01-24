@@ -503,7 +503,6 @@ def xg_single_ma_250(cl_datas: List[ICL], opt_type: list = []):
 def xg_single_bi_1buy_next_l3buy_mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     笔1buy后的中枢[类三买/类二买]
-    笔中枢配置中，必须有 段内中枢
     周期：单周期
     适用市场：沪深A股
     作者：WX
@@ -511,58 +510,58 @@ def xg_single_bi_1buy_next_l3buy_mmd(cl_datas: List[ICL], opt_type: list = []):
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
     cd = cl_datas[0]
-    if len(cd.get_bis()) == 0 or len(cd.get_bi_zss(Config.ZS_TYPE_DN.value)) < 2:
+    if len(cd.get_bis()) == 0:
         return None
     bi = cd.get_bis()[-1]
-    zs = cd.get_bi_zss(Config.ZS_TYPE_DN.value)[-1]
 
     if bi.type == "up":  # 笔向上，跳过
         return None
 
-    if bi.index not in [_l.index for _l in zs.lines]:  # 当前笔不在中枢内部
-        return None
-
-    bi_by_1buy = None  # 找寻前面的一买笔
-
+    # 找寻前面的一买笔
+    bi_by_1buy = None
     for _bi in cd.get_bis()[::-1]:
         if _bi.mmd_exists(["1buy"], "|"):
             bi_by_1buy = _bi
             break
-        if _bi.index < zs.lines[0].index - 1:
-            break
 
-    if bi_by_1buy is None:  # 中枢范围内，没有找到有一买
+    if bi_by_1buy is None:  # 没有找到有一买
         return None
 
-    # 当前笔距离1买至少要三笔
-    if bi.index - bi_by_1buy.index < 4:
+    # 一买后的笔创建一个中枢，如果没有中枢或多余1个中枢都是不符合条件的
+    zs_lines = cd.get_bis()[bi_by_1buy.index + 1 :]
+    # 一买后续有大于9笔，那就不找了
+    if len(zs_lines) > 9:
         return None
-    # 当前笔距离1买不能大于9笔
-    if bi.index - bi_by_1buy.index > 9:
+    zs = cd.create_dn_zs("bi", zs_lines)
+    if len(zs) != 1:
         return None
 
-    # 一买点要是最低的
-    zs_min_price = min([_k.c for _k in cd.get_src_klines()[bi_by_1buy.end.k.k_index :]])
-    if zs_min_price < bi_by_1buy.end.val:
+    zs = zs[0]
+    if bi.index not in [_l.index for _l in zs.lines]:  # 当前笔不在创建的中枢内
         return None
+
+    # 过滤中枢的起始笔不是一买后的第一个笔
+    if zs.lines[0].index != zs_lines[0].index:
+        return None
+
+    # 中枢线段的最低点
+    zs_min_price = min([_l.low for _l in zs.lines[1:]])
 
     zss_by_1buy = []  # 一买的中枢，根据配置的不用，可能会有多个
     for _zs_type, _mmds in bi_by_1buy.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "1buy":
                 zss_by_1buy.append(_m.zs)
-    for _zs in zss_by_1buy:
-        if _zs.lines[0].index == zs.lines[0].index:  # 中枢相同那就不用比较了
-            continue
-        # 当前中枢的下沿不能超过上一个中枢的上沿 30%
-        zd_zg_rate = (zs.zd - _zs.zg) / _zs.zg * 100
-        if zd_zg_rate > 30:
-            return None
+    for _zs_1buy in zss_by_1buy:
+        # 一买后续中枢低点不能低于一买中枢的中心
+        _zs_1buy_mid_price = _zs_1buy.zg - (_zs_1buy.zg - _zs_1buy.zd) / 2
+        if zs_min_price > _zs_1buy_mid_price:
+            return {
+                "code": cd.get_code(),
+                "msg": f"一买后形成中枢，且中枢低点 {zs_min_price} 高于 一买中枢的中心 {_zs_1buy_mid_price}",
+            }
 
-    return {
-        "code": cd.get_code(),
-        "msg": f"一买后的中枢下沿类三买",
-    }
+    return None
 
 
 if __name__ == "__main__":
@@ -570,7 +569,7 @@ if __name__ == "__main__":
     from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 
     market = "a"
-    code = "SH.600820"
+    code = "SZ.000551"
     freq = "d"
 
     ex = ExchangeTDX()
