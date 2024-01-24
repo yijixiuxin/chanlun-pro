@@ -2,6 +2,7 @@ import datetime
 import json
 import time
 from typing import List, Union
+import numpy as np
 import pandas as pd
 import warnings
 
@@ -141,6 +142,20 @@ class TableByOrder(Base):
     dt = Column(DateTime, comment="添加时间")  # 添加时间
 
 
+class TableByTVCharts(Base):
+    # TV 图表的布局
+    __tablename__ = "cl_tv_charts"
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
+    client_id = Column(String(50), comment="客户端id")
+    user_id = Column(Integer, comment="用户id")
+    chart_type = Column(String(20), comment="布局类型")
+    symbol = Column(String(50), comment="标的")
+    resolution = Column(String(20), comment="周期")
+    content = Column(Text, comment="布局内容")
+    timestamp = Column(Integer, comment="时间戳")
+    name = Column(String(50), comment="布局名称")
+
+
 @fun.singleton
 class DB(object):
     global Base
@@ -207,7 +222,7 @@ class DB(object):
                 UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
             )
             # 表结构
-            code = Column(String(10), primary_key=True, comment="标的代码")
+            code = Column(String(20), primary_key=True, comment="标的代码")
             dt = Column(DateTime, primary_key=True, comment="日期")
             f = Column(String(5), primary_key=True, comment="周期")
             o = Column(Float)
@@ -329,28 +344,34 @@ class DB(object):
                 session.commit()
                 return True
 
-            insert_klines = []
-            for _, _k in klines.iterrows():
-                insert_klines.append(
-                    {
-                        "code": code,
-                        "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                )
-            insert_stmt = insert(table).values(insert_klines)
-            update_keys = ["o", "c", "h", "l", "v"]
-            update_columns = {
-                x.name: x for x in insert_stmt.inserted if x.name in update_keys
-            }
-            upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-            session.execute(upsert_stmt)
-            session.commit()
+            # 将 klines 数据拆分为每 500 条一组，批量插入
+            group = np.arange(len(klines)) // 500
+            groups = [
+                group.reset_index(drop=True) for _, group in klines.groupby(group)
+            ]
+            for g_klines in groups:
+                insert_klines = []
+                for _, _k in g_klines.iterrows():
+                    insert_klines.append(
+                        {
+                            "code": code,
+                            "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                            "f": frequency,
+                            "o": _k["open"],
+                            "c": _k["close"],
+                            "h": _k["high"],
+                            "l": _k["low"],
+                            "v": _k["volume"],
+                        }
+                    )
+                insert_stmt = insert(table).values(insert_klines)
+                update_keys = ["o", "c", "h", "l", "v"]
+                update_columns = {
+                    x.name: x for x in insert_stmt.inserted if x.name in update_keys
+                }
+                upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
+                session.execute(upsert_stmt)
+                session.commit()
 
         return True
 
@@ -917,6 +938,111 @@ class DB(object):
             ).delete()
             session.commit()
 
+        return True
+
+    def tv_chart_list(self, chart_type, client_id, user_id):
+        with self.Session() as session:
+            return (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                )
+                .all()
+            )
+
+    def tv_chart_save(
+        self, chart_type, client_id, user_id, name, content, symbol, resolution
+    ):
+        # 保存图表布局，并返回 id
+        with self.Session() as session:
+            chart = TableByTVCharts(
+                chart_type=chart_type,
+                client_id=client_id,
+                user_id=user_id,
+                name=name,
+                content=content,
+                symbol=symbol,
+                resolution=resolution,
+                timestamp=int(time.time()),
+            )
+            session.add(chart)
+            session.commit()
+            return chart.id
+
+    def tv_chart_update(
+        self, chart_type, id, client_id, user_id, name, content, symbol, resolution
+    ):
+        # 更新图表布局
+        with self.Session() as session:
+            session.query(TableByTVCharts).filter(
+                TableByTVCharts.id == id,
+                TableByTVCharts.client_id == client_id,
+                TableByTVCharts.user_id == user_id,
+                TableByTVCharts.chart_type == chart_type,
+            ).update(
+                {
+                    TableByTVCharts.name: name,
+                    TableByTVCharts.content: content,
+                    TableByTVCharts.symbol: symbol,
+                    TableByTVCharts.resolution: resolution,
+                    TableByTVCharts.timestamp: int(time.time()),
+                }
+            )
+            session.commit()
+        return True
+
+    def tv_chart_get(self, chart_type, id, client_id, user_id):
+        # 获取图表布局
+        with self.Session() as session:
+            return (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.id == id,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                )
+                .first()
+            )
+
+    def tv_chart_get_by_name(self, chart_type, name, client_id, user_id):
+        # 获取图表布局
+        with self.Session() as session:
+            return (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.name == name,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                )
+                .first()
+            )
+
+    def tv_chart_del(self, chart_type, id, client_id, user_id):
+        # 删除图表布局
+        with self.Session() as session:
+            session.query(TableByTVCharts).filter(
+                TableByTVCharts.id == id,
+                TableByTVCharts.chart_type == chart_type,
+                TableByTVCharts.client_id == client_id,
+                TableByTVCharts.user_id == user_id,
+            ).delete()
+            session.commit()
+        return True
+
+    def tv_chart_del_by_name(self, chart_type, name, client_id, user_id):
+        # 根据名称删除图表布局
+        with self.Session() as session:
+            session.query(TableByTVCharts).filter(
+                TableByTVCharts.name == name,
+                TableByTVCharts.chart_type == chart_type,
+                TableByTVCharts.client_id == client_id,
+                TableByTVCharts.user_id == user_id,
+            ).delete()
+            session.commit()
         return True
 
     def cache_get(self, key: str):
