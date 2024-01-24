@@ -541,64 +541,74 @@ def create_app(test_config=None):
         """
         client_id = str(request.args.get("client"))
         user_id = str(request.args.get("user"))
-        chart = request.args.get("chart")
-
-        key = f"cl_charts_{client_id}_{user_id}"
-        data: dict = db.cache_get(key)
-        if data is None:
-            data: dict = {}
 
         if request.method == "GET":
-            # 列出保存的图表列表
-            if chart is None:
+            chart_id = request.args.get("chart")
+            if chart_id is None:
+                # 列出保存的图表列表
+                chart_list = db.tv_chart_list("chart", client_id, user_id)
                 return {
                     "status": "ok",
-                    "data": list(data.values()),
+                    "data": [
+                        {
+                            "timestamp": c.timestamp,
+                            "symbol": c.symbol,
+                            "resolution": c.resolution,
+                            "id": c.id,
+                            "name": c.name,
+                        }
+                        for c in chart_list
+                    ],
                 }
             else:
+                # 获取图表信息
+                chart = db.tv_chart_get("chart", chart_id, client_id, user_id)
                 return {
                     "status": "ok",
-                    "data": data[chart],
+                    "data": {
+                        "content": chart.content,
+                        "timestamp": chart.timestamp,
+                        "name": chart.name,
+                        "id": chart.id,
+                    },
                 }
         elif request.method == "DELETE":
             # 删除操作
-            del data[chart]
-            db.cache_set(key, data)
+            chart_id = request.args.get("chart")
+            db.tv_chart_del("chart", chart_id, client_id, user_id)
             return {
                 "status": "ok",
             }
         else:
+            # 更新与保存操作
             name = request.form["name"]
             content = request.form["content"]
             symbol = request.form["symbol"]
             resolution = request.form["resolution"]
+            chart_id = request.args.get("chart")
 
-            id = fun.datetime_to_int(datetime.datetime.now())
-            save_data = {
-                "timestamp": id,
-                "symbol": symbol,
-                "resolution": resolution,
-                "name": name,
-                "content": content,
-            }
-            if chart is None:
+            if chart_id is None:
                 # 保存新的图表信息
-                save_data["id"] = str(id)
-                data[str(id)] = save_data
-                db.cache_set(key, data)
+                id = db.tv_chart_save(
+                    "chart", client_id, user_id, name, content, symbol, resolution
+                )
                 return {
                     "status": "ok",
                     "id": id,
                 }
             else:
                 # 保存已有的图表信息
-                save_data["id"] = chart
-                data[chart] = save_data
-                db.cache_set(key, data)
-                return {
-                    "status": "ok",
-                    "id": chart,
-                }
+                db.tv_chart_update(
+                    "chart",
+                    chart_id,
+                    client_id,
+                    user_id,
+                    name,
+                    content,
+                    symbol,
+                    resolution,
+                )
+                return {"status": "ok"}
 
     @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
     def tv_study_templates(version):
@@ -607,43 +617,39 @@ def create_app(test_config=None):
         """
         client_id = str(request.args.get("client"))
         user_id = str(request.args.get("user"))
-        template = request.args.get("template")
-
-        key = f"tv_study_templates_{client_id}_{user_id}"
-        data: dict = db.cache_get(key)
-        if data is None:
-            data: dict = {}
 
         if request.method == "GET":
-            # 列出保存的图表列表
+            template = request.args.get("template")
             if template is None:
+                # 列出保存的图表列表
+                template_list = db.tv_chart_list("template", client_id, user_id)
                 return {
                     "status": "ok",
-                    "data": list(data.values()),
+                    "data": [{"name": t.name} for t in template_list],
                 }
             else:
+                # 获取图表信息
+                template = db.tv_chart_get_by_name(
+                    "template", template, client_id, user_id
+                )
                 return {
                     "status": "ok",
-                    "data": data[template],
+                    "data": {"name": template.name, "content": template.content},
                 }
         elif request.method == "DELETE":
             # 删除操作
-            del data[template]
-            db.cache_set(key, data)
+            name = request.args.get("template")
+            db.tv_chart_del_by_name("template", name, client_id, user_id)
             return {
                 "status": "ok",
             }
         else:
             name = request.form["name"]
             content = request.form["content"]
-            save_data = {"name": name, "content": content}
+
             # 保存图表信息
-            data[name] = save_data
-            db.cache_set(key, data)
-            return {
-                "status": "ok",
-                "id": name,
-            }
+            db.tv_chart_save("template", client_id, user_id, name, content, "", "")
+            return {"status": "ok"}
 
     # 查询配置项
     @app.route("/get_cl_config/<market>/<code>")

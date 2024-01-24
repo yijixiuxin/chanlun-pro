@@ -1027,7 +1027,14 @@ class BackTest:
                         range_end=100,
                     ),
                     opts.DataZoomOpts(
-                        is_show=False, xaxis_index=[0, 2], range_start=0, range_end=100
+                        is_show=True,
+                        xaxis_index=[0, 2],
+                        pos_top="97%",
+                        range_start=0,
+                        range_end=100,
+                    ),
+                    opts.DataZoomOpts(
+                        is_show=False, xaxis_index=[0, 3], range_start=0, range_end=100
                     ),
                 ],
             )

@@ -3,12 +3,14 @@ import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
-
 import ib_insync
-
+import datetime
+import pytz
+import pandas as pd
 from chanlun import config
 from chanlun import rd, fun
 from chanlun.exchange.exchange_ib import CmdEnum, ib_res_hkey
+from chanlun.file_db import FileCacheDB
 
 
 def run_tasks(client_id: int):
@@ -19,6 +21,10 @@ def run_tasks(client_id: int):
 
     ib: ib_insync.IB = ib_insync.IB()
     ib_insync.util.allowCtrlC()
+
+    fdb = FileCacheDB()  # 保存存储的k线数据
+
+    tz = pytz.timezone("US/Eastern")
 
     def get_ib() -> ib_insync.IB:
         if ib.isConnected():
@@ -52,10 +58,22 @@ def run_tasks(client_id: int):
     def klines(code, durationStr, barSizeSetting, timeout):
         for i in range(2):
             contract = get_contract_by_code(code)
+            history_klines = fdb.get_tdx_klines(
+                f"ib_{code}", barSizeSetting.replace(" ", "")
+            )
+            new_durationStr = durationStr
+            if history_klines is not None and len(history_klines) >= 100:
+                # 如果有之前保存的历史行情，则进行比较与增量更新
+                diff_days = (
+                    datetime.datetime.now() - history_klines.iloc[-1]["date"]
+                ).days + 5
+                new_durationStr = f"{diff_days} D"
+
+            re_request_bars = False  # 是否重新进行请求
             bars = get_ib().reqHistoricalData(
                 contract,
                 endDateTime="",
-                durationStr=durationStr,
+                durationStr=new_durationStr,
                 barSizeSetting=barSizeSetting,
                 whatToShow="TRADES",
                 useRTH=True,
@@ -64,6 +82,21 @@ def run_tasks(client_id: int):
             )
             klines_res = []
             for _b in bars:
+                if (
+                    history_klines is not None
+                    and len(history_klines) >= 100
+                    and re_request_bars is False
+                ):
+                    history_last_dt = fun.datetime_to_str(
+                        history_klines.iloc[-1]["date"]
+                    )
+                    if (
+                        history_last_dt == fun.datetime_to_str(_b.date)
+                        and history_klines.iloc[-1]["close"] != _b.close
+                    ):
+                        re_request_bars = True
+                        break
+
                 klines_res.append(
                     {
                         "code": code,
@@ -77,6 +110,54 @@ def run_tasks(client_id: int):
                 )
             if len(klines_res) == 0:
                 continue
+
+            if re_request_bars:  # 重新进行全量请求
+                bars = get_ib().reqHistoricalData(
+                    contract,
+                    endDateTime="",
+                    durationStr=durationStr,
+                    barSizeSetting=barSizeSetting,
+                    whatToShow="TRADES",
+                    useRTH=True,
+                    formatDate=1,
+                    timeout=timeout,
+                )
+                klines_res = []
+                for _b in bars:
+                    klines_res.append(
+                        {
+                            "code": code,
+                            "date": fun.datetime_to_str(_b.date),
+                            "open": _b.open,
+                            "close": _b.close,
+                            "high": _b.high,
+                            "low": _b.low,
+                            "volume": _b.volume,
+                        }
+                    )
+            else:
+                # 进行增量更新
+                klines_df = pd.DataFrame(klines_res)
+                klines_df["date"] = pd.to_datetime(klines_df["date"])
+                klines_df = pd.concat([history_klines, klines_df], ignore_index=True)
+                klines_df = klines_df.drop_duplicates(
+                    ["date"], keep="last"
+                ).sort_values("date")
+                klines_res = []
+                # 将时间转换成字符串
+                klines_df["date"] = klines_df["date"].apply(
+                    lambda d: fun.datetime_to_str(d)
+                )
+                for _, _k in klines_df.iterrows():
+                    klines_res.append(_k.to_dict())
+
+            if len(klines_res) == 0:
+                continue
+            # 进行本地保存
+            klines_df = pd.DataFrame(klines_res)
+            fdb.save_tdx_klines(
+                f"ib_{code}", barSizeSetting.replace(" ", ""), klines_df
+            )
             return klines_res
         return []
 
@@ -284,6 +365,9 @@ if __name__ == "__main__":
     h_keys = rd.Robj().keys(f"{ib_res_hkey}*")
     for _k in h_keys:
         rd.Robj().delete(_k)
+
+    # Debug
+    # run_tasks(11)
 
     # 启动 5 个客户端接收
     start_client_num = 5

@@ -121,8 +121,8 @@ class ExchangeIB(Exchange):
         # 控制获取的数量
         duration_map = {
             "w": "20 Y",
-            "d": "5 Y",
-            "60m": "180 D",
+            "d": "10 Y",
+            "60m": "360 D",
             "30m": "100 D",
             "10m": "30 D",
             "15m": "30 D",
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     # stock_info = ex.stock_info('DOCU')
     # print(stock_info)
     #
-    klines = ex.klines("APO", "d")
+    klines = ex.klines("TSLA", "60m")
     print(klines.tail(20))
 
     # balance = ex.balance()

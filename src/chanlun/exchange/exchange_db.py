@@ -142,6 +142,10 @@ class ExchangeDB(Exchange):
         db.klines_delete(self.market, code)
         return
 
+    def del_klines_by_code_freq(self, code, freq):
+        db.klines_delete(self.market, code, frequency=freq)
+        return
+
     def klines(
         self,
         code: str,
