@@ -233,11 +233,20 @@ class BackTest:
             for code in self.codes:
                 try:
                     self.strategy.on_bt_loop_start(self)
-                    self.trader.run(code)
+                    self.trader.run(code, is_filter=self.strategy.is_filter_opts())
                 except Exception as e:
                     self.log.error(f"执行 {code} : {self.datas.now_date} 异常")
                     self.log.error(traceback.format_exc())
                     # raise e
+            try:
+                # 如果有开启操作二次过滤，则调用一下进行执行
+                self.trader.buffer_opts = self.strategy.filter_opts(
+                    self.trader.buffer_opts
+                )
+                self.trader.run_buffer_opts()
+            except Exception as e:
+                self.log.error(f"执行 {code} 操作二次过滤 : {self.datas.now_date} 异常")
+                self.log.error(traceback.format_exc())
             if loop_callback_fun:
                 loop_callback_fun(self)
 

@@ -669,7 +669,7 @@ if __name__ == "__main__":
     # print(len(all_stocks))
 
     # s_time = time.time()
-    klines = ex.klines("SZ.000001", "w")
+    klines = ex.klines("SZ.002858", "d")
     print(klines.tail())
     # print("use time : ", time.time() - s_time)
     # 207735

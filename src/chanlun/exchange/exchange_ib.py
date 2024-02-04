@@ -282,7 +282,7 @@ if __name__ == "__main__":
     # stock_info = ex.stock_info('DOCU')
     # print(stock_info)
     #
-    klines = ex.klines("TSLA", "60m")
+    klines = ex.klines("SPX", "d")
     print(klines.tail(20))
 
     # balance = ex.balance()

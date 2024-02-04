@@ -152,6 +152,9 @@ class BackTestTrader(object):
         # 在执行策略前，手动指定执行的开始时间
         self.begin_run_dt: datetime.datetime = None
 
+        # 缓冲区的执行操作，用于在特定时间点批量进行开盘检测后，对要执行的开盘信号再次进行过滤筛选
+        self.buffer_opts = []
+
     def set_strategy(self, _strategy: Strategy):
         """
         设置策略对象
@@ -236,7 +239,7 @@ class BackTestTrader(object):
         return self.datas.now_date
 
     # 运行的唯一入口
-    def run(self, code):
+    def run(self, code, is_filter=False):
         # 如果设置开始执行时间，并且当前时间小于等于设置的时间，则不执行策略
         if (
             self.begin_run_dt is not None
@@ -275,9 +278,21 @@ class BackTestTrader(object):
         self._use_times["strategy_open"] += time.time() - _time
 
         for opt in opts:
-            self.execute(code, opt)
+            if is_filter:
+                # 如果是过滤模式，将操作记录到缓冲区，等待批量执行
+                self.buffer_opts.append(opt)
+            else:
+                self.execute(code, opt)
 
         return True
+
+    def run_buffer_opts(self):
+        """
+        执行缓冲区的操作
+        """
+        for opt in self.buffer_opts:
+            self.execute(opt.code, opt)
+        self.buffer_opts = []
 
     # 运行结束，统一清仓
     def end(self):
@@ -560,10 +575,9 @@ class BackTestTrader(object):
 
     # 做多平仓
     def close_buy(self, code, pos: POSITION, opt: Operation):
-        # 如果是止损的话，按照止损价格
-        if "止损" in opt.msg:
-            # price = pos.loss_price
-            price = self.get_price(code)["close"]
+        # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
+        if opt.loss_price != 0:
+            price = opt.loss_price
         else:
             price = self.get_price(code)["close"]
 
@@ -582,10 +596,9 @@ class BackTestTrader(object):
 
     # 做空平仓
     def close_sell(self, code, pos: POSITION, opt: Operation):
-        # 如果是止损的话，按照止损价格
-        if "止损" in opt.msg:
-            # price = pos.loss_price
-            price = self.get_price(code)["close"]
+        # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
+        if opt.loss_price != 0:
+            price = opt.loss_price
         else:
             price = self.get_price(code)["close"]
 
