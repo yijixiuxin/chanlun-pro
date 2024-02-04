@@ -12,10 +12,25 @@ class POSITION:
     持仓对象
     """
 
-    def __init__(self, code: str, mmd: str, type: str = None, balance: float = 0, price: float = 0, amount: float = 0,
-                 loss_price: float = None, open_date: str = None, open_datetime: str = None, close_datetime: str = None,
-                 profit_rate: float = 0, max_profit_rate: float = 0, max_loss_rate: float = 0, open_msg: str = '',
-                 close_msg: str = '', info: Dict = None):
+    def __init__(
+        self,
+        code: str,
+        mmd: str,
+        type: str = None,
+        balance: float = 0,
+        price: float = 0,
+        amount: float = 0,
+        loss_price: float = None,
+        open_date: str = None,
+        open_datetime: str = None,
+        close_datetime: str = None,
+        profit_rate: float = 0,
+        max_profit_rate: float = 0,
+        max_loss_rate: float = 0,
+        open_msg: str = "",
+        close_msg: str = "",
+        info: Dict = None,
+    ):
         self.code: str = code
         self.mmd: str = mmd
         self.type: str = type
@@ -50,8 +65,16 @@ class Operation:
     策略返回的操作指示对象
     """
 
-    def __init__(self, opt: str, mmd: str, loss_price: float = 0, info=None, msg: str = '',
-                 pos_rate: float = 1, key: str = 'id'):
+    def __init__(
+        self,
+        opt: str,
+        mmd: str,
+        loss_price: float = 0,
+        info=None,
+        msg: str = "",
+        pos_rate: float = 1,
+        key: str = "id",
+    ):
         self.opt: str = opt  # 操作指示  buy  买入  sell  卖出  lock 锁仓 unlock 解除锁仓 （只有期货支持锁仓操作）
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
@@ -64,7 +87,7 @@ class Operation:
         self.key: str = key  # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
 
     def __str__(self):
-        return f'mmd {self.mmd} opt {self.opt} loss_price {self.loss_price} msg: {self.msg}'
+        return f"mmd {self.mmd} opt {self.opt} loss_price {self.loss_price} msg: {self.msg}"
 
 
 class MarketDatas(ABC):
@@ -125,7 +148,9 @@ class Strategy(ABC):
         pass
 
     @abstractmethod
-    def open(self, code, market_data: MarketDatas, poss: Dict[str, POSITION]) -> List[Operation]:
+    def open(
+        self, code, market_data: MarketDatas, poss: Dict[str, POSITION]
+    ) -> List[Operation]:
         """
         观察行情数据，给出开仓操作建议
         :param code:
@@ -135,7 +160,9 @@ class Strategy(ABC):
         """
 
     @abstractmethod
-    def close(self, code, mmd: str, pos: POSITION, market_data: MarketDatas) -> [Operation, None, List[Operation]]:
+    def close(
+        self, code, mmd: str, pos: POSITION, market_data: MarketDatas
+    ) -> [Operation, None, List[Operation]]:
         """
         盯当前持仓，给出平仓当下建议
         :param code:
@@ -153,6 +180,20 @@ class Strategy(ABC):
         """
         pass
 
+    def is_filter_opts(self):
+        """
+        是否对产生的开盘信号进行二次过滤操作，比如在统一的时间执行开盘信号检测，在对产生的所有信号进行二次过滤，最终只执行其中过滤后的操作
+        需要再实际的策略中进行方法重写
+        """
+        return False
+
+    def filter_opts(self, opts: List[Operation]):
+        """
+        过滤开盘信号，返回过滤后的操作列表
+        需要再实际的策略中进行方法重写
+        """
+        return opts
+
     def clear(self):
         """
         回测专用，回测结束后，清理一些不需要的变量，避免被 pickle 保存
@@ -167,7 +208,7 @@ class Strategy(ABC):
         if is_all_prices:
             prices = np.array([k.c for k in cd.get_klines()])
         else:
-            prices = np.array([k.c for k in cd.get_klines()[-(period + 120):]])
+            prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
         ma = talib.MA(prices, timeperiod=period)
         return ma
 
@@ -179,7 +220,7 @@ class Strategy(ABC):
         if is_all_prices:
             prices = np.array([k.c for k in cd.get_klines()])
         else:
-            prices = np.array([k.c for k in cd.get_klines()[-(period + 120):]])
+            prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
         ma = talib.EMA(prices, timeperiod=period)
         return ma
 
@@ -188,11 +229,9 @@ class Strategy(ABC):
         """
         返回 boll 指标
         """
-        prices = np.array([k.c for k in cd.get_klines()[-(period + 120):]])
+        prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
         boll_up, boll_mid, boll_low = talib.BBANDS(prices, timeperiod=period)
-        return {
-            'up': boll_up, 'mid': boll_mid, 'low': boll_low
-        }
+        return {"up": boll_up, "mid": boll_mid, "low": boll_low}
 
     @staticmethod
     def idx_rsi(cd: ICL, period=14):
@@ -200,7 +239,7 @@ class Strategy(ABC):
         # RSI的基本原理是在一个正常的股市中，多空买卖双方的力道必须得到均衡，股价才能稳定；而RSI是对于固定期间内，股价上涨总幅度平均值占总幅度平均值的比例。
         # 1. RSI值于0 - 100 之间呈常态分配，当6日RSI值为80‰以上时，股市呈超买现象，若出现M头，市场风险较大；当6日RSI值在20‰以下时，股市呈超卖现象，若出现W头，市场机会增大。
         # 2. RSI一般选用6日、12日、24日作为参考基期，基期越长越有趋势性(慢速RSI)，基期越短越有敏感性(快速RSI)。当快速RSI由下往上突破慢速RSI时，机会增大；当快速RSI由上而下跌破慢速RSI时，风险增大。
-        prices = np.array([k.c for k in cd.get_klines()[-(period + 120):]])
+        prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
         rsi = talib.RSI(prices, timeperiod=period)
         return rsi
 
@@ -219,13 +258,25 @@ class Strategy(ABC):
         #     在上升通道中，ATR真实波幅向上时，且TR黄线上穿ATR蓝线，此时K线收阴者可买入。下降通道中不买。
 
         close_prices = np.array(
-            [k.c for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime]
+            [
+                k.c
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
         )
         high_prices = np.array(
-            [k.h for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime]
+            [
+                k.h
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
         )
         low_prices = np.array(
-            [k.l for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime]
+            [
+                k.l
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
         )
         atr = talib.ATR(high_prices, low_prices, close_prices, timeperiod=period)
         return atr
@@ -233,13 +284,13 @@ class Strategy(ABC):
     @staticmethod
     def idx_cci(cd: ICL, period=14):
         # 指标说明：
-        # 按市场的通行的标准，CCI指标的运行区间可分为三大类：大于﹢100、小于 - 100 和﹢100——-100 之间。　　
-        # 1. 当CCI＞﹢100 时，表明股价已经进入非常态区间——超买区间，股价的异动现象应多加关注。　　
-        # 2. 当CCI＜-100 时，表明股价已经进入另一个非常态区间——超卖区间，投资者可以逢低吸纳股票。　　
+        # 按市场的通行的标准，CCI指标的运行区间可分为三大类：大于﹢100、小于 - 100 和﹢100——-100 之间。
+        # 1. 当CCI＞﹢100 时，表明股价已经进入非常态区间——超买区间，股价的异动现象应多加关注。
+        # 2. 当CCI＜-100 时，表明股价已经进入另一个非常态区间——超卖区间，投资者可以逢低吸纳股票。
         # 3. 当CCI介于﹢100——-100 之间时表明股价处于窄幅振荡整理的区间——常态区间，投资者应以观望为主。
-        close_prices = np.array([k.c for k in cd.get_klines()[-(period + 120):]])
-        high_prices = np.array([k.h for k in cd.get_klines()[-(period + 120):]])
-        low_prices = np.array([k.l for k in cd.get_klines()[-(period + 120):]])
+        close_prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
+        high_prices = np.array([k.h for k in cd.get_klines()[-(period + 120) :]])
+        low_prices = np.array([k.l for k in cd.get_klines()[-(period + 120) :]])
         cci = talib.CCI(high_prices, low_prices, close_prices, timeperiod=period)
         return cci
 
@@ -254,22 +305,39 @@ class Strategy(ABC):
         # 5. 投机性太强的个股不适用。
         # 6. 可观察KD值同股价的背离，以确认高低点。
         close_prices = np.array(
-            [k.c for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime])
+            [
+                k.c
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
+        )
         high_prices = np.array(
-            [k.h for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime])
+            [
+                k.h
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
+        )
         low_prices = np.array(
-            [k.l for k in cd.get_klines()[-(period + 500):] if end_datetime is None or k.date <= end_datetime])
-        k, d, j = MyTT.KDJ(close_prices, high_prices, low_prices, N=period, M1=M1, M2=M2)
-        return {'k': k, 'd': d, 'j': j}
+            [
+                k.l
+                for k in cd.get_klines()[-(period + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
+        )
+        k, d, j = MyTT.KDJ(
+            close_prices, high_prices, low_prices, N=period, M1=M1, M2=M2
+        )
+        return {"k": k, "d": d, "j": j}
 
     @staticmethod
     def idx_mtm(cd: ICL, N=12, M=6):
         # 参数：N 间隔天数，也是求移动平均的天数，一般为6
         # MTM向上突破零，买入信号
         # MTM向下突破零，卖出信号
-        close_prices = np.array([k.c for k in cd.get_klines()[-(N + 120):]])
+        close_prices = np.array([k.c for k in cd.get_klines()[-(N + 120) :]])
         mtm, mtma = MyTT.MTM(close_prices, N, M)
-        return {'mtm': mtm, 'mtma': mtma}
+        return {"mtm": mtm, "mtma": mtma}
 
     @staticmethod
     def idx_psy(cd: ICL, N=12, M=6):
@@ -283,18 +351,22 @@ class Strategy(ABC):
         #     2.PSY<25为超卖，如形成W底时为卖出信号；
         #     3.心理线主要反映市场心理的超买或超卖，因此，当百分比值在常态区域上下移动时，一般应持观望态度；
         #     4.PSY一般不可单独使用，需配合VR指标和逆时针曲线同时使用，可提高准确度。
-        close_prices = np.array([k.c for k in cd.get_klines()[-(N + 120):]])
+        close_prices = np.array([k.c for k in cd.get_klines()[-(N + 120) :]])
         psy, psya = MyTT.PSY(close_prices, N, M)
-        return {'psy': psy, 'psya': psya}
+        return {"psy": psy, "psya": psya}
 
     @staticmethod
     def idx_atr_by_sma(CLOSE, HIGH, LOW, N: int = 20):
-        TR = MyTT.MAX(MyTT.MAX((HIGH - LOW), MyTT.ABS(MyTT.REF(CLOSE, 1) - HIGH)),
-                      MyTT.ABS(MyTT.REF(CLOSE, 1) - LOW))
+        TR = MyTT.MAX(
+            MyTT.MAX((HIGH - LOW), MyTT.ABS(MyTT.REF(CLOSE, 1) - HIGH)),
+            MyTT.ABS(MyTT.REF(CLOSE, 1) - LOW),
+        )
         return MyTT.SMA(TR, N)
 
     @staticmethod
-    def get_max_loss_price(mmd_type: str, now_price: float, stop_loss_price: float, max_loss_rate: float):
+    def get_max_loss_price(
+        mmd_type: str, now_price: float, stop_loss_price: float, max_loss_rate: float
+    ):
         """
         获取最大可接受的止损价格
         @param mmd_type: 买卖点类型，值 buy or sell
@@ -302,44 +374,60 @@ class Strategy(ABC):
         @param stop_loss_price: 原始止损价格
         @param max_loss_rate: 最大可接受的止损百分比，例如 10，则可接受最大10%的损失
         """
-        if mmd_type == 'buy':
+        if mmd_type == "buy":
             return max(stop_loss_price, now_price * (1 - max_loss_rate / 100))
-        elif mmd_type == 'sell':
+        elif mmd_type == "sell":
             return min(stop_loss_price, now_price * (1 + max_loss_rate / 100))
 
-    def get_atr_stop_loss_price(self, cd: ICL, mmd_type: str, atr_period: int = 14, atr_m: float = 1.5):
+    def get_atr_stop_loss_price(
+        self, cd: ICL, mmd_type: str, atr_period: int = 14, atr_m: float = 1.5
+    ):
         """
         获取ATR波动率的止损价格
         """
-        close_prices = np.array([k.c for k in cd.get_klines()[-(atr_period + 200):]])
-        high_prices = np.array([k.h for k in cd.get_klines()[-(atr_period + 200):]])
-        low_prices = np.array([k.l for k in cd.get_klines()[-(atr_period + 200):]])
-        atr_vals = self.idx_atr_by_sma(close_prices, high_prices, low_prices, atr_period)
+        close_prices = np.array([k.c for k in cd.get_klines()[-(atr_period + 200) :]])
+        high_prices = np.array([k.h for k in cd.get_klines()[-(atr_period + 200) :]])
+        low_prices = np.array([k.l for k in cd.get_klines()[-(atr_period + 200) :]])
+        atr_vals = self.idx_atr_by_sma(
+            close_prices, high_prices, low_prices, atr_period
+        )
         high_stop_loss_price = high_prices[-1] + atr_vals[-1] * atr_m
         low_stop_loss_price = low_prices[-1] - atr_vals[-1] * atr_m
-        if mmd_type == 'buy':
+        if mmd_type == "buy":
             return low_stop_loss_price
         else:
             return high_stop_loss_price
 
-    def check_atr_stop_loss(self, cd: ICL, pos: POSITION, atr_period: int = 14, atr_m: float = 1.5):
+    def check_atr_stop_loss(
+        self, cd: ICL, pos: POSITION, atr_period: int = 14, atr_m: float = 1.5
+    ):
         """
         检查是否触发 ATR 移动止损
         收盘价 大于 or 小于 前一个 atr 止损价格
         """
-        close_prices = np.array([k.c for k in cd.get_klines()[-(atr_period + 200):]])
-        high_prices = np.array([k.h for k in cd.get_klines()[-(atr_period + 200):]])
-        low_prices = np.array([k.l for k in cd.get_klines()[-(atr_period + 200):]])
-        atr_vals = self.idx_atr_by_sma(close_prices, high_prices, low_prices, atr_period)
+        close_prices = np.array([k.c for k in cd.get_klines()[-(atr_period + 200) :]])
+        high_prices = np.array([k.h for k in cd.get_klines()[-(atr_period + 200) :]])
+        low_prices = np.array([k.l for k in cd.get_klines()[-(atr_period + 200) :]])
+        atr_vals = self.idx_atr_by_sma(
+            close_prices, high_prices, low_prices, atr_period
+        )
         price = cd.get_klines()[-1].c
         high_stop_loss_price = high_prices[-2] + atr_vals[-2] * atr_m
         low_stop_loss_price = low_prices[-2] - atr_vals[-2] * atr_m
-        if 'buy' in pos.mmd and price <= low_stop_loss_price:
-            return Operation(opt='sell', mmd=pos.mmd,
-                             msg='%s ATR止损 （止损价格 %s 当前价格 %s）' % (pos.mmd, low_stop_loss_price, price))
-        elif 'sell' in pos.mmd and price >= high_stop_loss_price:
-            return Operation(opt='sell', mmd=pos.mmd,
-                             msg='%s ATR止损 （止损价格 %s 当前价格 %s）' % (pos.mmd, high_stop_loss_price, price))
+        if "buy" in pos.mmd and price <= low_stop_loss_price:
+            return Operation(
+                opt="sell",
+                mmd=pos.mmd,
+                msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
+                % (pos.mmd, low_stop_loss_price, price),
+            )
+        elif "sell" in pos.mmd and price >= high_stop_loss_price:
+            return Operation(
+                opt="sell",
+                mmd=pos.mmd,
+                msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
+                % (pos.mmd, high_stop_loss_price, price),
+            )
         return None
 
     @staticmethod
@@ -351,14 +439,20 @@ class Strategy(ABC):
         if pos.loss_price is None or pos.loss_price == 0:
             return None
 
-        if 'buy' in mmd:
+        if "buy" in mmd:
             if price < pos.loss_price:
-                return Operation(opt='sell', mmd=mmd,
-                                 msg='%s 止损 （止损价格 %s 当前价格 %s）' % (mmd, pos.loss_price, price))
-        elif 'sell' in mmd:
+                return Operation(
+                    opt="sell",
+                    mmd=mmd,
+                    msg="%s 止损 （止损价格 %s 当前价格 %s）" % (mmd, pos.loss_price, price),
+                )
+        elif "sell" in mmd:
             if price > pos.loss_price:
-                return Operation(opt='sell', mmd=mmd,
-                                 msg='%s 止损 （止损价格 %s 当前价格 %s）' % (mmd, pos.loss_price, price))
+                return Operation(
+                    opt="sell",
+                    mmd=mmd,
+                    msg="%s 止损 （止损价格 %s 当前价格 %s）" % (mmd, pos.loss_price, price),
+                )
         return None
 
     @staticmethod
@@ -382,11 +476,13 @@ class Strategy(ABC):
         检查是否触发最大回撤
         """
         if max_back_rate is not None:
-            profit_rate = (pos.price - price) / pos.price * 100 \
-                if 'sell' in mmd else \
-                (price - pos.price) / pos.price * 100
+            profit_rate = (
+                (pos.price - price) / pos.price * 100
+                if "sell" in mmd
+                else (price - pos.price) / pos.price * 100
+            )
             if profit_rate > 0 and pos.max_profit_rate - profit_rate >= max_back_rate:
-                return Operation(opt='sell', mmd=mmd, msg='%s 回调止损' % mmd)
+                return Operation(opt="sell", mmd=mmd, msg="%s 回调止损" % mmd)
         return None
 
     @staticmethod
@@ -409,7 +505,9 @@ class Strategy(ABC):
         @param loss_price: 止损价格
         """
         balance = 100000  # 信号模式下，回测每次开仓的金额
-        open_balance = (max_loss_rate / 100 * balance) / abs(open_price - loss_price) * open_price
+        open_balance = (
+            (max_loss_rate / 100 * balance) / abs(open_price - loss_price) * open_price
+        )
         pos_rate = round(open_balance / balance, 2)
         if pos_rate > 1:
             pos_rate = 1
@@ -426,7 +524,7 @@ class Strategy(ABC):
         return None
 
     @staticmethod
-    def last_bi(cd: ICL, _type: str = 'up'):
+    def last_bi(cd: ICL, _type: str = "up"):
         """
         获取最后一个给定类型的笔
         """
@@ -436,7 +534,7 @@ class Strategy(ABC):
             return cd.get_bis()[-2]
 
     @staticmethod
-    def last_xd(cd: ICL, _type: str = 'up'):
+    def last_xd(cd: ICL, _type: str = "up"):
         """
         获取最后一个给定类型的线段
         """
@@ -462,13 +560,13 @@ class Strategy(ABC):
         """
         if bi.is_done() is False:
             return False
-        next_ks = cd.get_klines()[bi.end.klines[-1].k_index + 1:]
+        next_ks = cd.get_klines()[bi.end.klines[-1].k_index + 1 :]
         if len(next_ks) == 0:
             return False
         for _nk in next_ks:
-            if bi.type == 'up' and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
+            if bi.type == "up" and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
                 return True
-            elif bi.type == 'down' and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
+            elif bi.type == "down" and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
                 return True
 
         return False
@@ -479,21 +577,29 @@ class Strategy(ABC):
         平均K线，笔转折判断
         """
         cl_config = cd.get_config()
-        if cl_config['kline_type'] != Config.KLINE_TYPE_HEIKIN_ASHI.value:
+        if cl_config["kline_type"] != Config.KLINE_TYPE_HEIKIN_ASHI.value:
             return False
         # 笔要完成
         if bi.is_done() is False:
             return False
         mean_klines = cd.get_klines()
         # 如果笔向上，k线要变绿，进行转折
-        if bi.type == 'up' and mean_klines[-2].o > mean_klines[-2].c and \
-                mean_klines[-1].h < bi.end.val and mean_klines[-1].c < mean_klines[-1].o and \
-                mean_klines[-1].c < mean_klines[-2].o:
+        if (
+            bi.type == "up"
+            and mean_klines[-2].o > mean_klines[-2].c
+            and mean_klines[-1].h < bi.end.val
+            and mean_klines[-1].c < mean_klines[-1].o
+            and mean_klines[-1].c < mean_klines[-2].o
+        ):
             return True
         # 如果笔向下，k线要变红，进行转折
-        if bi.type == 'down' and mean_klines[-2].o < mean_klines[-2].c and \
-                mean_klines[-1].l > bi.end.val and mean_klines[-1].c > mean_klines[-1].o and \
-                mean_klines[-1].c > mean_klines[-2].o:
+        if (
+            bi.type == "down"
+            and mean_klines[-2].o < mean_klines[-2].c
+            and mean_klines[-1].l > bi.end.val
+            and mean_klines[-1].c > mean_klines[-1].o
+            and mean_klines[-1].c > mean_klines[-2].o
+        ):
             return True
         return False
 
@@ -512,11 +618,19 @@ class Strategy(ABC):
             return False
         if bi.end.klines[-1].index == last_k.index:
             return False
-        if bi.end.type == 'ding' and last_k.o > last_k.c and last_k.c < bi.end.low(cd.get_config()['fx_qj'],
-                                                                                   cd.get_config()['fx_qy']):
+        if (
+            bi.end.type == "ding"
+            and last_k.o > last_k.c
+            and last_k.c
+            < bi.end.low(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
+        ):
             return True
-        elif bi.end.type == 'di' and last_k.o < last_k.c and last_k.c > bi.end.high(cd.get_config()['fx_qj'],
-                                                                                    cd.get_config()['fx_qy']):
+        elif (
+            bi.end.type == "di"
+            and last_k.o < last_k.c
+            and last_k.c
+            > bi.end.high(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
+        ):
             return True
         return False
 
@@ -529,7 +643,9 @@ class Strategy(ABC):
         last_k = cd.get_klines()[-1]
         price = last_k.c
         fxs = cd.get_fxs()
-        next_fxs = [_fx for _fx in fxs if (_fx.index > bi.end.index and _fx.type == bi.end.type)]
+        next_fxs = [
+            _fx for _fx in fxs if (_fx.index > bi.end.index and _fx.type == bi.end.type)
+        ]
         if len(next_fxs) == 0:
             return False
         next_fx = next_fxs[0]
@@ -540,15 +656,23 @@ class Strategy(ABC):
         # 两个分型不能相隔太远，两个分型中间最多两根缠论K线
         if next_fx.k.k_index - bi.end.k.k_index > 3:
             return False
-        if bi.type == 'up':
+        if bi.type == "up":
             # 笔向上，验证下一个顶分型不高于笔的结束顶分型，并且当前价格要低于顶分型的最低价格
-            if next_fx.done and next_fx.val < bi.end.val and price < bi.end.low(cd.get_config()['fx_qj'],
-                                                                                cd.get_config()['fx_qy']):
+            if (
+                next_fx.done
+                and next_fx.val < bi.end.val
+                and price
+                < bi.end.low(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
+            ):
                 return True
-        elif bi.type == 'down':
+        elif bi.type == "down":
             # 笔向下，验证下一个底分型不低于笔的结束底分型，并且两个分型不能离得太远
-            if next_fx.done and next_fx.val > bi.end.val and price > bi.end.high(cd.get_config()['fx_qj'],
-                                                                                 cd.get_config()['fx_qy']):
+            if (
+                next_fx.done
+                and next_fx.val > bi.end.val
+                and price
+                > bi.end.high(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
+            ):
                 return True
         return False
 
@@ -559,15 +683,15 @@ class Strategy(ABC):
         if pos.loss_price is None:
             return
         last_done_bi = self.last_done_bi(bis)
-        if 'buy' in pos.mmd and last_done_bi.type == 'up':
+        if "buy" in pos.mmd and last_done_bi.type == "up":
             pos.loss_price = max(pos.loss_price, last_done_bi.low)
-        elif 'sell' in pos.mmd and last_done_bi.type == 'down':
+        elif "sell" in pos.mmd and last_done_bi.type == "down":
             pos.loss_price = min(pos.loss_price, last_done_bi.high)
 
         return
 
     @staticmethod
-    def points_jiaodu(points: List[float], position='up'):
+    def points_jiaodu(points: List[float], position="up"):
         """
         提供一系列数据点，给出其趋势角度，以此判断其方向
         用于判断类似 macd 背驰，macd柱子创新低而黄白线则新高
@@ -588,15 +712,25 @@ class Strategy(ABC):
             p1 = new_points[i - 1]
             p2 = new_points[i]
             p3 = new_points[i + 1] if len(new_points) > (i + 1) else None
-            if position == 'up' and p1[1] <= p2[1] and ((p3 is not None and p2[1] >= p3[1]) or p3 is None):
+            if (
+                position == "up"
+                and p1[1] <= p2[1]
+                and ((p3 is not None and p2[1] >= p3[1]) or p3 is None)
+            ):
                 fxs.append(p2)
-            elif position == 'down' and p1[1] >= p2[1] and ((p3 is not None and p2[1] <= p3[1]) or p3 is None):
+            elif (
+                position == "down"
+                and p1[1] >= p2[1]
+                and ((p3 is not None and p2[1] <= p3[1]) or p3 is None)
+            ):
                 fxs.append(p2)
 
         if len(fxs) < 2:
             return 0
         # 按照大小排序
-        fxs = sorted(fxs, key=lambda f: f[1], reverse=True if position == 'up' else False)
+        fxs = sorted(
+            fxs, key=lambda f: f[1], reverse=True if position == "up" else False
+        )
 
         def jiaodu(_p1: list, _p2: list):
             # 计算斜率
@@ -610,21 +744,23 @@ class Strategy(ABC):
         return jiaodu(fxs[0], fxs[1])
 
     @staticmethod
-    def check_datetime_mmd(start_datetime: datetime.datetime, cd: ICL, check_line: str = 'bi'):
+    def check_datetime_mmd(
+        start_datetime: datetime.datetime, cd: ICL, check_line: str = "bi"
+    ):
         """
         检查指定时间后出现的买卖点信息
         """
         mmd_infos = {
-            '1buy': 0,
-            '2buy': 0,
-            '3buy': 0,
-            'l3buy': 0,
-            '1sell': 0,
-            '2sell': 0,
-            '3sell': 0,
-            'l3sell': 0
+            "1buy": 0,
+            "2buy": 0,
+            "3buy": 0,
+            "l3buy": 0,
+            "1sell": 0,
+            "2sell": 0,
+            "3sell": 0,
+            "l3sell": 0,
         }
-        lines = cd.get_bis() if check_line == 'bi' else cd.get_xds()
+        lines = cd.get_bis() if check_line == "bi" else cd.get_xds()
         for _l in lines[::-1]:
             if _l.start.k.date >= start_datetime:
                 line_mmds = _l.line_mmds()
@@ -635,18 +771,35 @@ class Strategy(ABC):
         return mmd_infos
 
     @staticmethod
-    def check_low_info_by_datetime(low_data: ICL,
-                                   start_datetime: datetime.datetime,
-                                   end_datetime: datetime.datetime):
+    def check_low_info_by_datetime(
+        low_data: ICL,
+        start_datetime: datetime.datetime,
+        end_datetime: datetime.datetime,
+    ):
         """
         检查低级别缠论数据中，时间范围内出现的信号信息
         """
         infos = {
-            'qiang_ding_fx': 0, 'qiang_di_fx': 0,
-            'up_bi_bc': 0, 'up_xd_bc': 0, 'up_pz_bc': 0, 'up_qs_bc': 0,
-            'down_bi_bc': 0, 'down_xd_bc': 0, 'down_pz_bc': 0, 'down_qs_bc': 0,
-            '1buy': 0, '2buy': 0, 'l2buy': 0, '3buy': 0, 'l3buy': 0,
-            '1sell': 0, '2sell': 0, 'l2sell': 0, '3sell': 0, 'l3sell': 0
+            "qiang_ding_fx": 0,
+            "qiang_di_fx": 0,
+            "up_bi_bc": 0,
+            "up_xd_bc": 0,
+            "up_pz_bc": 0,
+            "up_qs_bc": 0,
+            "down_bi_bc": 0,
+            "down_xd_bc": 0,
+            "down_pz_bc": 0,
+            "down_qs_bc": 0,
+            "1buy": 0,
+            "2buy": 0,
+            "l2buy": 0,
+            "3buy": 0,
+            "l3buy": 0,
+            "1sell": 0,
+            "2sell": 0,
+            "l2sell": 0,
+            "3sell": 0,
+            "l3sell": 0,
         }
         for bi in low_data.get_bis()[::-1]:
             if bi.end.k.date < start_datetime:
@@ -657,7 +810,7 @@ class Strategy(ABC):
                     infos[mmd] += 1
                 # 背驰统计
                 for bc in bi.line_bcs():
-                    infos[f'{bi.type}_{bc}_bc'] += 1
+                    infos[f"{bi.type}_{bc}_bc"] += 1
         for xd in low_data.get_xds()[::-1]:
             if xd.end_line.end.k.date < start_datetime:
                 break
@@ -667,13 +820,17 @@ class Strategy(ABC):
                     infos[mmd] += 1
                 # 背驰统计
                 for bc in xd.line_bcs():
-                    infos[f'{xd.type}_{bc}_bc'] += 1
+                    infos[f"{xd.type}_{bc}_bc"] += 1
 
         # 笔区间内的强分型统计
-        fxs = [fx for fx in low_data.get_fxs() if start_datetime <= fx.k.date <= end_datetime]
+        fxs = [
+            fx
+            for fx in low_data.get_fxs()
+            if start_datetime <= fx.k.date <= end_datetime
+        ]
         for fx in fxs:
             if fx.ld() >= 5:
-                infos[f'qiang_{fx.type}_fx'] += 1
+                infos[f"qiang_{fx.type}_fx"] += 1
         return infos
 
     @staticmethod
@@ -687,9 +844,9 @@ class Strategy(ABC):
         """
         zs_macd_info = cal_zs_macd_infos(zs, cd)
         # 根据进入中枢第一笔，判断中枢方向，向下笔是向上中枢，看回调零轴次数；向上笔是向下中枢，看回拉零轴次数
-        if zs.lines[0].type == 'down':
+        if zs.lines[0].type == "down":
             return max(zs_macd_info.dea_down_cross_num, zs_macd_info.dif_down_cross_num)
-        if zs.lines[0].type == 'up':
+        if zs.lines[0].type == "up":
             return max(zs_macd_info.dea_up_cross_num, zs_macd_info.dif_up_cross_num)
         return 0
 
@@ -705,7 +862,7 @@ def fee_a(opt: str, price: float, amount: float):
 
     trade_volume = price * amount
     fee_sum = max([min_fee, trade_volume * fee_rate / 100])
-    if opt == 'sell':
+    if opt == "sell":
         fee_sum += trade_volume * yhs_rate / 100
     fee_sum += trade_volume * ghf_rate / 100
     return fee_sum
@@ -718,7 +875,7 @@ def fee_us(opt: str, price: float, amlunt: float):
     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # A 股手续费计算
-    fee_total = fee_a('sell', 100, 100)
+    fee_total = fee_a("sell", 100, 100)
     print(fee_total)
