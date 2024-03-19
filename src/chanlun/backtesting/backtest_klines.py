@@ -243,7 +243,7 @@ class BackTestKlines(MarketDatas):
                 key = "%s-%s" % (code, _f)
                 if key not in self.all_klines.keys():
                     # 从数据库获取日期区间的所有行情
-                    self.all_klines[key] = self.ex.klines(
+                    all_klines = self.ex.klines(
                         code,
                         _f,
                         start_date=self._cal_start_date_by_frequency(
@@ -252,13 +252,17 @@ class BackTestKlines(MarketDatas):
                         end_date=fun.datetime_to_str(self.end_date),
                         args={"limit": None},
                     )
-                    self.all_klines[key].sort_values(
-                        "date", inplace=True
-                    )  # 按照日期重新进行排序，避免原始数据乱序导致出错
+                    self.all_klines[key] = all_klines.sort_values("date").reset_index(
+                        drop=True
+                    )
 
             for _f in self.frequencys:
                 key = "%s-%s" % (code, _f)
-                if self.market in ["currency", "futures", "us"]:  # 后对其的，不能包含当前日期
+                if self.market in [
+                    "currency",
+                    "futures",
+                    "us",
+                ]:  # 后对其的，不能包含当前日期
                     kline = self.all_klines[key][
                         self.all_klines[key]["date"] < self.now_date
                     ][-self.load_kline_nums : :]
@@ -268,6 +272,7 @@ class BackTestKlines(MarketDatas):
                     ][-self.load_kline_nums : :]
                 if self.del_volume_zero and len(kline) > 0:
                     kline = kline[kline["volume"] != 0]
+                kline = kline.sort_values("date").reset_index(drop=True)
                 klines[_f] = kline
         else:
             # 使用数据库按需查询
@@ -294,7 +299,9 @@ class BackTestKlines(MarketDatas):
                 if close_price is None:
                     close_price = _ks.iloc[-1]["close"]
                 if close_price != _ks.iloc[-1]["close"]:
-                    raise RuntimeError(f"{code} 获取K线异常，{_f} 周期的收盘价与其他周期数据不同")
+                    raise RuntimeError(
+                        f"{code} 获取K线异常，{_f} 周期的收盘价与其他周期数据不同"
+                    )
 
         # 将结果保存到 缓存中，避免重复读取
         self.cache_klines[code] = klines
@@ -309,23 +316,26 @@ class BackTestKlines(MarketDatas):
         for i in range(len(self.frequencys), 1, -1):
             min_f = self.frequencys[i - 1]
             max_f = self.frequencys[i - 2]
-            if len(klines[min_f]) == 0:
-                continue
             new_kline = self.ex.convert_kline_frequency(klines[min_f][-120::], max_f)
             if len(klines[max_f]) > 0 and len(new_kline) > 0:
                 # 先删除下大周期的最后一行数据，用合并后的数据代替
                 klines[max_f] = klines[max_f].drop(klines[max_f].index[-1])
 
-                klines[max_f] = pd.concat(
-                    [klines[max_f], new_kline], ignore_index=True
-                ).drop_duplicates(subset=["date"], keep="last")
+                klines[max_f] = (
+                    pd.concat([klines[max_f], new_kline], ignore_index=True)
+                    .drop_duplicates(subset=["date"], keep="last")
+                    .sort_values("date")
+                    .reset_index(drop=True)
+                )
 
         # 检测在数据列中，是否有大于最后一个时间的行
         for _f, _k_pd in klines.items():
             if len(_k_pd) > 0:
                 _last_dt = _k_pd.iloc[-1]["date"]
                 if len(_k_pd[_k_pd["date"] > _last_dt]) > 0:
-                    raise Exception(f"{code} K线数据异常，有大于最后时间的数据存在 {_last_dt}")
+                    raise Exception(
+                        f"{code} K线数据异常，有大于最后时间的数据存在 {_last_dt}"
+                    )
 
         self._use_times["convert_klines"] += time.time() - _time
         return klines
@@ -360,7 +370,8 @@ class BackTestKlines(MarketDatas):
                 "1m": 5,
             },
             "us": {
-                "d": 5000,
+                "w": 365 * 20,
+                "d": 365 * 10,
                 "120m": 2000,
                 "60m": 1000,
                 "30m": 500,
@@ -372,7 +383,9 @@ class BackTestKlines(MarketDatas):
             "currency": {
                 "w": 2000,
                 "d": 2000,
+                "6h": 1000,
                 "4h": 1000,
+                "3h": 1000,
                 "120m": 500,
                 "60m": 210,
                 "30m": 105,
@@ -399,7 +412,9 @@ class BackTestKlines(MarketDatas):
             "w",
             "d",
             "120m",
+            "6h",
             "4h",
+            "3h",
             "60m",
             "30m",
             "15m",

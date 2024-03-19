@@ -153,7 +153,7 @@ class BackTestTrader(object):
         self.begin_run_dt: datetime.datetime = None
 
         # 缓冲区的执行操作，用于在特定时间点批量进行开盘检测后，对要执行的开盘信号再次进行过滤筛选
-        self.buffer_opts = []
+        self.buffer_opts: List[Operation] = []
 
     def set_strategy(self, _strategy: Strategy):
         """
@@ -263,8 +263,10 @@ class BackTestTrader(object):
                 if opt is False or opt is None:
                     continue
                 if isinstance(opt, Operation):
+                    opt.code = code
                     opt = [opt]
                 for o in opt:
+                    o.code = code
                     self.execute(code, o)
 
         # 再执行检查机会方法
@@ -278,6 +280,7 @@ class BackTestTrader(object):
         self._use_times["strategy_open"] += time.time() - _time
 
         for opt in opts:
+            opt.code = code
             if is_filter:
                 # 如果是过滤模式，将操作记录到缓冲区，等待批量执行
                 self.buffer_opts.append(opt)
@@ -1007,7 +1010,11 @@ class BackTestTrader(object):
                 code,
                 lock_position,
                 Operation(
-                    opt="sell", mmd=lock_position.mmd, loss_price=0, info={}, msg="平仓锁仓"
+                    opt="sell",
+                    mmd=lock_position.mmd,
+                    loss_price=0,
+                    info={},
+                    msg="平仓锁仓",
                 ),
             )
             order_type = "close_long"
@@ -1030,7 +1037,11 @@ class BackTestTrader(object):
                 code,
                 lock_position,
                 Operation(
-                    opt="sell", mmd=lock_position.mmd, loss_price=0, info={}, msg="平仓锁仓"
+                    opt="sell",
+                    mmd=lock_position.mmd,
+                    loss_price=0,
+                    info={},
+                    msg="平仓锁仓",
                 ),
             )
             order_type = "close_short"

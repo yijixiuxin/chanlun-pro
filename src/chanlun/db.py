@@ -41,7 +41,9 @@ class TableByCache(Base):
     __tablename__ = "cl_cache"
     k = Column(String(100), unique=True, primary_key=True)  # 唯一值
     v = Column(Text, comment="存储内容")  # 存储内容
-    expire = Column(Integer, default=0, comment="过期时间戳，0为永不过期")  # 过期时间戳，0为永不过期
+    expire = Column(
+        Integer, default=0, comment="过期时间戳，0为永不过期"
+    )  # 过期时间戳，0为永不过期
 
 
 class TableByZxGroup(Base):
@@ -58,9 +60,6 @@ class TableByZxGroup(Base):
 class TableByZixuan(Base):
     # 自选表
     __tablename__ = "cl_zixuan_watchlist"
-    __table_args__ = (
-        UniqueConstraint("market", "zx_group", "stock_code", name="table_unique"),
-    )
     id = Column(Integer, primary_key=True, autoincrement=True)
     market = Column(String(10), comment="市场")  # 市场
     zx_group = Column(String(20), comment="自选组")  # 自选组

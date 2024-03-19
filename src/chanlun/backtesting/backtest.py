@@ -3,6 +3,7 @@ import hashlib
 import os
 import pickle
 import time
+import gc
 import traceback
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
@@ -266,7 +267,7 @@ class BackTest:
         new_file = (
             self.save_file.split(".pkl")[0]
             + "_"
-            + code.lower().replace(".", "_")
+            + code.lower().replace(".", "_").replace("/", "_")
             + "_process_.pkl"
         )
         # 默认如果之前的回测文件还有保存，可以直接返回，如果设置 重新运行，则不返回
@@ -332,6 +333,10 @@ class BackTest:
                 # 手续费合并
                 self.trader.fee_total += BT.trader.fee_total
 
+                # 释放内存
+                del BT
+                gc.collect()
+
             # 整理并汇总资金变动历史
             bh_df = pd.DataFrame(balance_history.values())
             bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
@@ -396,13 +401,17 @@ class BackTest:
 
         BT.load_data_to_cache = self.load_data_to_cache
 
-        BT.log.info(f"执行参数优化，参数配置：{new_cl_setting}，落地文件：{new_save_file}")
+        BT.log.info(
+            f"执行参数优化，参数配置：{new_cl_setting}，落地文件：{new_save_file}"
+        )
         balance = 0
         try:
             # 判断文件不存在，执行回测，文件存在，加载回测结果
             if os.path.isfile(new_save_file) is False:
                 BT.log.info(f"落地文件：{new_save_file} 不存在，开始执行回测")
-                BT.run(self.next_frequency)  # 节省参数优化执行的时间，这里可以手动设置每次循环的周期
+                BT.run(
+                    self.next_frequency
+                )  # 节省参数优化执行的时间，这里可以手动设置每次循环的周期
                 BT.save()
             else:
                 BT.log.info(f"落地文件：{new_save_file} 已经存在，直接进行加载")
@@ -845,21 +854,6 @@ class BackTest:
         dts = list(base_klines["date"].to_list())
         base_prices["val"] = list(base_klines["close"].to_list())
 
-        # 获取所有的持仓历史，并按照平仓时间排序
-        positions: List[POSITION] = []
-        for _code in self.trader.positions_history:
-            positions.extend(iter(self.trader.positions_history[_code]))
-        positions = sorted(positions, key=lambda p: p.close_datetime, reverse=False)
-
-        # 按照平仓时间统计其中的收益总和
-        dts_total_nps = {}
-        for _p in positions:
-            net_profit = (_p.profit_rate / 100) * _p.balance
-            if _p.close_datetime not in dts_total_nps.keys():
-                dts_total_nps[_p.close_datetime] = net_profit
-            else:
-                dts_total_nps[_p.close_datetime] += net_profit
-
         # 按照时间统计当前时间持仓累计盈亏
         _hold_profit_sums = {}
         _hold_num_sums = {}
@@ -909,6 +903,118 @@ class BackTest:
         return self.__create_backtest_charts(
             base_prices, balance_history, hold_profit_history, hold_num_history
         )
+
+    def backtest_charts_by_close_profit(self):
+
+        # 获取所有的交易日期节点
+        base_prices = {"datetime": [], "val": []}
+        base_klines = self.datas.ex.klines(
+            self.base_code,
+            self.next_frequency,
+            start_date=self.start_datetime,
+            end_date=self.end_datetime,
+            args={"limit": None},
+        )
+        dts = list(base_klines["date"].to_list())
+        base_prices["val"] = list(base_klines["close"].to_list())
+
+        # 获取所有的持仓历史，并按照平仓时间排序
+        positions: List[POSITION] = []
+        for _code in self.trader.positions_history:
+            positions.extend(iter(self.trader.positions_history[_code]))
+        positions = sorted(positions, key=lambda p: p.close_datetime, reverse=False)
+
+        # 持仓中的唯一买卖点
+        mmds = set([p.mmd for p in positions])
+        # 记录不同买卖点的收益总和
+        dts_mmd_nps = {_m: {} for _m in mmds}
+        # 按照平仓时间统计其中的收益总和
+        dts_total_nps = {}
+        # 临时记录不同买卖点的收益
+        tmp_mmd_nps = {_m: 0 for _m in mmds}
+        tmp_total_nps = 0
+        for _dt in dts:
+            tmp_pos_by_dt = [
+                p for p in positions if p.close_datetime == fun.datetime_to_str(_dt)
+            ]
+            if len(tmp_pos_by_dt) > 0:
+                for _p in tmp_pos_by_dt:
+                    net_profit = (_p.profit_rate / 100) * _p.balance
+                    tmp_total_nps += net_profit
+                    tmp_mmd_nps[_p.mmd] += net_profit
+            dts_total_nps[_dt] = tmp_total_nps
+            for _m, _nps in dts_mmd_nps.items():
+                _nps[_dt] = tmp_mmd_nps[_m]
+
+        # print(dts_mmd_nps)
+
+        main_chart = (
+            Line()
+            .extend_axis(yaxis=opts.AxisOpts(name="基准价格", position="left"))
+            .add_xaxis(xaxis_data=list(dts_total_nps.keys()))
+            .add_yaxis(
+                series_name="基准价格",
+                y_axis=base_prices["val"],
+                label_opts=opts.LabelOpts(is_show=False),
+                yaxis_index=1,
+            )
+            .add_yaxis(
+                series_name="平仓总收益",
+                y_axis=np.array([_v for _k, _v in dts_total_nps.items()]),
+                label_opts=opts.LabelOpts(is_show=False),
+                yaxis_index=0,
+            )
+            .set_global_opts(
+                title_opts=opts.TitleOpts(title="平仓收益汇总图表"),
+                tooltip_opts=opts.TooltipOpts(
+                    trigger="axis", axis_pointer_type="cross"
+                ),
+                legend_opts=opts.LegendOpts(
+                    is_show=True, pos_left="center", background_color="yellow"
+                ),
+                datazoom_opts=[
+                    opts.DataZoomOpts(
+                        is_show=False,
+                        type_="inside",
+                        xaxis_index=[0, 0],
+                        range_start=0,
+                        range_end=100,
+                    ),
+                    opts.DataZoomOpts(
+                        is_show=True,
+                        xaxis_index=[0, 1],
+                        pos_top="97%",
+                        range_start=0,
+                        range_end=100,
+                    ),
+                    opts.DataZoomOpts(
+                        is_show=False, xaxis_index=[0, 2], range_start=0, range_end=100
+                    ),
+                ],
+            )
+        )
+        for _mmd, _nps in dts_mmd_nps.items():
+            main_chart.add_yaxis(
+                series_name=_mmd,
+                y_axis=np.array([_v for _k, _v in _nps.items()]),
+                label_opts=opts.LabelOpts(is_show=False),
+                yaxis_index=0,
+            )
+
+        chart = Grid(
+            init_opts=opts.InitOpts(width="90%", height="700px", theme="white")
+        )
+        chart.add(
+            main_chart,
+            is_control_axis_index=True,
+            grid_opts=opts.GridOpts(
+                width="96%", height="100%", pos_left="1%", pos_right="3%"
+            ),
+        )
+        if "JPY_PARENT_PID" in os.environ.keys() or "VSCODE_CWD" in os.environ.keys():
+            return chart.render_notebook()
+        else:
+            return chart.dump_options()
 
     def positions(self, code=None, add_columns=None):
         """
@@ -986,7 +1092,10 @@ class BackTest:
 
         main_chart = (
             Line()
-            .add_xaxis(xaxis_data=main_x)
+            .add_xaxis(xaxis_data=base_prices["datetime"])
+            .extend_axis(yaxis=opts.AxisOpts(name="基准", position="left"))
+            .extend_axis(yaxis=opts.AxisOpts(name="持仓盈亏", position="left"))
+            .extend_axis(yaxis=opts.AxisOpts(name="持仓数量", position="left"))
             .add_yaxis(
                 series_name=main_name,
                 y_axis=main_y,
@@ -1008,8 +1117,14 @@ class BackTest:
                             itemstyle_opts=opts.ItemStyleOpts(color="green"),
                         ),
                     ],
-                    label_opts=opts.LabelOpts(color="black"),
+                    label_opts=opts.LabelOpts(color="yellow"),
                 ),
+            )
+            .add_yaxis(
+                series_name="基准",
+                y_axis=base_prices["val"],
+                yaxis_index=1,
+                label_opts=opts.LabelOpts(is_show=False),
             )
             .set_global_opts(
                 title_opts=opts.TitleOpts(title="回测结果图表展示"),
@@ -1019,7 +1134,9 @@ class BackTest:
                 yaxis_opts=opts.AxisOpts(
                     position="right", type_="value", min_=min(main_y), max_=max(main_y)
                 ),
-                legend_opts=opts.LegendOpts(is_show=False),
+                legend_opts=opts.LegendOpts(
+                    is_show=True, pos_left="center", background_color="yellow"
+                ),
                 datazoom_opts=[
                     opts.DataZoomOpts(
                         is_show=False,
@@ -1049,29 +1166,13 @@ class BackTest:
             )
         )
 
-        base_chart = (
-            Line()
-            .add_xaxis(xaxis_data=base_prices["datetime"])
-            .add_yaxis(
-                series_name="基准",
-                y_axis=base_prices["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-            )
-            .set_global_opts(
-                tooltip_opts=opts.TooltipOpts(
-                    trigger="axis", axis_pointer_type="cross"
-                ),
-                yaxis_opts=opts.AxisOpts(position="right"),
-                legend_opts=opts.LegendOpts(is_show=False),
-            )
-        )
-
         hold_profit_chart = (
             Bar()
             .add_xaxis(xaxis_data=hold_profit_history["datetime"])
             .add_yaxis(
                 series_name="持仓盈亏变动",
                 y_axis=hold_profit_history["val"],
+                yaxis_index=2,
                 label_opts=opts.LabelOpts(is_show=False),
             )
             .set_global_opts(
@@ -1079,7 +1180,9 @@ class BackTest:
                     trigger="axis", axis_pointer_type="cross"
                 ),
                 yaxis_opts=opts.AxisOpts(position="right"),
-                legend_opts=opts.LegendOpts(is_show=False),
+                legend_opts=opts.LegendOpts(
+                    is_show=True, pos_right="20%", background_color="yellow"
+                ),
             )
         )
 
@@ -1089,6 +1192,7 @@ class BackTest:
             .add_yaxis(
                 series_name="持仓数",
                 y_axis=hold_num_history["val"],
+                yaxis_index=3,
                 label_opts=opts.LabelOpts(is_show=False),
             )
             .set_global_opts(
@@ -1096,7 +1200,9 @@ class BackTest:
                     trigger="axis", axis_pointer_type="cross"
                 ),
                 yaxis_opts=opts.AxisOpts(position="right"),
-                legend_opts=opts.LegendOpts(is_show=False),
+                legend_opts=opts.LegendOpts(
+                    is_show=True, pos_right="10%", background_color="yellow"
+                ),
             )
         )
 
@@ -1105,23 +1211,14 @@ class BackTest:
         )
         chart.add(
             main_chart,
+            is_control_axis_index=True,
             grid_opts=opts.GridOpts(
-                width="96%", height="50%", pos_left="1%", pos_right="3%"
-            ),
-        )
-
-        chart.add(
-            base_chart,
-            grid_opts=opts.GridOpts(
-                height="40%",
-                width="96%",
-                pos_left="1%",
-                pos_right="3%",
-                pos_bottom="20%",
+                width="96%", height="80%", pos_left="1%", pos_right="3%"
             ),
         )
         chart.add(
             hold_profit_chart,
+            is_control_axis_index=True,
             grid_opts=opts.GridOpts(
                 height="10%",
                 width="96%",
@@ -1132,6 +1229,7 @@ class BackTest:
         )
         chart.add(
             hold_num_chart,
+            is_control_axis_index=True,
             grid_opts=opts.GridOpts(
                 height="10%",
                 width="96%",

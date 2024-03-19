@@ -131,8 +131,11 @@ class FileCacheDB(object):
         """
         del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (7 * 24 * 60 * 60)
         for filename in self.klines_path.glob("*.csv"):
-            if filename.stat().st_mtime < del_lt_times:
-                filename.unlink()
+            try:
+                if filename.stat().st_mtime < del_lt_times:
+                    filename.unlink()
+            except Exception as e:
+                pass
         return True
 
     def get_web_cl_data(
@@ -200,7 +203,9 @@ class FileCacheDB(object):
                         or Decimal(src_klines.iloc[0]["volume"])
                         != Decimal(cd_pre_kline.a)
                     ):
-                        # print(f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算")
+                        print(
+                            f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
+                        )
                         # print(cd_pre_kline, src_klines)
                         cd = cl.CL(code, frequency, cl_config)
                 # 判断缓存中的最近一百根时间范围内的数量是否一致
@@ -211,9 +216,9 @@ class FileCacheDB(object):
                         & (klines["date"] <= _valid_cd_klines[-1].date)
                     ]
                     if len(_valid_cd_klines) != len(_valid_src_klines):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
-                        # )
+                        print(
+                            f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
+                        )
                         cd = cl.CL(code, frequency, cl_config)
         except Exception as e:
             if file_pathname.is_file():

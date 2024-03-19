@@ -1,5 +1,5 @@
 import datetime
-from typing import List, Dict
+from typing import List, Dict, Union
 
 import pandas as pd
 import pytz
@@ -153,7 +153,7 @@ class ExchangeDB(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         if args is None:
             args = {}
 
@@ -167,9 +167,9 @@ class ExchangeDB(Exchange):
         if start_date is not None and end_date is not None and "limit" not in args:
             limit = None
         if start_date is not None:
-            start_date = fun.str_to_datetime(start_date, tz=self.tz)
+            start_date = fun.str_to_datetime(start_date)
         if end_date is not None:
-            end_date = fun.str_to_datetime(end_date, tz=self.tz)
+            end_date = fun.str_to_datetime(end_date)
         klines = db.klines_query(
             self.market, code, frequency, start_date, end_date, limit, order
         )

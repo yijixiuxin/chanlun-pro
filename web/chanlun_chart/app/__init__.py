@@ -108,6 +108,7 @@ def create_app(test_config=None):
         "30m": "30",
         "60m": "60",
         "120m": "120",
+        "3h": "180",
         "4h": "240",
         "d": "1D",
         "2d": "2D",
@@ -492,19 +493,23 @@ def create_app(test_config=None):
                 m = {
                     "id": i,
                     "time": _dt_int,
-                    "color": "red"
-                    if o["type"] in ["buy", "open_long", "close_short"]
-                    else "green",
-                    "label": "B"
-                    if o["type"] in ["buy", "open_long", "close_short"]
-                    else "S",
+                    "color": (
+                        "red"
+                        if o["type"] in ["buy", "open_long", "close_short"]
+                        else "green"
+                    ),
+                    "label": (
+                        "B" if o["type"] in ["buy", "open_long", "close_short"] else "S"
+                    ),
                     "tooltip": [
                         f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]",
                         f"{'' if 'info' not in o else o['info']}",
                     ],
-                    "shape": "earningUp"
-                    if o["type"] in ["buy", "open_long", "close_short"]
-                    else "earningDown",
+                    "shape": (
+                        "earningUp"
+                        if o["type"] in ["buy", "open_long", "close_short"]
+                        else "earningDown"
+                    ),
                 }
                 marks.append(m)
 
@@ -1071,13 +1076,19 @@ def create_app(test_config=None):
             "frequency_num"
         ]
         if len(frequencys) != allow_freq_num:
-            return {"ok": False, "msg": f"选股周期错误，该任务可选周期数量 : {allow_freq_num}"}
+            return {
+                "ok": False,
+                "msg": f"选股周期错误，该任务可选周期数量 : {allow_freq_num}",
+            }
 
         run_res = _xuangu_tasks.run_xuangu(
             market, task_name, frequencys, opt_type, zx_group
         )
 
-        return {"ok": run_res, "msg": "选股任务已存在，请在当前任务中查看任务" if run_res is False else ""}
+        return {
+            "ok": run_res,
+            "msg": "选股任务已存在，请在当前任务中查看任务" if run_res is False else "",
+        }
 
     @app.route("/setting", methods=["GET"])
     def setting():
@@ -1086,9 +1097,9 @@ def create_app(test_config=None):
         fs_setting = db.cache_get("fs_keys")
         set_config = {
             "fs_app_id": fs_setting["fs_app_id"] if fs_setting is not None else "",
-            "fs_app_secret": fs_setting["fs_app_secret"]
-            if fs_setting is not None
-            else "",
+            "fs_app_secret": (
+                fs_setting["fs_app_secret"] if fs_setting is not None else ""
+            ),
             "fs_user_id": fs_setting["fs_user_id"] if fs_setting is not None else "",
             "proxy_host": proxy["host"] if proxy is not None else "",
             "proxy_port": proxy["port"] if proxy is not None else "",

@@ -75,7 +75,9 @@ class Config(Enum):
     ZS_QJ_CK = "zs_qj_ck"  # 中枢区间，使用线段中缠论K线的最高最低作为区间
     ZS_QJ_K = "zs_qj_k"  # 中枢区间，使用线段中原始K线的最高最低作为区间
     ZS_WZGX_ZGD = "zs_wzgx_zgd"  # 判断两个中枢的位置关系，比较方式，zg与zd 宽松比较
-    ZS_WZGX_ZGGDD = "zs_wzgx_zggdd"  # 判断两个中枢的位置关系，比较方式，zg与dd zd与gg 较为宽松比较
+    ZS_WZGX_ZGGDD = (
+        "zs_wzgx_zggdd"  # 判断两个中枢的位置关系，比较方式，zg与dd zd与gg 较为宽松比较
+    )
     ZS_WZGX_GD = "zs_wzgx_gd"  # 判断两个中枢的位置关系，比较方式，gg与dd 严格比较
 
 
@@ -293,8 +295,12 @@ class LINE:
     def __init__(self, start: FX, end: FX, _type: str, index: int):
         self.start: FX = start  # 线的起始位置，以分型来记录
         self.end: FX = end  # 线的结束位置，以分型来记录
-        self.high: float = 0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
-        self.low: float = 0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
+        self.high: float = (
+            0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
+        )
+        self.low: float = (
+            0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
+        )
         self.type: str = _type  # 线的方向类型 （up 上涨  down 下跌）
         self.index: int = index  # 线的索引，后续查找方便
 
@@ -358,7 +364,9 @@ class ZS:
     ):
         self.zs_type: str = zs_type  # 标记中枢类型 bi 笔中枢 xd 线段中枢 zsd 走势段中枢
         self.start: FX = start
-        self.lines: List[Union[BI, XD, LINE]] = []  # 中枢，记录中枢的线（笔 or 线段）对象
+        self.lines: List[Union[BI, XD, LINE]] = (
+            []
+        )  # 中枢，记录中枢的线（笔 or 线段）对象
         self.end: FX = end
 
         self.zg: float = zg
@@ -450,9 +458,13 @@ class BC:
         compare_lines: List[LINE],
         bc: bool,
     ):
-        self.type: str = _type  # 背驰类型 （bi 笔背驰 xd 线段背驰 zsd 走势段背驰 pz 盘整背驰 qs 趋势背驰）
+        self.type: str = (
+            _type  # 背驰类型 （bi 笔背驰 xd 线段背驰 zsd 走势段背驰 pz 盘整背驰 qs 趋势背驰）
+        )
         self.zs: Union[ZS, None] = zs  # 背驰对应的中枢
-        self.compare_line: LINE = compare_line  # 比较的笔 or 线段， 在 笔背驰、线段背驰、盘整背驰有用
+        self.compare_line: LINE = (
+            compare_line  # 比较的笔 or 线段， 在 笔背驰、线段背驰、盘整背驰有用
+        )
         self.compare_lines: List[LINE] = compare_lines  # 在趋势背驰的时候使用
         self.bc = bc  # 是否背驰
 
@@ -638,7 +650,9 @@ class TZXL:
         line_bad: bool,
         done: bool,
     ):
-        self.bh_direction: str = bh_direction  # 特征序列包含的方向 up 向上包含，取高高，down 向下包含，取低低
+        self.bh_direction: str = (
+            bh_direction  # 特征序列包含的方向 up 向上包含，取高高，down 向下包含，取低低
+        )
         self.line: Union[LINE, None] = line
         self.pre_line: LINE = pre_line
         self.line_bad: bool = line_bad
@@ -1286,12 +1300,22 @@ def user_custom_mmd(
             new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
             if len(new_zss) != 1:
                 continue
-            line.add_mmd("l2buy", new_zss[0], zs_type, msg="二买后，重叠中枢后，不创二买低点，形成类二买")
+            line.add_mmd(
+                "l2buy",
+                new_zss[0],
+                zs_type,
+                msg="二买后，重叠中枢后，不创二买低点，形成类二买",
+            )
         if line.type == "up" and mmd.name == "2sell" and line.high < pre_same_line.high:
             new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
             if len(new_zss) != 1:
                 continue
-            line.add_mmd("l2sell", new_zss[0], zs_type, msg="二卖后，重叠中枢后，不创二卖高点，形成类二卖")
+            line.add_mmd(
+                "l2sell",
+                new_zss[0],
+                zs_type,
+                msg="二卖后，重叠中枢后，不创二卖高点，形成类二卖",
+            )
 
     # 类三类买卖点，如果前一笔同向的线段出现三类买卖点，当前与三类买卖点笔有重叠（形成中枢），不创前中枢的高低点，并且力度笔三类买卖点小，增加类三类买卖点
     for mmd in pre_same_line.get_mmds(zs_type):
@@ -1301,19 +1325,33 @@ def user_custom_mmd(
             and line.low > mmd.zs.zg
             and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "down")
         ):
-            new_zss = cd.create_dn_zs("", lines[-4:])  # 从三买的前一段到现在一段，共4段形成的中枢
+            new_zss = cd.create_dn_zs(
+                "", lines[-4:]
+            )  # 从三买的前一段到现在一段，共4段形成的中枢
             if len(new_zss) != 1:
                 continue
-            line.add_mmd("l3buy", new_zss[0], zs_type, msg="三买后，重叠中枢后，不创三买低点，形成类三买")
+            line.add_mmd(
+                "l3buy",
+                new_zss[0],
+                zs_type,
+                msg="三买后，重叠中枢后，不创三买低点，形成类三买",
+            )
         if (
             line.type == "up"
             and mmd.name == "3sell"
             and line.high < mmd.zs.zd
             and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "up")
         ):
-            new_zss = cd.create_dn_zs("", lines[-4:])  # 从三卖的前一段到现在一段，共4段形成的中枢
+            new_zss = cd.create_dn_zs(
+                "", lines[-4:]
+            )  # 从三卖的前一段到现在一段，共4段形成的中枢
             if len(new_zss) != 1:
                 continue
-            line.add_mmd("l3sell", new_zss[0], zs_type, msg="三卖后，重叠中枢后，不创三卖高点，形成类三卖")
+            line.add_mmd(
+                "l3sell",
+                new_zss[0],
+                zs_type,
+                msg="三卖后，重叠中枢后，不创三卖高点，形成类三卖",
+            )
 
     return True
