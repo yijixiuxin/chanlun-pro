@@ -2,7 +2,7 @@ import datetime
 import json
 import uuid
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -41,6 +41,7 @@ class ExchangeIB(Exchange):
 
     def support_frequencys(self) -> dict:
         return {
+            "m": "Month",
             "w": "Week",
             "d": "Day",
             "60m": "60m",
@@ -102,11 +103,12 @@ class ExchangeIB(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         if args is None:
             args = {}
 
         frequency_map = {
+            "m": "1 month",
             "w": "1 week",
             "d": "1 day",
             "60m": "1 hour",
@@ -120,6 +122,7 @@ class ExchangeIB(Exchange):
 
         # 控制获取的数量
         duration_map = {
+            "m": "30 Y",
             "w": "20 Y",
             "d": "10 Y",
             "60m": "360 D",
@@ -282,7 +285,7 @@ if __name__ == "__main__":
     # stock_info = ex.stock_info('DOCU')
     # print(stock_info)
     #
-    klines = ex.klines("SPX", "d")
+    klines = ex.klines("NDX_IND_NASDAQ", "m")
     print(klines.tail(20))
 
     # balance = ex.balance()

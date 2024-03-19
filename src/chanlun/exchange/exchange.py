@@ -291,11 +291,18 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
         "30m": "30min",
         "60m": "1H",
         "120m": "2H",
+        "3h": "3H",
         "4h": "4H",
+        "6h": "6H",
         "d": "D",
         "w": "W",
         "m": "M",
     }
+
+    # 将日期转换成 utc 时间
+    utc_tz = pytz.timezone("UTC")
+    klines["date"] = pd.to_datetime(klines["date"]).dt.tz_convert(utc_tz)
+
     klines.insert(0, column="date_index", value=klines["date"])
     klines.set_index("date_index", inplace=True)
     period_type = period_maps[to_f]
@@ -319,6 +326,15 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
     period_klines.dropna(inplace=True)
     period_klines.reset_index(inplace=True)
     period_klines.drop("date_index", axis=1, inplace=True)
+
+    # 转换完成后，再将日期转换成本地时间
+    period_klines["date"] = period_klines["date"].dt.tz_convert(__tz)
+
+    # if to_f in ["d", "w", "m"]:
+    #     # 替换日期中的小时数为 8 点
+    #     period_klines["date"] = period_klines["date"].map(
+    #         lambda d: d.replace(hour=8, minute=0)
+    #     )
 
     return period_klines[["code", "date", "open", "close", "high", "low", "volume"]]
 
@@ -529,7 +545,14 @@ def convert_us_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
     klines.set_index("date_index", inplace=True)
     period_type = period_maps[to_f]
 
-    period_klines = klines.resample(period_type, label="right", closed="left").first()
+    if to_f in ["w"]:  # 周线是末尾的时间
+        period_klines = klines.resample(
+            period_type, label="right", closed="left"
+        ).last()
+    else:
+        period_klines = klines.resample(
+            period_type, label="right", closed="left"
+        ).first()
     period_klines["open"] = (
         klines["open"].resample(period_type, label="right", closed="left").first()
     )
@@ -581,14 +604,14 @@ def convert_us_tdx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFr
     period_klines["open"] = (
         klines["open"].resample(period_type, label="left", closed="right").first()
     )
-    period_klines["close"] = (
-        klines["close"].resample(period_type, label="left", closed="right").last()
-    )
     period_klines["high"] = (
         klines["high"].resample(period_type, label="left", closed="right").max()
     )
     period_klines["low"] = (
         klines["low"].resample(period_type, label="left", closed="right").min()
+    )
+    period_klines["close"] = (
+        klines["close"].resample(period_type, label="left", closed="right").last()
     )
     period_klines["volume"] = (
         klines["volume"].resample(period_type, label="left", closed="right").sum()
@@ -601,26 +624,27 @@ def convert_us_tdx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFr
         lambda dt: dt.astimezone(pytz.timezone("US/Eastern"))
     )
 
-    return period_klines[["code", "date", "open", "close", "high", "low", "volume"]]
+    return period_klines[["code", "date", "open", "high", "low", "close", "volume"]]
 
 
 if __name__ == "__main__":
     from chanlun.exchange.exchange_db import ExchangeDB
     import pandas as pd
 
-    # 设置显示全部行，不省略
-    pd.set_option("display.max_rows", None)
-    # 设置显示全部列，不省略
-    pd.set_option("display.max_columns", None)
+    code = "BTC/USDT"
 
-    code = "SHSE.000001"
+    ex = ExchangeDB("currency")
+    klines_d = ex.klines(code, "30m", end_date="2023-02-15 18:00:00")
+    klines_60m = ex.klines(code, "5m", end_date="2023-02-15 18:00:00")
 
-    ex = ExchangeDB("a")
-    klines = ex.klines(code, "5m", end_date="2023-08-30 10:10:00")
+    print("日线最后10跟")
+    print(klines_d.tail(10))
+    print("60分钟线最后10根")
+    print(klines_60m.tail(10))
 
-    convert_k = convert_stock_kline_frequency(klines, "w")
-    print(klines.tail(8))
-    print(convert_k.tail(8))
+    convert_d = convert_currency_kline_frequency(klines_60m, "30m")
+    print("转换成日线的最后10根")
+    print(convert_d.tail(10))
     print("Done")
 
     # convert_klines_d = convert_us_kline_frequency(klines_30m, 'd')

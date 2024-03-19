@@ -283,11 +283,15 @@ class ExchangeTDXUS(Exchange):
                         high=_quote["high"],
                         volume=_quote["zongliang"],
                         open=_quote["open"],
-                        rate=round(
-                            (_quote["price"] - _quote["pre_close"])
-                            / _quote["price"]
-                            * 100,
-                            2,
+                        rate=(
+                            round(
+                                (_quote["price"] - _quote["pre_close"])
+                                / _quote["price"]
+                                * 100,
+                                2,
+                            )
+                            if _quote["pre_close"] > 0 and _quote["price"] > 0
+                            else 0
                         ),
                     )
         return ticks
