@@ -1412,6 +1412,11 @@
       clickClose: true,
       tips: "商品代码搜索",
       empty: "没有搜索商品",
+      theme: {
+        color: '#e54d42',
+        // hover: '#e54d42',
+      },
+      delay: 1000,
       remoteMethod: function (val, cb, show) {
         $.ajax({
           type: "GET",

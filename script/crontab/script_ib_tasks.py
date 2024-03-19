@@ -66,7 +66,7 @@ def run_tasks(client_id: int):
                 # 如果有之前保存的历史行情，则进行比较与增量更新
                 diff_days = (
                     datetime.datetime.now() - history_klines.iloc[-1]["date"]
-                ).days + 5
+                ).days + 30
                 new_durationStr = f"{diff_days} D"
 
             re_request_bars = False  # 是否重新进行请求

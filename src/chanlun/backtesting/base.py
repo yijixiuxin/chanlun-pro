@@ -51,7 +51,9 @@ class POSITION:
         # 仓位控制相关
         self.now_pos_rate: float = 0  # 记录当前开仓所占比例
         self.open_keys: Dict[str, float] = {}  # 记录开仓的唯一key记录，避免多次重复开仓
-        self.close_keys: Dict[str, float] = {}  # 记录平仓的唯一key记录，避免多次重复平仓
+        self.close_keys: Dict[str, float] = (
+            {}
+        )  # 记录平仓的唯一key记录，避免多次重复平仓
 
         # 锁仓持仓记录
         self.lock_positions: Dict[str, POSITION] = {}
@@ -74,8 +76,11 @@ class Operation:
         msg: str = "",
         pos_rate: float = 1,
         key: str = "id",
+        code: str = "",
     ):
-        self.opt: str = opt  # 操作指示  buy  买入  sell  卖出  lock 锁仓 unlock 解除锁仓 （只有期货支持锁仓操作）
+        self.opt: str = (
+            opt  # 操作指示  buy  买入  sell  卖出  lock 锁仓 unlock 解除锁仓 （只有期货支持锁仓操作）
+        )
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
         # 背驰点 例如：down_bi_bc_buy down_pz_bc_buy down_qs_bc_buy up_bi_bc_sell up_pz_bc_sell up_qs_bc_sell
@@ -84,7 +89,10 @@ class Operation:
         self.info: Dict[str, object] = info  # 自定义保存的一些信息
         self.msg: str = msg
         self.pos_rate: float = pos_rate  # 开仓 or 平仓 所占的比例
-        self.key: str = key  # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
+        self.key: str = (
+            key  # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
+        )
+        self.code: str = code  # 操作的标的代码
 
     def __str__(self):
         return f"mmd {self.mmd} opt {self.opt} loss_price {self.loss_price} msg: {self.msg}"
@@ -162,7 +170,7 @@ class Strategy(ABC):
     @abstractmethod
     def close(
         self, code, mmd: str, pos: POSITION, market_data: MarketDatas
-    ) -> [Operation, None, List[Operation]]:
+    ) -> Union[Operation, None, List[Operation]]:
         """
         盯当前持仓，给出平仓当下建议
         :param code:
@@ -444,14 +452,16 @@ class Strategy(ABC):
                 return Operation(
                     opt="sell",
                     mmd=mmd,
-                    msg="%s 止损 （止损价格 %s 当前价格 %s）" % (mmd, pos.loss_price, price),
+                    msg="%s 止损 （止损价格 %s 当前价格 %s）"
+                    % (mmd, pos.loss_price, price),
                 )
         elif "sell" in mmd:
             if price > pos.loss_price:
                 return Operation(
                     opt="sell",
                     mmd=mmd,
-                    msg="%s 止损 （止损价格 %s 当前价格 %s）" % (mmd, pos.loss_price, price),
+                    msg="%s 止损 （止损价格 %s 当前价格 %s）"
+                    % (mmd, pos.loss_price, price),
                 )
         return None
 

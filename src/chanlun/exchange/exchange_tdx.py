@@ -204,7 +204,9 @@ class ExchangeTDX(Exchange):
                     get_bars = client.get_security_bars
 
                 ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if args["use_disk"] is False:  # 如果只使用本地文件缓存，则无需进行网络请求
+                if (
+                    args["use_disk"] is False
+                ):  # 如果只使用本地文件缓存，则无需进行网络请求
                     if ks is None:
                         # 获取 8*800 = 6400 条数据
                         ks = pd.concat(
@@ -368,11 +370,13 @@ class ExchangeTDX(Exchange):
                     high=_q["high"],
                     volume=_q["vol"],
                     open=_q["open"],
-                    rate=round(
-                        (_q["price"] - _q["last_close"]) / _q["last_close"] * 100, 2
-                    )
-                    if _q["price"] != 0
-                    else 0,
+                    rate=(
+                        round(
+                            (_q["price"] - _q["last_close"]) / _q["last_close"] * 100, 2
+                        )
+                        if _q["price"] != 0
+                        else 0
+                    ),
                 )
 
         return ticks
@@ -668,10 +672,13 @@ if __name__ == "__main__":
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
 
-    # s_time = time.time()
-    klines = ex.klines("SZ.002858", "d")
-    print(klines.tail())
-    # print("use time : ", time.time() - s_time)
+    s_time = time.time()
+    klines = ex.klines("SH.605296", "d", args={"pages": 12})
+    print(klines.head(5))
+    print(klines.tail(5))
+    print(len(klines))
+
+    print("use time : ", time.time() - s_time)
     # 207735
     #
     # klines = ex.klines('SH.600498', '5m')

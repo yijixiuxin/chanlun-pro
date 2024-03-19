@@ -1,4 +1,5 @@
 import traceback
+from typing import Union
 
 import ccxt
 import pymysql.err
@@ -55,6 +56,7 @@ class ExchangeBinance(Exchange):
             "8h": "8H",
             "6h": "6H",
             "4h": "4H",
+            "3h": "3H",
             "60m": "1H",
             "30m": "30m",
             "15m": "15m",
@@ -71,7 +73,7 @@ class ExchangeBinance(Exchange):
         """
         return True
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         """
         数字货币全部返回 code 值
         """
@@ -109,7 +111,7 @@ class ExchangeBinance(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         返回 k 线数据
         优先从数据库中获取，在进行 api 请求，合并数据，并更新数据库，之后返回k线行情
@@ -145,7 +147,9 @@ class ExchangeBinance(Exchange):
                     code, frequency, start_date=last_datetime
                 )
                 self.db_exchange.insert_klines(code, frequency, online_klines)
-                if len(online_klines) == 1500:  # 如果api获取的还是 1500，则说明没有跟新到最新的数据，则继续调用
+                if (
+                    len(online_klines) == 1500
+                ):  # 如果api获取的还是 1500，则说明没有跟新到最新的数据，则继续调用
                     db_klines = self.db_exchange.klines(
                         code, frequency, args={"limit": 10000}
                     )
@@ -167,7 +171,7 @@ class ExchangeBinance(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         api 接口请求行情数据
         """
@@ -181,6 +185,7 @@ class ExchangeBinance(Exchange):
             "8h": "8h",
             "6h": "6h",
             "4h": "4h",
+            "3h": "1h",
             "60m": "1h",
             "30m": "30m",
             "15m": "15m",
@@ -229,7 +234,7 @@ class ExchangeBinance(Exchange):
         )
         kline_pd = kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
         # 自定义级别，需要进行转换
-        if frequency in ["10m", "2m"] and len(kline_pd) > 0:
+        if frequency in ["10m", "2m", "3h"] and len(kline_pd) > 0:
             kline_pd = convert_currency_kline_frequency(kline_pd, frequency)
         return kline_pd
 
