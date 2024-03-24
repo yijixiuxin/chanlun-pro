@@ -34,3 +34,5 @@ alpaca-py
 ib_insync
 akshare
 tqsdk
+
+pyfolio-reloaded

@@ -13,6 +13,8 @@ import prettytable as pt
 from pyecharts import options as opts
 from pyecharts.charts import Line, Bar, Grid
 
+import pyfolio as pf
+
 from chanlun import cl
 from chanlun import kcharts, fun
 from chanlun.backtesting.backtest_klines import BackTestKlines
@@ -833,6 +835,82 @@ class BackTest:
             )
         print(res["mmd_infos"])
         return
+
+    def result_by_pyfolio(self, live_start_date=None):
+        """
+        使用 pyfolio 计算回测结果
+        """
+        if self.mode != "trade":
+            print("只有交易模式才能使用 pyfolio 计算回测结果")
+            return None
+        # 按照日期聚合资产变化
+        new_day_balances = {}
+        for dt, b in self.trader.balance_history.items():
+            day = dt[0:10]  # 2022-02-22
+            new_day_balances[fun.str_to_datetime(day, "%Y-%m-%d")] = b
+        df = pd.DataFrame.from_dict(
+            new_day_balances, orient="index", columns=["balance"]
+        )
+        df.index.name = "date"
+        df = df.sort_index()
+        df["return"] = df["balance"].pct_change()
+
+        # 持仓记录
+        positions = {}
+        for _dt, _pos_balance in self.trader.positions_balance_history.items():
+            _dt = fun.str_to_datetime(_dt[0:10], "%Y-%m-%d")
+            if _dt not in positions.keys():
+                positions[_dt] = {}
+            for _code, _b in _pos_balance.items():
+                if _code == "Cash":
+                    _code = "cash"
+                positions[_dt][_code] = _b
+        positions = pd.DataFrame(positions).T
+
+        # 交易记录
+        transactions = []
+        for _code, _orders in self.trader.orders.items():
+            for _o in _orders:
+                transactions.append(
+                    {
+                        "date": fun.str_to_datetime(
+                            fun.datetime_to_str(_o["datetime"])
+                        ),
+                        "amount": (
+                            _o["amount"]
+                            if _o["type"] in ["open_long", "close_short"]
+                            else -_o["amount"]
+                        ),
+                        "price": _o["price"],
+                        "symbol": _code,
+                    }
+                )
+        transactions = pd.DataFrame(transactions)
+        transactions.set_index("date", inplace=True)
+
+        # 获取基准的收益率
+        base_klines = self.datas.ex.klines(
+            self.base_code,
+            "d",
+            start_date=self.start_datetime,
+            end_date=self.end_datetime,
+            args={"limit": None},
+        )
+        base_klines["date"] = base_klines["date"].apply(
+            lambda d: fun.str_to_datetime(d.strftime("%Y-%m-%d"), "%Y-%m-%d")
+        )
+        base_klines.set_index("date", inplace=True)
+        base_klines["return"] = base_klines["close"].pct_change()
+
+        pf.create_full_tear_sheet(
+            returns=df["return"],
+            benchmark_rets=base_klines["return"],
+            positions=positions,
+            transactions=transactions,
+            live_start_date=live_start_date,
+        )
+
+        return None
 
     def backtest_charts(self):
         """

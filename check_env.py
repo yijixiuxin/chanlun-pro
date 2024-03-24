@@ -1,6 +1,7 @@
 """
 检查当前环境是否OK
 """
+
 import os
 import sys
 import telnetlib
@@ -38,24 +39,28 @@ def check_env():
 
     # 检查 Redis
     try:
-        R = redis.Redis(
-            host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
-        )
-        R.get("check")
+        if config.REDIS_HOST != "":
+            R = redis.Redis(
+                host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
+            )
+            R.get("check")
     except:
         print("Redis 连接失败，请检查是否有安装并启动 Redis 服务端，并且配置正确")
-        return
+        print("Redis 不是必须的，不使用可以忽略")
     # 检查 MySQL
     try:
-        pymysql.connect(
-            host=config.DB_HOST,
-            port=config.DB_PORT,
-            user=config.DB_USER,
-            password=config.DB_PWD,
-            database=config.DB_DATABASE,
-        )
+        if config.DB_TYPE == "mysql":
+            pymysql.connect(
+                host=config.DB_HOST,
+                port=config.DB_PORT,
+                user=config.DB_USER,
+                password=config.DB_PWD,
+                database=config.DB_DATABASE,
+            )
     except:
-        print("MySQL 连接失败，请检查是否安装并运行 MySQL，并且检查配置的 ip、端口、用户名、密码、数据库 是否正确")
+        print(
+            "MySQL 连接失败，请检查是否安装并运行 MySQL，并且检查配置的 ip、端口、用户名、密码、数据库 是否正确"
+        )
 
     # 检查授权信息
     pyarmor_path = pathlib.Path().cwd() / "src" / "pyarmor_runtime_005445"
