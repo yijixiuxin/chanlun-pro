@@ -309,7 +309,7 @@ if __name__ == "__main__":
     """
     bkgn = StocksBKGN()
     # 重新更新并保存行业与板块信息
-    bkgn.reload_dfcf_bkgn()
+    # bkgn.reload_dfcf_bkgn()
 
     # 所有行业概念
     hys, gns = bkgn.file_bkgns()
@@ -325,13 +325,13 @@ if __name__ == "__main__":
     print(len(all_gn_names))
 
     # 同步所有行业指数到数据库
-    # from chanlun.exchange.exchange_db import ExchangeDB
+    from chanlun.exchange.exchange_db import ExchangeDB
 
-    # ex = ExchangeDB("a")
-    # for _hy in all_hy_names:
-    #     klines = bkgn.get_index_klines(_hy, "dfcf")
-    #     ex.insert_klines(klines.iloc[0]["code"], "d", klines)
-    #     print(f"Insert {_hy} success len : {len(klines)}")
+    ex = ExchangeDB("a")
+    for _hy in all_hy_names:
+        klines = bkgn.get_index_klines(_hy, "dfcf")
+        ex.insert_klines(klines.iloc[0]["code"], "d", klines)
+        print(f"Insert {_hy} success len : {len(klines)}")
 
     # klines = bkgn.get_index_klines("文化传媒", "dfcf")
     # print(klines)

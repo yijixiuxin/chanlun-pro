@@ -185,12 +185,7 @@ class ExchangeTDX(Exchange):
             "1m": 8,
         }
         market, tdx_code, _type = self.to_tdx_code(code)
-        if (
-            market is None
-            or _type is None
-            or start_date is not None
-            or end_date is not None
-        ):
+        if market is None or _type is None:
             # print(f"{code} - {frequency} 不支持的调用参数")
             return None
 

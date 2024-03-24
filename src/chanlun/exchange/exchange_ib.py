@@ -200,7 +200,7 @@ class ExchangeIB(Exchange):
             )
         return ticks
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         if f"stock_info_{code}" in self.cache.keys():
             return self.cache[f"stock_info_{code}"]
 
