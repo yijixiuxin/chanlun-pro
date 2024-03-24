@@ -66,6 +66,8 @@ class BackTestTrader(object):
         # 当前持仓信息
         self.positions: Dict[str, Dict[str, POSITION]] = {}
         self.positions_history: Dict[str, List[POSITION]] = {}
+        # 持仓资金历史
+        self.positions_balance_history: Dict[str, Dict[str, float]] = {}
         # 持仓盈亏记录
         self.hold_profit_history = {}
         # 资产历史
@@ -185,6 +187,7 @@ class BackTestTrader(object):
             "max_pos": self.max_pos,
             "positions": self.positions,
             "positions_history": self.positions_history,
+            "positions_balance_history": self.positions_balance_history,
             "hold_profit_history": self.hold_profit_history,
             "balance_history": self.balance_history,
             "orders": self.orders,
@@ -216,6 +219,12 @@ class BackTestTrader(object):
 
         self.positions = save_infos["positions"]
         self.positions_history = save_infos["positions_history"]
+
+        if "positions_balance_history" not in save_infos.keys():
+            self.positions_balance_history = {}
+        else:
+            self.positions_balance_history = save_infos["positions_balance_history"]
+
         self.hold_profit_history = save_infos["hold_profit_history"]
         self.balance_history = save_infos["balance_history"]
         self.orders = save_infos["orders"]
@@ -311,14 +320,33 @@ class BackTestTrader(object):
         更新所有持仓的盈亏情况
         """
         total_hold_profit = 0
+
         for code in self.positions.keys():
             now_profit, hold_balance = self.position_record(code)
             if self.mode == "trade":
                 total_hold_profit += now_profit + hold_balance
             else:
                 total_hold_profit += now_profit
+
+        position_balance = {}
+        for code, poss in self.positions.items():
+            for mmd, pos in poss.items():
+                if pos.balance == 0:
+                    continue
+                code_price = self.get_price(code)
+                if "buy" in mmd:
+                    code_balance = pos.amount * code_price["close"]
+                else:
+                    code_balance = -(pos.amount * code_price["close"])
+                if code not in position_balance.keys():
+                    position_balance[code] = 0
+                position_balance[code] += code_balance
+        position_balance["Cash"] = self.balance
+
         now_datetime = self.get_now_datetime().strftime(self.record_dt_format)
         self.balance_history[now_datetime] = total_hold_profit + self.balance
+
+        self.positions_balance_history[now_datetime] = position_balance
 
     def position_record(self, code: str) -> Tuple[float, float]:
         """

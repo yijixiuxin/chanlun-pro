@@ -2,7 +2,18 @@
 
 ---
 
+### 2024-03-24
+
+> pip install pyfolio-reloaded
+
+* check_end.py 检查环境脚本，针对于 Redis 与 Mysql 不是必须检查项
+* 交易回测模式，增加 pyfolio 结果展示，方法 （result_by_pyfolio）
+
 ### 2024-03-19
+
+* 缠论计算：
+    * bug修复，针对于行情日期不断延后的问题
+    * macd 采用全量重新计算的方式
 
 * 前端样式调整
 * 回测结果图表优化

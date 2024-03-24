@@ -11,6 +11,9 @@ class filter:
     def flush(self):
         self.target.flush()
 
+    def close(self):
+        self.target.close()
+
 
 sys.stdin = filter(sys.stdin)
 sys.stdout = filter(sys.stdout)

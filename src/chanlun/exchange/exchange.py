@@ -298,6 +298,8 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
         "w": "W",
         "m": "M",
     }
+    if len(klines) == 0:
+        return klines
 
     # 将日期转换成 utc 时间
     utc_tz = pytz.timezone("UTC")

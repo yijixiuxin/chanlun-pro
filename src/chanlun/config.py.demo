@@ -25,8 +25,8 @@ DB_USER = 'chanlun'
 DB_PWD = '123456'
 DB_DATABASE = 'chanlun_klines'
 
-# Redis 配置
-REDIS_HOST = '127.0.0.1'
+# Redis 配置，不使用可将 REDIS_HOST 设置为空字符串
+REDIS_HOST = ''  # 127.0.0.1
 REDIS_PORT = 6379
 
 # 各个市场的交易所设置（只适用于WEB页面的行情展示）
