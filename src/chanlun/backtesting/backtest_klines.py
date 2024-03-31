@@ -317,6 +317,7 @@ class BackTestKlines(MarketDatas):
             min_f = self.frequencys[i - 1]
             max_f = self.frequencys[i - 2]
             new_kline = self.ex.convert_kline_frequency(klines[min_f][-120::], max_f)
+            new_kline = new_kline.iloc[1::]
             if len(klines[max_f]) > 0 and len(new_kline) > 0:
                 # 先删除下大周期的最后一行数据，用合并后的数据代替
                 klines[max_f] = klines[max_f].drop(klines[max_f].index[-1])

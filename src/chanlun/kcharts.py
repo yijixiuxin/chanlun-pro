@@ -590,7 +590,7 @@ def render_charts(title, cl_data: ICL, to_frequency: str = None, orders=None, co
     #             if xl is None:
     #                 continue
     #             line_xd_xl_dings.append(
-    #                 {'index': datetime_convect_frequency([xl.get_start_fx().k.date, xl.get_end_fx().k.date],
+    #                 {'index': datetime_convert_frequency([xl.get_start_fx().k.date, xl.get_end_fx().k.date],
     #                                                      target_dates),
     #                  'val': [xl.get_start_fx().val, xl.get_end_fx().val]}
     #             )
@@ -599,7 +599,7 @@ def render_charts(title, cl_data: ICL, to_frequency: str = None, orders=None, co
     #             if xl is None:
     #                 continue
     #             line_xd_xl_dis.append(
-    #                 {'index': datetime_convect_frequency([xl.get_start_fx().k.date, xl.get_end_fx().k.date],
+    #                 {'index': datetime_convert_frequency([xl.get_start_fx().k.date, xl.get_end_fx().k.date],
     #                                                      target_dates),
     #                  'val': [xl.get_start_fx().val, xl.get_end_fx().val]}
     #             )
