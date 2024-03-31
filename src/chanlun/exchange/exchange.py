@@ -543,6 +543,8 @@ def convert_us_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
         "w": "W",
         "m": "M",
     }
+    if len(klines) == 0:
+        return None
     klines.insert(0, column="date_index", value=klines["date"])
     klines.set_index("date_index", inplace=True)
     period_type = period_maps[to_f]

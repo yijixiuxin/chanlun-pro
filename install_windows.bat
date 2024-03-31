@@ -18,10 +18,6 @@ if not exist %conda_path% (
    echo Anaconda 安装路径：%conda_path%
    echo 创建环境名称：%conda_env_name%
 
-   echo 设置Conda国内源
-   %conda_exe% config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
-   %conda_exe% config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
-   
    rem 删除环境
    %conda_exe% remove -n %conda_env_name% -y --all
     
