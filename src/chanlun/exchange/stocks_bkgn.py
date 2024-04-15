@@ -312,26 +312,26 @@ if __name__ == "__main__":
     # bkgn.reload_dfcf_bkgn()
 
     # 所有行业概念
-    hys, gns = bkgn.file_bkgns()
-    all_hy_names = []
-    all_gn_names = []
-    for _c, _v in hys.items():
-        all_hy_names += _v
-        all_hy_names = list(set(all_hy_names))
-    for _c, _v in gns.items():
-        all_gn_names += _v
-        all_gn_names = list(set(all_gn_names))
-    print(len(all_hy_names))
-    print(len(all_gn_names))
+    # hys, gns = bkgn.file_bkgns()
+    # all_hy_names = []
+    # all_gn_names = []
+    # for _c, _v in hys.items():
+    #     all_hy_names += _v
+    #     all_hy_names = list(set(all_hy_names))
+    # for _c, _v in gns.items():
+    #     all_gn_names += _v
+    #     all_gn_names = list(set(all_gn_names))
+    # print(len(all_hy_names))
+    # print(len(all_gn_names))
 
-    # 同步所有行业指数到数据库
-    from chanlun.exchange.exchange_db import ExchangeDB
+    # # 同步所有行业指数到数据库
+    # from chanlun.exchange.exchange_db import ExchangeDB
 
-    ex = ExchangeDB("a")
-    for _hy in all_hy_names:
-        klines = bkgn.get_index_klines(_hy, "dfcf")
-        ex.insert_klines(klines.iloc[0]["code"], "d", klines)
-        print(f"Insert {_hy} success len : {len(klines)}")
+    # ex = ExchangeDB("a")
+    # for _hy in all_hy_names:
+    #     klines = bkgn.get_index_klines(_hy, "dfcf")
+    #     ex.insert_klines(klines.iloc[0]["code"], "d", klines)
+    #     print(f"Insert {_hy} success len : {len(klines)}")
 
     # klines = bkgn.get_index_klines("文化传媒", "dfcf")
     # print(klines)
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     # print(all_gn_names)
 
     # 获取代码的板块概念信息
-    code_bkgn = bkgn.get_code_bkgn("600895")
+    code_bkgn = bkgn.get_code_bkgn("SH.600143")
     print(code_bkgn)
 
     # 根据行业获取其中的代码

@@ -204,6 +204,11 @@ class FileCacheDB(object):
                         != Decimal(cd_pre_kline.a)
                     ):
                         print(
+                            f"{market}--{code}--{frequency} {key}",
+                            cd_pre_kline,
+                            src_klines.iloc[0].to_dict(),
+                        )
+                        print(
                             f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
                         )
                         # print(cd_pre_kline, src_klines)
@@ -337,7 +342,7 @@ fdb = FileCacheDB()
 
 if __name__ == "__main__":
     from chanlun.cl_utils import query_cl_chart_config
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
+    from chanlun.exchange.exchange_binance import ExchangeBinance
 
     # market = 'a'
     # code = 'SHSE.000001'
@@ -350,9 +355,9 @@ if __name__ == "__main__":
     # print(len(cd.get_klines()))
     # print(cd)
 
-    ex = ExchangeTDX()
-    market = "a"
-    code = "SZ.300666"
+    ex = ExchangeBinance()
+    market = "currency"
+    code = "APT/USDT"
     freq = "d"
     cl_config = query_cl_chart_config(market, code)
     klines = ex.klines(code, freq)
@@ -362,3 +367,13 @@ if __name__ == "__main__":
     cl_config = query_cl_chart_config(market, code)
     cd = fdb.get_web_cl_data(market, code, freq, cl_config, klines)
     print(cd)
+
+
+#     currency--APT/USDT--d 726a8925bda1d6fb6ac6fbe5b146fd5a index: 541 date: 2024-04-12 08:00:00+08:00 h: 12.223 l: 8.422 o: 11.862 c:9.775 a:42964252.4 code                       APT/USDT
+# date      2024-04-12 08:00:00+08:00
+# open                         11.862
+# high                         12.223
+# low                           8.422
+# close                         9.775
+# volume                   42964300.0
+# Name: 541, dtype: object

@@ -136,6 +136,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+
+src/chanlun_ai
+src/chanlun_strategy
+src/core
+web/chanlun_kcm
+
 .idea
 .virtual_documents
 **/__pycache__
@@ -161,4 +167,3 @@ src/cl_vnpy/.vntrader
 src/cl_myquant/gmcache
 # 无用的排除
 /my_debug
-
