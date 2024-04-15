@@ -1,8 +1,10 @@
 """
 US Polygon 行情接口
 """
+
 import datetime as dt
 import os
+from typing import Union
 
 from polygon.rest import RESTClient
 from tenacity import retry_if_result, wait_random, stop_after_attempt, retry
@@ -76,7 +78,7 @@ class ExchangePolygon(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         if args is None:
             args = {}
         frequency_map = {
@@ -177,7 +179,7 @@ class ExchangePolygon(Exchange):
 
         return None
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         """
         获取股票名称
         """
@@ -232,8 +234,26 @@ if __name__ == "__main__":
     # is_trading = ex.now_trading()
     # print(is_trading)
 
-    klines = ex.klines(ex.default_code(), "30m")
-    print(klines.tail(50))
+    # klines = ex.klines(ex.default_code(), "30m")
+    # print(klines.tail(50))
 
     # ticks = ex.ticks([ex.default_code()])
     # print(ticks)
+
+    tickers = ex.client.list_tickers(
+        type="CS", market="stocks", active=True, limit=1000
+    )
+    stocks = []
+    for t in tickers:
+        stocks.append(
+            {
+                "ticker": t.ticker,
+                "exchange": t.primary_exchange,
+                "name": t.name,
+                "currency": t.currency_name,
+                "last_updated": t.last_updated_utc,
+            }
+        )
+
+    print(stocks)
+    print(len(stocks))

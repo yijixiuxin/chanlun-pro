@@ -147,6 +147,39 @@ class MarketDatas(ABC):
         return None
 
 
+class Trader(ABC):
+
+    def __init__(
+        self,
+        name,
+        mode="signal",
+        is_stock=True,
+        is_futures=False,
+        init_balance=100000,
+        fee_rate=0.0005,
+        max_pos=10,
+        log=None,
+    ):
+        # 策略基本信息
+        self.name = name
+        self.mode = mode
+        self.is_stock = is_stock
+        self.is_futures = is_futures
+        self.max_pos = max_pos
+
+    @abstractmethod
+    def get_price(self, code) -> dict:
+        """
+        回测中方法，获取股票代码当前的价格，根据最小周期 k 线收盘价
+        """
+
+    @abstractmethod
+    def hold_positions(self) -> List[POSITION]:
+        """
+        返回所有持仓记录
+        """
+
+
 class Strategy(ABC):
     """
     交易策略基类
@@ -195,7 +228,11 @@ class Strategy(ABC):
         """
         return False
 
-    def filter_opts(self, opts: List[Operation]):
+    def filter_opts(
+        self,
+        opts: List[Operation],
+        trader: Trader = None,
+    ):
         """
         过滤开盘信号，返回过滤后的操作列表
         需要再实际的策略中进行方法重写
