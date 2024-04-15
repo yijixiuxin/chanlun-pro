@@ -295,7 +295,7 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
         "4h": "4H",
         "6h": "6H",
         "d": "D",
-        "w": "W",
+        "w": "W-MON",
         "m": "M",
     }
     if len(klines) == 0:
@@ -638,17 +638,17 @@ if __name__ == "__main__":
     code = "BTC/USDT"
 
     ex = ExchangeDB("currency")
-    klines_d = ex.klines(code, "30m", end_date="2023-02-15 18:00:00")
-    klines_60m = ex.klines(code, "5m", end_date="2023-02-15 18:00:00")
+    klines_w = ex.klines(code, "60m", end_date="2023-02-15 18:00:00")
+    klines_d = ex.klines(code, "10m", end_date="2023-02-15 18:00:00")
 
-    print("日线最后10跟")
+    print("周线最后10跟")
+    print(klines_w.tail(10))
+    print("日线最后10根")
     print(klines_d.tail(10))
-    print("60分钟线最后10根")
-    print(klines_60m.tail(10))
 
-    convert_d = convert_currency_kline_frequency(klines_60m, "30m")
-    print("转换成日线的最后10根")
-    print(convert_d.tail(10))
+    convert_w = convert_currency_kline_frequency(klines_d, "60m")
+    print("转换成周线的最后10根")
+    print(convert_w.tail(10))
     print("Done")
 
     # convert_klines_d = convert_us_kline_frequency(klines_30m, 'd')

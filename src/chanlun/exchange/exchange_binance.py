@@ -142,7 +142,7 @@ class ExchangeBinance(Exchange):
 
             while True:
                 # 根据数据库中的最后时间，调用api进行返回数据
-                last_datetime = db_klines.iloc[-1]["date"].strftime("%Y-%m-%d %H:%M:%S")
+                last_datetime = db_klines.iloc[-2]["date"].strftime("%Y-%m-%d %H:%M:%S")
                 online_klines = self.online_klines(
                     code, frequency, start_date=last_datetime
                 )
@@ -353,9 +353,9 @@ class ExchangeBinance(Exchange):
 if __name__ == "__main__":
     ex = ExchangeBinance()
 
-    # klines = ex.klines("BTC/USDT", "w")
-    # print(klines.tail())
-    # print(len(klines))
+    klines = ex.klines("BTC/USDT", "d")
+    print(klines.tail())
+    print(len(klines))
 
-    balance = ex.balance()
-    print(balance)
+    # balance = ex.balance()
+    # print(balance)

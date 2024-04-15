@@ -1,12 +1,14 @@
 import pickle
 import time
 
-from chanlun.backtesting.base import Strategy, Operation, POSITION, MarketDatas
+from chanlun import fun
+from chanlun.backtesting.base import Strategy, Operation, POSITION, MarketDatas, Trader
 from chanlun.cl_interface import *
 from chanlun.file_db import fdb
+from chanlun.db import db
 
 
-class BackTestTrader(object):
+class BackTestTrader(Trader):
     """
     回测交易（可继承支持实盘）
     """
@@ -503,7 +505,7 @@ class BackTestTrader(object):
         codes = list(poss["code"].to_numpy())
         return codes
 
-    def hold_positions(self):
+    def hold_positions(self) -> List[POSITION]:
         """
         返回所有持仓记录
         """
@@ -1098,4 +1100,36 @@ class BackTestTrader(object):
                 "info": "平仓锁仓",
             }
         )
+        return True
+
+    def order_draw_tv_mark(self, market: str, mark_label: str):
+        # 先删除所有的订单
+        db.marks_del(market=market, mark_label=mark_label)
+        order_colors = {
+            "open_long": "red",
+            "open_short": "green",
+            "close_long": "green",
+            "close_short": "red",
+        }
+        order_shape = {
+            "open_long": "earningUp",
+            "open_short": "earningDown",
+            "close_long": "earningDown",
+            "close_short": "earningUp",
+        }
+        for _code, _orders in self.orders.items():
+            print(f"Draw Mark {_code} : {len(_orders) / 2}")
+            for _o in _orders:
+                db.marks_add(
+                    market,
+                    _code,
+                    _code,
+                    "",
+                    fun.datetime_to_int(_o["datetime"]),
+                    mark_label,
+                    _o["info"],
+                    order_shape[_o["type"]],
+                    order_colors[_o["type"]],
+                )
+        print("Done")
         return True

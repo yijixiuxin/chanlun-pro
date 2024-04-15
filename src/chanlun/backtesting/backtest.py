@@ -244,7 +244,8 @@ class BackTest:
             try:
                 # 如果有开启操作二次过滤，则调用一下进行执行
                 self.trader.buffer_opts = self.strategy.filter_opts(
-                    self.trader.buffer_opts
+                    self.trader.buffer_opts,
+                    self.trader
                 )
                 self.trader.run_buffer_opts()
             except Exception as e:
