@@ -6,6 +6,9 @@
 > 前置条件  
 > 已经安装 GitHub Desktop、 Anaconda、MySQL、Redis  
 
+
+### [B站安装教程](https://www.bilibili.com/video/BV1XH4y1K7VM/)
+
 ### 1. 通过 GitHub Desktop 克隆项目到本地
 
       # GitHub 地址
