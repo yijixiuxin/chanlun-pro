@@ -12,6 +12,8 @@
 
 [在线文档](https://chanlun-pro.readthedocs.io/)
 
+[B站视频教程](https://space.bilibili.com/384267873/video)
+
 [缠论解盘 - Windows版本](https://chanlun-pro.readthedocs.io/WINDOWS_VERSION/)
 
 **项目的核心 `cl.py` 缠论计算，需要授权许可文件才可运行，加微信好友可免费获取20天使用授权。**
@@ -100,16 +102,6 @@ QQ 群
 ![策略回测结果查看](cookbook/docs/img/back_test_3.png)
 ![策略回测结果查看](cookbook/docs/img/back_test_4.png)
 ![策略回测结果查看](cookbook/docs/img/back_test_5.png)
-
-**数字货币行情图表页面**
-
-![数字货币页面](cookbook/docs/img/currency.png)
-
-**历史行情回放，根据数据库中历史行情数据，逐bar回放展示行情，可用于观察缠论计算与练习买卖操作**
-
-![回放页面](cookbook/docs/img/back.png)
-
-**可按照市场中的自选列表，设置缠论数据指标的监控信号（背驰、买卖点信息）**
 
 ![监控任务管理](cookbook/docs/img/check.png)
 
