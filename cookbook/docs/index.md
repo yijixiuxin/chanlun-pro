@@ -4,8 +4,9 @@
 
 **基于缠论的市场行情量化分析工具**
 
-[在线 Demo 展示](http://www.chanlun-trader.com/)  
-_在线Demo只做上证指数的缠论示例_
+## [B站视频教程](https://space.bilibili.com/384267873/video)
+
+----
 
 [缠论解盘 - Windows版本](WINDOWS_VERSION.md)
 
