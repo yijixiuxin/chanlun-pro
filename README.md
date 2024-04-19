@@ -20,7 +20,6 @@
 
 [更新日志](https://chanlun-pro.readthedocs.io/UPDATE/)
 
-_(无特殊情况，每周五例行更新)_
 
 **加好友可免费获取20天使用授权**
 

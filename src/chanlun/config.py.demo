@@ -96,6 +96,18 @@ FEISHU_KEYS = {
         "app_id": "cli_********",
         "app_secret": "TlQXy9Y7********",
     },
+    "hk": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "futures": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "currency": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
     "user_id": "86********",
     "enable_img": False,
 }

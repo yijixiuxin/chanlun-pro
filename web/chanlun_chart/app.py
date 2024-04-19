@@ -1,14 +1,11 @@
-from gevent import monkey
-
-monkey.patch_all()
-
 import chanlun.encodefix  # Fix Windows print 乱码问题
+from tornado.wsgi import WSGIContainer
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
 import pathlib
 import sys
 import traceback
 import webbrowser
-from gevent.pywsgi import WSGIServer
-
 
 cmd_path = pathlib.Path.cwd()
 sys.path.append(str(cmd_path))
@@ -23,19 +20,17 @@ except Exception as e:
 
 if __name__ == "__main__":
     try:
-        app = create_app()
-        # DEBUG
-        # app.run('127.0.0.1', 9900, True)
+        s = HTTPServer(WSGIContainer(create_app()))
+        s.bind(9900, "0.0.0.0")
 
         print("启动成功")
-        http_server = WSGIServer(("0.0.0.0", 9900), app)
+        s.start(1)
 
         if len(sys.argv) >= 2 and sys.argv[1] == "nobrowser":
             pass
         else:
             webbrowser.open("http://127.0.0.1:9900")
-
-        http_server.serve_forever()
+        IOLoop.instance().start()
 
     except Exception as e:
         print(e)
