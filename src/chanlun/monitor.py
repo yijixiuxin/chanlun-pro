@@ -1,6 +1,7 @@
 """
 监控相关代码
 """
+
 import os
 import pathlib
 import time
@@ -157,7 +158,9 @@ def monitoring_code(
             or is_exists.bi_is_done != is_done
             or is_exists.bi_is_td != is_td
         ) and is_send_msg:
-            msg = f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td})"
+            msg = (
+                f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td})"
+            )
             send_msgs.append(msg)
             db.alert_record_save(
                 market,
@@ -198,7 +201,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     """
     缠论数据保存图表并上传网络，返回访问地址
     """
-    # 如果没有设置七牛云的 key，则不使用生成图片的功能
+    # 没有启用图片则不生产图片
     if config.FEISHU_KEYS["enable_img"] == False:
         return ""
 
@@ -261,11 +264,11 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
 
 
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_db import ExchangeDB
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
     from chanlun.cl_utils import query_cl_chart_config
     from chanlun import cl
 
-    ex = ExchangeDB("a")
+    ex = ExchangeTDX()
     cl_config = query_cl_chart_config("a", "SH.000001")
     klines = ex.klines("SH.600519", "d")
     cd = cl.CL("SH.600519", "d", cl_config).process_klines(klines)

@@ -22,8 +22,8 @@ from apscheduler.events import (
     EVENT_JOB_ERROR,
     EVENT_JOB_MISSED,
 )
-from apscheduler.executors.gevent import GeventExecutor
-from apscheduler.schedulers.gevent import GeventScheduler
+from apscheduler.executors.tornado import TornadoExecutor
+from apscheduler.schedulers.tornado import TornadoScheduler
 from flask import Flask, send_file
 from flask import render_template
 from flask import request
@@ -48,8 +48,8 @@ from .other_tasks import OtherTasks
 
 def create_app(test_config=None):
     # 任务对象
-    scheduler = GeventScheduler(timezone=pytz.timezone("Asia/Shanghai"))
-    scheduler.add_executor(GeventExecutor())
+    scheduler = TornadoScheduler(timezone=pytz.timezone("Asia/Shanghai"))
+    scheduler.add_executor(TornadoExecutor())
     scheduler.my_task_list = {}
 
     def run_tasks_listener(event):
