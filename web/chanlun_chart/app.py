@@ -6,6 +6,7 @@ import pathlib
 import sys
 import traceback
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 
 cmd_path = pathlib.Path.cwd()
 sys.path.append(str(cmd_path))
@@ -20,7 +21,7 @@ except Exception as e:
 
 if __name__ == "__main__":
     try:
-        s = HTTPServer(WSGIContainer(create_app()))
+        s = HTTPServer(WSGIContainer(create_app(), executor=ThreadPoolExecutor(10)))
         s.bind(9900, "0.0.0.0")
 
         print("启动成功")

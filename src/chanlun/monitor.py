@@ -20,6 +20,7 @@ from chanlun.exchange import get_exchange, Market
 from chanlun.utils import send_fs_msg
 from chanlun import config
 from chanlun.db import db
+import traceback
 
 
 def monitoring_code(
@@ -256,6 +257,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
         return response.data.image_key
     except Exception as e:
         print(f"{title} 生成并上传图片异常：{e}")
+        traceback.print_exc()
         return ""
     finally:
         # 删除本地图片

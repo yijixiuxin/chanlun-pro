@@ -15,6 +15,7 @@ class filter:
         self.target.close()
 
 
-sys.stdin = filter(sys.stdin)
-sys.stdout = filter(sys.stdout)
-sys.stderr = filter(sys.stderr)
+if sys.platform == "win32":
+    sys.stdin = filter(sys.stdin)
+    sys.stdout = filter(sys.stdout)
+    sys.stderr = filter(sys.stderr)
