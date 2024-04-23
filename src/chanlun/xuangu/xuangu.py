@@ -470,7 +470,7 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
     bi = cd.get_bis()[-1]
     if bi.type not in opt_direction:
         return None
-    if bi.mmd_exists(["3buy"] if bi.type == "down" else ["3sell"], "|") is False:
+    if bi.mmd_exists(["3buy"] if bi.type == "down" else ["3sell"], "|", Config.ZS_TYPE_DN.value) is False:
         return None
     dn_zss = cd.get_bi_zss(Config.ZS_TYPE_DN.value)
     if (

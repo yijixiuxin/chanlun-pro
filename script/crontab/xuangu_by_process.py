@@ -49,20 +49,20 @@ def xuangu_by_code(code: str):
             klines[f] = k
         cds: List[ICL] = web_batch_get_cl_datas("a", code, klines, cl_config)
         """
-            *** 这里使用自己需要的选股条件方法进行判断 ***
-            """
+        这里使用自己需要的选股条件方法进行判断 ***
+        """
         xg_res = xuangu.xg_single_find_3buy_by_zhuanzhe(cds)
         if xg_res is not None:
             stocks = ex.stock_info(code)
-            print(
+            tqdm.write(
                 "【%s - %s 】 出现机会：%s"
                 % (stocks["code"], stocks["name"], xg_res["msg"])
             )
             zx.add_stock(zx_group, stocks["code"], stocks["name"])
 
         """
-            *** 这里也可以在写其他的选股条件，执行多个选股策略；复制以上的并改变选股条件 ***
-            """
+        这里也可以在写其他的选股条件，执行多个选股策略；复制以上的并改变选股条件 ***
+        """
         # ...
     except Exception as e:
         print("Code : %s Run Exception : %s" % (code, e))
