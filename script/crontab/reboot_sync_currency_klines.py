@@ -37,44 +37,45 @@ f_start_time_maps = {
     "1m": "2000-01-01 00:00:00",
 }
 
-for code in tqdm(codes):
-    try:
-        for f in sync_frequencys:
-            while True:
-                try:
-                    last_dt = exchange.query_last_datetime(code, f)
-                    if last_dt is None:
-                        klines = line_exchange.klines(
-                            code,
-                            f,
-                            end_date=f_start_time_maps[f],
-                            args={"use_online": True},
-                        )
-                        if len(klines) == 0:
+if __name__ == "__main__":
+    for code in tqdm(codes):
+        try:
+            for f in sync_frequencys:
+                while True:
+                    try:
+                        last_dt = exchange.query_last_datetime(code, f)
+                        if last_dt is None:
                             klines = line_exchange.klines(
                                 code,
                                 f,
-                                start_date=f_start_time_maps[f],
+                                end_date=f_start_time_maps[f],
                                 args={"use_online": True},
                             )
-                    else:
-                        klines = line_exchange.klines(
-                            code, f, start_date=last_dt, args={"use_online": True}
+                            if len(klines) == 0:
+                                klines = line_exchange.klines(
+                                    code,
+                                    f,
+                                    start_date=f_start_time_maps[f],
+                                    args={"use_online": True},
+                                )
+                        else:
+                            klines = line_exchange.klines(
+                                code, f, start_date=last_dt, args={"use_online": True}
+                            )
+
+                        tqdm.write(
+                            "Run code %s frequency %s klines len %s"
+                            % (code, f, len(klines))
                         )
-
-                    tqdm.write(
-                        "Run code %s frequency %s klines len %s"
-                        % (code, f, len(klines))
-                    )
-                    exchange.insert_klines(code, f, klines)
-                    if len(klines) <= 1:
+                        exchange.insert_klines(code, f, klines)
+                        if len(klines) <= 1:
+                            break
+                    except Exception as e:
+                        tqdm.write("执行 %s 同步K线异常" % code)
+                        tqdm.write(traceback.format_exc())
                         break
-                except Exception as e:
-                    tqdm.write("执行 %s 同步K线异常" % code)
-                    tqdm.write(traceback.format_exc())
-                    break
 
-    except Exception as e:
-        tqdm.write("执行 %s 同步K线异常" % code)
-        tqdm.write(e)
-        tqdm.write(traceback.format_exc())
+        except Exception as e:
+            tqdm.write("执行 %s 同步K线异常" % code)
+            tqdm.write(e)
+            tqdm.write(traceback.format_exc())
