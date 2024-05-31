@@ -265,6 +265,8 @@ def create_app(test_config=None):
             "type": market_types[market],
             "session": market_session[market],
             "timezone": market_timezone[market],
+            "pricescale": 1000 if market in ["a", "hk", "us", "futures"] else 100000000,
+            "visible_plots_set": "ohlcv",
             "supported_resolutions": [
                 v for k, v in frequency_maps.items() if k in market_frequencys[market]
             ],

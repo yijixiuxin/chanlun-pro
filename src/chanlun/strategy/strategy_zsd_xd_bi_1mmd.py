@@ -17,7 +17,9 @@ class StrategyZsdXdBi1MMD(Strategy):
 
         self._max_loss_rate = None  # 最大亏损比例设置
 
-    def open(self, code, market_data: MarketDatas, poss: Dict[str, POSITION]) -> List[Operation]:
+    def open(
+        self, code, market_data: MarketDatas, poss: Dict[str, POSITION]
+    ) -> List[Operation]:
         """
         开仓监控，返回开仓配置
         """
@@ -36,8 +38,10 @@ class StrategyZsdXdBi1MMD(Strategy):
         # 三个线的方向要一致
         if zsd.type != xd.type or zsd.type != bi.type:
             return opts
-        if xd.mmd_exists(['1buy', '1sell', '2buy', '2sell']) is False and bi.mmd_exists(
-                ['1buy', '1sell', '2buy', '2sell']) is False:
+        if (
+            xd.mmd_exists(["1buy", "1sell", "2buy", "2sell"]) is False
+            and bi.mmd_exists(["1buy", "1sell", "2buy", "2sell"]) is False
+        ):
             return opts
         # 最后笔要停顿
         if self.bi_td(bi, data) is False:
@@ -46,34 +50,48 @@ class StrategyZsdXdBi1MMD(Strategy):
         # 设置止损价格
         price = data.get_klines()[-1].c
         if self._max_loss_rate is not None:
-            if bi.type == 'up':
+            if bi.type == "up":
                 loss_price = min(bi.high, price * (1 + self._max_loss_rate / 100))
             else:
                 loss_price = max(bi.low, price * (1 - self._max_loss_rate / 100))
         else:
-            loss_price = bi.low if bi.type == 'down' else bi.high
+            loss_price = bi.low if bi.type == "down" else bi.high
 
         # 买卖点开仓
         for mmd in zsd.line_mmds():
             # 线段 or 笔 出现一类买卖点
-            opts.append(Operation(
-                'buy', mmd, loss_price, {},
-                f'走势段买卖点 {mmd}, 线段买卖点 {xd.line_mmds()} 笔买卖点 {bi.line_mmds()}'
-            ))
+            opts.append(
+                Operation(
+                    code,
+                    "buy",
+                    mmd,
+                    loss_price,
+                    {},
+                    f"走势段买卖点 {mmd}, 线段买卖点 {xd.line_mmds()} 笔买卖点 {bi.line_mmds()}",
+                )
+            )
             return opts
         # 背驰开仓
         for bc in zsd.line_bcs():
-            if bc == 'zsd':
-                bc = 'pz'
-            bc_mmd = f'{bi.type}_{bc}_bc_' + ('buy' if bi.type == 'down' else 'sell')
-            opts.append(Operation(
-                'buy', bc_mmd, loss_price, {},
-                f'走势段背驰 {bc}, 线段买卖点 {xd.line_mmds()} 笔买卖点 {bi.line_mmds()}')
+            if bc == "zsd":
+                bc = "pz"
+            bc_mmd = f"{bi.type}_{bc}_bc_" + ("buy" if bi.type == "down" else "sell")
+            opts.append(
+                Operation(
+                    code,
+                    "buy",
+                    bc_mmd,
+                    loss_price,
+                    {},
+                    f"走势段背驰 {bc}, 线段买卖点 {xd.line_mmds()} 笔买卖点 {bi.line_mmds()}",
+                )
             )
             return opts
         return opts
 
-    def close(self, code, mmd: str, pos: POSITION, market_data: MarketDatas) -> [Operation, None]:
+    def close(
+        self, code, mmd: str, pos: POSITION, market_data: MarketDatas
+    ) -> Union[Operation, None]:
         """
         持仓监控，返回平仓配置
         """
@@ -99,22 +117,28 @@ class StrategyZsdXdBi1MMD(Strategy):
         if zsd.type != xd.type or zsd.type != bi.type:
             return False
         # 如果低级别没有一类买卖点，退出
-        if xd.mmd_exists(['1buy', '1sell', '2buy', '2sell']) is False \
-                and bi.mmd_exists(['1buy', '1sell', '2buy', '2sell']) is False:
+        if (
+            xd.mmd_exists(["1buy", "1sell", "2buy", "2sell"]) is False
+            and bi.mmd_exists(["1buy", "1sell", "2buy", "2sell"]) is False
+        ):
             return False
         # 如果最后一笔没有停顿，退出
         if self.bi_td(bi, data) is False:
             return False
 
-        if 'buy' in mmd and zsd.type == 'up':
+        if "buy" in mmd and zsd.type == "up":
             return Operation(
-                'sell', mmd,
-                msg=f'走势段买卖点 {zsd.line_mmds()} 背驰 {zsd.line_bcs()}，线段 {xd.line_mmds()} 笔 {bi.line_mmds()}'
+                code,
+                "sell",
+                mmd,
+                msg=f"走势段买卖点 {zsd.line_mmds()} 背驰 {zsd.line_bcs()}，线段 {xd.line_mmds()} 笔 {bi.line_mmds()}",
             )
-        if 'sell' in mmd and zsd.type == 'down':
+        if "sell" in mmd and zsd.type == "down":
             return Operation(
-                'sell', mmd,
-                msg=f'走势段买卖点 {zsd.line_mmds()} 背驰 {zsd.line_bcs()}，线段 {xd.line_mmds()} 笔 {bi.line_mmds()}'
+                code,
+                "sell",
+                mmd,
+                msg=f"走势段买卖点 {zsd.line_mmds()} 背驰 {zsd.line_bcs()}，线段 {xd.line_mmds()} 笔 {bi.line_mmds()}",
             )
 
         return None

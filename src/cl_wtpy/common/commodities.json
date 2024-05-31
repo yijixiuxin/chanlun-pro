@@ -7,7 +7,7 @@
             "precision": 1,
             "pricetick": 0.2,
             "volscale": 200,
-            "name": "ï¿½ï¿½Ö¤",
+            "name": "ÖÐÖ¤",
             "exchg": "CFFEX",
             "session": "SD0930",
             "holiday": "CHINA"
@@ -19,7 +19,7 @@
             "precision": 1,
             "pricetick": 0.2,
             "volscale": 300,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦Éî",
             "exchg": "CFFEX",
             "session": "SD0930",
             "holiday": "CHINA"
@@ -31,7 +31,19 @@
             "precision": 1,
             "pricetick": 0.2,
             "volscale": 300,
-            "name": "ï¿½ï¿½Ö¤",
+            "name": "ÉÏÖ¤",
+            "exchg": "CFFEX",
+            "session": "SD0930",
+            "holiday": "CHINA"
+        },
+        "IM": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 1,
+            "pricetick": 0.2,
+            "volscale": 200,
+            "name": "IM",
             "exchg": "CFFEX",
             "session": "SD0930",
             "holiday": "CHINA"
@@ -43,9 +55,9 @@
             "precision": 3,
             "pricetick": 0.005,
             "volscale": 10000,
-            "name": "10ï¿½ï¿½Õ®",
+            "name": "10ÄêÕ®",
             "exchg": "CFFEX",
-            "session": "SD0930",
+            "session": "FD0915",
             "holiday": "CHINA"
         },
         "TF": {
@@ -55,9 +67,21 @@
             "precision": 3,
             "pricetick": 0.005,
             "volscale": 10000,
-            "name": "5ï¿½ï¿½Õ®",
+            "name": "5ÄêÕ®",
             "exchg": "CFFEX",
-            "session": "SD0930",
+            "session": "FD0915",
+            "holiday": "CHINA"
+        },
+        "TL": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 2,
+            "pricetick": 0.01,
+            "volscale": 10000,
+            "name": "30ÄêÕ®",
+            "exchg": "CFFEX",
+            "session": "FD0915",
             "holiday": "CHINA"
         },
         "TS": {
@@ -65,11 +89,11 @@
             "pricemode": 0,
             "category": 1,
             "precision": 3,
-            "pricetick": 0.005,
+            "pricetick": 0.002,
             "volscale": 20000,
-            "name": "2ï¿½ï¿½Õ®",
+            "name": "2ÄêÕ®",
             "exchg": "CFFEX",
-            "session": "SD0930",
+            "session": "FD0915",
             "holiday": "CHINA"
         }
     },
@@ -81,7 +105,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "Æ»ï¿½ï¿½",
+            "name": "Æ»¹û",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -93,7 +117,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "Ö£ï¿½ï¿½",
+            "name": "Ö£ÃÞ",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -105,7 +129,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ºìÔæ",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -117,7 +141,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½É´",
+            "name": "ÃÞÉ´",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -129,7 +153,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "²£Á§",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -141,7 +165,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¾¬µ¾",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -153,7 +177,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½Ìµï¿½",
+            "name": "ÍíôÌµ¾",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -165,7 +189,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "Ö£ï¿½ï¿½",
+            "name": "Ö£´¼",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -177,7 +201,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "²ËÓÍ",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -189,7 +213,7 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¶ÌÏË",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -201,7 +225,7 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¨Éú",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -213,9 +237,21 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 50,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ÆÕÂó",
             "exchg": "CZCE",
             "session": "FD0900",
+            "holiday": "CHINA"
+        },
+        "PX": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 2.0,
+            "volscale": 5,
+            "name": "¶Ô¶þ¼×±½",
+            "exchg": "CZCE",
+            "session": "",
             "holiday": "CHINA"
         },
         "RI": {
@@ -225,7 +261,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½Ìµï¿½",
+            "name": "ÔçôÌµ¾",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -237,7 +273,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "²ËÆÉ",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -249,7 +285,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "²Ë×Ñ",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -261,7 +297,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "´¿¼î",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -273,9 +309,21 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¹èÌú",
             "exchg": "CZCE",
             "session": "FD0900",
+            "holiday": "CHINA"
+        },
+        "SH": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 1.0,
+            "volscale": 30,
+            "name": "ÉÕ¼î",
+            "exchg": "CZCE",
+            "session": "",
             "holiday": "CHINA"
         },
         "SM": {
@@ -285,7 +333,7 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 5,
-            "name": "ï¿½Ì¹ï¿½",
+            "name": "ÃÌ¹è",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -297,7 +345,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "°×ÌÇ",
             "exchg": "CZCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -321,7 +369,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ÄòËØ",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -333,7 +381,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "Ö£ï¿½ï¿½",
+            "name": "Ö£Âó",
             "exchg": "CZCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -359,7 +407,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½Ò»",
+            "name": "¶¹Ò»",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -371,7 +419,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¶¹¶þ",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -383,7 +431,7 @@
             "precision": 2,
             "pricetick": 0.05,
             "volscale": 500,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "½º°å",
             "exchg": "DCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -395,7 +443,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ÓñÃ×",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -407,7 +455,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "µí·Û",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -419,7 +467,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½Ï©",
+            "name": "±½ÒÒÏ©",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -431,7 +479,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½Ò¶ï¿½ï¿½ï¿½",
+            "name": "ÒÒ¶þ´¼",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -443,7 +491,7 @@
             "precision": 1,
             "pricetick": 0.5,
             "volscale": 10,
-            "name": "ï¿½Ë°ï¿½",
+            "name": "ÏË°å",
             "exchg": "DCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -455,7 +503,7 @@
             "precision": 1,
             "pricetick": 0.5,
             "volscale": 100,
-            "name": "ï¿½ï¿½ï¿½ï¿½Ê¯",
+            "name": "Ìú¿óÊ¯",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -467,7 +515,7 @@
             "precision": 1,
             "pricetick": 0.5,
             "volscale": 100,
-            "name": "ï¿½ï¿½Ì¿",
+            "name": "½¹Ì¿",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -479,7 +527,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¼¦µ°",
             "exchg": "DCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -491,7 +539,7 @@
             "precision": 1,
             "pricetick": 0.5,
             "volscale": 60,
-            "name": "ï¿½ï¿½Ãº",
+            "name": "½¹Ãº",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -503,7 +551,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ËÜÁÏ",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -515,7 +563,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 16,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ÉúÖí",
             "exchg": "DCE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -527,7 +575,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¶¹ÆÉ",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -539,7 +587,7 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "name": "×ØéµÓÍ",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -551,7 +599,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 20,
-            "name": "Òºï¿½ï¿½ï¿½ï¿½",
+            "name": "Òº»¯Æø",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -563,7 +611,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 5,
-            "name": "ï¿½Û±ï¿½Ï©",
+            "name": "¾Û±ûÏ©",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -575,7 +623,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¾¬Ã×",
             "exchg": "DCE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -599,9 +647,35 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "¶¹ÓÍ",
             "exchg": "DCE",
             "session": "FN2300",
+            "holiday": "CHINA"
+        }
+    },
+    "GFEX": {
+        "lc": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 50.0,
+            "volscale": 1,
+            "name": "Ì¼Ëáï®",
+            "exchg": "GFEX",
+            "session": "FD0900",
+            "holiday": "CHINA"
+        },
+        "si": {
+            "covermode": 0,
+            "pricemode": 0,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 5.0,
+            "volscale": 5,
+            "name": "¹¤Òµ¹è",
+            "exchg": "GFEX",
+            "session": "FD0900",
             "holiday": "CHINA"
         }
     },
@@ -613,9 +687,21 @@
             "precision": 0,
             "pricetick": 10.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½Í­",
+            "name": "¹ú¼ÊÍ­",
             "exchg": "INE",
             "session": "FN0100",
+            "holiday": "CHINA"
+        },
+        "ec": {
+            "covermode": 1,
+            "pricemode": 1,
+            "category": 1,
+            "precision": 1,
+            "pricetick": 0.1,
+            "volscale": 50,
+            "name": "SCFISÅ·Ïß",
+            "exchg": "INE",
+            "session": "",
             "holiday": "CHINA"
         },
         "lu": {
@@ -625,7 +711,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "name": "µÍÁòÓÍ",
             "exchg": "INE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -637,7 +723,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 10,
-            "name": "20ï¿½ï¿½",
+            "name": "20½º",
             "exchg": "INE",
             "session": "FN0230",
             "holiday": "CHINA"
@@ -649,7 +735,7 @@
             "precision": 1,
             "pricetick": 0.1,
             "volscale": 1000,
-            "name": "Ô­ï¿½ï¿½",
+            "name": "Ô­ÓÍ",
             "exchg": "INE",
             "session": "FN0230",
             "holiday": "CHINA"
@@ -663,7 +749,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 15,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦Òø",
             "exchg": "SHFE",
             "session": "FN0230",
             "holiday": "CHINA"
@@ -675,7 +761,19 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦ÂÁ",
+            "exchg": "SHFE",
+            "session": "FN0100",
+            "holiday": "CHINA"
+        },
+        "ao": {
+            "covermode": 1,
+            "pricemode": 1,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 1.0,
+            "volscale": 20,
+            "name": "Ñõ»¯ÂÁ",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -687,9 +785,21 @@
             "precision": 2,
             "pricetick": 0.02,
             "volscale": 1000,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦½ð",
             "exchg": "SHFE",
             "session": "FN0230",
+            "holiday": "CHINA"
+        },
+        "br": {
+            "covermode": 1,
+            "pricemode": 1,
+            "category": 1,
+            "precision": 0,
+            "pricetick": 5.0,
+            "volscale": 5,
+            "name": "¶¡¶þÏ©Ïð½º",
+            "exchg": "SHFE",
+            "session": "",
             "holiday": "CHINA"
         },
         "bu": {
@@ -697,9 +807,9 @@
             "pricemode": 1,
             "category": 1,
             "precision": 0,
-            "pricetick": 2.0,
+            "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "Á¤Çà",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -711,7 +821,7 @@
             "precision": 0,
             "pricetick": 10.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½Í­",
+            "name": "»¦Í­",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -723,7 +833,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "È¼ï¿½ï¿½",
+            "name": "È¼ÓÍ",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -735,7 +845,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½È¾ï¿½",
+            "name": "ÈÈ¾í",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -747,7 +857,7 @@
             "precision": 0,
             "pricetick": 10.0,
             "volscale": 1,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦Äø",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -759,7 +869,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½Ç¦",
+            "name": "»¦Ç¦",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -771,7 +881,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "ÂÝÎÆ",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -783,7 +893,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 10,
-            "name": "ï¿½ï¿½",
+            "name": "Ïð½º",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -795,7 +905,7 @@
             "precision": 0,
             "pricetick": 10.0,
             "volscale": 1,
-            "name": "ï¿½ï¿½ï¿½ï¿½",
+            "name": "»¦Îý",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -807,7 +917,7 @@
             "precision": 0,
             "pricetick": 2.0,
             "volscale": 10,
-            "name": "Ö½ï¿½ï¿½",
+            "name": "Ö½½¬",
             "exchg": "SHFE",
             "session": "FN2300",
             "holiday": "CHINA"
@@ -819,7 +929,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½ï¿½ï¿½ï¿½",
+            "name": "²»Ðâ¸Ö",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"
@@ -831,7 +941,7 @@
             "precision": 0,
             "pricetick": 1.0,
             "volscale": 10,
-            "name": "ï¿½ß²ï¿½",
+            "name": "Ïß²Ä",
             "exchg": "SHFE",
             "session": "FD0900",
             "holiday": "CHINA"
@@ -843,7 +953,7 @@
             "precision": 0,
             "pricetick": 5.0,
             "volscale": 5,
-            "name": "ï¿½ï¿½Ð¿",
+            "name": "»¦Ð¿",
             "exchg": "SHFE",
             "session": "FN0100",
             "holiday": "CHINA"

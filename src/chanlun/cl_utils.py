@@ -1,3 +1,4 @@
+import time
 from chanlun import fun
 from chanlun.cl_interface import *
 from chanlun.exchange import exchange
@@ -884,7 +885,6 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
         "zsd_zss": zsd_zs_chart_data,
         "bcs": bc_chart_data,
         "mmds": mmd_chart_data,
-        # "bc_marks": bc_marks,
     }
 
 
@@ -968,19 +968,11 @@ def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
     """
     将缠论数据的普通K线，转换成平均K线数据，返回格式 pd.DataFrame
     """
-    cd_klines = [
-        {
-            "code": _k["code"],
-            "date": _k["date"],
-            "high": _k["high"],
-            "open": _k["open"],
-            "low": _k["low"],
-            "close": _k["close"],
-            "volume": _k["volume"],
-        }
-        for _, _k in ks.iterrows()
-    ]
+    # s_time = time.time()
+    cd_klines = ks.to_dict(orient="records")
+    # print(f"转换成列表数据格式耗时: {time.time() - s_time:.2f}s")
 
+    # s_time = time.time()
     mean_klines: list = []
     for i in range(len(cd_klines)):
         if i == 0:
@@ -1008,8 +1000,13 @@ def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
                 "volume": _volume,
             }
         )
+    # print(f"转换成平均K线数据格式耗时: {time.time() - s_time:.2f}s")
 
-    return pd.DataFrame(mean_klines)
+    # s_time = time.time()
+    df = pd.DataFrame(mean_klines)
+    # print(f"转换成 pd.DataFrame 数据格式耗时: {time.time() - s_time:.2f}s")
+
+    return df
 
 
 if __name__ == "__main__":

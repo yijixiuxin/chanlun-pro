@@ -261,7 +261,7 @@ class ExchangeDB(Exchange):
             )
         return ticks
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Dict:
         return {
             "code": code,
             "name": code,

@@ -90,6 +90,7 @@ class BackTestKlines(MarketDatas):
             "klines": 0,
             "convert_klines": 0,
             "get_cl_data": 0,
+            "query_db_klines": 0,
         }
 
     def init(self, base_code: str, frequency: Union[str, list]):
@@ -436,18 +437,23 @@ class BackTestKlines(MarketDatas):
 
 
 if __name__ == "__main__":
+    from chanlun.cl_utils import klines_to_heikin_ashi_klines
+
     market = "a"
-    start = "2022-03-30 09:45:00"
-    end = "2022-05-30 09:45:00"
-    code = "SZ.300460"
-    frequencys = ["d", "30m", "5m"]
+    start = "2015-01-01 00:00:00"
+    end = "2024-05-01 00:00:00"
+    code = "SH.000001"
+    frequencys = ["w", "d", "30m"]
     cl_config = {}
     bkt = BackTestKlines(market, start, end, frequencys, cl_config)
     bkt.init(code, frequencys[-1])
 
+    s_time = time.time()
     while bkt.next():
-        for f in frequencys:
-            k = bkt.klines(code, f)
-            print(
-                f"{code} - {f} : kline last date : {k.iloc[-1]['date']} close: {k.iloc[-1]['close']}"
-            )
+        k = bkt.klines(code, "d")
+        ks = klines_to_heikin_ashi_klines(k.iloc[-1000::])
+
+        # print(
+        #     f"{code} - {f} : kline last date : {k.iloc[-1]['date']} close: {k.iloc[-1]['close']}"
+        # )
+    print(f"总耗时：{time.time() - s_time}")
