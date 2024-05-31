@@ -346,8 +346,8 @@ if __name__ == "__main__":
     print(code_bkgn)
 
     # 根据行业获取其中的代码
-    # codes = bkgn.get_codes_by_hy('珠宝首饰')
-    # print(codes)
+    codes = bkgn.get_codes_by_hy('塑料制品')
+    print(codes)
 
     # 根据概念获取其中的代码
     # codes = bkgn.get_codes_by_gn('电子竞技')

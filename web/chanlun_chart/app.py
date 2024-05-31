@@ -8,6 +8,8 @@ import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
+from flask_cors import CORS
+
 cmd_path = pathlib.Path.cwd()
 sys.path.append(str(cmd_path))
 
@@ -21,7 +23,9 @@ except Exception as e:
 
 if __name__ == "__main__":
     try:
-        s = HTTPServer(WSGIContainer(create_app(), executor=ThreadPoolExecutor(10)))
+        app = create_app()
+        CORS(app)
+        s = HTTPServer(WSGIContainer(app, executor=ThreadPoolExecutor(10)))
         s.bind(9900, "0.0.0.0")
 
         print("启动成功")

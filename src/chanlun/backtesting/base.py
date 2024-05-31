@@ -22,14 +22,15 @@ class POSITION:
         amount: float = 0,
         loss_price: float = None,
         open_date: str = None,
-        open_datetime: str = None,
-        close_datetime: str = None,
+        open_datetime: datetime = None,
+        close_datetime: datetime = None,
         profit_rate: float = 0,
         max_profit_rate: float = 0,
         max_loss_rate: float = 0,
         open_msg: str = "",
         close_msg: str = "",
         info: Dict = None,
+        open_uid: str = None,
     ):
         self.code: str = code
         self.mmd: str = mmd
@@ -39,8 +40,8 @@ class POSITION:
         self.amount: float = amount
         self.loss_price: float = loss_price
         self.open_date: str = open_date
-        self.open_datetime: str = open_datetime
-        self.close_datetime: str = close_datetime
+        self.open_datetime: datetime = open_datetime
+        self.close_datetime: datetime = close_datetime
         self.profit: float = 0  # 收益金额
         self.profit_rate: float = profit_rate  # 收益率
         self.max_profit_rate: float = max_profit_rate  # 仅供参考，不太精确
@@ -48,15 +49,68 @@ class POSITION:
         self.open_msg: str = open_msg
         self.close_msg: str = close_msg
         self.info: Dict = info
+        self.open_uid: str = open_uid
         # 仓位控制相关
-        self.now_pos_rate: float = 0  # 记录当前开仓所占比例
-        self.open_keys: Dict[str, float] = {}  # 记录开仓的唯一key记录，避免多次重复开仓
-        self.close_keys: Dict[str, float] = (
-            {}
-        )  # 记录平仓的唯一key记录，避免多次重复平仓
+        # 记录当前开仓所占比例
+        self.now_pos_rate: float = 0
+        # 记录开仓的唯一key记录，避免多次重复开仓
+        self.open_keys: Dict[str, float] = {}
+        # 记录平仓的唯一key记录，避免多次重复平仓
+        self.close_keys: Dict[str, float] = {}
 
-        # 锁仓持仓记录
-        self.lock_positions: Dict[str, POSITION] = {}
+        # 开仓记录信息
+        self.open_records: List[dict] = []
+        # 平仓记录信息
+        self.close_records: List[dict] = []
+
+        # 各种平仓标记发出后的盈亏情况记录
+        # dict 包括
+        #   close_datetime: 平仓时间
+        #   profit_rate: 盈亏率
+        #   price: 平仓价格
+        #   max_profit_rate: 最大盈亏比率
+        #   max_loss_rate:  最大亏损比率
+        #   close_msg:  平仓信息
+        self.close_uid_profit: Dict[str, dict] = {}
+
+    def __close_records_by_uids(self, uids: List[str] = None):
+        """
+        根据 uid 关闭记录
+        """
+        if uids is None:
+            return None
+        if "clear" not in uids:
+            uids.append("clear")
+        # 按照时间从早到晚排序
+        close_profit = sorted(
+            self.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
+        )
+        for _r in close_profit:
+            if _r[0] in uids:
+                return _r[1]
+        raise Exception(
+            f"{self.code} - {self.mmd} - {self.open_datetime} 没有找到对应的平仓记录: {uids}"
+        )
+
+    def get_close_profit(self, uids: List[str] = None):
+        if uids is None:
+            return {
+                "close_datetime": self.close_datetime,
+                "profit": self.profit,
+                "profit_rate": self.profit_rate,
+                "max_profit_rate": self.max_profit_rate,
+                "max_loss_rate": self.max_loss_rate,
+                "close_msg": self.close_msg,
+            }
+        close_profit = self.__close_records_by_uids(uids)
+        return {
+            "close_datetime": close_profit["close_datetime"],
+            "profit": close_profit["profit"],
+            "profit_rate": close_profit["profit_rate"],
+            "max_profit_rate": close_profit["max_profit_rate"],
+            "max_loss_rate": close_profit["max_loss_rate"],
+            "close_msg": close_profit["close_msg"],
+        }
 
     # def __str__(self):
     #     return f'code : {self.code} mmd : {self.mmd} type : {self.type}'
@@ -69,6 +123,7 @@ class Operation:
 
     def __init__(
         self,
+        code: str,
         opt: str,
         mmd: str,
         loss_price: float = 0,
@@ -76,11 +131,11 @@ class Operation:
         msg: str = "",
         pos_rate: float = 1,
         key: str = "id",
-        code: str = "",
+        open_uid: str = None,
+        close_uid: str = "clear",
     ):
-        self.opt: str = (
-            opt  # 操作指示  buy  买入  sell  卖出  lock 锁仓 unlock 解除锁仓 （只有期货支持锁仓操作）
-        )
+        # 操作指示  buy  买入  sell  卖出
+        self.opt: str = opt
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
         # 背驰点 例如：down_bi_bc_buy down_pz_bc_buy down_qs_bc_buy up_bi_bc_sell up_pz_bc_sell up_qs_bc_sell
@@ -89,10 +144,13 @@ class Operation:
         self.info: Dict[str, object] = info  # 自定义保存的一些信息
         self.msg: str = msg
         self.pos_rate: float = pos_rate  # 开仓 or 平仓 所占的比例
-        self.key: str = (
-            key  # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
-        )
+        # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
+        self.key: str = key
         self.code: str = code  # 操作的标的代码
+        # 开车的标记uid，同一个uid同时只能有一个持仓
+        self.open_uid: str = f"{code}:{mmd}" if open_uid is None else open_uid
+        # 平仓的标记uid，在信号模式下，只有 clear 才算彻底清仓，其他只是标记
+        self.close_uid: str = close_uid
 
     def __str__(self):
         return f"mmd {self.mmd} opt {self.opt} loss_price {self.loss_price} msg: {self.msg}"
@@ -186,11 +244,12 @@ class Strategy(ABC):
     """
 
     def __init__(self):
+        self.allow_close_uid = None
         pass
 
     @abstractmethod
     def open(
-        self, code, market_data: MarketDatas, poss: Dict[str, POSITION]
+        self, code, market_data: MarketDatas, poss: List[POSITION]
     ) -> List[Operation]:
         """
         观察行情数据，给出开仓操作建议
@@ -461,6 +520,7 @@ class Strategy(ABC):
         low_stop_loss_price = low_prices[-2] - atr_vals[-2] * atr_m
         if "buy" in pos.mmd and price <= low_stop_loss_price:
             return Operation(
+                code=cd.get_code(),
                 opt="sell",
                 mmd=pos.mmd,
                 msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
@@ -468,6 +528,7 @@ class Strategy(ABC):
             )
         elif "sell" in pos.mmd and price >= high_stop_loss_price:
             return Operation(
+                code=cd.get_code(),
                 opt="sell",
                 mmd=pos.mmd,
                 msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
@@ -487,18 +548,22 @@ class Strategy(ABC):
         if "buy" in mmd:
             if price < pos.loss_price:
                 return Operation(
+                    code=pos.code,
                     opt="sell",
                     mmd=mmd,
                     msg="%s 止损 （止损价格 %s 当前价格 %s）"
                     % (mmd, pos.loss_price, price),
+                    close_uid="clear",
                 )
         elif "sell" in mmd:
             if price > pos.loss_price:
                 return Operation(
+                    code=pos.code,
                     opt="sell",
                     mmd=mmd,
                     msg="%s 止损 （止损价格 %s 当前价格 %s）"
                     % (mmd, pos.loss_price, price),
+                    close_uid="clear",
                 )
         return None
 
@@ -529,7 +594,9 @@ class Strategy(ABC):
                 else (price - pos.price) / pos.price * 100
             )
             if profit_rate > 0 and pos.max_profit_rate - profit_rate >= max_back_rate:
-                return Operation(opt="sell", mmd=mmd, msg="%s 回调止损" % mmd)
+                return Operation(
+                    code=pos.code, opt="sell", mmd=mmd, msg="%s 回调止损" % mmd
+                )
         return None
 
     @staticmethod

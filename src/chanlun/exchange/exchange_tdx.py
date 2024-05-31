@@ -167,13 +167,10 @@ class ExchangeTDX(Exchange):
         else:
             args["pages"] = int(args["pages"])
 
-        if "use_disk" not in args.keys():
-            args["use_disk"] = False
-
         frequency_map = {
             "y": 11,
             "m": 6,
-            "w": 5,
+            "w": 9,
             "d": 9,
             "120m": 3,
             "60m": 3,
@@ -184,12 +181,14 @@ class ExchangeTDX(Exchange):
             "2m": 8,
             "1m": 8,
         }
+        # 周线数据，使用日线复权后的数据进行合并，所以多请求点数据
+        if frequency == "w":
+            args["pages"] = 12
+
         market, tdx_code, _type = self.to_tdx_code(code)
         if market is None or _type is None:
-            # print(f"{code} - {frequency} 不支持的调用参数")
             return None
 
-        # _time_s = time.time()
         try:
             client = TdxHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
@@ -199,35 +198,11 @@ class ExchangeTDX(Exchange):
                     get_bars = client.get_security_bars
 
                 ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if (
-                    args["use_disk"] is False
-                ):  # 如果只使用本地文件缓存，则无需进行网络请求
-                    if ks is None:
-                        # 获取 8*800 = 6400 条数据
-                        ks = pd.concat(
-                            [
-                                client.to_df(
-                                    get_bars(
-                                        frequency_map[frequency],
-                                        market,
-                                        tdx_code,
-                                        (i - 1) * 800,
-                                        800,
-                                    )
-                                )
-                                for i in range(1, args["pages"] + 1)
-                            ],
-                            axis=0,
-                            sort=False,
-                        )
-                        if len(ks) == 0:
-                            return pd.DataFrame([])
-                        ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
-                        ks.sort_values("date", inplace=True)
-                    else:
-                        for i in range(1, args["pages"] + 1):
-                            # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                            _ks = client.to_df(
+                if ks is None:
+                    # 获取 8*800 = 6400 条数据
+                    ks = pd.concat(
+                        [
+                            client.to_df(
                                 get_bars(
                                     frequency_map[frequency],
                                     market,
@@ -236,19 +211,50 @@ class ExchangeTDX(Exchange):
                                     800,
                                 )
                             )
-                            if len(_ks) == 0:
-                                break
-                            _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                            _ks.sort_values("date", inplace=True)
-                            new_start_dt = _ks.iloc[0]["date"]
-                            old_end_dt = ks.iloc[-1]["date"]
-                            ks = pd.concat([ks, _ks], ignore_index=True)
-                            # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                            if old_end_dt >= new_start_dt:
-                                break
+                            for i in range(1, args["pages"] + 1)
+                        ],
+                        axis=0,
+                        sort=False,
+                    )
+                    if len(ks) == 0:
+                        return pd.DataFrame([])
+                    ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
+                    ks.sort_values("date", inplace=True)
+                else:
+                    for i in range(1, args["pages"] + 1):
+                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
+                        _ks = client.to_df(
+                            get_bars(
+                                frequency_map[frequency],
+                                market,
+                                tdx_code,
+                                (i - 1) * 800,
+                                800,
+                            )
+                        )
+                        if len(_ks) == 0:
+                            break
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                        _ks.sort_values("date", inplace=True)
+                        new_start_dt = _ks.iloc[0]["date"]
+                        old_end_dt = ks.iloc[-1]["date"]
+                        ks = pd.concat([ks, _ks], ignore_index=True)
+                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
+                        if old_end_dt >= new_start_dt:
+                            break
+            # TODO 如果是分钟数据，当天的数据会有问题，在 13:00，应该是 11:00
+            if len(frequency) >= 2 and frequency.endswith("m"):
+                # 将 13:00 修改为 11:30
+                def dt_1300_to_1130(_d: datetime.datetime):
+                    if _d.hour == 13 and _d.minute == 0:
+                        return _d.replace(hour=11, minute=30)
+                    return _d
+
+                ks["date"] = ks["date"].apply(dt_1300_to_1130)
 
             # 删除重复数据
             ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
+
             self.fdb.save_tdx_klines(code, frequency, ks)
 
             ks.loc[:, "code"] = code
@@ -268,11 +274,11 @@ class ExchangeTDX(Exchange):
                 ks["date"] = ks["date"].apply(lambda _d: _d.replace(month=1, day=1))
             ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
 
-            if frequency in ["120m", "10m", "2m"]:
-                ks = convert_stock_kline_frequency(ks, frequency)
-
             if args["fq"] in ["qfq", "hfq"]:
                 ks = self.klines_fq(ks, self.xdxr(market, code, tdx_code), args["fq"])
+
+            if frequency in ["w", "120m", "10m", "2m"]:
+                ks = convert_stock_kline_frequency(ks, frequency)
 
             ks.reset_index(inplace=True)
             ks = ks[["code", "date", "open", "close", "high", "low", "volume"]]
@@ -668,9 +674,9 @@ if __name__ == "__main__":
     # print(len(all_stocks))
 
     s_time = time.time()
-    klines = ex.klines("SH.605296", "d", args={"pages": 12})
+    klines = ex.klines("SH.605296", "30m")
     print(klines.head(5))
-    print(klines.tail(5))
+    print(klines.tail(50))
     print(len(klines))
 
     print("use time : ", time.time() - s_time)

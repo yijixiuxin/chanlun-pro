@@ -78,7 +78,7 @@ export interface DOMLevel {
 }
 /**
  * Datafeed configuration data.
- * Pass the resulting array of properties as a parameter to {@link OnReadyCallback} of the [`onReady`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#onready) method.
+ * Pass the resulting array of properties as a parameter to {@link OnReadyCallback} of the [`onReady`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API.md#onready) method.
  */
 export interface DatafeedConfiguration {
 	/**
@@ -88,12 +88,13 @@ export interface DatafeedConfiguration {
 	 */
 	exchanges?: Exchange[];
 	/**
-	 * List of supported resolutions. Resolution string format is described here: {@link ResolutionString}
-	 * Setting this property to `undefined` or an empty array will result in the resolution widget
-	 * displaying the content.
+	 * List of [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md) that the chart should support.
+	 * Each item of the array is expected to be a string that has a specific [format](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format).
+	 * If you set this property to `undefined` or an empty array, the _Resolution_ drop-down menu displays the list of resolutions available for
+	 * the current symbol ({@link LibrarySymbolInfo.supported_resolutions}).
 	 *
 	 * @example
-	 * `["1", "15", "240", "D", "6M"]` will give you "1 minute, 15 minutes, 4 hours, 1 day, 6 months" in resolution widget.
+	 * `["1", "15", "240", "D", "6M"]` will give you "1 minute, 15 minutes, 4 hours, 1 day, 6 months" in the _Resolution_ drop-down menu.
 	 */
 	supported_resolutions?: ResolutionString[];
 	/**
@@ -241,9 +242,12 @@ export interface IDatafeedChartApi {
 	 */
 	getTimescaleMarks?(symbolInfo: LibrarySymbolInfo, from: number, to: number, onDataCallback: GetMarksCallback<TimescaleMark>, resolution: ResolutionString): void;
 	/**
-	 * This function is called if configuration flag supports_time is set to true when chart needs to know the server time.
-	 * The library expects callback to be called once.
-	 * The time is provided without milliseconds. Example: `1445324591`. It is used to display Countdown on the price scale.
+	 * This function is called if the `supports_time` configuration flag is `true` when the chart needs to know the server time.
+	 * The library expects a callback to be called once.
+	 * The time is provided without milliseconds. Example: `1445324591`.
+	 *
+	 * `getServerTime` is used to display countdown on the price scale.
+	 * Note that the countdown can be displayed only for [intraday](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-minutes-intraday) resolutions.
 	 */
 	getServerTime?(callback: ServerTimeCallback): void;
 	/**
@@ -293,6 +297,7 @@ export interface IDatafeedChartApi {
 	unsubscribeBars(listenerGuid: string): void;
 	/**
 	 * Trading Platform calls this function when it wants to receive real-time level 2 (DOM) for a symbol.
+	 * Note that you should set the {@link BrokerConfigFlags.supportLevel2Data} configuration flag to `true`.
 	 *
 	 * @param symbol A SymbolInfo object
 	 * @param callback Function returning an object to update Depth Of Market (DOM) data
@@ -301,6 +306,7 @@ export interface IDatafeedChartApi {
 	subscribeDepth?(symbol: string, callback: DOMCallback): string;
 	/**
 	 * Trading Platform calls this function when it doesn't want to receive updates for this listener anymore.
+	 * Note that you should set the {@link BrokerConfigFlags.supportLevel2Data} configuration flag to `true`.
 	 *
 	 * @param subscriberUID A string returned by `subscribeDepth`
 	 */
@@ -381,16 +387,14 @@ export interface LibrarySubsessionInfo {
 }
 export interface LibrarySymbolInfo {
 	/**
-	 * Symbol Name
-	 * It's the name of the symbol. It is a string that your users will be able to see.
-	 * Also, it will be used for data requests if you are not using tickers.
+	 * It is a symbol name within an exchange, such as `AAPL` or `9988` (Hong Kong).
+	 * Note that it should not contain the exchange name.
+	 * This symbol name is visible to users and can be repeated.
+	 *
+	 * By default, `name` is used to resolve symbols in the [Datafeed API](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API.md).
+	 * If you use {@link LibrarySymbolInfo.ticker}, the library will use the ticker for Datafeed API requests.
 	 */
 	name: string;
-	/**
-	 * The full name of the symbol (contains name and exchange)
-	 * Example: `BTCE:BTCUSD`
-	 */
-	full_name: string;
 	/**
 	 * Array of base symbols
 	 * Example: for `AAPL*MSFT` it is `['NASDAQ:AAPL', 'NASDAQ:MSFT']`
@@ -399,9 +403,10 @@ export interface LibrarySymbolInfo {
 		string
 	];
 	/**
-	 * Unique symbol id
-	 * It's an unique identifier for this particular symbol in your symbology.
-	 * If you specify this property then its value will be used for all data requests for this symbol. ticker will be treated the same as {@link LibrarySymbolInfo.name} if not specified explicitly.
+	 * It is an unique identifier for a particular symbol in your [symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md).
+	 * If you specify this property, its value will be used for all data requests for this symbol.
+	 * `ticker` will be treated the same as {@link LibrarySymbolInfo.name} if not specified explicitly.
+	 * Note that it should not contain the exchange name.
 	 */
 	ticker?: string;
 	/**
@@ -421,7 +426,7 @@ export interface LibrarySymbolInfo {
 	 */
 	type: string;
 	/**
-	 * Trading hours for this symbol. See the [Trading Sessions article](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions) to learn more details.
+	 * Trading hours for this symbol. See the [Trading sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions.md) article to learn more details.
 	 * @example "1700-0200"
 	 */
 	session: string;
@@ -430,16 +435,23 @@ export interface LibrarySymbolInfo {
 	 */
 	session_display?: string;
 	/**
-	 * List of holidays for this symbol. These dates are not displayed on the chart.
-	 * It's a string in the following format: `YYYYMMDD[,YYYYMMDD]`.
+	 * A string that contains a list of non-trading holidays for the symbol.
+	 * Holiday dates should be in the `YYYYMMDD` format.
+	 * These dates are not displayed on the chart.
+	 *
+	 * You can specify a correction for a holiday using {@link LibrarySymbolInfo.corrections}.
 	 * @example "20181105,20181107,20181112"
 	 */
 	session_holidays?: string;
 	/**
-	 * List of corrections for this symbol. Corrections are days with specific trading sessions. They can be applied to holidays as well.
+	 * List of corrections for a symbol. The corrections are days when the trading session differs from the default one set in {@link LibrarySymbolInfo.session}.
+	 * The `corrections` value is a string in the following format: `SESSION:YYYYMMDD`.
+	 * For more information, refer to [corrections](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#corrections).
 	 *
-	 * It's a string in the following format: `SESSION:YYYYMMDD[,YYYYMMDD][;SESSION:YYYYMMDD[,YYYYMMDD]]`
-	 * Where SESSION has the same format as [Trading Sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions).
+	 * The string below specifies corrections for two trading days:
+	 *
+	 * - November 13, 2018. This trading day is split into two sessions. The first session starts at 19:00 four days before (November 9, 2018) and ends at 23:50 four days before. The second session starts at 10:00 and ends at 18:45.
+	 * - November 14, 2018. The session starts at 10:00 and ends at 14:00.
 	 *
 	 * @example "1900F4-2350F4,1000-1845:20181113;1000-1400:20181114"
 	 */
@@ -459,14 +471,14 @@ export interface LibrarySymbolInfo {
 	 */
 	listed_exchange: string;
 	/**
-	 * Timezone of the exchange for this symbol. We expect to get the name of the time zone in `olsondb` format.
-	 * See [Timezones](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology#timezone) for a full list of supported timezones
+	 * Time zone of the exchange for this symbol. We expect to get the name of the time zone in `olsondb` format.
+	 * See [Time zones](https://www.tradingview.com/charting-library-docs/latest/ui_elements/timezones.md) for a full list of supported time zones.
 	 */
 	timezone: Timezone;
 	/**
 	 * Format of displaying labels on the price scale:
 	 *
-	 * `price` - formats decimal or fractional numbers based on `minmov`, `pricescale`, `minmove2`, `fractional` and `variableMinTick` values. See [Price Formatting](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology#price-format) for more details
+	 * `price` - formats decimal or fractional numbers based on `minmov`, `pricescale`, `minmove2`, `fractional` and `variableMinTick` values. See [Price format](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#price-format) for more details.
 	 * `volume` - formats decimal numbers in thousands, millions, billions or trillions
 	 */
 	format: SeriesFormat;
@@ -524,18 +536,17 @@ export interface LibrarySymbolInfo {
 	 * If it's `false` then all buttons for intraday resolutions will be disabled for this particular symbol.
 	 * If it is set to `true`, all intradays resolutions that are supplied directly by the datafeed must be provided in `intraday_multipliers` array.
 	 *
-	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions!
+	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions.
 	 *
 	 * `false` if DWM only
 	 * @default false
 	 */
 	has_intraday?: boolean;
 	/**
-	 * An array of resolutions which should be enabled in resolutions picker for this symbol.
+	 * An array of [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md) which should be enabled in the _Resolution_ drop-down menu for this symbol.
+	 * Each item of the array is expected to be a string that has a specific [format](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format).
 	 *
-	 * Each item of an array is expected to be a string. Format is described in another article.
-	 *
-	 * If one changes the symbol and new symbol does not support the selected resolution then resolution will be switched to the first available one in the list.
+	 * If one changes the symbol and the new symbol does not support the selected resolution, the resolution will be switched to the first available one in the list.
 	 *
 	 * **Resolution availability logic (pseudocode):**
 	 * ```
@@ -545,10 +556,15 @@ export interface LibrarySymbolInfo {
 	 *         : symbol.supported_resolutions(resolution);
 	 * ```
 	 *
-	 * In case of absence of `supported_resolutions` in a symbol info all DWM resolutions will be available. Intraday resolutions will be available if `has_intraday` is `true`.
-	 * Supported resolutions affect available timeframes too. The timeframe will not be available if it requires the resolution that is not supported.
+	 * If `supported_resolutions` is `[]` (empty array), all resolutions are disabled in the _Resolution_ drop-down menu.
+	 *
+	 * If `supported_resolutions` is `undefined`, all resolutions that the chart support ({@link DatafeedConfiguration.supported_resolutions}) and custom resolutions are enabled.
+	 *
+	 * Note that the list of available time frames depends on supported resolutions.
+	 * Time frames that require resolutions that are unavailable for a particular symbol will be hidden.
+	 * Refer to [Time frame toolbar](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale.md#time-frame-toolbar) for more information.
 	 */
-	supported_resolutions: ResolutionString[];
+	supported_resolutions?: ResolutionString[];
 	/**
 	 * Array of resolutions (in minutes) supported directly by the data feed. Each such resolution may be passed to, and should be implemented by, `getBars`. The default of [] means that the data feed supports aggregating by any number of minutes.
 	 *
@@ -594,7 +610,7 @@ export interface LibrarySymbolInfo {
 	 */
 	has_daily?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#days) (in days - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format) (in days - without the suffix) supported by the datafeed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -614,7 +630,7 @@ export interface LibrarySymbolInfo {
 	 */
 	has_weekly_and_monthly?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#weeks) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-weeks--months) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -625,7 +641,7 @@ export interface LibrarySymbolInfo {
 	 */
 	weekly_multipliers?: string[];
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-weeks--months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -647,9 +663,9 @@ export interface LibrarySymbolInfo {
 	/**
 	 * Represents what values are supported by the symbol. Possible values:
 	 *
-	 * - `ohlcv` - the symbol supports open, high, low, close and has volume
-	 * - `ohlc` - the symbol supports open, high, low, close, but doesn't have volume
-	 * - `c` - the symbol supports only close, it's displayed on the chart using line-based styles only
+	 * - `ohlcv` — the symbol supports open, high, low, close prices and has volume.
+	 * - `ohlc` — the symbol supports open, high, low, close, prices but doesn't have volume.
+	 * - `c` — the symbol supports only close price. This makes the chart show the symbol data using only line-based styles.
 	 * @default 'ohlcv'
 	 */
 	visible_plots_set?: VisiblePlotsSet;
@@ -662,15 +678,16 @@ export interface LibrarySymbolInfo {
 	volume_precision?: number;
 	/**
 	 * The status code of a series with this symbol.
-	 * This could be represented as an icon in the legend, next to the market status icon for `delayed_streaming` & `endofday` type of data.
+	 * For `delayed_streaming` and `endofday` type of data, the status is displayed as an icon and the *Data is delayed* section in the [_Legend_](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend.md#display-delayed-data-information), next to the market status icon.
+	 * Note that you should also enable the [`display_data_mode`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#display_data_mode) featureset.
+	 *
 	 * When declaring `delayed_streaming` you also have to specify its {@link LibrarySymbolInfo.delay} in seconds.
 	 */
-	data_status?: "streaming" | "endofday" | "pulsed" | "delayed_streaming";
+	data_status?: "streaming" | "endofday" | "delayed_streaming";
 	/**
 	 * Type of delay that is associated to the data or real delay for real time data.
 	 * - `0` for realtime
 	 * - `-1` for endofday
-	 * - `-2` for pulsed
 	 * - or delay in seconds (for delayed realtime)
 	 */
 	delay?: number;
@@ -709,24 +726,28 @@ export interface LibrarySymbolInfo {
 	 */
 	unit_conversion_types?: string[];
 	/**
-	 * Subsession ID. Must match the `id` property of one of the subsessions.
+	 * An ID of a subsession specified in {@link subsessions}. The value must match the subsession that is currently displayed on the chart.
+	 * For more information, refer to the [Extended sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#extended-sessions) section.
 	 */
 	subsession_id?: string;
 	/**
-	 * Subsessions definitions.
+	 * An array of objects that contain information about certain subsessions within the extended session.
+	 * For more information, refer to the [Extended sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#extended-sessions) section.
 	 */
 	subsessions?: LibrarySubsessionInfo[];
 	/**
-	 * Optional ID of a price source for this symbol. Should match one of the price sources from the {@link price_sources} array.
+	 * Optional ID of a price source for a symbol. Should match one of the price sources from the {@link price_sources} array.
+	 *
+	 * Note that you should set the [`symbol_info_price_source`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#symbol_info_price_source) featureset to `true` to display the symbol price source in the main series legend.
 	 */
 	price_source_id?: string;
 	/**
-	 * Supported price sources for the symbol. The source of the values that this symbol's bars represent.
+	 * Supported price sources for the symbol.
+	 * Price sources appear in the series legend and indicate the origin of values represented by symbol bars.
+	 * Example price sources: "Spot Price", "Ask", "Bid", etc.
+	 * The price source information is valuable when viewing non-OHLC series types.
 	 *
-	 * For example 'Spot Price', 'Ask', 'Bid', etc.
-	 *
-	 * Mostly useful when viewing non-OHLC series types. The price source will be shown in the series legend.
-	 *
+	 * Note that you should set the [`symbol_info_price_source`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#symbol_info_price_source) featureset to `true` to display the symbol price source in the main series legend.
 	 * @example [{ id: '1', name: 'Spot Price' }, { id: '321', name: 'Bid' }]
 	 */
 	price_sources?: SymbolInfoPriceSource[];
@@ -772,7 +793,7 @@ export interface Mark {
 	id: string | number;
 	/**
 	 * Time for the mark.
-	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
+	 * Unix timestamp in seconds.
 	 */
 	time: number;
 	/** Color for the mark */
@@ -940,7 +961,7 @@ export interface SymbolResolveExtension {
 	/**
 	 * Indicates the currency for conversions if `currency_codes` configuration field is set,
 	 * and `currency_code` is provided in the original symbol information ({@link LibrarySymbolInfo}).
-	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale#currency-conversion).
+	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale.md#currency-conversion).
 	 */
 	currencyCode?: string;
 	/**
@@ -949,7 +970,7 @@ export interface SymbolResolveExtension {
 	 */
 	unitId?: string;
 	/**
-	 * Trading session string
+	 * Trading session type, such as `"regular"` or `"extended"`, that the chart should currently display.
 	 */
 	session?: string;
 }
@@ -958,7 +979,7 @@ export interface TimescaleMark {
 	id: string | number;
 	/**
 	 * Time for the mark.
-	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
+	 * Unix timestamp in seconds.
 	 */
 	time: number;
 	/** Color for the timescale mark */
@@ -1003,7 +1024,7 @@ export interface Unit {
 	/** Description */
 	description: string;
 }
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 export type DOMCallback = (data: DOMData) => void;
 export type ErrorCallback = (reason: string) => void;
 export type GetMarksCallback<T> = (marks: T[]) => void;

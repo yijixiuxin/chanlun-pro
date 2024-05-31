@@ -8,6 +8,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 declare const dateFormatFunctions: {
 	readonly "dd MMM 'yy": (date: Date, local: boolean) => string;
+	readonly "MMM 'yy": (date: Date, local: boolean) => string;
 	readonly "MMM dd, yyyy": (date: Date, local: boolean) => string;
 	readonly "MMM yyyy": (date: Date, local: boolean) => string;
 	readonly "MMM dd": (date: Date, local: boolean) => string;
@@ -134,6 +135,7 @@ export declare const enum ActionId {
 	ChartDialogsShowGeneralSettings = "Chart.Dialogs.ShowGeneralSettings",
 	ChartDialogsShowGeneralSettingsLegendTab = "Chart.Dialogs.ShowGeneralSettings.LegendTab",
 	ChartDialogsShowGeneralSettingsSymbolTab = "Chart.Dialogs.ShowGeneralSettings.SymbolTab",
+	ChartDialogsShowGeneralScalesTab = "Chart.Dialogs.ShowGeneralSettings.ScalesTab",
 	ChartDialogsShowGoToDate = "Chart.Dialogs.ShowGoToDate",
 	ChartDialogsShowInsertIndicators = "Chart.Dialogs.ShowInsertIndicators",
 	ChartDialogsShowSymbolInfo = "Chart.Dialogs.ShowSymbolInfo",
@@ -141,6 +143,7 @@ export declare const enum ActionId {
 	ChartExternalActionId = "Chart.ExternalActionId",
 	ChartFavoriteDrawingToolsToolbarHide = "Chart.FavoriteDrawingToolsToolbar.Hide",
 	ChartIndicatorShowSettingsDialog = "Chart.Indicator.ShowSettingsDialog",
+	ChartLegendToggleLastDayChangeValuesVisibility = "Chart.Legend.ToggleLastDayChangeValuesVisibility",
 	ChartLegendToggleBarChangeValuesVisibility = "Chart.Legend.ToggleBarChangeValuesVisibility",
 	ChartLegendTogglePriceSourceVisibility = "Chart.Legend.TogglePriceSourceVisibility",
 	ChartLegendToggleIndicatorArgumentsVisibility = "Chart.Legend.ToggleIndicatorArgumentsVisibility",
@@ -272,12 +275,12 @@ export declare const enum ActionId {
 	TradingSellBuyButtonsToggleVisibility = "Trading.SellBuyButtonsToggleVisibility",
 	TradingTradeFromChart = "Trading.TradeFromChart",
 	TradingNoOverlapMode = "Trading.NoOverlapMode",
-	WatchlistAddSymbol = "Watchlist.AddSymbol",
-	WatchlistAddSymbolToCompare = "Watchlist.AddSymbolToCompare",
 	WatchlistAddSelectedSymbolsToCompare = "Watchlist.AddSelectedSymbolsToCompare ",
-	WatchlistRenameSection = "Watchlist.RenameSection",
+	WatchlistAddSymbolToCompare = "Watchlist.AddSymbolToCompare",
+	WatchlistAddSymbolToSection = "Watchlist.AddSymbolToSection",
+	WatchlistAddSymbol = "Watchlist.AddSymbol",
 	WatchlistRemoveSection = "Watchlist.RemoveSection",
-	WatchlistAddSymbolToSection = "Watchlist.AddSymbolToSection"
+	WatchlistRenameSection = "Watchlist.RenameSection"
 }
 export declare const enum ChartStyle {
 	Bar = 0,
@@ -411,7 +414,7 @@ export declare const enum OverridePriceAxisLastValueMode {
 export declare const enum ParentType {
 	Order = 1,
 	Position = 2,
-	Trade = 3
+	IndividualPosition = 3
 }
 export declare const enum PriceScaleMode {
 	/** Normal mode of the price scale */
@@ -445,6 +448,10 @@ export declare const enum Side {
 	Buy = 1,
 	Sell = -1
 }
+/**
+ * Enumeration of the built-in formatters for the Account Manager columns.
+ * Refer to the [Value formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md) section for more information.
+ */
 export declare const enum StandardFormatterName {
 	Date = "date",
 	DateOrDateTime = "dateOrDateTime",
@@ -568,10 +575,32 @@ export interface AbcdLineToolOverrides {
 	"linetoolabcd.fontsize": number;
 	/** Default value: `false` */
 	"linetoolabcd.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolabcd.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetoolabcd.textcolor": string;
+}
+/**
+ * Overrides for the 'Accelerator Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AcceleratorOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `histogram` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#000080` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Defines a whitelist / blacklist of studies or drawing tools.
@@ -600,74 +629,51 @@ export interface AccessListItem {
 	 */
 	grayed?: boolean;
 }
-/** Column description for an account manager table */
+/** Column properties for the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md) pages. */
 export interface AccountManagerColumnBase<TFormatterName extends StandardFormatterName | FormatterName> {
 	/** Column title. It will be displayed in the table's header row. */
 	label: string;
 	/**
 	 * Horizontal alignment of the cell value. The default value is `left`.
 	 *
-	 * | alignment    |   description  |
+	 * | Alignment    |   Description  |
 	 * |--------------|----------------|
-	 * | left         | It aligns the cell value to the left |
-	 * | right        | It aligns the cell value to the right |
+	 * | left         | It aligns the cell value to the left. |
+	 * | right        | It aligns the cell value to the right. |
 	 */
 	alignment?: CellAlignment;
-	/** Column id. Unique identifier of column. */
+	/** Unique column identifier. */
 	id: string;
 	/**
-	 * Name of the formatter to be used for data formatting. It can be one of two types - `StandardFormatterName` or `FormatterName`. If `formatter` is not set, then the value is displayed as is.
-	 * Formatter can be a default or a custom one.
+	 * Defines a formatter to be applied for data formatting, which can either belong to the `StandardFormatterName` or `FormatterName` type.
+	 * If no specific formatter is set, the value is displayed as is.
 	 *
-	 * Default formatter names are listed in `StandardFormatterName` enumerator. If you want to use a custom formatter, you must typecast its name to `FormatterName` to confirm your confidence that you are using the correct name.
+	 * Default formatter names are enumerated in {@link StandardFormatterName}.
+	 * Refer to the [Default formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md#default-formatters) section to see the full list of formatters.
 	 *
-	 * Here is the list of default formatters:
-	 *
-	 * | name | description |
-	 * | ---- | ----------- |
-	 * | `StandardFormatterName.Date` | Displays the date or time. |
-	 * | `StandardFormatterName.DateOrDateTime` | Displays the date or date and time. This formatter accepts an `{dateOrDateTime: number, hasTime: boolean}` object. If `hasTime` is set to `true` then the date and time are displayed. Otherwise only the date is displayed.|
-	 * | `StandardFormatterName.Fixed` | Displays a number with 2 decimal places. |
-	 * | `StandardFormatterName.FixedInCurrency` | Displays a number with 2 decimal places and adds currency. |
-	 * | `StandardFormatterName.FormatPrice` | Displays symbol's price. |
-	 * | `StandardFormatterName.FormatQuantity` | Displays an integer or floating point quantity, separates thousands groups with a space. |
-	 * | `StandardFormatterName.FormatPriceForexSup` | The same as `formatPrice`, but it makes the last character of the price superscripted. It works only if instrument type is set to `forex`.|
-	 * | `StandardFormatterName.LocalDate` | Displays the local date or time. |
-	 * | `StandardFormatterName.LocalDateOrDateTime` | The same as `StandardFormatterName.DateOrDateTime`, but it displays time in the local timezone. |
-	 * | `StandardFormatterName.Pips` | Displays a number with 1 decimal place. |
-	 * | `StandardFormatterName.Profit` | Displays profit in account currency. It also adds the `+` sign, separates thousands and changes the cell text color to red or green. |
-	 * | `StandardFormatterName.ProfitInInstrumentCurrency` | Displays profit in instrument currency. It also adds the `+` sign, separates thousands and changes the cell text color to red or green. |
-	 * | `StandardFormatterName.Side` | It is used to display the side: Sell or Buy. |
-	 * | `StandardFormatterName.PositionSide` | It is used to display the position side: Short or Long. |
-	 * | `StandardFormatterName.Status` | It is used to format the `status`. |
-	 * | `StandardFormatterName.Symbol` | It is used for a symbol field. It displays `brokerSymbol`, but when you click on a symbol the chart changes according to the `symbol` field. |
-	 * | `StandardFormatterName.Text` | Displays a text value. |
-	 * | `StandardFormatterName.Type` | It is used to display the type of order: Limit/Stop/StopLimit/Market. |
-	 * | `StandardFormatterName.VariablePrecision` | Displays a number with variable precision. |
+	 * You can also create custom formatters using the {@link AccountManagerInfo.customFormatters} property.
 	 */
 	formatter?: TFormatterName;
 	/**
-	 * `dataFields` is an array with data object fields that is used to get the data to display in a column.
+	 * The `dataFields` array contains fields from an order/position data object.
+	 * `dataFields` is used to generate the values displayed in a column.
+	 * The displayed value in the column updates only when the corresponding values in the data object change.
 	 *
-	 * The displayed value in the column will only change if one of the corresponding data object values change.
-	 *
-	 * If the `formatter` is not set, the displayed values will be space-separated in the column.
-	 *
-	 * If a `formatter` is specified, it will only get the specified values.
-	 *
-	 * Specify an empty array as the `dataFields` and the formatter will receive the entire data object.
+	 * If no {@link formatter} is specified, the displayed values will be space-separated in the column.
+	 * When a `formatter` is defined, it processes only the specified values.
+	 * If an empty array is assigned to `dataFields`, the `formatter` will receive the entire data object.
 	 *
 	 * **Example**
-	 * Example
 	 *
-	 * - If you have column with `dataFields` set as `['avgPrice', 'qty']`, then displayed value will update only if `avgPrice` or `qty` values of the data object have been changed.
-	 * - If you have column with `dataFields` set as `[]`, then displayed value will update if some data object values have been changed.
+	 * - For a column with `dataFields` set as `['avgPrice', 'qty']`, the displayed value updates only when the `avgPrice` or `qty` values in the data object change.
+	 * - For a column with an empty `dataFields` array, the displayed value updates if any values in the data object change.
 	 */
 	dataFields: TFormatterName extends StandardFormatterName ? StandardFormattersDependenciesMapping[TFormatterName] : string[];
 	/**
-	 * Data object key that is used for data sorting
+	 * Data object key that is used for data sorting.
 	 *
-	 * If `sortProp` is not provided, then the first element of the `dataFields` array will be used. If the `dataFields` array is empty, then column sorting will be unavailable.
+	 * If `sortProp` is not provided, the first element of the `dataFields` array will be used.
+	 * If the `dataFields` array is empty, the column sorting will be unavailable.
 	 */
 	sortProp?: string;
 	/** When set to `true` will prevent column sorting. */
@@ -675,12 +681,14 @@ export interface AccountManagerColumnBase<TFormatterName extends StandardFormatt
 	/** Tooltip string for the column. */
 	help?: string;
 	/**
-	 * `highlightDiff` can be set with `StandardFormatterName.FormatPrice` and `StandardFormatterName.FormatPriceForexSup` formatters to highlight the changes of the field. If set to `true` then custom formatters will also get previous values.
+	 * `highlightDiff` can be set with [`StandardFormatterName.FormatPrice`](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md#formatPrice)
+	 * and [`StandardFormatterName.FormatPriceForexSup`](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md#formatPriceForexSup) formatters to highlight the changes of the field.
+	 * If `highlightDiff is `true`, the custom formatters will also get previous values.
 	 */
 	highlightDiff?: boolean;
-	/** When set to `true` will prevent the column from hiding. */
+	/** Setting `notHideable` to `true` prevents the column from being hidden. */
 	notHideable?: boolean;
-	/** When set to `true` will hide the column by default */
+	/** Setting `hideByDefault` to `true` hides the column by default. */
 	hideByDefault?: boolean;
 	/** Key of the row object that is used to get the tooltip to display when hovering over a cell.
 	 * The tooltip property refers to an object whose keys are property names and
@@ -691,29 +699,37 @@ export interface AccountManagerColumnBase<TFormatterName extends StandardFormatt
 	 * will be capitalized. The default value is `true`.
 	 */
 	isCapitalize?: boolean;
-	/** When set to `true` any zero values will be hidden. Default is `true` */
+	/** Setting `showZeroValues` to `true` hides any zero values. The default value is `true`. */
 	showZeroValues?: boolean;
 }
+/**
+ * The information object that is used to build the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md).
+ */
 export interface AccountManagerInfo {
 	/** Name of the broker */
 	accountTitle: string;
-	/** Custom fields which will always be displayed above the pages. */
+	/**
+	 * Custom fields that are always displayed at the top-right corner of the Account Manager.
+	 * Refer to the [Account Summary row](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#account-summary-row) section for more information.
+	 */
 	summary: AccountManagerSummaryField[];
 	/**
-	 * Optional array to define custom formatters.
-	 * Each description is an object with the following fields:
+	 * An optional array for defining [custom formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md#custom-formatters).
+	 * Each formatter description is an object with the following fields:
 	 *
-	 * 1. `name`: FormatterName
-	 *     - Unique name of a formatter.
+	 * - `name` ({@link FormatterName}): Unique formatter name.
 	 *
-	 * 1. `formatText`: [TableFormatTextFunction](#tableformattextfunction)
-	 *    -Function that is used for formatting of a cell value to `string`. Required because used to generate exported data.
+	 * - `formatText` ({@link TableFormatTextFunction}):
+	 * Function that is used for formatting a cell value to a string.
+	 * The `formatText` field is required because it is used to generate exported data.
+	 * You can return an empty string if you do not need this function.
 	 *
-	 * 1. `formatElement`: [CustomTableFormatElementFunction](#customtableformatelementfunction) | undefined
-	 *     - Optional function that is used for formatting of a cell value to `string` or `HTMLElement`.
+	 * - `formatElement` ({@link CustomTableFormatElementFunction} | `undefined`):
+	 * Optional function that is used for formatting a cell value to a string or an HTML element.
 	 *
-	 * If the `formatElement` function is provided, then only it will be used to format the displayed values, otherwise
-	 * `formatText` will be used. If you need to only display `string` values it is better to use only `formatText` for performance reasons.
+	 * If the `formatElement` function is provided, it only handles the formatting of displayed values.
+	 * Otherwise the `formatText` function is used.
+	 * For optimal performance, it is recommended to only use `formatText` if you intend to display only string values.
 	 *
 	 * **Example**
 	 * ```ts
@@ -737,28 +753,34 @@ export interface AccountManagerInfo {
 	 * ```
 	 */
 	customFormatters?: CustomTableElementFormatter[];
-	/** Columns description that you want to be displayed on the Orders page.
+	/** An array of data objects that create columns for the [Orders](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#orders-and-positions) page.
 	 * You can display any field of an {@link Order}
 	 * or add your own fields to an order object and display them.
 	 */
 	orderColumns: OrderTableColumn[];
 	/** Optional sorting of the orders table. */
 	orderColumnsSorting?: SortingParameters;
-	/** History page will be displayed if it exists. All orders from previous sessions will be shown in the History. */
+	/**
+	 * An array of data objects that create columns for the [History](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#history) page where all orders from previous sessions are shown.
+	 * Note that this page is only shown
+	 * if you set the {@link BrokerConfigFlags.supportOrdersHistory} to `true`
+	 * and implement the {@link IBrokerTerminal.ordersHistory} method.
+	 */
 	historyColumns?: AccountManagerColumn[];
-	/** Optional sorting of the history table. */
+	/** Optional sorting of the table on the [History](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#history) page. */
 	historyColumnsSorting?: SortingParameters;
 	/**
+	 * An array of data objects that create columns for the [Positions](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#orders-and-positions) page.
 	 * You can display any field of a {@link Position}
 	 * or add your own fields to a position object and display them.
 	 */
 	positionColumns?: AccountManagerColumn[];
 	/**
-	 * You can display any field of a {@link Trade}
-	 * or add your own fields to a trade object and display them.
+	 * You can display any field of an {@link IndividualPosition}
+	 * or add your own fields to an individualPosition object and display them.
 	 */
-	tradeColumns?: AccountManagerColumn[];
-	/** You can add new tabs in the Account Manager by using `pages`. Each tab is a set of tables. */
+	individualPositionColumns?: AccountManagerColumn[];
+	/** Adds [custom pages](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md#custom-pages) to the Account Manager. Each page is a set of tables. */
 	pages: AccountManagerPage[];
 	/** Optional list of statuses to be used in the orders filter. Default list is used if it hasn't been set. */
 	possibleOrderStatuses?: OrderStatus[];
@@ -829,6 +851,68 @@ export interface AccountManagerTableFlags {
 	/** Does the table support pagination */
 	supportPagination?: boolean;
 }
+export interface AccountMetainfo {
+	/**
+	 * Account ID
+	 */
+	id: AccountId;
+	/**
+	 * Account Name
+	 */
+	name: string;
+	/**
+	 * Currency
+	 */
+	currency?: string;
+	/**
+	 * Currency Sign (Prefix)
+	 */
+	currencySign?: string;
+}
+/**
+ * Overrides for the 'Accumulation/Distribution' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AccumulationDistributionIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Accumulative Swing Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AccumulativeSwingIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"asi.display": number;
+	/** Default value: `0` */
+	"asi.linestyle": number;
+	/** Default value: `1` */
+	"asi.linewidth": number;
+	/** Default value: `line` */
+	"asi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"asi.trackprice": boolean;
+	/** Default value: `0` */
+	"asi.transparency": number;
+	/** Default value: `#2196F3` */
+	"asi.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface ActionDescription {
 	/** Displayed text for action */
 	text?: "-" | string;
@@ -858,7 +942,7 @@ export interface ActionDescriptionWithCallback extends ActionDescription {
 	/** Action to be executed when user clicks the menu item. */
 	action: (a?: ActionDescription) => void;
 }
-export interface ActionOptions extends Partial<Omit<ActionState, "actionId">>, Pick<ActionState, "actionId"> {
+export interface ActionOptions extends Partial<OmitActionId<ActionState>>, Pick<ActionState, "actionId"> {
 	/**
 	 * A function which will be called when an action should be executed (e.g. when a user clicks on the item).
 	 */
@@ -875,6 +959,10 @@ export interface ActionState {
 	 * Text title of an action
 	 */
 	label: string;
+	/**
+	 * Text title of an action consisting of several styled sections. If not defined then {@link label} is used instead.
+	 */
+	styledLabel?: StyledText[];
 	/**
 	 * Whether an action is disabled or not (disabled actions are usually cannot be executed and displayed grayed out)
 	 */
@@ -938,6 +1026,50 @@ export interface AdditionalSymbolInfoField {
 	propertyName: string;
 }
 /**
+ * Overrides for the 'Advance/Decline' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AdvanceDeclineIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Anchored VWAP' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AnchoredVWAPIndicatorOverrides {
+	/** Default value: `15` */
+	"vwap.display": number;
+	/** Default value: `#1e88e5` */
+	"vwap.color": string;
+	/** Default value: `0` */
+	"vwap.linestyle": number;
+	/** Default value: `1` */
+	"vwap.linewidth": number;
+	/** Default value: `line` */
+	"vwap.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vwap.trackprice": boolean;
+	/** Default value: `0` */
+	"vwap.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Override properties for the Anchoredvwap drawing tool.
  */
 export interface AnchoredvwapLineToolOverrides {
@@ -972,7 +1104,7 @@ export interface ArcLineToolOverrides {
 	"linetoolarc.color": string;
 	/** Default value: `true` */
 	"linetoolarc.fillBackground": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolarc.linewidth": number;
 	/** Default value: `80` */
 	"linetoolarc.transparency": number;
@@ -996,6 +1128,64 @@ export interface AreaStylePreferences {
 	 * **Note**: Rather use `rgba` color string for setting transparency.
 	 */
 	transparency: number;
+}
+/**
+ * Overrides for the 'Arnaud Legoux Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ArnaudLegouxMovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Aroon' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AroonIndicatorOverrides {
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#FB8C00` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"lower.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Arrow drawing tool.
@@ -1148,6 +1338,116 @@ export interface AvailableZOrderOperations {
 	sendToBackEnabled: boolean;
 }
 /**
+ * Overrides for the 'Average Directional Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AverageDirectionalIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"adx.display": number;
+	/** Default value: `0` */
+	"adx.linestyle": number;
+	/** Default value: `1` */
+	"adx.linewidth": number;
+	/** Default value: `line` */
+	"adx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"adx.trackprice": boolean;
+	/** Default value: `0` */
+	"adx.transparency": number;
+	/** Default value: `#FF5252` */
+	"adx.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Average Price' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AveragePriceIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Average True Range' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AverageTrueRangeIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#801922` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Awesome Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface AwesomeOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `histogram` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#000080` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Balance of Power' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface BalanceofPowerIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Override properties for the Balloon drawing tool.
  */
 export interface BalloonLineToolOverrides {
@@ -1260,7 +1560,7 @@ export interface BeziercubicLineToolOverrides {
 	"linetoolbeziercubic.linecolor": string;
 	/** Default value: `0` */
 	"linetoolbeziercubic.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolbeziercubic.linewidth": number;
 	/** Default value: `0` */
 	"linetoolbeziercubic.rightEnd": number;
@@ -1285,19 +1585,148 @@ export interface BezierquadroLineToolOverrides {
 	"linetoolbezierquadro.linecolor": string;
 	/** Default value: `0` */
 	"linetoolbezierquadro.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolbezierquadro.linewidth": number;
 	/** Default value: `0` */
 	"linetoolbezierquadro.rightEnd": number;
 	/** Default value: `50` */
 	"linetoolbezierquadro.transparency": number;
 }
+/**
+ * Overrides for the 'Bollinger Bands %B' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface BollingerBandsBIndicatorOverrides {
+	/** Default value: `#26A69A` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `1` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `0` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#22AB94` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Bollinger Bands' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface BollingerBandsIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"plots background.color": string;
+	/** Default value: `95` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"median.display": number;
+	/** Default value: `0` */
+	"median.linestyle": number;
+	/** Default value: `1` */
+	"median.linewidth": number;
+	/** Default value: `line` */
+	"median.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"median.trackprice": boolean;
+	/** Default value: `0` */
+	"median.transparency": number;
+	/** Default value: `#FF6D00` */
+	"median.color": string;
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"lower.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Bollinger Bands Width' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface BollingerBandsWidthIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * An object that contains information about a bracket order.
+ */
 export interface BracketOrder extends BracketOrderBase, CustomFields {
 }
 export interface BracketOrderBase extends PlacedOrderBase {
-	/** If order is a bracket then this should contain base order/position id. */
+	/** If an order is a bracket, it should contain an ID of a parent order/position. */
 	parentId: string;
-	/** Type of the bracket's parent */
+	/** Type of the bracket's parent. */
 	parentType: ParentType;
 }
 export interface Brackets {
@@ -1310,200 +1739,228 @@ export interface Brackets {
 }
 export interface BrokerConfigFlags {
 	/**
-	 * Display broker symbol name in the symbol search. You may usually want to disable it if broker symbols are the same or you are using internal numbers as broker symbol names.
-	 * @default true
-	 */
-	supportDisplayBrokerNameInSymbolSearch?: boolean;
-	/**
-	 * This flag can be used to change "Amount" to "Quantity" in Order Ticket.
+	 * Changes _Amount_ to _Quantity_ in Order Ticket.
 	 * @default false
 	 */
 	showQuantityInsteadOfAmount?: boolean;
 	/**
-	 * Broker supports brackets (take profit and stop loss) for orders.
+	 * Enables order brackets: take-profit and stop-loss.
 	 * @default false
 	 */
 	supportOrderBrackets?: boolean;
 	/**
-	 * Broker supports trailing stop orders.
-	 * If this flag is set to `true`, then the chart displays trailing stop orders and a user can place a trailing stop order using Order Ticket.
+	 * Enables trailing stop orders.
+	 * If you set this flag to `true`, the library displays trailing stop orders and a user can place a trailing stop order using the Order Ticket.
 	 * @default false
 	 */
 	supportTrailingStop?: boolean;
 	/**
-	 * Broker supports positions.
-	 * If it is set to `false`, the Positions tab in the Account Manager will be hidden.
+	 * Enables positions.
+	 * This flag requires the {@link IBrokerTerminal.positions} method to be implemented.
+	 * If you set `supportPositions` to `false`, the _Positions_ tab in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md) will be hidden.
 	 * @default true
 	 */
 	supportPositions?: boolean;
 	/**
-	 * Broker supports brackets (take profit and stop loss orders) for positions.
-	 * If this flag is set to `true` the Chart will display an Edit button for positions and add `Edit position...` to the context menu of a position.
+	 * Enables position brackets: take-profit and stop-loss orders.
+	 * If you set `supportPositionBrackets` to `true`, the library displays an _Edit_ button for positions and _Edit position..._ in the position's context menu.
+	 * This flag requires the {@link IBrokerTerminal.editPositionBrackets} method to be implemented.
 	 * @default false
 	 */
 	supportPositionBrackets?: boolean;
 	/**
-	 * Broker supports brackets for trades (take profit and stop loss orders).
-	 * If this flag is set to `true` the Chart will display an Edit button for trades (individual positions) and add `Edit position...` to the context menu of a trade.
+	 * Enables brackets for individual positions: take-profit and stop-loss orders.
+	 * If you set this flag to `true`, the library displays an _Edit_ button for individual positions and _Edit position..._ in the individual position's context menu.
+	 * This flag requires the {@link IBrokerTerminal.editIndividualPositionBrackets} method to be implemented.
 	 * @default false
 	 */
-	supportTradeBrackets?: boolean;
+	supportIndividualPositionBrackets?: boolean;
 	/**
-	 * Broker supports individual positions (trades).
-	 * If it is set to `true`, there will be two tabs in the Account Manager - Individual Positions and Net Positions.
+	 * Enables individual and net positions.
+	 * If you set this flag to `true`, the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md) will have two tabs: _Individual Positions_ and _Net Positions_.
+	 * This flag requires the {@link IBrokerTerminal.individualPositions} method to be implemented.
+	 *
 	 * @default false
 	 */
-	supportTrades?: boolean;
+	supportPositionNetting?: boolean;
 	/**
-	 * Broker supports closing of a position.
-	 * If it is not supported by broker, Chart will have the close button, but it will place a closing order.
+	 * Enables position closing.
+	 * This flag requires the {@link IBrokerTerminal.closePosition} method to be implemented.
+	 * If `supportClosePosition` is set to `true`, the library displays a close button and calls the `closePosition` method.
+	 * If `supportClosePosition` is set to `false`, the library displays a close button but calls the {@link IBrokerTerminal.placeOrder} method with the `isClose` property set to `true`.
 	 * @default false
 	 */
 	supportClosePosition?: boolean;
 	/**
-	 * Individual positions (trades) can be closed.
+	 * Enables individual position closing.
+	 * This flag requires the {@link IBrokerTerminal.closeIndividualPosition} method to be implemented.
 	 * @default false
 	 */
-	supportCloseTrade?: boolean;
+	supportCloseIndividualPosition?: boolean;
 	/**
-	 * Using this flag you can disable existing order's price modification.
+	 * Enables order price editing.
+	 * If you set this flag to `false`, the price control in the _Order Ticket_ will be disabled when users modify orders.
 	 * @default true
 	 */
 	supportModifyOrderPrice?: boolean;
 	/**
-	 * Using this flag you can disable existing order's quantity modification.
+	 * Enables order quantity editing.
+	 * If you set this flag to `false`, the quantity control in the _Order Ticket_ will be disabled when users modify orders.
 	 * @default true
 	 */
 	supportEditAmount?: boolean;
 	/**
-	 * Using this flag you can disable existing order's brackets modification. If you set it to `false`,
-	 * additional fields will be disabled in Order Ticket on the chart,
-	 * and 'Modify' button will be hidden from the chart and in the Account Manager.
+	 * Enables order brackets editing.
+	 * If you set this flag to `false`, the bracket's control in the Order Ticket will be disabled,
+	 * and the _Modify_ button will be hidden from the chart and in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md).
 	 * @default true
 	 */
 	supportModifyBrackets?: boolean;
 	/**
-	 * Level2 data is used for DOM widget. `subscribeDepth` and `unsubscribeDepth` should be implemented.
+	 * Enables Level 2 data for the Depth of Market (DOM) widget.
+	 * This flag requires the [`subscribeDepth`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#subscribedepth) and [`unsubscribeDepth`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#unsubscribedepth) methods to be implemented.
+	 * Note that you should also enable the {@link BrokerConfigFlags.supportDOM} flag to display the DOM widget in the UI.
 	 * @default false
 	 */
 	supportLevel2Data?: boolean;
 	/**
-	 * Does broker support Depth of Market.
+	 * Enables the Depth of Market (DOM) widget.
+	 * Note that you should also enable the {@link BrokerConfigFlags.supportLevel2Data} flag and implement the [`subscribeDepth`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#subscribedepth) and [`unsubscribeDepth`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#unsubscribedepth) methods to provide Level 2 data for the DOM widget.
 	 * @default false
 	 */
 	supportDOM?: boolean;
 	/**
-	 * Supporting multiposition prevents creating the default implementation for a reversing position.
+	 * Enables multiple positions for one instrument at the same time.
+	 * Supporting multiple positions prevents creating the default implementation for a reversing position.
 	 * @default false
 	 */
 	supportMultiposition?: boolean;
 	/**
-	 * Broker provides PL for a position. If the broker calculates profit/loss by itself it should call `plUpdate` as soon as PL is changed.
-	 * Otherwise Chart will calculate PL as a difference between the current trade and an average price of the position.
+	 * Allows you to use your own Profit & Loss (P&L) values for positions.
+	 * If `supportPLUpdate` is set to `true`, you should call the {@link IBrokerConnectionAdapterHost.plUpdate} method as soon as P&L values are changed.
+	 * If `supportPLUpdate` is set to `false`, the library automatically calculates P&L values as the difference between the current trade and the average position price.
 	 * @default true
 	 */
 	supportPLUpdate?: boolean;
 	/**
-	 * Broker supports reversing of a position.
-	 * If it is not supported by broker, the reverse position button will be hidden.
+	 * Enables position reversing.
+	 * If `supportReversePosition` is set to `false`, the _Reverse Position_ button will be hidden from the UI.
 	 * @default false
 	 */
 	supportReversePosition?: boolean;
 	/**
-	 * Broker natively supports reversing of a position.
-	 * If it is not natively supported by broker, Chart will place a reversing order.
+	 * Enables native position reversing.
+	 * This flag requires the {@link IBrokerTerminal.reversePosition} method to be implemented.
+	 * If `supportNativeReversePosition` is set to `false`, the library expects you to place a reversing order via the {@link IBrokerTerminal.placeOrder} method.
 	 * @default false
 	 */
 	supportNativeReversePosition?: boolean;
 	/**
-	 * This flag adds market orders type to Order Ticket.
+	 * Enables market orders type in the Order Ticket.
 	 * @default true
 	 */
 	supportMarketOrders?: boolean;
 	/**
-	 * This flag adds limit orders type to Order Ticket.
+	 * Enables limit orders type in the Order Ticket.
 	 * @default true
 	 */
 	supportLimitOrders?: boolean;
 	/**
-	 * This flag adds stop orders type to Order Ticket.
+	 * Enables stop orders type in the Order Ticket.
 	 * @default true
 	 */
 	supportStopOrders?: boolean;
 	/**
-	 * This flag adds stop-limit orders type to Order Ticket.
+	 * Enables stop-limit orders type in the Order Ticket.
 	 * @default false
 	 */
 	supportStopLimitOrders?: boolean;
 	/**
-	 * Does broker support demo live switcher.
+	 * Enables demo live switcher.
 	 * @default true
 	 */
 	supportDemoLiveSwitcher?: boolean;
 	/**
-	 * Using this flag you can disable brackets for market orders.
+	 * Enables brackets for market orders.
 	 * @default true
 	 */
 	supportMarketBrackets?: boolean;
 	/**
-	 * Broker supports symbol search
+	 * Enables symbol searching.
 	 * @default false
 	 */
 	supportSymbolSearch?: boolean;
 	/**
-	 * Using this flag you can enable modification of the duration of the existing order.
+	 * Allows modifying existing [order duration](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#set-order-duration).
 	 * @default false
 	 */
 	supportModifyDuration?: boolean;
 	/**
-	 * Broker supports modifying trailing stop orders.
+	 * Allows modifying trailing stop orders.
 	 * @default true
 	 */
 	supportModifyTrailingStop?: boolean;
 	/**
-	 * Broker supports margin.
-	 * If the broker supports margin it should call `marginAvailableUpdate` ({@link IBrokerConnectionAdapterHost.marginAvailableUpdate}) when the Trading Platform subscribes using `subscribeMarginAvailable` ({@link IBrokerWithoutRealtime.subscribeMarginAvailable}).
+	 * Allows margin.
+	 * If `supportMargin` is set to `true`, you should call {@link IBrokerConnectionAdapterHost.marginAvailableUpdate} when the Trading Platform subscribes to margin available updates using {@link IBrokerWithoutRealtime.subscribeMarginAvailable}.
 	 * @default false
 	 */
 	supportMargin?: boolean;
 	/**
-	 * Calculate Profit / Loss using last value.
+	 * Enables Profit & Loss calculations using last value.
 	 * @default false
 	 */
 	calculatePLUsingLast?: boolean;
 	/**
-	 * Broker provides the estimated commission, fees, margin and other order information before placing the order without actually placing it.
+	 * Allows providing the estimated commission, fees, margin, and other order information before placing the order without actually placing it.
+	 * This information will be displayed in the _Order confirmation_ dialog.
+	 *
+	 * This flag requires the {@link IBrokerTerminal.previewOrder} method to be implemented and `confirmId` parameter to be passed in the {@link IBrokerTerminal.placeOrder} method.
+	 * Refer to [Enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#add-custom-fields) for more information.
 	 * @default false
 	 */
 	supportPlaceOrderPreview?: boolean;
 	/**
-	 * Broker provides the estimated commission, fees, margin and other order information before modifying the order without actually modifying it.
+	 * Allows providing the estimated commission, fees, margin, and other order information before modifying the order without actually modifying it.
+	 * This information will be displayed in the _Order confirmation_ dialog.
+	 *
+	 * This flag requires the {@link IBrokerTerminal.previewOrder} method to be implemented and `confirmId` parameter to be passed in the {@link IBrokerTerminal.modifyOrder} method.
+	 * Refer to [Enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#add-custom-fields) for more information.
 	 * @default false
 	 */
 	supportModifyOrderPreview?: boolean;
 	/**
-	 * Broker supports leverage. If the flag is set to `true`, broker will calculate leverage using `leverageInfo` ({@link IBrokerWithoutRealtime.leverageinfo}) method.
+	 * Enables trading with leverage.
+	 * If the flag is set to `true`, you should calculate the leverage using the {@link IBrokerWithoutRealtime.leverageInfo} method.
 	 * @default false
 	 */
 	supportLeverage?: boolean;
 	/**
-	 * Broker supports leverage button. If the flag is set to `true`, a leverage input field will appear in Order Ticket. Click on the input field will activate a dedicated Leverage Dialog.
+	 * Displays a leverage button in the UI.
+	 * Note that you should also enable the {@link BrokerConfigFlags.supportLeverage} flag.
+	 * If `supportLeverageButton` is set to `true`, the leverage input field appears in the Order Ticket.
+	 * Clicking the input field activates a dedicated Leverage Dialog.
 	 * @default true
 	 */
 	supportLeverageButton?: boolean;
 	/**
-	 * Broker supports orders history. If it is set to `true`, there will be an additional tab in the Account Manager - Orders History.
-	 * The `ordersHistory` method should be implemented. It should return a list of orders with the `filled`, `cancelled` and `rejected` statuses from previous trade sessions.
+	 * Enables orders history.
+	 * If `supportOrdersHistory` is set to `true`, the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md) will have an additional tab: _Orders History_.
+	 * This flag requires the {@link IBrokerTerminal.ordersHistory} method to be implemented.
+	 * The method should return a list of orders with the `filled`, `cancelled`, and `rejected` statuses from previous trade sessions.
 	 * @default false
 	 */
 	supportOrdersHistory?: boolean;
 	/**
-	 * Using this flag you can disable adding brackets to the existing order.
+	 * Enables adding brackets to the existing order.
 	 * @default true
 	 */
 	supportAddBracketsToExistingOrder?: boolean;
 	/**
-	 * Used for crypto currencies only. Allows to get crypto balances for an account. Balances are displayed as the first table of the Account Summary tab.
+	 * Allows getting crypto balances for an account.
+	 * Balances are displayed as the first table of the _Account Summary_ tab.
+	 * Use the flag for crypto currencies only.
+	 * This flag requires the {@link IBrokerConnectionAdapterHost.cryptoBalanceUpdate} method to be implemented.
 	 * @default false
 	 */
 	supportBalances?: boolean;
@@ -1518,72 +1975,81 @@ export interface BrokerConfigFlags {
 	 */
 	supportOnlyPairPositionBrackets?: boolean;
 	/**
-	 * Whether the account is used to exchange(trade) crypto currencies.
-	 * This flag switches Order Ticket to the Crypto Exchange mode. It adds second currency quantity control, currency labels etc.
+	 * Enables cryptocurrency trading (exchanging).
+	 * This flag switches the Order Ticket to Crypto Exchange mode,
+	 * which provides additional controls for entering the quantity in either the base or quote currency.
 	 * @default false
 	 */
 	supportCryptoExchangeOrderTicket?: boolean;
 	/**
-	 * With this flag you can show a checkbox to disable the confirmation dialog display
-	 * @default false
-	 */
-	supportConfirmations?: boolean;
-	/**
-	 * Using this flag you can display PL in instrument currency.
+	 * Enables displaying Profit & Loss values in instrument currency.
 	 * @default false
 	 */
 	positionPLInInstrumentCurrency?: boolean;
 	/**
-	 * Does broker support partial position closing
+	 * Enables partial position closing.
+	 * This flag requires the {@link IBrokerTerminal.closePosition} method to be implemented.
 	 * @default false
 	 */
 	supportPartialClosePosition?: boolean;
 	/**
-	 * Does broker support partial trade closing
+	 * Enables partial individual position closing.
+	 * This flag requires the {@link IBrokerTerminal.closeIndividualPosition} method to be implemented.
 	 * @default false
 	 */
-	supportPartialCloseTrade?: boolean;
+	supportPartialCloseIndividualPosition?: boolean;
 	/**
-	 * Cancelling a bracket (take profit or stop loss) cancels its pair.
+	 * Modifies the confirmation dialog text for closing a bracket order.
+	 * When set to `true`, the text explicitly states that cancelling a bracket order will also cancel its associated pair.
+	 * When set to `false`, the text will include the ID of the singular bracket order being cancelled.
+	 *
+	 * Note that the library does not cancel orders itself.
+	 * You should implement the {@link IBrokerTerminal.cancelOrder} or {@link IBrokerTerminal.cancelOrders } method.
 	 * @default false
 	 */
 	supportCancellingBothBracketsOnly?: boolean;
 	/**
-	 * Does broker support crypto brackets
+	 * Enables crypto brackets.
 	 * @default false
 	 */
 	supportCryptoBrackets?: boolean;
 	/**
-	 * Using this flag you can show/hide the `Notifications log` tab in the account manager.
+	 * Enables the _Notifications log_ tab in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md).
 	 * @default true
 	 */
 	showNotificationsLog?: boolean;
 	/**
-	 * Whether stop orders should behave like Market-if-touched in both directions.
+	 * Whether stop orders should behave like Market-if-Touched in both directions.
 	 * Enabling this flag prevents the check of stop price direction from the stop limit Order Ticket.
 	 * @default false
 	 */
 	supportStopOrdersInBothDirections?: boolean;
 	/**
+	 * Whether stop-limit orders should behave like Limit-if-Touched in both directions.
 	 * Enabling this flag prevents the check of stop price direction from the stop limit Order Ticket.
 	 */
 	supportStopLimitOrdersInBothDirections?: boolean;
 	/**
-	 * Broker supports executions.
-	 * If this flag is set to `true` the Chart will display executions.
+	 * Whether the integration supports limit price validation in the order ticket to eliminate the possibility to place
+	 * an order on the wrong side of the market that will most likely trigger and get filled immediately.
+	 */
+	supportStrictCheckingLimitOrderPrice?: boolean;
+	/**
+	 * Enables executions.
+	 * This flag requires the {@link IBrokerTerminal.executions} method to be implemented.
 	 * @default false
 	 */
 	supportExecutions?: boolean;
 	/**
-	 * Does broker support modifying order type
+	 * Allows modifying order type.
 	 * @default false
 	 */
 	supportModifyOrderType?: boolean;
 	/**
-	 * Trading account requires closing of trades in FIFO order.
+	 * Enables closing of individual positions in FIFO order.
 	 * @default false
 	 */
-	requiresFIFOCloseTrades?: boolean;
+	requiresFIFOCloseIndividualPositions?: boolean;
 }
 export interface BrokerCustomUI {
 	/**
@@ -1594,11 +2060,11 @@ export interface BrokerCustomUI {
 	showOrderDialog?: (order: OrderTemplate | Order, focus?: OrderTicketFocusControl) => Promise<boolean>;
 	/**
 	 * Shows the Position Dialog
-	 * @param  {Position|Trade} position - position to be placed or modified
+	 * @param  {Position|IndividualPosition} position - position to be placed or modified
 	 * @param  {Brackets} brackets - brackets for the position
 	 * @param  {OrderTicketFocusControl} [focus] - Control to focus on when dialog is opened
 	 */
-	showPositionDialog?: (position: Position | Trade, brackets: Brackets, focus?: OrderTicketFocusControl) => Promise<boolean>;
+	showPositionDialog?: (position: Position | IndividualPosition, brackets: Brackets, focus?: OrderTicketFocusControl) => Promise<boolean>;
 	/**
 	 * Shows a confirmation dialog and executes handler if YES/OK is pressed.
 	 * @param  {Order} order - order to be cancelled
@@ -1624,7 +2090,7 @@ export interface BrushLineToolOverrides {
 	"linetoolbrush.linecolor": string;
 	/** Default value: `0` */
 	"linetoolbrush.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolbrush.linewidth": number;
 	/** Default value: `0` */
 	"linetoolbrush.rightEnd": number;
@@ -1649,7 +2115,7 @@ export interface CalloutLineToolOverrides {
 	"linetoolcallout.fontsize": number;
 	/** Default value: `false` */
 	"linetoolcallout.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolcallout.linewidth": number;
 	/** Default value: `50` */
 	"linetoolcallout.transparency": number;
@@ -1684,6 +2150,160 @@ export interface CandleStylePreferences {
 	/** Bar color determined by previous close value */
 	barColorsOnPrevClose: boolean;
 }
+/**
+ * Overrides for the 'Chaikin Money Flow' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChaikinMoneyFlowIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#43A047` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Chaikin Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChaikinOscillatorIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#EC407A` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Chaikin Volatility' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChaikinVolatilityIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#AB47BC` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Chande Kroll Stop' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChandeKrollStopIndicatorOverrides {
+	/** Default value: `15` */
+	"long.display": number;
+	/** Default value: `0` */
+	"long.linestyle": number;
+	/** Default value: `1` */
+	"long.linewidth": number;
+	/** Default value: `line` */
+	"long.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"long.trackprice": boolean;
+	/** Default value: `0` */
+	"long.transparency": number;
+	/** Default value: `#2196F3` */
+	"long.color": string;
+	/** Default value: `15` */
+	"short.display": number;
+	/** Default value: `0` */
+	"short.linestyle": number;
+	/** Default value: `1` */
+	"short.linewidth": number;
+	/** Default value: `line` */
+	"short.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"short.trackprice": boolean;
+	/** Default value: `0` */
+	"short.transparency": number;
+	/** Default value: `#FF6D00` */
+	"short.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Chande Momentum Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChandeMomentumOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface ChangeAccountSolution {
 	/** id of a sub-account suitable for trading the symbol */
 	changeAccount: AccountId;
@@ -1711,6 +2331,36 @@ export interface ChartData {
 	/** content of the chart */
 	content: string;
 }
+export interface ChartDescriptionContext {
+	/** Style of chart */
+	chartType: SeriesType;
+	/** Name of chart style */
+	chartTypeName: string;
+	/** Symbol's description from the Symbol Info */
+	description?: string;
+	/** Symbol identifier, typically the symbols ticker or name defined in the Symbol Info */
+	symbol: string;
+	/** Symbol's exchange */
+	exchange?: string;
+	/** Symbol's ticker identifier */
+	ticker?: string;
+	/** Visible time range */
+	visibleRange: VisibleTimeRange;
+	/** Visible data. Only included if [aria_detailed_chart_descriptions](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#aria_detailed_chart_descriptions) featureset is enabled */
+	visibleData?: ExportedData;
+	/** The complete Symbol Info for the chart's main series */
+	symbolInfo: LibrarySymbolInfo | null;
+	/** Index of the current chart within a multi-chart layout */
+	chartIndex: number;
+	/** Number of visible charts in the current layout */
+	chartCount: number;
+	/** Symbol's default price formatter */
+	priceFormatter: ISymbolValueFormatter;
+	/** Resolution (interval) of the chart */
+	interval: ResolutionString;
+	/** Is the resolution (interval) intraday */
+	isIntraday: boolean;
+}
 /**
  * Meta information about a saved chart
  */
@@ -1729,7 +2379,11 @@ export interface ChartMetaInfo {
 /**
  * Property overrides that can be used with {@link IChartingLibraryWidget.applyOverrides}.
  */
-export interface ChartPropertiesOverrides extends StudyOverrides {
+export interface ChartPropertiesOverrides {
+	/**
+	 * Override values.
+	 */
+	[key: string]: string | number | boolean;
 	/**
 	 * A timezone ID. The default value depends on the locale.
 	 */
@@ -1945,19 +2599,19 @@ export interface ChartPropertiesOverrides extends StudyOverrides {
 	 */
 	"scalesProperties.showPrePostMarketPriceLabel": boolean;
 	/**
-	 * Scales (axis) highlight color.
+	 * Sets the highlight color of the scales when adding a drawing.
 	 *
 	 * @default 'rgba(41, 98, 255, 0.25)'
 	 */
 	"scalesProperties.axisHighlightColor": string;
 	/**
-	 * Scales (axis) highlight label background color.
+	 * Configures the background color of a label shown on an axis scale when a drawing is selected.
 	 *
 	 * @default '#2962FF'
 	 */
 	"scalesProperties.axisLineToolLabelBackgroundColorCommon": string;
 	/**
-	 * Scales (axis) background label active background color.
+	 * Dynamically changes the background color of all labels on the price scale when a drawing is in motion.
 	 *
 	 * @default '#143EB3'
 	 */
@@ -1993,7 +2647,7 @@ export interface ChartPropertiesOverrides extends StudyOverrides {
 	 */
 	"mainSeriesProperties.style": ChartStyle;
 	/**
-	 * Main series bar countdown visibility.
+	 * Displays the countdown to the bar closing on the price scale. Available only for [intraday](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-minutes-intraday) resolutions.
 	 *
 	 * @default false
 	 */
@@ -2988,7 +3642,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	debug?: boolean;
 	/**
-	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed [here](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
+	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
 	 *
 	 * Example:
 	 * ```javascript
@@ -3019,7 +3673,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	drawings_access?: AccessList;
 	/**
-	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed [here](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
+	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
 	 *
 	 * Example:
 	 * ```javascript
@@ -3107,11 +3761,11 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	symbol_search_request_delay?: number;
 	/**
-	 * Sets the default timeframe of the chart.
+	 * Sets the default time frame of the chart.
 	 *
-	 * The timeframe can be relative to the current date, or a range.
+	 * The time frame can be relative to the current date, or a range.
 	 *
-	 * A relative timeframe is a number with a letter D for days and M for months:
+	 * A relative time frame is a number with a letter D for days and M for months:
 	 *
 	 * ```javascript
 	 * timeframe: '3M',
@@ -3128,8 +3782,8 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	timeframe?: TimeframeOption;
 	/**
-	 * Default timezone of the chart. The time on the timescale is displayed according to this timezone.
-	 * See the [list of supported timezones](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology#timezone) for available values. Set it to `exchange` to use the exchange timezone. Use the {@link ChartingLibraryWidgetOptions.overrides} section if you wish to override the default value.
+	 * Default time zone of the chart. The time on the timescale is displayed according to this time zone.
+	 * See the [list of supported time zones](https://www.tradingview.com/charting-library-docs/latest/ui_elements/timezones.md#supported-time-zones) for available values. Set it to `exchange` to use the exchange time zone. Use the {@link ChartingLibraryWidgetOptions.overrides} section if you wish to override the default value.
 	 *
 	 * ```javascript
 	 * timezone: "America/New_York",
@@ -3165,8 +3819,8 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	height?: number;
 	/**
-	 * Set the storage url endpoint for use with the high-level saving / loading charts API.
-	 * See more details [here](https://www.tradingview.com/charting-library-docs/latest/saving_loading/).
+	 * Set the storage URL endpoint for use with the high-level saving/loading chart API.
+	 * Refer to [Save and load REST API](https://www.tradingview.com/charting-library-docs/latest/saving_loading/save-load-rest-api/save-load-rest-api.md) for more information.
 	 *
 	 * ```javascript
 	 * charts_storage_url: 'http://storage.yourserver.com',
@@ -3183,7 +3837,7 @@ export interface ChartingLibraryWidgetOptions {
 	charts_storage_api_version?: AvailableSaveloadVersions;
 	/**
 	 * Set the client ID for the high-level saving / loading charts API.
-	 * See more details [here](https://www.tradingview.com/charting-library-docs/latest/saving_loading/).
+	 * Refer to [Saving and Loading Charts](https://www.tradingview.com/charting-library-docs/latest/saving_loading/saving_loading.md) for more information.
 	 *
 	 * ```javascript
 	 * client_id: 'yourserver.com',
@@ -3192,7 +3846,7 @@ export interface ChartingLibraryWidgetOptions {
 	client_id?: string;
 	/**
 	 * Set the user ID for the high-level saving / loading charts API.
-	 * See more details [here](https://www.tradingview.com/charting-library-docs/latest/saving_loading/).
+	 * Refer to [Saving and Loading Charts](https://www.tradingview.com/charting-library-docs/latest/saving_loading/saving_loading.md) for more information.
 	 *
 	 * ```javascript
 	 * user_id: 'public_user_id',
@@ -3200,7 +3854,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	user_id?: string;
 	/**
-	 * Set this parameter to `true` if you want the library to load the last saved chart for a user (you should implement [save/load](https://www.tradingview.com/charting-library-docs/latest/saving_loading/) first to make it work).
+	 * Set this parameter to `true` if you want the library to load the last saved chart for a user. You should implement [save/load](https://www.tradingview.com/charting-library-docs/latest/saving_loading/saving_loading.md) first to make it work.
 	 *
 	 * ```javascript
 	 * load_last_chart: true,
@@ -3210,7 +3864,8 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * Use this option to customize the style or inputs of the indicators.
 	 * You can also customize the styles and inputs of the `Compare` series using this argument.
-	 * Refer to [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md) for more information.
+	 * Refer to [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#specify-default-properties) for more information.
+	 * Overrides for built-in indicators are listed in {@link StudyOverrides}.
 	 *
 	 * ```javascript
 	 * studies_overrides: {
@@ -3218,12 +3873,7 @@ export interface ChartingLibraryWidgetOptions {
 	 * },
 	 * ```
 	 */
-	studies_overrides?: StudyOverrides;
-	/**
-	 * @deprecated
-	 * Alias for {@link ChartingLibraryWidgetOptions.custom_formatters}
-	 */
-	customFormatters?: CustomFormatters;
+	studies_overrides?: Partial<StudyOverrides>;
 	/**
 	 * Custom formatters for adjusting the display format of price, date, and time values.
 	 *
@@ -3306,7 +3956,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * Override values for the default widget properties
 	 * You can override most of the properties (which also may be edited by user through UI)
-	 * using `overrides` parameter of Widget constructor. `overrides` is supposed to be an object.
+	 * using `overrides` parameter of Widget Constructor. `overrides` is supposed to be an object.
 	 * The keys of this object are the names of overridden properties.
 	 * The values of these keys are the new values of the properties.
 	 *
@@ -3321,10 +3971,10 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	overrides?: Partial<WidgetOverrides>;
 	/**
-	 * This URL is used to send a POST request with binary chart snapshots when a user presses the snapshot button.
+	 * This URL is used to send a POST request with binary chart snapshots when a user presses the [snapshot](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Snapshots.md) button.
 	 * This POST request contains `multipart/form-data` with the field `preparedImage` that represents binary data of the snapshot image in `image/png` format.
 	 *
-	 * This endpoint should return the full URL of the saved image in the the response.
+	 * This endpoint should return the full URL of the saved image in the response.
 	 *
 	 * ```javascript
 	 * snapshot_url: "https://myserver.com/snapshot",
@@ -3377,8 +4027,9 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	custom_font_family?: string;
 	/**
-	 * Items that should be marked as favorite by default. This option requires that the usage of localstorage is disabled (see [featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets) to know more).
-	 * The `favorites` property is supposed to be an object. The following properties are supported:
+	 * Elements that should be marked as favorites for a new browser or user.
+	 * You can use this property to specify default favorite chart types, drawings, indicators, and resolutions.
+	 * To do this, assign a {@link Favorites} object to `favorites`. The example of such object is demonstrated below.
 	 *
 	 * ```javascript
 	 * favorites: {
@@ -3389,14 +4040,20 @@ export interface ChartingLibraryWidgetOptions {
 	 * },
 	 * ```
 	 *
-	 * If you want to allow users to add/remove items from favorites, you should enable/disable the [`items_favoriting`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#items_favoriting) featureset.
+	 * To allow users to add/remove items from favorites, enable the [`items_favoriting`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#items_favoriting) featureset.
 	 *
+	 * Note that favorites saved in [`localStorage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) take precedence over the ones specified in the `favorites` property.
+	 * Therefore, the library tries to load the favorites from `localStorage` first, and then use the elements in `favorites` if there is nothing saved in `localStorage`.
+	 * If you want the elements specified within `favorites` to always apply, disable `localStorage` using the [`use_localstorage_for_settings`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#use_localstorage_for_settings) featureset.
+	 *
+	 * You can also use {@link ChartingLibraryWidgetOptions.settings_adapter} to store favorites. These favorites take precedence over favorites in the `favorites` property and `localStorage`.
+	 * Refer to the [Customization precedence](https://www.tradingview.com/charting-library-docs/latest/customization/customization-precedence.md) article to learn more about the application order of different approaches for changing the chart appearance and behavior.
 	 */
 	favorites?: Favorites<ChartTypeFavorites>;
 	/**
 	 * An object containing the save/load functions.
 	 * It is used to implement a custom save/load algorithm.
-	 * Please see details and an example on [Saving and Loading Charts page](https://www.tradingview.com/charting-library-docs/latest/saving_loading/#api-handlers).
+	 * Refer to [API handlers](https://www.tradingview.com/charting-library-docs/latest/saving_loading/save-load-adapter.md) for more information.
 	 */
 	save_load_adapter?: IExternalSaveLoadAdapter;
 	/**
@@ -3413,7 +4070,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	loading_screen?: LoadingScreenOptions;
 	/**
-	 * An object that contains set/remove functions. Use it to save chart settings to your preferred storage (including server-side).
+	 * An object that contains set/remove functions. Use it to save [user settings](https://www.tradingview.com/charting-library-docs/latest/saving_loading/user-settings.md) to your preferred storage, including the server-side one.
 	 *
 	 * Example:
 	 * ```javascript
@@ -3451,7 +4108,7 @@ export interface ChartingLibraryWidgetOptions {
 	 *
 	 * `PineJS` variable will be passed as the first argument of this function and can be used inside your indicators to access internal helper functions.
 	 *
-	 * See more details [here](https://www.tradingview.com/charting-library-docs/latest/custom_studies/).
+	 * Refer to [Custom indicators](https://www.tradingview.com/charting-library-docs/latest/custom_studies/custom_studies.md) for more information.
 	 *
 	 * ```javascript
 	 * custom_indicators_getter: function(PineJS) {
@@ -3465,7 +4122,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * An optional field containing an array of custom symbol info fields to be shown in the Symbol Info dialog.
 	 *
-	 * See [Symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology) for more information about symbol info.
+	 * Refer to [Symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md) for more information about symbol info.
 	 *
 	 * ```javascript
 	 * additional_symbol_info_fields: [
@@ -3486,7 +4143,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	header_widget_buttons_mode?: HeaderWidgetButtonsMode;
 	/**
-	 * You could use this object to override context menu. You can also change the menu on the fly using the {@link IChartingLibraryWidget.onContextMenu} method.
+	 * Use this property to override the [context menu](https://www.tradingview.com/charting-library-docs/latest/ui_elements/context-menu.md). You can also change the menu on the fly using the {@link IChartingLibraryWidget.onContextMenu} method.
 	 */
 	context_menu?: ContextMenuOptions;
 	/**
@@ -3559,11 +4216,25 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	settings_overrides?: Overrides;
 	/**
-	 * List of custom timezones.
+	 * List of custom time zones.
 	 *
-	 * Please see the [timezones](https://www.tradingview.com/charting-library-docs/latest/ui_elements/timezones) documentation for more details.
+	 * Refer to [Timezones](https://www.tradingview.com/charting-library-docs/latest/ui_elements/timezones.md) for more information.
 	 */
 	custom_timezones?: CustomAliasedTimezone[];
+	/**
+	 * Use this property to set your own chart description function. `context` will be passed to the function.
+	 *
+	 * This description is read aloud by screen readers when a chart within the layout is selected via the `Tab` key.
+	 *
+	 * The function should return either a string with a description or `null` to fallback to the default description.
+	 *
+	 * ```javascript
+	 * custom_chart_description_function: (context) => {
+	 *     return Promise.resolve(`Chart ${context.chartIndex + 1} of ${context.chartCount}. ${context.chartTypeName} chart of ${context.symbol}.`);
+	 * }
+	 * ```
+	 */
+	custom_chart_description_function?: ChartDescriptorFunction;
 }
 export interface CheckboxFieldMetaInfo extends CustomFieldMetaInfoBase {
 	/** @inheritDoc */
@@ -3574,6 +4245,76 @@ export interface CheckboxFieldMetaInfo extends CustomFieldMetaInfoBase {
 	supportModify?: boolean;
 	/** Help message for the field */
 	help?: string;
+}
+/**
+ * Overrides for the 'Chop Zone' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChopZoneIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `columns` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#000080` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Choppiness Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ChoppinessIndexIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `61.8` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `38.2` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Circle drawing tool.
@@ -3591,31 +4332,12 @@ export interface CircleLineToolOverrides {
 	"linetoolcircle.fontSize": number;
 	/** Default value: `false` */
 	"linetoolcircle.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolcircle.linewidth": number;
 	/** Default value: `false` */
 	"linetoolcircle.showLabel": boolean;
 	/** Default value: `#FF9800` */
 	"linetoolcircle.textColor": string;
-}
-/**
- * Override properties for the Circlelines drawing tool.
- */
-export interface CirclelinesLineToolOverrides {
-	/** Default value: `#80ccdb` */
-	"linetoolcirclelines.linecolor": string;
-	/** Default value: `0` */
-	"linetoolcirclelines.linestyle": number;
-	/** Default value: `1` */
-	"linetoolcirclelines.linewidth": number;
-	/** Default value: `#808080` */
-	"linetoolcirclelines.trendline.color": string;
-	/** Default value: `2` */
-	"linetoolcirclelines.trendline.linestyle": number;
-	/** Default value: `1` */
-	"linetoolcirclelines.trendline.linewidth": number;
-	/** Default value: `true` */
-	"linetoolcirclelines.trendline.visible": boolean;
 }
 export interface ClientSnapshotOptions {
 	/** Background color */
@@ -3655,6 +4377,88 @@ export interface CommentLineToolOverrides {
 	"linetoolcomment.transparency": number;
 }
 /**
+ * Overrides for the 'Commodity Channel Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface CommodityChannelIndexIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `100` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `-100` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Compare' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface CompareIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `2` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#9C27B0` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Defines a custom compare symbol for the Compare dialog window
  */
 export interface CompareSymbol {
@@ -3662,6 +4466,54 @@ export interface CompareSymbol {
 	symbol: string;
 	/** the name of instrument that will be displayed near the corresponding checkbox */
 	title: string;
+}
+/**
+ * Overrides for the 'Connors RSI' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ConnorsRSIIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `70` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `30` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"crsi.display": number;
+	/** Default value: `0` */
+	"crsi.linestyle": number;
+	/** Default value: `1` */
+	"crsi.linewidth": number;
+	/** Default value: `line` */
+	"crsi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"crsi.trackprice": boolean;
+	/** Default value: `0` */
+	"crsi.transparency": number;
+	/** Default value: `#2196F3` */
+	"crsi.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface ContextMenuItem {
 	/** Position of the context menu item */
@@ -3671,6 +4523,7 @@ export interface ContextMenuItem {
 	/** Callback event when menu item is clicked */
 	click: EmptyCallback;
 }
+/** Use this interface to override the [context menu](https://www.tradingview.com/charting-library-docs/latest/ui_elements/context-menu.md).  */
 export interface ContextMenuOptions {
 	/**
 	 * Provide this function if you want to change the set of actions being displayed in the context menu.
@@ -3701,8 +4554,7 @@ export interface ContextMenuOptions {
 	 */
 	items_processor?: ContextMenuItemsProcessor;
 	/**
-	 * **Note:** This API is experimental and might be changed significantly in the future releases.
-	 * By providing this function you could override the default renderer for context menu.
+	 * Provide this function to override the default renderer for context menu so you can adjust existing menu items.
 	 */
 	renderer_factory?: ContextMenuRendererFactory;
 }
@@ -3757,6 +4609,72 @@ export interface ContextMenuPosition {
 	 * Additional vertical margin.
 	 */
 	marginY?: number;
+}
+/**
+ * Overrides for the 'Coppock Curve' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface CoppockCurveIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Correlation Coefficient' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface CorrelationCoefficientIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `area` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Correlation - Log' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface CorrelationLogIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Options for creating an anchored drawing.
@@ -3835,9 +4753,8 @@ export interface CreateShapeOptions<TOverrides extends object> extends CreateSha
 	 */
 	shape?: "arrow_up" | "arrow_down" | "flag" | "vertical_line" | "horizontal_line" | "long_position" | "short_position" | "icon" | "emoji" | "sticker" | "anchored_text" | "anchored_note";
 	/**
-	 * An optional study ID to be attached to the owner study.
-	 * It does not mean that both the owner and all possible associated IDs will behave in tandem.
-	 * Their behavior will be independent.
+	 * The ID of an indicator that the drawing is attached to.
+	 * For more information, refer to the [Attach drawing to indicator](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#attach-drawing-to-indicator) section.
 	 */
 	ownerStudyId?: EntityId;
 }
@@ -3858,11 +4775,11 @@ export interface CreateShapeOptionsBase<TOverrides extends object> {
 	 */
 	disableSave?: boolean;
 	/**
-	 * Disable/enable undoing the creation of the drawing.
+	 * If `true`, users cannot cancel the drawing creation in the UI. However, users can still click the _Undo_ button to cancel previous actions.
 	 */
 	disableUndo?: boolean;
 	/**
-	 * Drawing properties overrides.
+	 * Drawing properties overrides. Refer to [Shapes and Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Shapes-and-Overrides.md) for more information.
 	 */
 	overrides?: TOverrides;
 	/**
@@ -3874,7 +4791,7 @@ export interface CreateShapeOptionsBase<TOverrides extends object> {
 	 */
 	showInObjectsTree?: boolean;
 	/**
-	 * An entity ID that can be used to associate the drawing with a study.
+	 * The ID of an indicator that the drawing is attached to. For more information, refer to the [Attach drawing to indicator](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#attach-drawing-to-indicator) section.
 	 */
 	ownerStudyId?: EntityId;
 	/**
@@ -3882,7 +4799,8 @@ export interface CreateShapeOptionsBase<TOverrides extends object> {
 	 */
 	filled?: boolean;
 	/**
-	 * Specify an icon to render - Only icons listed [here](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Shapes-and-Overrides) are supported
+	 * Specify an icon to render. Only icons listed in [Shapes and Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Shapes-and-Overrides.md) are supported.
+	 * Note that the value should be a **hex number**, not a string.
 	 */
 	icon?: number;
 }
@@ -3944,13 +4862,19 @@ export interface CreateTradingViewStyledButtonOptions {
  */
 export interface CrossHairMovedEventParams {
 	/**
-	 * The time coordinate of the crosshair.
+	 * The crosshair time coordinate represented with a UNIX timestamp in UTC.
+	 * You can use this property to do some calculations or retrieve additional data from the datafeed.
 	 */
 	time: number;
 	/**
 	 * The price coordinate of the crosshair.
 	 */
 	price: number;
+	/**
+	 * The crosshair time coordinate represented with a UNIX timestamp in the selected time zone.
+	 * You can use this property to display the crosshair time value in the UI, for example, in a tooltip or data window.
+	 */
+	userTime?: number;
 	/**
 	 * Series and study values at the crosshair position. The object keys are study or series IDs, and the object value are study or series values.
 	 * The ID for the main series will always be the string `'_seriesId'`.
@@ -4025,6 +4949,16 @@ export interface CryptoBalance {
 	/** Bitcoin value of balance */
 	btcValue?: number;
 }
+export interface CurrencyInfo {
+	/**
+	 * Currently selected currency for the price scale.
+	 */
+	selectedCurrency: PriceScaleSelectedCurrency;
+	/**
+	 * Available currencies for the price scale provided by the datafeed.
+	 */
+	currencies: string[];
+}
 export interface CurrencyItem {
 	/** Unique ID */
 	id: string;
@@ -4076,20 +5010,29 @@ export interface CustomFields {
 export interface CustomFormatter {
 	/** Formats date and time */
 	format(date: Date): string;
-	/** Converts date and time to local timezone. */
+	/** Converts date and time to local time zone. */
 	formatLocal(date: Date): string;
+	/**
+	 * Returns a value in a format known by the UI.
+	 * Required when using `dateFormatter`, it has to return a date in the following format: `YYYY-MM-DD`.
+	 */
+	parse(value: string): string;
 }
 /**
  * Formatters used to adjust the displayed format of the date and time values.
  */
 export interface CustomFormatters {
-	/** Used to format the time displayed in the bottom toolbar (timezone) */
-	timeFormatter: CustomFormatter;
-	/** Used to format the date displayed over the timescale when hover over a chart */
-	dateFormatter: CustomFormatter;
+	/** Used to format the time displayed in the bottom toolbar (time zone) */
+	timeFormatter?: CustomFormatter;
+	/**
+	 * Used to format the date displayed over the timescale when hovering over a chart.
+	 * Note that by declaring this formatter all the default ones defined in Chart settings/Scales/Date format
+	 * will display the exact same outcome as the formatter.
+	 */
+	dateFormatter?: CustomFormatter;
 	/**
 	 * Used to format date displayed in the time axis
-	 * **Remark**: `tickMarkFormatter` must display the UTC date, and not the date corresponding to your local timezone.
+	 * **Remark**: `tickMarkFormatter` must display the UTC date, and not the date corresponding to your local time zone.
 	 */
 	tickMarkFormatter?: (date: Date, tickMarkType: TickMarkType) => string;
 	/** Used to format the number displayed in the price axis  */
@@ -4105,16 +5048,15 @@ export interface CustomIndicator {
 	/**
 	 * The metainfo field is designed to contain the main info about the custom study.
 	 *
-	 * See [Custom Studies Metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/metainfo.md) for more information
+	 * Refer to [Custom Studies Metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/metainfo.md) for more information.
 	 */
 	readonly metainfo: StudyMetaInfo;
 	/**
-	 * The Custom Study Constructor is a Function Constructor in terms of ES5.
-	 * The library creates an instance of a custom study by applying operator new to the constructor.
-	 * The library expects the constructor to create an instance of the study with one mandatory method - `main()` and one optional method - `init()`.
-	 * Once the study is created the library calls init (if exists) and main sequentially with empty context to collect information about all vars.
+	 * The field should contain an ES5 constructor function. The library applies the `new` operator to the constructor to create an instance of the custom indicator.
+	 * The constructor contains the mandatory `main` method and the optional `init` method.
+	 * Once the indicator instance is created, the library calls `init` (if exists) and `main` sequentially with empty context to collect information about all variables.
 	 *
-	 * See [Custom Studies Constructor](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Constructor.md) for more information.
+	 * Refer to the [Constructor](https://www.tradingview.com/charting-library-docs/latest/custom_studies/custom-indicator-constructor.md) article for more information.
 	 */
 	readonly constructor: LibraryPineStudyConstructor<IPineStudyResult> | ((this: LibraryPineStudy<IPineStudyResult>) => void);
 }
@@ -4201,7 +5143,7 @@ export interface CustomStudyFormatterFormat {
 	/**
 	 * The format of the plot.
 	 */
-	type: "price" | "volume" | "percent";
+	type: "price" | "volume" | "percent" | "inherit";
 	/**
 	 * The format precision.
 	 */
@@ -4265,7 +5207,7 @@ export interface CypherpatternLineToolOverrides {
 	"linetoolcypherpattern.fontsize": number;
 	/** Default value: `false` */
 	"linetoolcypherpattern.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolcypherpattern.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetoolcypherpattern.textcolor": string;
@@ -4298,7 +5240,7 @@ export interface DOMLevel {
 }
 /**
  * Datafeed configuration data.
- * Pass the resulting array of properties as a parameter to {@link OnReadyCallback} of the [`onReady`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API#onready) method.
+ * Pass the resulting array of properties as a parameter to {@link OnReadyCallback} of the [`onReady`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API.md#onready) method.
  */
 export interface DatafeedConfiguration {
 	/**
@@ -4308,12 +5250,13 @@ export interface DatafeedConfiguration {
 	 */
 	exchanges?: Exchange[];
 	/**
-	 * List of supported resolutions. Resolution string format is described here: {@link ResolutionString}
-	 * Setting this property to `undefined` or an empty array will result in the resolution widget
-	 * displaying the content.
+	 * List of [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md) that the chart should support.
+	 * Each item of the array is expected to be a string that has a specific [format](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format).
+	 * If you set this property to `undefined` or an empty array, the _Resolution_ drop-down menu displays the list of resolutions available for
+	 * the current symbol ({@link LibrarySymbolInfo.supported_resolutions}).
 	 *
 	 * @example
-	 * `["1", "15", "240", "D", "6M"]` will give you "1 minute, 15 minutes, 4 hours, 1 day, 6 months" in resolution widget.
+	 * `["1", "15", "240", "D", "6M"]` will give you "1 minute, 15 minutes, 4 hours, 1 day, 6 months" in the _Resolution_ drop-down menu.
 	 */
 	supported_resolutions?: ResolutionString[];
 	/**
@@ -4416,6 +5359,38 @@ export interface DefaultDropdownActionsParams {
 	/** Restore confirmations */
 	restoreConfirmations?: boolean;
 }
+/**
+ * Overrides for the 'Detrended Price Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface DetrendedPriceOscillatorIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"dpo.display": number;
+	/** Default value: `0` */
+	"dpo.linestyle": number;
+	/** Default value: `1` */
+	"dpo.linewidth": number;
+	/** Default value: `line` */
+	"dpo.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"dpo.trackprice": boolean;
+	/** Default value: `0` */
+	"dpo.transparency": number;
+	/** Default value: `#43A047` */
+	"dpo.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface DialogParams<CallbackType> {
 	/** Dialog title */
 	title: string;
@@ -4423,6 +5398,84 @@ export interface DialogParams<CallbackType> {
 	body: string;
 	/** Callback */
 	callback: CallbackType;
+}
+/**
+ * Overrides for the 'Directional Movement' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface DirectionalMovementIndicatorOverrides {
+	/** Default value: `15` */
+	"+di.display": number;
+	/** Default value: `0` */
+	"+di.linestyle": number;
+	/** Default value: `1` */
+	"+di.linewidth": number;
+	/** Default value: `line` */
+	"+di.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"+di.trackprice": boolean;
+	/** Default value: `0` */
+	"+di.transparency": number;
+	/** Default value: `#2196F3` */
+	"+di.color": string;
+	/** Default value: `15` */
+	"-di.display": number;
+	/** Default value: `0` */
+	"-di.linestyle": number;
+	/** Default value: `1` */
+	"-di.linewidth": number;
+	/** Default value: `line` */
+	"-di.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"-di.trackprice": boolean;
+	/** Default value: `0` */
+	"-di.transparency": number;
+	/** Default value: `#FF6D00` */
+	"-di.color": string;
+	/** Default value: `15` */
+	"adx.display": number;
+	/** Default value: `0` */
+	"adx.linestyle": number;
+	/** Default value: `1` */
+	"adx.linewidth": number;
+	/** Default value: `line` */
+	"adx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"adx.trackprice": boolean;
+	/** Default value: `0` */
+	"adx.transparency": number;
+	/** Default value: `#F50057` */
+	"adx.color": string;
+	/** Default value: `15` */
+	"dx.display": number;
+	/** Default value: `0` */
+	"dx.linestyle": number;
+	/** Default value: `1` */
+	"dx.linewidth": number;
+	/** Default value: `line` */
+	"dx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"dx.trackprice": boolean;
+	/** Default value: `0` */
+	"dx.transparency": number;
+	/** Default value: `#FFA726` */
+	"dx.color": string;
+	/** Default value: `15` */
+	"adxr.display": number;
+	/** Default value: `0` */
+	"adxr.linestyle": number;
+	/** Default value: `1` */
+	"adxr.linewidth": number;
+	/** Default value: `line` */
+	"adxr.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"adxr.trackprice": boolean;
+	/** Default value: `0` */
+	"adxr.transparency": number;
+	/** Default value: `#ab47bc` */
+	"adxr.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Disjointangle drawing tool.
@@ -4442,6 +5495,20 @@ export interface DisjointangleLineToolOverrides {
 	"linetooldisjointangle.fontsize": number;
 	/** Default value: `false` */
 	"linetooldisjointangle.italic": boolean;
+	/** Default value: `false` */
+	"linetooldisjointangle.labelBold": boolean;
+	/** Default value: `14` */
+	"linetooldisjointangle.labelFontSize": number;
+	/** Default value: `left` */
+	"linetooldisjointangle.labelHorzAlign": string;
+	/** Default value: `false` */
+	"linetooldisjointangle.labelItalic": boolean;
+	/** Default value: `#089981` */
+	"linetooldisjointangle.labelTextColor": string;
+	/** Default value: `bottom` */
+	"linetooldisjointangle.labelVertAlign": string;
+	/** Default value: `false` */
+	"linetooldisjointangle.labelVisible": boolean;
 	/** Default value: `0` */
 	"linetooldisjointangle.leftEnd": number;
 	/** Default value: `#089981` */
@@ -4465,6 +5532,84 @@ export interface DisjointangleLineToolOverrides {
 	/** Default value: `20` */
 	"linetooldisjointangle.transparency": number;
 }
+/**
+ * Overrides for the 'Donchian Channels' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface DonchianChannelsIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"plots background.color": string;
+	/** Default value: `95` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"lower.color": string;
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"basis.display": number;
+	/** Default value: `0` */
+	"basis.linestyle": number;
+	/** Default value: `1` */
+	"basis.linewidth": number;
+	/** Default value: `line` */
+	"basis.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"basis.trackprice": boolean;
+	/** Default value: `0` */
+	"basis.transparency": number;
+	/** Default value: `#FF6D00` */
+	"basis.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Double EMA' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface DoubleEMAIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#43A047` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 /** Item within a dropdown menu */
 export interface DropdownItem {
 	/** Title of the menu item */
@@ -4485,11 +5630,115 @@ export interface DropdownParams {
 	/** Alignment of the dropdown menu */
 	align?: "right" | "left";
 }
+/**
+ * Overrides for the 'EMA Cross' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface EMACrossIndicatorOverrides {
+	/** Default value: `15` */
+	"short:plot.display": number;
+	/** Default value: `0` */
+	"short:plot.linestyle": number;
+	/** Default value: `1` */
+	"short:plot.linewidth": number;
+	/** Default value: `line` */
+	"short:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"short:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"short:plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"short:plot.color": string;
+	/** Default value: `15` */
+	"long:plot.display": number;
+	/** Default value: `0` */
+	"long:plot.linestyle": number;
+	/** Default value: `1` */
+	"long:plot.linewidth": number;
+	/** Default value: `line` */
+	"long:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"long:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"long:plot.transparency": number;
+	/** Default value: `#43A047` */
+	"long:plot.color": string;
+	/** Default value: `15` */
+	"crosses.display": number;
+	/** Default value: `0` */
+	"crosses.linestyle": number;
+	/** Default value: `4` */
+	"crosses.linewidth": number;
+	/** Default value: `cross` */
+	"crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"crosses.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Ease Of Movement' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface EaseOfMovementIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#43A047` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface EditObjectDialogEventParams {
 	/** Dialog type */
 	objectType: EditObjectDialogObjectType;
 	/** Title of the object described within the dialog */
 	scriptTitle: string;
+}
+/**
+ * Overrides for the 'Elder's Force Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface EldersForceIndexIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#F23645` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Elliottcorrection drawing tool.
@@ -4499,7 +5748,7 @@ export interface ElliottcorrectionLineToolOverrides {
 	"linetoolelliottcorrection.color": string;
 	/** Default value: `7` */
 	"linetoolelliottcorrection.degree": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolelliottcorrection.linewidth": number;
 	/** Default value: `true` */
 	"linetoolelliottcorrection.showWave": boolean;
@@ -4512,7 +5761,7 @@ export interface ElliottdoublecomboLineToolOverrides {
 	"linetoolelliottdoublecombo.color": string;
 	/** Default value: `7` */
 	"linetoolelliottdoublecombo.degree": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolelliottdoublecombo.linewidth": number;
 	/** Default value: `true` */
 	"linetoolelliottdoublecombo.showWave": boolean;
@@ -4525,7 +5774,7 @@ export interface ElliottimpulseLineToolOverrides {
 	"linetoolelliottimpulse.color": string;
 	/** Default value: `7` */
 	"linetoolelliottimpulse.degree": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolelliottimpulse.linewidth": number;
 	/** Default value: `true` */
 	"linetoolelliottimpulse.showWave": boolean;
@@ -4538,7 +5787,7 @@ export interface ElliotttriangleLineToolOverrides {
 	"linetoolelliotttriangle.color": string;
 	/** Default value: `7` */
 	"linetoolelliotttriangle.degree": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolelliotttriangle.linewidth": number;
 	/** Default value: `true` */
 	"linetoolelliotttriangle.showWave": boolean;
@@ -4551,7 +5800,7 @@ export interface ElliotttriplecomboLineToolOverrides {
 	"linetoolelliotttriplecombo.color": string;
 	/** Default value: `7` */
 	"linetoolelliotttriplecombo.degree": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolelliotttriplecombo.linewidth": number;
 	/** Default value: `true` */
 	"linetoolelliotttriplecombo.showWave": boolean;
@@ -4572,7 +5821,7 @@ export interface EllipseLineToolOverrides {
 	"linetoolellipse.fontSize": number;
 	/** Default value: `false` */
 	"linetoolellipse.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolellipse.linewidth": number;
 	/** Default value: `false` */
 	"linetoolellipse.showLabel": boolean;
@@ -4602,6 +5851,62 @@ export interface EntityInfo {
 	/** Name of entity */
 	name: string;
 }
+/**
+ * Overrides for the 'Envelopes' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface EnvelopesIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"plots background.color": string;
+	/** Default value: `95` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"average.display": number;
+	/** Default value: `0` */
+	"average.linestyle": number;
+	/** Default value: `1` */
+	"average.linewidth": number;
+	/** Default value: `line` */
+	"average.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"average.trackprice": boolean;
+	/** Default value: `0` */
+	"average.transparency": number;
+	/** Default value: `#FF6D00` */
+	"average.color": string;
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"lower.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface ErrorFormatterParseResult extends FormatterParseResult {
 	/** Optional message when there's an error while parsing */
 	error?: string;
@@ -4618,7 +5923,8 @@ export interface Exchange {
 	desc: string;
 }
 /**
- * Describes a single execution. Execution is a mark on a chart that displays trade information.
+ * Describes a single execution.
+ * Execution is when a buy or sell order is completed for a financial instrument.
  */
 export interface Execution extends CustomFields {
 	/** Symbol name */
@@ -4972,7 +6278,7 @@ export interface FibchannelLineToolOverrides {
 	"linetoolfibchannel.level9.visible": boolean;
 	/** Default value: `0` */
 	"linetoolfibchannel.levelsStyle.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibchannel.levelsStyle.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibchannel.showCoeffs": boolean;
@@ -4997,7 +6303,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level1.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level1.visible": boolean;
@@ -5007,7 +6313,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level10.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level10.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level10.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level10.visible": boolean;
@@ -5017,7 +6323,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level11.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level11.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level11.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level11.visible": boolean;
@@ -5027,7 +6333,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level2.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level2.visible": boolean;
@@ -5037,7 +6343,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level3.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level3.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level3.visible": boolean;
@@ -5047,7 +6353,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level4.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level4.visible": boolean;
@@ -5057,7 +6363,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level5.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level5.visible": boolean;
@@ -5067,7 +6373,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level6.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level6.visible": boolean;
@@ -5077,7 +6383,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level7.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level7.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level7.visible": boolean;
@@ -5087,7 +6393,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level8.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level8.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level8.visible": boolean;
@@ -5097,7 +6403,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.level9.color": string;
 	/** Default value: `0` */
 	"linetoolfibcircles.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.level9.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.level9.visible": boolean;
@@ -5109,7 +6415,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.trendline.color": string;
 	/** Default value: `2` */
 	"linetoolfibcircles.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibcircles.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibcircles.trendline.visible": boolean;
@@ -5278,7 +6584,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level9.visible": boolean;
 	/** Default value: `0` */
 	"linetoolfibretracement.levelsStyle.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibretracement.levelsStyle.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibretracement.reverse": boolean;
@@ -5292,7 +6598,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.trendline.color": string;
 	/** Default value: `2` */
 	"linetoolfibretracement.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibretracement.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibretracement.trendline.visible": boolean;
@@ -5313,7 +6619,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level1.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level1.visible": boolean;
@@ -5323,7 +6629,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level10.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level10.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level10.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level10.visible": boolean;
@@ -5333,7 +6639,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level11.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level11.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level11.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level11.visible": boolean;
@@ -5343,7 +6649,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level2.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level2.visible": boolean;
@@ -5353,7 +6659,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level3.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level3.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level3.visible": boolean;
@@ -5363,7 +6669,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level4.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level4.visible": boolean;
@@ -5373,7 +6679,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level5.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level5.visible": boolean;
@@ -5383,7 +6689,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level6.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level6.visible": boolean;
@@ -5393,7 +6699,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level7.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level7.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level7.visible": boolean;
@@ -5403,7 +6709,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level8.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level8.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level8.visible": boolean;
@@ -5413,7 +6719,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.level9.color": string;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancearcs.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.level9.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.level9.visible": boolean;
@@ -5425,7 +6731,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.trendline.color": string;
 	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancearcs.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibspeedresistancearcs.trendline.visible": boolean;
@@ -5488,7 +6794,7 @@ export interface FibspeedresistancefanLineToolOverrides {
 	"linetoolfibspeedresistancefan.hlevel7.visible": boolean;
 	/** Default value: `0` */
 	"linetoolfibspeedresistancefan.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibspeedresistancefan.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibspeedresistancefan.reverse": boolean;
@@ -5546,19 +6852,6 @@ export interface FibspeedresistancefanLineToolOverrides {
 	"linetoolfibspeedresistancefan.vlevel7.visible": boolean;
 }
 /**
- * Override properties for the Fibspiral drawing tool.
- */
-export interface FibspiralLineToolOverrides {
-	/** Default value: `false` */
-	"linetoolfibspiral.counterclockwise": boolean;
-	/** Default value: `#00bcd4` */
-	"linetoolfibspiral.linecolor": string;
-	/** Default value: `0` */
-	"linetoolfibspiral.linestyle": number;
-	/** Default value: `1` */
-	"linetoolfibspiral.linewidth": number;
-}
-/**
  * Override properties for the Fibtimezone drawing tool.
  */
 export interface FibtimezoneLineToolOverrides {
@@ -5574,7 +6867,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level1.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level1.visible": boolean;
@@ -5584,7 +6877,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level10.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level10.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level10.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level10.visible": boolean;
@@ -5594,7 +6887,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level11.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level11.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level11.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level11.visible": boolean;
@@ -5604,7 +6897,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level2.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level2.visible": boolean;
@@ -5614,7 +6907,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level3.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level3.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level3.visible": boolean;
@@ -5624,7 +6917,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level4.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level4.visible": boolean;
@@ -5634,7 +6927,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level5.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level5.visible": boolean;
@@ -5644,7 +6937,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level6.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level6.visible": boolean;
@@ -5654,7 +6947,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level7.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level7.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level7.visible": boolean;
@@ -5664,7 +6957,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level8.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level8.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level8.visible": boolean;
@@ -5674,7 +6967,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.level9.color": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.level9.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.level9.visible": boolean;
@@ -5682,7 +6975,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.linecolor": string;
 	/** Default value: `0` */
 	"linetoolfibtimezone.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibtimezone.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibtimezone.showLabels": boolean;
@@ -5711,7 +7004,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level1.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level1.visible": boolean;
@@ -5721,7 +7014,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level10.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level10.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level10.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibwedge.level10.visible": boolean;
@@ -5731,7 +7024,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level11.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level11.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level11.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibwedge.level11.visible": boolean;
@@ -5741,7 +7034,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level2.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level2.visible": boolean;
@@ -5751,7 +7044,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level3.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level3.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level3.visible": boolean;
@@ -5761,7 +7054,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level4.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level4.visible": boolean;
@@ -5771,7 +7064,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level5.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level5.visible": boolean;
@@ -5781,7 +7074,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level6.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.level6.visible": boolean;
@@ -5791,7 +7084,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level7.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibwedge.level7.visible": boolean;
@@ -5801,7 +7094,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level8.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibwedge.level8.visible": boolean;
@@ -5811,7 +7104,7 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.level9.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.level9.linewidth": number;
 	/** Default value: `false` */
 	"linetoolfibwedge.level9.visible": boolean;
@@ -5823,10 +7116,64 @@ export interface FibwedgeLineToolOverrides {
 	"linetoolfibwedge.trendline.color": string;
 	/** Default value: `0` */
 	"linetoolfibwedge.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolfibwedge.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetoolfibwedge.trendline.visible": boolean;
+}
+/**
+ * Overrides for the '52 Week High/Low' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface FiftyTwoWeekHighLowIndicatorOverrides {
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Fisher Transform' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface FisherTransformIndicatorOverrides {
+	/** Default value: `#E91E63` */
+	"level:band.color": string;
+	/** Default value: `2` */
+	"level:band.linestyle": number;
+	/** Default value: `1` */
+	"level:band.linewidth": number;
+	/** Default value: `true` */
+	"level:band.visible": boolean;
+	/** Default value: `-1.5` */
+	"level:band.value": number;
+	/** Default value: `15` */
+	"fisher.display": number;
+	/** Default value: `0` */
+	"fisher.linestyle": number;
+	/** Default value: `1` */
+	"fisher.linewidth": number;
+	/** Default value: `line` */
+	"fisher.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fisher.trackprice": boolean;
+	/** Default value: `0` */
+	"fisher.transparency": number;
+	/** Default value: `#2196F3` */
+	"fisher.color": string;
+	/** Default value: `15` */
+	"trigger.display": number;
+	/** Default value: `0` */
+	"trigger.linestyle": number;
+	/** Default value: `1` */
+	"trigger.linewidth": number;
+	/** Default value: `line` */
+	"trigger.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trigger.trackprice": boolean;
+	/** Default value: `0` */
+	"trigger.transparency": number;
+	/** Default value: `#FF6D00` */
+	"trigger.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Fivepointspattern drawing tool.
@@ -5844,12 +7191,62 @@ export interface FivepointspatternLineToolOverrides {
 	"linetool5pointspattern.fontsize": number;
 	/** Default value: `false` */
 	"linetool5pointspattern.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetool5pointspattern.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetool5pointspattern.textcolor": string;
 	/** Default value: `85` */
 	"linetool5pointspattern.transparency": number;
+}
+/**
+ * Overrides for the 'Fixed Range' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface FixedRangeIndicatorOverrides {
+	/** Default value: `#ff0000` */
+	"developing poc.color": string;
+	/** Default value: `0` */
+	"developing poc.linestyle": number;
+	/** Default value: `1` */
+	"developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"developing poc.transparency": number;
+	/** Default value: `0` */
+	"developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"developing va high.color": string;
+	/** Default value: `0` */
+	"developing va high.linestyle": number;
+	/** Default value: `1` */
+	"developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va high.transparency": number;
+	/** Default value: `0` */
+	"developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"developing va low.color": string;
+	/** Default value: `0` */
+	"developing va low.linestyle": number;
+	/** Default value: `1` */
+	"developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va low.transparency": number;
+	/** Default value: `0` */
+	"developing va low.display": number;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Flagmark drawing tool.
@@ -5876,6 +7273,20 @@ export interface FlatbottomLineToolOverrides {
 	"linetoolflatbottom.fontsize": number;
 	/** Default value: `false` */
 	"linetoolflatbottom.italic": boolean;
+	/** Default value: `false` */
+	"linetoolflatbottom.labelBold": boolean;
+	/** Default value: `14` */
+	"linetoolflatbottom.labelFontSize": number;
+	/** Default value: `left` */
+	"linetoolflatbottom.labelHorzAlign": string;
+	/** Default value: `false` */
+	"linetoolflatbottom.labelItalic": boolean;
+	/** Default value: `#FF9800` */
+	"linetoolflatbottom.labelTextColor": string;
+	/** Default value: `bottom` */
+	"linetoolflatbottom.labelVertAlign": string;
+	/** Default value: `false` */
+	"linetoolflatbottom.labelVisible": boolean;
 	/** Default value: `0` */
 	"linetoolflatbottom.leftEnd": number;
 	/** Default value: `#FF9800` */
@@ -5911,7 +7322,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.0.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.0.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.arcs.0.x": number;
@@ -5921,7 +7332,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.1.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.1.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.arcs.1.x": number;
@@ -5931,7 +7342,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.10.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.10.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.10.width": number;
 	/** Default value: `5` */
 	"linetoolganncomplex.arcs.10.x": number;
@@ -5941,7 +7352,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.2.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.2.width": number;
 	/** Default value: `1.5` */
 	"linetoolganncomplex.arcs.2.x": number;
@@ -5951,7 +7362,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.3.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.3.width": number;
 	/** Default value: `2` */
 	"linetoolganncomplex.arcs.3.x": number;
@@ -5961,7 +7372,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.4.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.4.width": number;
 	/** Default value: `2` */
 	"linetoolganncomplex.arcs.4.x": number;
@@ -5971,7 +7382,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.5.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.5.width": number;
 	/** Default value: `3` */
 	"linetoolganncomplex.arcs.5.x": number;
@@ -5981,7 +7392,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.6.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.6.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.6.width": number;
 	/** Default value: `3` */
 	"linetoolganncomplex.arcs.6.x": number;
@@ -5991,7 +7402,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.7.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.7.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.7.width": number;
 	/** Default value: `4` */
 	"linetoolganncomplex.arcs.7.x": number;
@@ -6001,7 +7412,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.8.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.8.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.8.width": number;
 	/** Default value: `4` */
 	"linetoolganncomplex.arcs.8.x": number;
@@ -6011,7 +7422,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.arcs.9.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.arcs.9.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.arcs.9.width": number;
 	/** Default value: `5` */
 	"linetoolganncomplex.arcs.9.x": number;
@@ -6025,7 +7436,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.0.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.0.width": number;
 	/** Default value: `8` */
 	"linetoolganncomplex.fanlines.0.x": number;
@@ -6035,7 +7446,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.1.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.1.width": number;
 	/** Default value: `5` */
 	"linetoolganncomplex.fanlines.1.x": number;
@@ -6045,7 +7456,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.10.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.10.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.10.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.10.x": number;
@@ -6055,7 +7466,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.2.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.2.width": number;
 	/** Default value: `4` */
 	"linetoolganncomplex.fanlines.2.x": number;
@@ -6065,7 +7476,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.3.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.3.width": number;
 	/** Default value: `3` */
 	"linetoolganncomplex.fanlines.3.x": number;
@@ -6075,7 +7486,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.4.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.fanlines.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.4.width": number;
 	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.4.x": number;
@@ -6085,7 +7496,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.5.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.fanlines.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.5.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.5.x": number;
@@ -6095,7 +7506,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.6.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.fanlines.6.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.6.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.6.x": number;
@@ -6105,7 +7516,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.7.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.7.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.7.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.7.x": number;
@@ -6115,7 +7526,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.8.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.8.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.8.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.8.x": number;
@@ -6125,7 +7536,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.fanlines.9.color": string;
 	/** Default value: `false` */
 	"linetoolganncomplex.fanlines.9.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.fanlines.9.width": number;
 	/** Default value: `1` */
 	"linetoolganncomplex.fanlines.9.x": number;
@@ -6143,37 +7554,37 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.levels.0.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.0.width": number;
 	/** Default value: `#FF9800` */
 	"linetoolganncomplex.levels.1.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.1.width": number;
 	/** Default value: `#00bcd4` */
 	"linetoolganncomplex.levels.2.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.2.width": number;
 	/** Default value: `#4caf50` */
 	"linetoolganncomplex.levels.3.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.3.width": number;
 	/** Default value: `#089981` */
 	"linetoolganncomplex.levels.4.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.4.width": number;
 	/** Default value: `#787B86` */
 	"linetoolganncomplex.levels.5.color": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.levels.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolganncomplex.levels.5.width": number;
 	/** Default value: `false` */
 	"linetoolganncomplex.reverse": boolean;
@@ -6196,7 +7607,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level1.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level1.visible": boolean;
@@ -6208,7 +7619,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level2.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level2.visible": boolean;
@@ -6220,7 +7631,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level3.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level3.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level3.visible": boolean;
@@ -6232,7 +7643,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level4.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level4.visible": boolean;
@@ -6244,7 +7655,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level5.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level5.visible": boolean;
@@ -6256,7 +7667,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level6.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level6.visible": boolean;
@@ -6268,7 +7679,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level7.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level7.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level7.visible": boolean;
@@ -6280,7 +7691,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level8.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level8.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level8.visible": boolean;
@@ -6292,10 +7703,12 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.level9.color": string;
 	/** Default value: `0` */
 	"linetoolgannfan.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfan.level9.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.level9.visible": boolean;
+	/** Default value: `2` */
+	"linetoolgannfan.linewidth": number;
 	/** Default value: `true` */
 	"linetoolgannfan.showLabels": boolean;
 	/** Default value: `80` */
@@ -6309,7 +7722,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.0.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.0.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.arcs.0.x": number;
@@ -6319,7 +7732,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.1.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.1.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.arcs.1.x": number;
@@ -6329,7 +7742,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.10.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.10.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.10.width": number;
 	/** Default value: `5` */
 	"linetoolgannfixed.arcs.10.x": number;
@@ -6339,7 +7752,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.2.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.2.width": number;
 	/** Default value: `1.5` */
 	"linetoolgannfixed.arcs.2.x": number;
@@ -6349,7 +7762,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.3.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.3.width": number;
 	/** Default value: `2` */
 	"linetoolgannfixed.arcs.3.x": number;
@@ -6359,7 +7772,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.4.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.4.width": number;
 	/** Default value: `2` */
 	"linetoolgannfixed.arcs.4.x": number;
@@ -6369,7 +7782,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.5.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.5.width": number;
 	/** Default value: `3` */
 	"linetoolgannfixed.arcs.5.x": number;
@@ -6379,7 +7792,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.6.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.6.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.6.width": number;
 	/** Default value: `3` */
 	"linetoolgannfixed.arcs.6.x": number;
@@ -6389,7 +7802,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.7.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.7.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.7.width": number;
 	/** Default value: `4` */
 	"linetoolgannfixed.arcs.7.x": number;
@@ -6399,7 +7812,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.8.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.8.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.8.width": number;
 	/** Default value: `4` */
 	"linetoolgannfixed.arcs.8.x": number;
@@ -6409,7 +7822,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.arcs.9.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.arcs.9.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.arcs.9.width": number;
 	/** Default value: `5` */
 	"linetoolgannfixed.arcs.9.x": number;
@@ -6423,7 +7836,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.0.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.0.width": number;
 	/** Default value: `8` */
 	"linetoolgannfixed.fanlines.0.x": number;
@@ -6433,7 +7846,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.1.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.1.width": number;
 	/** Default value: `5` */
 	"linetoolgannfixed.fanlines.1.x": number;
@@ -6443,7 +7856,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.10.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.10.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.10.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.10.x": number;
@@ -6453,7 +7866,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.2.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.2.width": number;
 	/** Default value: `4` */
 	"linetoolgannfixed.fanlines.2.x": number;
@@ -6463,7 +7876,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.3.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.3.width": number;
 	/** Default value: `3` */
 	"linetoolgannfixed.fanlines.3.x": number;
@@ -6473,7 +7886,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.4.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.fanlines.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.4.width": number;
 	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.4.x": number;
@@ -6483,7 +7896,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.5.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.fanlines.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.5.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.5.x": number;
@@ -6493,7 +7906,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.6.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.fanlines.6.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.6.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.6.x": number;
@@ -6503,7 +7916,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.7.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.7.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.7.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.7.x": number;
@@ -6513,7 +7926,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.8.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.8.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.8.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.8.x": number;
@@ -6523,7 +7936,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.fanlines.9.color": string;
 	/** Default value: `false` */
 	"linetoolgannfixed.fanlines.9.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.fanlines.9.width": number;
 	/** Default value: `1` */
 	"linetoolgannfixed.fanlines.9.x": number;
@@ -6535,37 +7948,37 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.levels.0.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.0.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.0.width": number;
 	/** Default value: `#FF9800` */
 	"linetoolgannfixed.levels.1.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.1.width": number;
 	/** Default value: `#00bcd4` */
 	"linetoolgannfixed.levels.2.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.2.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.2.width": number;
 	/** Default value: `#4caf50` */
 	"linetoolgannfixed.levels.3.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.3.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.3.width": number;
 	/** Default value: `#089981` */
 	"linetoolgannfixed.levels.4.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.4.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.4.width": number;
 	/** Default value: `#787B86` */
 	"linetoolgannfixed.levels.5.color": string;
 	/** Default value: `true` */
 	"linetoolgannfixed.levels.5.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannfixed.levels.5.width": number;
 	/** Default value: `false` */
 	"linetoolgannfixed.reverse": boolean;
@@ -6630,7 +8043,7 @@ export interface GannsquareLineToolOverrides {
 	"linetoolgannsquare.horzTransparency": number;
 	/** Default value: `0` */
 	"linetoolgannsquare.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolgannsquare.linewidth": number;
 	/** Default value: `false` */
 	"linetoolgannsquare.reverse": boolean;
@@ -6726,6 +8139,182 @@ export interface GrayedObject {
 	/** Name of grayed object */
 	name: string;
 }
+/**
+ * Overrides for the 'Guppy Multiple Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface GuppyMultipleMovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"trader ema 1.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 1.color": string;
+	/** Default value: `0` */
+	"trader ema 1.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 1.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 1.trackprice": boolean;
+	/** Default value: `15` */
+	"trader ema 1.transparency": number;
+	/** Default value: `15` */
+	"trader ema 2.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 2.color": string;
+	/** Default value: `0` */
+	"trader ema 2.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 2.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 2.trackprice": boolean;
+	/** Default value: `12` */
+	"trader ema 2.transparency": number;
+	/** Default value: `15` */
+	"trader ema 3.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 3.color": string;
+	/** Default value: `0` */
+	"trader ema 3.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 3.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 3.trackprice": boolean;
+	/** Default value: `9` */
+	"trader ema 3.transparency": number;
+	/** Default value: `15` */
+	"trader ema 4.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 4.color": string;
+	/** Default value: `0` */
+	"trader ema 4.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 4.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 4.trackprice": boolean;
+	/** Default value: `6` */
+	"trader ema 4.transparency": number;
+	/** Default value: `15` */
+	"trader ema 5.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 5.color": string;
+	/** Default value: `0` */
+	"trader ema 5.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 5.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 5.trackprice": boolean;
+	/** Default value: `3` */
+	"trader ema 5.transparency": number;
+	/** Default value: `15` */
+	"trader ema 6.display": number;
+	/** Default value: `#00FFFF` */
+	"trader ema 6.color": string;
+	/** Default value: `0` */
+	"trader ema 6.linestyle": number;
+	/** Default value: `1` */
+	"trader ema 6.linewidth": number;
+	/** Default value: `line` */
+	"trader ema 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trader ema 6.trackprice": boolean;
+	/** Default value: `0` */
+	"trader ema 6.transparency": number;
+	/** Default value: `15` */
+	"investor ema 1.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 1.color": string;
+	/** Default value: `0` */
+	"investor ema 1.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 1.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 1.trackprice": boolean;
+	/** Default value: `15` */
+	"investor ema 1.transparency": number;
+	/** Default value: `15` */
+	"investor ema 2.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 2.color": string;
+	/** Default value: `0` */
+	"investor ema 2.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 2.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 2.trackprice": boolean;
+	/** Default value: `12` */
+	"investor ema 2.transparency": number;
+	/** Default value: `15` */
+	"investor ema 3.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 3.color": string;
+	/** Default value: `0` */
+	"investor ema 3.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 3.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 3.trackprice": boolean;
+	/** Default value: `9` */
+	"investor ema 3.transparency": number;
+	/** Default value: `15` */
+	"investor ema 4.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 4.color": string;
+	/** Default value: `0` */
+	"investor ema 4.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 4.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 4.trackprice": boolean;
+	/** Default value: `6` */
+	"investor ema 4.transparency": number;
+	/** Default value: `15` */
+	"investor ema 5.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 5.color": string;
+	/** Default value: `0` */
+	"investor ema 5.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 5.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 5.trackprice": boolean;
+	/** Default value: `3` */
+	"investor ema 5.transparency": number;
+	/** Default value: `15` */
+	"investor ema 6.display": number;
+	/** Default value: `#FF0000` */
+	"investor ema 6.color": string;
+	/** Default value: `0` */
+	"investor ema 6.linestyle": number;
+	/** Default value: `1` */
+	"investor ema 6.linewidth": number;
+	/** Default value: `line` */
+	"investor ema 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"investor ema 6.trackprice": boolean;
+	/** Default value: `0` */
+	"investor ema 6.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
 /** Histogram Preferences */
 export interface HHistPreferences {
 	/**
@@ -6792,7 +8381,7 @@ export interface HeadandshouldersLineToolOverrides {
 	"linetoolheadandshoulders.fontsize": number;
 	/** Default value: `false` */
 	"linetoolheadandshoulders.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolheadandshoulders.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetoolheadandshoulders.textcolor": string;
@@ -6851,6 +8440,28 @@ export interface HighlighterLineToolOverrides {
 	"linetoolhighlighter.smooth": number;
 	/** Default value: `80` */
 	"linetoolhighlighter.transparency": number;
+}
+/**
+ * Overrides for the 'Historical Volatility' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface HistoricalVolatilityIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Information passed to `onHistoryCallback` for getBars.
@@ -6960,6 +8571,28 @@ export interface HorzrayLineToolOverrides {
 	/** Default value: `top` */
 	"linetoolhorzray.vertLabelsAlign": string;
 }
+/**
+ * Overrides for the 'Hull Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface HullMovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface IAction extends IMenuItem {
 	/** @inheritDoc */
 	readonly type: MenuItemType.Action;
@@ -6987,27 +8620,49 @@ export interface IBoxedValueReadOnly<T> {
 	/** Value */
 	value(): T;
 }
+export interface IBrokerAccountInfo {
+	/**
+	 * The library calls `accountsMetainfo` to get a list of accounts for a particular user.
+	 * The method should return an array that contains an ID and name for each account.
+	 *
+	 * Note that if `accountsMetainfo` returns an array containing more than one element, you should implement the {@link setCurrentAccount} method.
+	 * Refer to [User accounts](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/user-accounts.md) for more information.
+	 */
+	accountsMetainfo(): Promise<AccountMetainfo[]>;
+	/**
+	 * The library calls `currentAccount` to get the current account ID.
+	 */
+	currentAccount(): AccountId;
+	/**
+	 * The library calls `setCurrentAccount` when users switch accounts using the drop-down menu in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md).
+	 * This method provides your backend server with the ID of the selected account.
+	 *
+	 * Note that `setCurrentAccount` is required if {@link accountsMetainfo} returns an array containing more than one element.
+	 * Refer to [Multiple accounts](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/user-accounts.md#multiple-accounts) for more information.
+	 */
+	setCurrentAccount?(id: AccountId): void;
+}
 export interface IBrokerCommon {
 	/**
 	 * Chart can have a sub-menu `Trading` in the context menu. This method should return an array of {@link ActionMetaInfo} elements, each of them representing one context menu item.
 	 * @param  {TradeContext} context - context object passed by a browser
-	 * @param  {DefaultContextMenuActionsParams} options? - default options for the context menu action parameters
+	 * @param  {DefaultContextMenuActionsParams} [options] - default options for the context menu action parameters
 	 */
 	chartContextMenuActions(context: TradeContext, options?: DefaultContextMenuActionsParams): Promise<ActionMetaInfo[]>;
 	/**
-	 * This function is required for the Floating Trading Panel.
-	 * The ability to trade via the panel depends on the result of this function: `true` or `false`.
-	 * You don't need to implement this method if all symbols can be traded.
-	 *
-	 * If you want to show a custom message with the reason why the symbol cannot be traded then you can return an object `IsTradableResult`.
+	 * The library calls this method to check if a symbol can be traded.
+	 * If the method returns `false`, users will see the *Non-tradable symbol* message in the UI when creating orders.
+	 * You can also show a custom message with the reason why the symbol cannot be traded and the possible solution to resolve the issue.
+	 * To do this, return an `IsTradableResult` object.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	isTradable(symbol: string): Promise<boolean | IsTradableResult>;
 	/**
-	 * Connection status for the Broker API.
+	 * Defines the connection status for the Broker API.
+	 * You don't need to return values other than `1` (`Connected`) since the broker is already connected when you create the widget.
 	 *
-	 * You don't need to return values other than `1` (`Connected`) typically since the broker is already connected when you create the widget.
-	 * You can use it if you want to display a spinner in the bottom panel while the data is being loaded.
+	 * If the method is not implemented, the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md) will have a spinner instead of the user's trading data.
+	 * In the console, the *Trading.Core:Broker broker creation error* will also be displayed.
 	 */
 	connectionStatus(): ConnectionStatus;
 	/**
@@ -7018,29 +8673,31 @@ export interface IBrokerCommon {
 	 * This method is called by the Trading Platform to request orders history.
 	 * It is expected that returned orders will have a final status (`rejected`, `filled`, `cancelled`).
 	 *
-	 * This method is optional. If you don't support orders history, please set `supportOrdersHistory` flag to `false`.
+	 * This method is optional. If you don't support orders history, please set the {@link BrokerConfigFlags.supportOrdersHistory} flag to `false`.
 	 */
 	ordersHistory?(): Promise<Order[]>;
 	/**
-	 * Called by Trading Platform to request positions
+	 * Called by Trading Platform to request positions.
+	 * Required if the {@link BrokerConfigFlags.supportPositions} flag is set to `true`.
 	 */
 	positions?(): Promise<Position[]>;
 	/**
-	 * Called by Trading Platform to request trades
+	 * Called by Trading Platform to request individual positions.
+	 * Required if the {@link BrokerConfigFlags.supportPositionNetting} flag is set to `true`.
 	 */
-	trades?(): Promise<Trade[]>;
+	individualPositions?(): Promise<IndividualPosition[]>;
 	/**
 	 * Called by Trading Platform to request executions for the specified symbol
 	 * @param  {string} symbol - symbol identifier
 	 */
 	executions(symbol: string): Promise<Execution[]>;
 	/**
-	 * Called by the internal Order dialog, DOM panel, and floating trading panel to get symbol information.
+	 * Called by the Order Ticket and DOM panel to get symbol information.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	symbolInfo(symbol: string): Promise<InstrumentInfo>;
 	/**
-	 * This function should return the information that will be used to build an Account manager.
+	 * This function should return the information that will be used to build the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/account-manager.md).
 	 */
 	accountManagerInfo(): AccountManagerInfo;
 	/**
@@ -7060,7 +8717,7 @@ export interface IBrokerCommon {
 	 */
 	quantityFormatter?(symbol: string): Promise<INumberFormatter>;
 	/**
-	 * Implement this method if you use the standard Order dialog and want to customize it.
+	 * Implement this method if you want to [add custom fields](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#add-custom-fields) to the standard Order Ticket.
 	 *
 	 * Use the `symbol` parameter to return customization options for a particular symbol.
 	 * @param  {string} symbol - symbol identifier
@@ -7070,6 +8727,11 @@ export interface IBrokerCommon {
 	 * Implement this method if you want to customize the position dialog.
 	 */
 	getPositionDialogOptions?(): PositionDialogOptions | undefined;
+	/**
+	 * Implement this method if you want to have custom options available for different symbols.
+	 * @param  {string} symbol - symbol identifier
+	 */
+	getSymbolSpecificTradingOptions?(symbol: string): Promise<SymbolSpecificTradingOptions | undefined>;
 }
 export interface IBrokerConnectionAdapterFactory {
 	/** Creates a Delegate object */
@@ -7087,8 +8749,9 @@ export interface IBrokerConnectionAdapterFactory {
 	createPriceFormatter(priceScale?: number, minMove?: number, fractional?: boolean, minMove2?: number, variableMinTick?: string): IPriceFormatter;
 }
 /**
- * Trading Host is an API for interaction between the Broker API and the Chart Trading Subsystem.
- * Its main purpose is to exchange information between our charts and your trading adapter.
+ * The Trading Host is an API for interaction between the Broker API and the library code related to trading.
+ * Its main purpose is to receive information from your backend server where trading logic is implemented and provide updates to the library.
+ * Refer to the [Core trading concepts](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/trading-concepts.md) article for more information.
  */
 export interface IBrokerConnectionAdapterHost {
 	/** Broker Connection Adapter Factory object */
@@ -7164,17 +8827,17 @@ export interface IBrokerConnectionAdapterHost {
 	 */
 	positionPartialUpdate(id: string, positionChanges: Partial<Position>): void;
 	/**
-	 * Call this method when a trade is added or changed.
-	 * @param  {Trade} trade - updated trade
+	 * Call this method when an individual position is added or changed.
+	 * @param  {IndividualPosition} individualPosition - updated individual position
 	 * @param  {boolean} [isHistoryUpdate] - whether the change is a history update
 	 */
-	tradeUpdate(trade: Trade, isHistoryUpdate?: boolean): void;
+	individualPositionUpdate(individualPosition: IndividualPosition, isHistoryUpdate?: boolean): void;
 	/**
-	 * Call this method when a trade has not changed, but fields that you added to the trade object to display in the Account Manager have changed.
-	 * @param  {string} id - id of the updated trade
-	 * @param  {Partial<Trade>} tradeChanges - changes to the trade object
+	 * Call this method when an individual position has not changed, but fields that you added to the individual position object to display in the Account Manager have changed.
+	 * @param  {string} id - ID of the updated individual position
+	 * @param  {Partial<IndividualPosition>} changes - changes to the individual position object
 	 */
-	tradePartialUpdate(id: string, tradeChanges: Partial<Trade>): void;
+	individualPositionPartialUpdate(id: string, changes: Partial<IndividualPosition>): void;
 	/**
 	 * Call this method when an execution is added.
 	 * @param  {Execution} execution - execution which was added
@@ -7191,8 +8854,9 @@ export interface IBrokerConnectionAdapterHost {
 	 */
 	realtimeUpdate(symbol: string, data: TradingQuotes): void;
 	/**
-	 * Call this method when a broker connection has received a PL update. This method should be used when `supportPLUpdate` flag is set in `configFlags`.
-	 * @param  {string} positionId - id of the position
+	 * Call this method when a broker connection has received a PL update.
+	 * Use this method when the {@link BrokerConfigFlags.supportPLUpdate} flag is set to `true` in {@link SingleBrokerMetaInfo.configFlags}.
+	 * @param  {string} positionId - ID of the position
 	 * @param  {number} pl - updated profit / loss value
 	 */
 	plUpdate(positionId: string, pl: number): void;
@@ -7204,29 +8868,29 @@ export interface IBrokerConnectionAdapterHost {
 	 */
 	pipValueUpdate(symbol: string, pipValues: PipValues): void;
 	/**
-	 * Call this method when a broker connection has received a trade PL update.
-	 * @param  {string} tradeId - id of the trade
-	 * @param  {number} pl - updated profit / loss for the trade
+	 * Call this method when a broker connection has received an individual position PL update.
+	 * @param  {string} individualPositionId - ID of the individual position
+	 * @param  {number} pl - updated profit / loss for the individual position
 	 */
-	tradePLUpdate(tradeId: string, pl: number): void;
+	individualPositionPLUpdate(individualPositionId: string, pl: number): void;
 	/**
-	 * Call this method when a broker connection has received an equity update. This method is required by the standard Order Dialog to calculate risks.
+	 * Call this method when a broker connection has received an equity update. This method is required by the standard Order Ticket to calculate risks.
 	 * @param  {number} equity - updated equity
 	 */
 	equityUpdate(equity: number): void;
 	/**
 	 * Call this method when a broker connection has received a margin available update.
-	 * This method is required by the standard Order Dialog to display the margin meter.
-	 * This method should be used when `supportMargin` flag is set in `configFlags`.
+	 * This method is required by the standard Order Ticket to display the margin meter.
+	 * This method should be used when {@link BrokerConfigFlags.supportMargin} is set to `true` in {@link SingleBrokerMetaInfo.configFlags}.
 	 * The Trading Platform subscribes to margin available updates using {@link IBrokerWithoutRealtime.subscribeMarginAvailable}.
 	 * @param  {number} marginAvailable - updated available margin
 	 */
 	marginAvailableUpdate(marginAvailable: number): void;
 	/**
 	 * Call this method when a broker connection has received a balance update.
-	 * This method is required by the crypto Order Dialog.
-	 * It should be implemented when `supportBalances` flag is set in `configFlags`.
-	 * @param  {string} symbol - symbol id
+	 * This method is required by the crypto Order Ticket.
+	 * It should be implemented when the {@link BrokerConfigFlags.supportBalances} flag is set to `true` in {@link SingleBrokerMetaInfo.configFlags}.
+	 * @param  {string} symbol - symbol ID
 	 * @param  {CryptoBalance} balance - updated crypto balance
 	 */
 	cryptoBalanceUpdate(symbol: string, balance: CryptoBalance): void;
@@ -7237,26 +8901,53 @@ export interface IBrokerConnectionAdapterHost {
 	 */
 	domUpdate(symbol: string, equity: DOMData): void;
 	/**
-	 * Shows the order dialog
+	 * Sets the quantity for a given symbol.
+	 * @param  {string} symbol - symbol
+	 * @param  {number} quantity - quantity to update
+	 */
+	setQty(symbol: string, quantity: number): void;
+	/**
+	 * Returns the quantity for a given symbol.
+	 * @param  {string} symbol - symbol
+	 * @return  {Promise<number>} - quantity for the given symbol
+	 */
+	getQty(symbol: string): Promise<number>;
+	/**
+	 * Adds a callback to be executed whenever there's a change of quantity for a given symbol.
+	 *
+	 * It's the user's responsibility to manage the unsubscription of any added listener
+	 *
+	 * @param  {string} symbol - symbol to which the callback will be linked to
+	 * @param  {SuggestedQtyChangedListener} listener - callback
+	 */
+	subscribeSuggestedQtyChange(symbol: string, listener: SuggestedQtyChangedListener): void;
+	/**
+	 * Remove a previously added callback from the list.
+	 * @param  {string} symbol - symbol to remove the callback from
+	 * @param  {SuggestedQtyChangedListener} listener - callback to be removed
+	 */
+	unsubscribeSuggestedQtyChange(symbol: string, listener: SuggestedQtyChangedListener): void;
+	/**
+	 * Shows the Order Ticket
 	 * @param  {T extends PreOrder} order - order to show in the dialog
-	 * @param  {OrderTicketFocusControl} focus? - input control to focus on when dialog is opened
+	 * @param  {OrderTicketFocusControl} [focus] - input control to focus on when dialog is opened
 	 */
 	showOrderDialog?<T extends PreOrder>(order: T, focus?: OrderTicketFocusControl): Promise<boolean>;
 	/**
 	 * Shows notification message
 	 * @param  {string} title - notification title
 	 * @param  {string} text - notification content
-	 * @param  {NotificationType} notificationType? - type of notification (default: NotificationType.Error)
+	 * @param  {NotificationType} [notificationType] - type of notification (default: NotificationType.Error)
 	 */
 	showNotification(title: string, text: string, notificationType?: NotificationType): void;
 	/**
-	 * Shows the cancel order dialog for specified order
+	 * Shows the cancel Order Ticket for specified order
 	 * @param  {string} orderId - id of order to potentially cancel
 	 * @param  {()=>Promise<void>} handler - cancel order confirmation handler (called when order should be cancelled)
 	 */
 	showCancelOrderDialog(orderId: string, handler: () => Promise<void>): Promise<void>;
 	/**
-	 * Shows the cancel order dialog for multiple orders
+	 * Shows the cancel Order Ticket for multiple orders
 	 * @param  {string} symbol - symbol for which to cancel orders
 	 * @param  {Side} side - side of the order
 	 * @param  {number} qty - quantity of the order
@@ -7283,16 +8974,11 @@ export interface IBrokerConnectionAdapterHost {
 	showReversePositionDialog(position: string, handler: () => Promise<boolean>): Promise<boolean>;
 	/**
 	 * Shows the position brackets dialog
-	 * @param  {Position|Trade} position - position or trade
-	 * @param  {Brackets} brackets - brackets for the position or trade
+	 * @param  {Position|IndividualPosition} position - position or individual position
+	 * @param  {Brackets} brackets - brackets for the position or individual position
 	 * @param  {OrderTicketFocusControl} focus - input control to focus on when dialog is opened
 	 */
-	showPositionBracketsDialog(position: Position | Trade, brackets: Brackets, focus: OrderTicketFocusControl): Promise<boolean>;
-	/**
-	 * Bottom Trading Panel has a button with a list of dropdown items. This method can be used to replace existing items.
-	 * @param  {ActionMetaInfo[]} descriptions - Descriptions for the dropdown items.
-	 */
-	setButtonDropdownActions(descriptions: ActionMetaInfo[]): void;
+	showPositionBracketsDialog(position: Position | IndividualPosition, brackets: Brackets, focus: OrderTicketFocusControl): Promise<boolean>;
 	/**
 	 * Activate bottom widget
 	 */
@@ -7310,7 +8996,7 @@ export interface IBrokerConnectionAdapterHost {
 	 * Displays a message dialog to a user.
 	 * @param  {string} title - title of the message dialog
 	 * @param  {string} text - message
-	 * @param  {boolean} textHasHTML? - whether message text contains HTML
+	 * @param  {boolean} [textHasHTML] - whether message text contains HTML
 	 */
 	showMessageDialog(title: string, text: string, textHasHTML?: boolean): void;
 	/**
@@ -7344,7 +9030,12 @@ export interface IBrokerTerminal extends IBrokerWithoutRealtime {
 	 */
 	unsubscribeRealtime(symbol: string): void;
 }
-export interface IBrokerWithoutRealtime extends IBrokerCommon {
+/**
+ * The Broker API is a key component that enables trading.
+ * Its main purpose is to connect TradingView charts with your trading logic.
+ * Refer to the [Core trading concepts](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/trading-concepts.md) article for more information.
+ */
+export interface IBrokerWithoutRealtime extends IBrokerCommon, IBrokerAccountInfo {
 	/**
 	 * Library is requesting that realtime DOM (Depth of Market) updates should be supplied for this symbol
 	 * @param  {string} symbol - symbol identifier
@@ -7356,71 +9047,100 @@ export interface IBrokerWithoutRealtime extends IBrokerCommon {
 	 */
 	unsubscribeDOM?(symbol: string): void;
 	/**
-	 * Method is called when a user wants to place an order. Order is pre-filled with partial or complete information. This function returns an object with the order id.
+	 * Method is called when a user wants to place an order.
+	 * Order is pre-filled with partial or complete information.
+	 * This function returns an object with the order ID.
+	 * To enable order preview before placing it, set {@link BrokerConfigFlags.supportPlaceOrderPreview} to `true`.
 	 * @param  {PreOrder} order - order information
-	 * @param  {string} [confirmId] - is passed if `supportPlaceOrderPreview` configuration flag is on.
+	 * @param  {string} [confirmId] - is passed if the `supportPlaceOrderPreview` configuration flag is on.
 	 * @returns PlaceOrderResult, which should include an `orderId`
 	 */
 	placeOrder(order: PreOrder, confirmId?: string): Promise<PlaceOrderResult>;
 	/**
-	 * Returns estimated commission, fees, margin and other information for the order without it actually being placed.
-	 * The method is called if `supportPlaceOrderPreview` configuration flag is on.
+	 * Returns estimated commission, fees, margin, and other information for the order without it actually being placed.
+	 * The method is called if the {@link BrokerConfigFlags.supportPlaceOrderPreview} or {@link BrokerConfigFlags.supportModifyOrderPreview} configuration flag is on.
 	 * @param  {PreOrder} order - order information
 	 */
 	previewOrder?(order: PreOrder): Promise<OrderPreviewResult>;
 	/**
 	 * Method is called when a user wants to modify an existing order.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
+	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues.md#timeout-issue).
+	 *
+	 * To enable order preview before modifying it, set {@link BrokerConfigFlags.supportModifyOrderPreview} to `true`.
 	 * @param  {Order} order - order information
-	 * @param  {string} [confirmId] - is passed if `supportPlaceOrderPreview` configuration flag is on.
+	 * @param  {string} [confirmId] - is passed if `supportModifyOrderPreview` configuration flag is on.
 	 */
 	modifyOrder(order: Order, confirmId?: string): Promise<void>;
 	/**
 	 * This method is called to cancel a single order with the given `id`.
-	 * @param  {string} orderId - id for the order to cancel
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
+	 * @param  {string} orderId - ID for the order to cancel
 	 */
 	cancelOrder(orderId: string): Promise<void>;
 	/**
 	 * This method is called to cancel multiple orders for a `symbol` and `side`.
+	 * The `ordersIds` parameter should contain the list of order ids to be cancelled.
 	 *
-	 * `ordersIds` parameter should contain the list of order ids to be cancelled.
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
 	 * @param  {string} symbol - symbol identifier
 	 * @param  {Side|undefined} side - order side
 	 * @param  {string[]} ordersIds - ids already collected by `symbol` and `side`
 	 */
 	cancelOrders(symbol: string, side: Side | undefined, ordersIds: string[]): Promise<void>;
 	/**
-	 * This method is called if `supportNativeReversePosition` configuration flag is on. It allows to reverse the position by id.
+	 * This method is called if the {@link BrokerConfigFlags.supportNativeReversePosition} configuration flag is on.
+	 * It allows reversing the position by ID.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
+	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues.md#timeout-issue).
 	 * @param  {string} positionId - position
 	 */
 	reversePosition?(positionId: string): Promise<void>;
 	/**
-	 * This method is called if `supportClosePosition` configuration flag is on. It allows to close the position by id.
-	 * @param  {string} positionId - position id
+	 * This method is called if the {@link BrokerConfigFlags.supportClosePosition} or {@link BrokerConfigFlags.supportPartialClosePosition} configuration flag is on.
+	 * It allows closing the position by ID.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
+	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues.md#timeout-issue).
+	 * @param  {string} positionId - Position ID.
 	 * @param  {number} [amount] - The amount is specified if `supportPartialClosePosition` is `true` and the user wants to close only part of the position.
 	 */
 	closePosition?(positionId: string, amount?: number): Promise<void>;
 	/**
-	 * This method is called if `supportCloseTrade` configuration flag is on. It allows to close the trade by id.
-	 * @param  {string} tradeId - trade id
-	 * @param  {number} [amount] - The amount is specified if `supportPartialCloseTrade` is `true` and the user wants to close only part of the trade.
+	 * This method is called if the {@link BrokerConfigFlags.supportCloseIndividualPosition} or {@link BrokerConfigFlags.supportPartialCloseIndividualPosition} configuration flag is on.
+	 * It allows closing the individual position by ID.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
+	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues.md#timeout-issue).
+	 * @param  {string} individualPositionId - Individual position ID.
+	 * @param  {number} [amount] - The amount is specified if `supportPartialCloseIndividualPosition` is `true` and the user wants to close only part of the individual position.
 	 */
-	closeTrade?(tradeId: string, amount?: number): Promise<void>;
+	closeIndividualPosition?(individualPositionId: string, amount?: number): Promise<void>;
 	/**
-	 * This method is called if `supportPositionBrackets` configuration flag is on. It shows a dialog that enables `take profit` and `stop loss` editing.
+	 * This method is called if the {@link BrokerConfigFlags.supportPositionBrackets} configuration flag is on.
+	 * It shows a dialog that enables take-profit and stop-loss editing.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
 	 * @param  {string} positionId - is an ID of an existing position to be modified
 	 * @param  {Brackets} brackets - new Brackets to be set for the position
 	 * @param  {CustomInputFieldsValues} [customFields] - custom fields to display in the dialog
 	 */
 	editPositionBrackets?(positionId: string, brackets: Brackets, customFields?: CustomInputFieldsValues): Promise<void>;
 	/**
-	 * This method is called if `supportTradeBrackets` configuration flag is on. It displays a dialog that enables take profit and stop loss editing.
-	 * @param  {string} tradeId - ID of existing trade to be modified
-	 * @param  {Brackets} brackets - new Brackets to be set for the trade
+	 * This method is called if the {@link BrokerConfigFlags.supportIndividualPositionBrackets} configuration flag is on.
+	 * It displays a dialog that enables take-profit and stop-loss editing.
+	 *
+	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
+	 * @param  {string} individualPositionId - ID of existing individual position to be modified
+	 * @param  {Brackets} brackets - new Brackets to be set for the individual position
 	 */
-	editTradeBrackets?(tradeId: string, brackets: Brackets): Promise<void>;
+	editIndividualPositionBrackets?(individualPositionId: string, brackets: Brackets): Promise<void>;
 	/**
 	 * This method is called to receive leverageInfo from the broker.
-	 * @param  {LeverageInfoParams} leverageInfoParams - information about the specific symbol to provide leverage info for
+	 * @param  {LeverageInfoParams} leverageInfoParams - information about the specific symbol to provide leverage information for
 	 */
 	leverageInfo?(leverageInfoParams: LeverageInfoParams): Promise<LeverageInfo>;
 	/**
@@ -7434,20 +9154,20 @@ export interface IBrokerWithoutRealtime extends IBrokerCommon {
 	 */
 	previewLeverage?(leverageSetParams: LeverageSetParams): Promise<LeveragePreviewResult>;
 	/**
-	 * The method should be implemented if you use the standard Order dialog and support stop loss. Equity is used to calculate Risk in Percent.
+	 * The method should be implemented if you use the standard Order Ticket and support stop loss. Equity is used to calculate Risk in Percent.
 	 *
 	 * Once this method is called the broker should provide equity (Balance + P/L) updates via {@link IBrokerConnectionAdapterHost.equityUpdate} method.
 	 */
 	subscribeEquity?(): void;
 	/**
-	 * The method should be implemented if you use the standard Order dialog and want to show the margin meter.
+	 * The method should be implemented if you use the standard Order Ticket and want to show the margin meter.
 	 *
 	 * Once this method is called the broker should provide margin available updates via {@link IBrokerConnectionAdapterHost.marginAvailableUpdate} method.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	subscribeMarginAvailable?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use a standard Order dialog.
+	 * The method should be implemented if you use a standard Order Ticket.
 	 * `pipValues` is displayed in the Order info and it is used to calculate the Trade Value and risks.
 	 * If this method is not implemented then `pipValue` from the `symbolInfo` is used in the order panel/dialog.
 	 *
@@ -7456,21 +9176,21 @@ export interface IBrokerWithoutRealtime extends IBrokerCommon {
 	 */
 	subscribePipValue?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use a standard Order dialog and implement `subscribePipValue`.
+	 * The method should be implemented if you use a standard Order Ticket and implement `subscribePipValue`.
 	 *
 	 * Once this method is called the broker should stop providing `pipValue` updates.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	unsubscribePipValue?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use the standard Order dialog want to show the margin meter.
+	 * The method should be implemented if you use the standard Order Ticket want to show the margin meter.
 	 *
 	 * Once this method is called the broker should stop providing margin available updates.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	unsubscribeMarginAvailable?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use the standard Order dialog and support stop loss.
+	 * The method should be implemented if you use the standard Order Ticket and support stop loss.
 	 *
 	 * Once this method is called the broker should stop providing equity updates.
 	 */
@@ -7580,7 +9300,7 @@ export interface IChartWidgetApi {
 	 *
 	 * @param callback A callback function called when chart data is loaded.
 	 */
-	dataReady(callback: () => void): boolean;
+	dataReady(callback?: () => void): boolean;
 	/**
 	 * Get a subscription object for the crosshair moving over the chart.
 	 *
@@ -7641,8 +9361,9 @@ export interface IChartWidgetApi {
 	 *
 	 * @param resolution A resolution.
 	 * @param options Optional object of options for the new resolution or optional callback that is called when the data for the new resolution has loaded.
+	 * @returns A promise that resolves with a boolean value. It's `true` when the resolution has been set and `false` when setting the resolution is not possible.
 	 */
-	setResolution(resolution: ResolutionString, options?: SetResolutionOptions | (() => void)): void;
+	setResolution(resolution: ResolutionString, options?: SetResolutionOptions | (() => void)): Promise<boolean>;
 	/**
 	 * Change the chart's type.
 	 *
@@ -7653,10 +9374,11 @@ export interface IChartWidgetApi {
 	 *
 	 * @param type A chart type.
 	 * @param callback An optional callback function. Called when the chart type has changed and data has loaded.
+	 * @returns A promise that resolves with a boolean value. It's `true` when the chart type has been set and `false` when setting the chart type is not possible.
 	 */
 	setChartType(type: SeriesType, callback?: () => void): void;
 	/**
-	 * Force the chart to re-request data.
+	 * Force the chart to re-request data, for example if there are [internet connection issues](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues.md#internet-connection-issues).
 	 * Before calling this function the `onResetCacheNeededCallback` callback from {@link IDatafeedChartApi.subscribeBars} should be called.
 	 *
 	 * **Example**
@@ -7848,7 +9570,7 @@ export interface IChartWidgetApi {
 	 * widget.activeChart().sendToBack([id]);
 	 * ```
 	 *
-	 * @param sources An array of source IDs.
+	 * @param entities An array of entity IDs.
 	 */
 	sendToBack(entities: readonly EntityId[]): void;
 	/**
@@ -7889,14 +9611,14 @@ export interface IChartWidgetApi {
 	 * For more information, refer to the [Indicators](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicators.md) article.
 	 *
 	 * @param  {string} name - name of an indicator as shown in the `Indicators` widget
-	 * @param  {boolean} [forceOverlay] - forces the Charting Library to place the created study on the main pane
-	 * @param  {boolean} [lock] - whether a user will be able to remove/change/hide the study or not
-	 * @param  {Record<string} [inputs] - **From version v22** it's an object containing named properties from the study properties dialog.
-	 * @param  {TOverrides} [overrides] - an object (containing Studies Overrides) you'd like to set for your new study. Note that you should not specify the study name. Start a property path with a plot name.
+	 * @param  {boolean} [forceOverlay] - forces the Charting Library to place the created indicator on the main pane
+	 * @param  {boolean} [lock] - whether a user will be able to remove/change/hide the indicator or not
+	 * @param  {Record<string} [inputs] - **From version v22**, it's an object containing named properties from the indicator properties dialog.
+	 * @param  {TOverrides} [overrides] - An object that contains [overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#customize-a-single-indicator) for a new indicator. Note that you should not specify the indicator name. Overrides for built-in indicators are listed in `SingleIndicatorOverrides`.
 	 * @param  {CreateStudyOptions} [options] - study creation options
 	 * @returns ID of the created study
 	 */
-	createStudy<TOverrides extends StudyOverrides>(name: string, forceOverlay?: boolean, lock?: boolean, inputs?: Record<string, StudyInputValue>, overrides?: TOverrides, options?: CreateStudyOptions): Promise<EntityId | null>;
+	createStudy<TOverrides extends Partial<SingleIndicatorOverrides>>(name: string, forceOverlay?: boolean, lock?: boolean, inputs?: Record<string, StudyInputValue>, overrides?: TOverrides, options?: CreateStudyOptions): Promise<EntityId | null>;
 	/**
 	 * Get a study by ID.
 	 *
@@ -7928,6 +9650,8 @@ export interface IChartWidgetApi {
 	 * widget.activeChart().createShape({ time: 1514764800 }, { shape: 'vertical_line' });
 	 * ```
 	 *
+	 * For more information, refer to [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#createshape).
+	 *
 	 * @param point A point. The location of the new drawing.
 	 * @param options An options object for the new drawing.
 	 * @returns The ID of the new drawing if it was created successfully, or null otherwise.
@@ -7953,6 +9677,8 @@ export interface IChartWidgetApi {
 	 * );
 	 * ```
 	 *
+	 * For more information, refer to [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#createmultipointshape).
+	 *
 	 * @param points An array of points that define the drawing.
 	 * @param options An options object for the new drawing.
 	 * @returns The ID of the new drawing if it was created successfully, or null otherwise.
@@ -7966,6 +9692,8 @@ export interface IChartWidgetApi {
 	 * widget.createAnchoredShape({ x: 0.1, y: 0.9 }, { shape: 'anchored_text', text: 'Hello, charts!', overrides: { color: 'green' }});
 	 * ```
 	 *
+	 * For more information, refer to [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#createanchoredshape).
+	 *
 	 * @param position Percent-based x and y position of the new drawing, relative to the top left of the chart.
 	 * @param options An options object for the new drawing.
 	 */
@@ -7977,6 +9705,8 @@ export interface IChartWidgetApi {
 	 * ```javascript
 	 * widget.activeChart().getShapeById(id).bringToFront();
 	 * ```
+	 *
+	 * For more information, refer to [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#manage-drawings).
 	 *
 	 * @param entityId A drawing ID.
 	 * @returns An API object for interacting with the drawing.
@@ -8276,6 +10006,7 @@ export interface IChartWidgetApi {
 	setScrollEnabled(enabled: boolean): void;
 	/**
 	 * Get an API object for interacting with groups of drawings.
+	 * Refer to the [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#drawing-groups-api) article for more information.
 	 *
 	 * **Example**
 	 * ```javascript
@@ -8369,6 +10100,25 @@ export interface IChartWidgetApi {
 	 * @param timeFrame Object specifying the range and resolution to be applied
 	 */
 	setTimeFrame(timeFrame: RangeOptions): void;
+	/**
+	 * Get the line tools state containing the drawings on the active chart.
+	 *
+	 * This method requires that the [`saveload_separate_drawings_storage`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#saveload_separate_drawings_storage) featureset is enabled.
+	 */
+	getLineToolsState(): LineToolsAndGroupsState;
+	/**
+	 * Apply line tools state to the chart which will restore the drawings from the saved content.
+	 *
+	 * This method requires that the [`saveload_separate_drawings_storage`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#saveload_separate_drawings_storage) featureset is enabled.
+	 */
+	applyLineToolsState(state: LineToolsAndGroupsState): Promise<void>;
+	/**
+	 * Manually trigger the chart to request the linetools again from the {@link IExternalSaveLoadAdapter.loadLineToolsAndGroups} method
+	 * or the 'load_line_tools' endpoint of the [Chart Storage REST API](https://www.tradingview.com/charting-library-docs/latest/saving_loading/#predefined-rest-api).
+	 *
+	 * This method requires that the [`saveload_separate_drawings_storage`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#saveload_separate_drawings_storage) featureset is enabled.
+	 */
+	reloadLineToolsFromServer(): void;
 }
 /**
  * The main interface for interacting with the library, returned by {@link ChartingLibraryWidgetConstructor}.
@@ -8505,8 +10255,9 @@ export interface IChartingLibraryWidget {
 	 * Saves the chart state to a object. This method is part of the low-level save/load API.
 	 *
 	 * @param callback A function called with the chart state as the first argument.
+	 * @param options Options for customising the saved data.
 	 */
-	save(callback: (state: object) => void): void;
+	save(callback: (state: object) => void, options?: SaveChartOptions): void;
 	/**
 	 * Loads the chart state from a object. This method is part of the low-level save/load API.
 	 *
@@ -8693,15 +10444,23 @@ export interface IChartingLibraryWidget {
 	 */
 	getStudiesList(): string[];
 	/**
-	 * Get an array of information about the inputs of a study.
+	 * Get an array of information about indicator inputs, including their names.
+	 * You need to know an input name to refer to this property in the code.
+	 * For example, when you change an input value using the [overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md).
+	 * Consider the [Input property](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#input-property) section for more information.
 	 *
 	 * @param studyName The name of a study.
 	 */
 	getStudyInputs(studyName: string): StudyInputInformation[];
 	/**
-	 * Get information about the styles of a study.
+	 * Get information about indicator properties.
+	 * You can use this information to refer to the properties in the code.
+	 * For example, when you change property values using the [overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md).
 	 *
-	 * @param studyName The name of a study.
+	 * Note that `getStudyStyles` does not return actual property names but the indicator's [metadata](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/metainfo.md).
+	 * Consider the [Property path](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#property-path) section for more information on how to refer to the properties.
+	 *
+	 * @param studyName The name of a indicator.
 	 */
 	getStudyStyles(studyName: string): StudyStyleInfo;
 	/**
@@ -8717,7 +10476,9 @@ export interface IChartingLibraryWidget {
 	 */
 	applyOverrides<TOverrides extends Partial<ChartPropertiesOverrides>>(overrides: TOverrides): void;
 	/**
-	 * Apply overrides to study styles and inputs without reloading. See also {@link ChartingLibraryWidgetOptions.studies_overrides}.
+	 * Apply overrides to indicator styles and inputs without reloading.
+	 * Refer to [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#change-default-properties-on-the-fly) for more information.
+	 * Overrides for built-in indicators are listed in {@link StudyOverrides}.
 	 *
 	 * @param overrides An object of overrides to apply to the studies.
 	 */
@@ -8751,6 +10512,10 @@ export interface IChartingLibraryWidget {
 	widgetbar(): Promise<IWidgetbarApi>;
 	/**
 	 * Get an API object for interacting with the active chart.
+	 * For example, you can subscribe to events on the active chart, such as {@link IChartWidgetApi.onIntervalChanged}.
+	 * Note that the library does not manage the event subscriptions when users switch between the charts on the [multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading_terminal.md#multiple-chart-layout).
+	 * If necessary, you should manually unsubscribe from the previous chart and subscribe to the newly selected one.
+	 * To track the currently active chart, use the {@link SubscribeEventsMap.activeChartChanged} event.
 	 *
 	 * @returns An API object for interacting with the chart.
 	 */
@@ -8779,6 +10544,24 @@ export interface IChartingLibraryWidget {
 	 */
 	chartsCount(): number;
 	/**
+	 * This method deletes non-visible charts from a multiple-chart layout.
+	 *
+	 * When a user transitions from a layout with a larger number of charts
+	 * to one with fewer charts, the unused chart APIs still exist behind the scenes.
+	 * This inherent behavior allows the library to restore previously displayed charts.
+	 *
+	 * If you prefer that additional charts are displayed as new, with no record of previous
+	 * charts at the same position, you can use this method to delete all non-visible charts.
+	 * It is most effective to run this method right after a layout change (one can subscribe to
+	 * {@link SubscribeEventsMap.layout_changed} to know when this occurs).
+	 *
+	 * Please ensure that any subscriptions or event listeners associated with the
+	 * hidden charts are removed prior to invoking this method.
+	 *
+	 * @returns void
+	 */
+	unloadUnusedCharts(): void;
+	/**
 	 * Get the current chart layout type.
 	 *
 	 * @returns A string representation of the current layout type. E.g. `'2h'` for two charts split vertically.
@@ -8796,6 +10579,13 @@ export interface IChartingLibraryWidget {
 	 * @returns A string of the name of the current chart layout.
 	 */
 	layoutName(): string;
+	/**
+	 * Resets the sizes of all charts within a multiple-chart layout back to their initial default values.
+	 * This action redistributes the space equally among all charts to ensure consistency in layout design.
+	 *
+	 * @param disableUndo When set to true, the reset action is not added to the undo stack. Hence, the user cannot undo the reset operation.
+	 */
+	resetLayoutSizes(disableUndo?: boolean): void;
 	/**
 	 * Change the theme of the chart.
 	 *
@@ -8823,6 +10613,7 @@ export interface IChartingLibraryWidget {
 	takeScreenshot(): void;
 	/**
 	 * Create a snapshot of the chart and return it as a canvas.
+	 * Use this method to [implement your logic](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Snapshots.md#implement-your-logic) for taking snapshots.
 	 *
 	 * @param options An optional object that customizes the returned snapshot.
 	 * @returns A promise containing a `HTMLCanvasElement` of the snapshot.
@@ -8957,6 +10748,13 @@ export interface IChartingLibraryWidget {
 	 */
 	setDebugMode(enabled: boolean): void;
 	/**
+	 * Get a watched value that read/write/subscribe to the state of the 'draw on all charts' mode.
+	 *
+	 * When enabled new drawings will be replicated to all charts in the layout
+	 * and shown when the same ticker is selected.
+	 */
+	drawOnAllChartsEnabled(): IWatchedValue<boolean>;
+	/**
 	 * Clears the undo & redo history.
 	 *
 	 * **Warning:** this should only be used in very specific cases where you have considered
@@ -9032,9 +10830,9 @@ export interface IContext {
 	 * Load a new symbol for the custom indicator
 	 * @param  {string} tickerid - Symbol identifier
 	 * @param  {string} period - period for the new symbol
-	 * @param  {string} currencyCode? - Currency code
-	 * @param  {string} unitId? - Unit id
-	 * @param  {string} unitId? - Subsession id
+	 * @param  {string} [currencyCode] - Currency code
+	 * @param  {string} [unitId] - Unit ID
+	 * @param  {string} [subsessionId] - Subsession ID
 	 */
 	new_sym(tickerid: string, period: string, currencyCode?: string, unitId?: string, subsessionId?: string): ISymbolInstrument;
 	/**
@@ -9044,12 +10842,12 @@ export interface IContext {
 	select_sym(i: number): void;
 	/**
 	 * Creates an in-memory temporary storage with depth defined by the first call `new_var(value).get(n)`
-	 * @param  {number} value? - variable's value
+	 * @param  {number} [value] - variable's value
 	 */
 	new_var(value?: number): IPineSeries;
 	/**
 	 * Creates an in-memory temporary storage with unlimited depth.
-	 * @param  {number} value? - variable's value
+	 * @param  {number} [value] - variable's value
 	 */
 	new_unlimited_var(value?: number): IPineSeries;
 	/**
@@ -9264,9 +11062,12 @@ export interface IDatafeedChartApi {
 	 */
 	getTimescaleMarks?(symbolInfo: LibrarySymbolInfo, from: number, to: number, onDataCallback: GetMarksCallback<TimescaleMark>, resolution: ResolutionString): void;
 	/**
-	 * This function is called if configuration flag supports_time is set to true when chart needs to know the server time.
-	 * The library expects callback to be called once.
-	 * The time is provided without milliseconds. Example: `1445324591`. It is used to display Countdown on the price scale.
+	 * This function is called if the `supports_time` configuration flag is `true` when the chart needs to know the server time.
+	 * The library expects a callback to be called once.
+	 * The time is provided without milliseconds. Example: `1445324591`.
+	 *
+	 * `getServerTime` is used to display countdown on the price scale.
+	 * Note that the countdown can be displayed only for [intraday](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-minutes-intraday) resolutions.
 	 */
 	getServerTime?(callback: ServerTimeCallback): void;
 	/**
@@ -9316,6 +11117,7 @@ export interface IDatafeedChartApi {
 	unsubscribeBars(listenerGuid: string): void;
 	/**
 	 * Trading Platform calls this function when it wants to receive real-time level 2 (DOM) for a symbol.
+	 * Note that you should set the {@link BrokerConfigFlags.supportLevel2Data} configuration flag to `true`.
 	 *
 	 * @param symbol A SymbolInfo object
 	 * @param callback Function returning an object to update Depth Of Market (DOM) data
@@ -9324,6 +11126,7 @@ export interface IDatafeedChartApi {
 	subscribeDepth?(symbol: string, callback: DOMCallback): string;
 	/**
 	 * Trading Platform calls this function when it doesn't want to receive updates for this listener anymore.
+	 * Note that you should set the {@link BrokerConfigFlags.supportLevel2Data} configuration flag to `true`.
 	 *
 	 * @param subscriberUID A string returned by `subscribeDepth`
 	 */
@@ -9624,6 +11427,25 @@ export interface IExternalSaveLoadAdapter {
 	 * @param templateName The name of the template.
 	 */
 	removeChartTemplate(templateName: string): Promise<void>;
+	/**
+	 * Save drawings and drawing groups associated with a chart layout.
+	 *
+	 * @param layoutId The chart layout ID
+	 * @param chartId The chart ID
+	 * @param state The drawings and drawing groups state
+	 */
+	saveLineToolsAndGroups(layoutId: string | undefined, chartId: string | number, state: LineToolsAndGroupsState): Promise<void>;
+	/**
+	 * Load drawings and drawing groups associated with a chart layout.
+	 *
+	 * @param layoutId The chart layout ID
+	 * @param chartId The chart ID
+	 * @param requestType Type of load request
+	 * @param requestContext Additional information for the request
+	 *
+	 * @returns The drawings and drawing groups state
+	 */
+	loadLineToolsAndGroups(layoutId: string | undefined, chartId: string | number, requestType: LineToolsAndGroupsLoadRequestType, requestContext: LineToolsAndGroupsLoadRequestContext): Promise<Partial<LineToolsAndGroupsState> | null>;
 }
 /** Definition of a formatter */
 export interface IFormatter<T> {
@@ -9733,6 +11555,7 @@ export interface INewsApi {
 	refresh(): void;
 }
 export interface INonSeriesStudyBarsResult {
+	type: "non_series_bars";
 	/**
 	 * Non series bars
 	 */
@@ -10124,7 +11947,7 @@ export interface IPineSeries {
 	 * - s.get(1) returns second last,
 	 * - s.get(2) - third last
 	 * - and so on
-	 * @param  {number} n? - index
+	 * @param  {number} [n] - index
 	 */
 	get(n?: number): number;
 	/**
@@ -10493,7 +12316,7 @@ export interface IPriceFormatter extends ISymbolValueFormatter {
 	/**
 	 * Price Formatter
 	 * @param  {number} price - price
-	 * @param  {boolean} signPositive? - add plus sign to result string.
+	 * @param  {boolean} [signPositive] - add plus sign to result string.
 	 * @param  {number} [tailSize] - add `tailSize` digits to fractional part of result string
 	 * @param  {boolean} [signNegative] - add minus sign to result string.
 	 * @param  {boolean} [useRtlFormat] - Use Right to left format
@@ -10503,6 +12326,7 @@ export interface IPriceFormatter extends ISymbolValueFormatter {
 	format(price: number, signPositive?: boolean, tailSize?: number, signNegative?: boolean, useRtlFormat?: boolean, cutFractionalByPrecision?: boolean): string;
 }
 /**
+ * The Price Scale API allows interacting with the [price scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale.md).
  * You can retrieve this interface by evoking the following methods of the {@link IPaneApi}:
  * - `getLeftPriceScales`
  * - `getRightPriceScales`
@@ -10556,6 +12380,20 @@ export interface IPriceScaleApi {
 	hasMainSeries(): boolean;
 	/** Returns an array of IDs of all studies attached to the price scale */
 	getStudies(): EntityId[];
+	/** Returns the current currency info set on the price scale if any or null if none is specified */
+	currency(): CurrencyInfo | null;
+	/**
+	 * Sets a currency on the price scale.
+	 * @param  {string|null} currency - currency supported by your backend (for example 'EUR', 'USD'). A null value will reset the currency to default.
+	 */
+	setCurrency(currency: string | null): void;
+	/** Returns the current unit info set on the price scale if any or null if none is specified */
+	unit(): UnitInfo | null;
+	/**
+	 * Sets a unit on the price scale.
+	 * @param  {string|null} unit - unit supported by your backend (for example 'weight', 'energy'). A null value will reset the unit to default.
+	 */
+	setUnit(unit: string | null): void;
 }
 export interface IProjectionStudyResult {
 	/** array of projection bars */
@@ -10565,11 +12403,12 @@ export interface IProjectionStudyResult {
 	/** last price displayed on price scale */
 	price?: number;
 	/** always projection */
-	type?: "projection";
+	type: "projection";
 	/** box size is displayed in the legend */
 	boxSize?: number;
 	/** reversal amount is displayed in the legend */
 	reversalAmount?: number;
+	projectionTime?: number;
 }
 /**
  * Allows you to select entities ([drawings](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Drawings) and [indicators](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/)) on the chart. Consider the following example:
@@ -10687,16 +12526,19 @@ export interface ISeriesApi {
 	/** Sets properties for a specific chart style */
 	setChartStyleProperties<T extends ChartStyle>(chartStyle: T, newPrefs: Partial<SeriesPreferencesMap[T]>): void;
 }
+/**
+ * Properties of the {@link ChartingLibraryWidgetOptions.settings_adapter} property that allows saving [user settings](https://www.tradingview.com/charting-library-docs/latest/saving_loading/user-settings.md) to your preferred storage, including server-side.
+ */
 export interface ISettingsAdapter {
-	/** Initial settings */
+	/** Initial settings the chart should be initiated with. */
 	initialSettings?: InitialSettingsMap;
-	/** Set a value for a setting */
+	/** Set a value for a setting. */
 	setValue(key: string, value: string): void;
-	/** Remove a value for a setting */
+	/** Remove a value for a setting. */
 	removeValue(key: string): void;
 }
 /**
- * Drawing Groups API.
+ * Drawing Groups API. Refer to the [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api.md#drawing-groups-api) article for more information.
  */
 export interface IShapesGroupControllerApi {
 	/**
@@ -10917,12 +12759,13 @@ export interface IStudyApi {
 	 */
 	sendToBack(): void;
 	/**
-	 * Override one or more of the study's properties.
-	 * Refer to [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md) for a list of available overrides.
+	 * Override one or more of the indicator's properties.
+	 * Refer to [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md#change-the-existing-indicator) for more information.
+	 * Overrides for built-in indicators are listed in {@link SingleIndicatorOverrides}.
 	 *
 	 * @param overrides Property values to override.
 	 */
-	applyOverrides<TOverrides extends StudyOverrides>(overrides: TOverrides): void;
+	applyOverrides<TOverrides extends Partial<SingleIndicatorOverrides>>(overrides: TOverrides): void;
 	/**
 	 * Copies the study to all charts in the layout.
 	 * Only applicable to multi-chart layouts (Trading Platform).
@@ -11038,9 +12881,9 @@ export interface ISymbolInstrument {
 	/** Ticker ID */
 	tickerid: string;
 	/** Currency Code */
-	currencyCode?: string;
+	currencyCode?: string | null;
 	/** Unit ID */
-	unitId?: string;
+	unitId?: string | null;
 	/** Bar resolution */
 	period: ResolutionString;
 	/** Index */
@@ -11165,22 +13008,22 @@ export interface ITimezoneApi {
 export interface IUpdatableAction extends IAction {
 	/**
 	 * Update the options for the Action
-	 * @param  {Partial<ActionOptions>} options - updated options
+	 * @param  {Partial<OmitActionId<ActionOptions>>} options - updated options
 	 */
-	update(options: Partial<ActionOptions>): void;
+	update(options: Partial<OmitActionId<ActionOptions>>): void;
 }
 /**
- * An API object for interacting with the widgetbar (right sidebar) watchlist.
+ * An API object for interacting with the [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List.md) widget.
+ * The Watchlist is a widget that allows users to track price movements and volume of specific financial instruments in real-time.
+ * Watchlists also allow users to quickly switch between the symbols.
+ * The Watchlist widget is displayed on the widget panel on the right side of the chart.
  *
  * **Notes about watchlist contents**
  *
- * Watchlist items should be symbol names which your datafeed `resolveSymbol` method can resolve. This
+ * Watchlist items should be symbol names which your datafeed [`resolveSymbol`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API.md#resolvesymbol) method can resolve. This
  * means that generally shorter names such as `AAPL` can be used if your datafeed understands it. However,
- * it is recommend that you provided the symbol names as they appear within the symbolInfo result (for
- * example: `NASDAQNM:AAPL`).
- *
- * Additionally, any item in the list which is prefixed with `###` will be considered a
- * section divider in the watchlist.
+ * it is recommend that you provide the symbol names as they appear within the `LibrarySymbolInfo` object, for
+ * example, `NASDAQ:AAPL`.
  */
 export interface IWatchListApi {
 	/**
@@ -11190,7 +13033,7 @@ export interface IWatchListApi {
 	defaultList(): string[];
 	/**
 	 * Get a list of symbols.
-	 * If the `id` parameter is not provided then the current list will be returned. If there is no WatchList then `null` will be returned.
+	 * If the `id` parameter is not provided, the current list will be returned. If there is no watchList, `null` will be returned.
 	 * @param  {string} [id] - Watchlist ID
 	 * @returns list of symbols for watchlist
 	 */
@@ -11220,28 +13063,26 @@ export interface IWatchListApi {
 	/**
 	 * Edit the list of symbols for a watchlist.
 	 * @param  {string} listId - ID of the watchlist
-	 * @param  {string[]} symbols - symbols to be set for the watchlist. Any item in the list which is prefixed with `###` will be considered a
-	 * section divider in the watchlist.
+	 * @param  {string[]} symbols - Symbols to be set for the watchlist. Any list item that has the `###` prefix is considered a section divider in the watchlist.
 	 */
 	updateList(listId: string, symbols: string[]): void;
 	/**
 	 * Rename the watchlist.
 	 * @param  {string} listId - ID of the watchlist
-	 * @param  {string} newName - new name to set for the watchlist
+	 * @param  {string} newName - New name to set for the watchlist
 	 */
 	renameList(listId: string, newName: string): void;
 	/**
 	 * Create a list of symbols with `listName` name. If the `listName` parameter is not provided or there is no WatchList then `null` will be returned;
 	 * @param  {string} [listName] - name for the watchlist
-	 * @param  {string[]} [symbols] - symbol IDs for the watchlist. Any item in the list which is prefixed with `###` will be considered a
-	 * section divider in the watchlist.
+	 * @param  {string[]} [symbols] - Symbol IDs for the watchlist. Any list item that has the `###` prefix is considered a section divider in the watchlist.
 	 * @returns WatchListSymbolList
 	 */
 	createList(listName?: string, symbols?: string[]): WatchListSymbolList | null;
 	/**
 	 * Save a list of symbols.
 	 * @param  {WatchListSymbolList} list
-	 * @returns If there is no WatchList or an equivalent list already exists then `false` will be returned, otherwise `true` will returned.
+	 * @returns If there is no watchList or an equivalent list already exists, `false` will be returned. Otherwise, `true` will be returned.
 	 */
 	saveList(list: WatchListSymbolList): boolean;
 	/**
@@ -11274,7 +13115,7 @@ export interface IWatchedValue<T> extends IWatchedValueReadonly<T>, IObservableV
 	/**
 	 * Set value for the watched value
 	 * @param  {T} value - value to set
-	 * @param  {boolean} forceUpdate? - force an update
+	 * @param  {boolean} [forceUpdate] - force an update
 	 */
 	setValue(value: T, forceUpdate?: boolean): void;
 	/** @inheritDoc */
@@ -11354,6 +13195,90 @@ export interface IWidgetbarApi extends IDestroyable {
 	changeWidgetBarVisibility(visible: boolean): void;
 }
 /**
+ * Overrides for the 'Ichimoku Cloud' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface IchimokuCloudIndicatorOverrides {
+	/** Default value: `#000080` */
+	"plots background.color": string;
+	/** Default value: `90` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"conversion line.display": number;
+	/** Default value: `0` */
+	"conversion line.linestyle": number;
+	/** Default value: `1` */
+	"conversion line.linewidth": number;
+	/** Default value: `line` */
+	"conversion line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"conversion line.trackprice": boolean;
+	/** Default value: `0` */
+	"conversion line.transparency": number;
+	/** Default value: `#2196F3` */
+	"conversion line.color": string;
+	/** Default value: `15` */
+	"base line.display": number;
+	/** Default value: `0` */
+	"base line.linestyle": number;
+	/** Default value: `1` */
+	"base line.linewidth": number;
+	/** Default value: `line` */
+	"base line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"base line.trackprice": boolean;
+	/** Default value: `0` */
+	"base line.transparency": number;
+	/** Default value: `#801922` */
+	"base line.color": string;
+	/** Default value: `15` */
+	"lagging span.display": number;
+	/** Default value: `0` */
+	"lagging span.linestyle": number;
+	/** Default value: `1` */
+	"lagging span.linewidth": number;
+	/** Default value: `line` */
+	"lagging span.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lagging span.trackprice": boolean;
+	/** Default value: `0` */
+	"lagging span.transparency": number;
+	/** Default value: `#43A047` */
+	"lagging span.color": string;
+	/** Default value: `15` */
+	"leading span a.display": number;
+	/** Default value: `0` */
+	"leading span a.linestyle": number;
+	/** Default value: `1` */
+	"leading span a.linewidth": number;
+	/** Default value: `line` */
+	"leading span a.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"leading span a.trackprice": boolean;
+	/** Default value: `0` */
+	"leading span a.transparency": number;
+	/** Default value: `#A5D6A7` */
+	"leading span a.color": string;
+	/** Default value: `15` */
+	"leading span b.display": number;
+	/** Default value: `0` */
+	"leading span b.linestyle": number;
+	/** Default value: `1` */
+	"leading span b.linewidth": number;
+	/** Default value: `line` */
+	"leading span b.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"leading span b.trackprice": boolean;
+	/** Default value: `0` */
+	"leading span b.transparency": number;
+	/** Default value: `#FAA1A4` */
+	"leading span b.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Override properties for the Icon drawing tool.
  */
 export interface IconLineToolOverrides {
@@ -11382,6 +13307,25 @@ export interface ImageLineToolOverrides {
 	"linetoolimage.cssWidth": number;
 	/** Default value: `0` */
 	"linetoolimage.transparency": number;
+}
+export interface IndividualPosition extends IndividualPositionBase, CustomFields {
+}
+/**
+ * Describes an individual position.
+ */
+export interface IndividualPositionBase {
+	/** Individual position ID. Usually id should be equal to brokerSymbol */
+	id: string;
+	/** Individual position open date (UNIX timestamp in milliseconds) */
+	date: number;
+	/** Symbol name */
+	symbol: string;
+	/** Individual position Quantity */
+	qty: number;
+	/** Individual position Side */
+	side: Side;
+	/** Individual position price */
+	price: number;
 }
 /**
  * Override properties for the Infoline drawing tool.
@@ -11456,7 +13400,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level0.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level0.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level0.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level0.visible": boolean;
@@ -11466,7 +13410,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level1.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level1.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level1.visible": boolean;
@@ -11476,7 +13420,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level2.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolinsidepitchfork.level2.visible": boolean;
@@ -11486,7 +13430,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level3.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level3.visible": boolean;
@@ -11496,7 +13440,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level4.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level4.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level4.visible": boolean;
@@ -11506,7 +13450,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level5.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolinsidepitchfork.level5.visible": boolean;
@@ -11516,7 +13460,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level6.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level6.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level6.visible": boolean;
@@ -11526,7 +13470,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level7.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level7.visible": boolean;
@@ -11536,7 +13480,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.level8.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolinsidepitchfork.level8.visible": boolean;
@@ -11544,7 +13488,7 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.median.color": string;
 	/** Default value: `0` */
 	"linetoolinsidepitchfork.median.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolinsidepitchfork.median.linewidth": number;
 	/** Default value: `true` */
 	"linetoolinsidepitchfork.median.visible": boolean;
@@ -11576,6 +13520,10 @@ export interface InstrumentInfo {
 	domVolumePrecision?: number;
 	/** Leverage */
 	leverage?: string;
+	/**
+	 * The margin requirement for the instrument. A 3% margin rate should be represented as 0.03.
+	 */
+	marginRate?: number;
 	/** Minimal price change for limit price field of the Limit and Stop Limit order. If set it will override the `minTick` value. */
 	limitPriceStep?: number;
 	/** Minimal price change for stop price field of the Stop and Stop Limit order. If set it will override the `minTick` value. */
@@ -11599,6 +13547,8 @@ export interface InstrumentInfo {
 	bigPointValue?: number;
 	/** The value represents how much price is multiplied in relation to base monetary unit. */
 	priceMagnifier?: number;
+	/** Supported order types for the instrument */
+	allowedOrderTypes?: OrderType[];
 }
 /** Show a custom message with the reason why the symbol cannot be traded */
 export interface IsTradableResult {
@@ -11624,6 +13574,166 @@ export interface KagiStylePreferences {
 	upColorProjection: string;
 	/** Down projection line color */
 	downColorProjection: string;
+}
+/**
+ * Overrides for the 'Keltner Channels' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface KeltnerChannelsIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"plots background.color": string;
+	/** Default value: `95` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"middle.display": number;
+	/** Default value: `0` */
+	"middle.linestyle": number;
+	/** Default value: `1` */
+	"middle.linewidth": number;
+	/** Default value: `line` */
+	"middle.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"middle.trackprice": boolean;
+	/** Default value: `0` */
+	"middle.transparency": number;
+	/** Default value: `#2196F3` */
+	"middle.color": string;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"lower.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Klinger Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface KlingerOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#43A047` */
+	"signal.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Know Sure Thing' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface KnowSureThingIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"kst.display": number;
+	/** Default value: `0` */
+	"kst.linestyle": number;
+	/** Default value: `1` */
+	"kst.linewidth": number;
+	/** Default value: `line` */
+	"kst.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"kst.trackprice": boolean;
+	/** Default value: `0` */
+	"kst.transparency": number;
+	/** Default value: `#089981` */
+	"kst.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#F23645` */
+	"signal.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Least Squares Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface LeastSquaresMovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * An API object representing leverage info for an order.
@@ -11768,16 +13878,14 @@ export interface LibrarySubsessionInfo {
 }
 export interface LibrarySymbolInfo {
 	/**
-	 * Symbol Name
-	 * It's the name of the symbol. It is a string that your users will be able to see.
-	 * Also, it will be used for data requests if you are not using tickers.
+	 * It is a symbol name within an exchange, such as `AAPL` or `9988` (Hong Kong).
+	 * Note that it should not contain the exchange name.
+	 * This symbol name is visible to users and can be repeated.
+	 *
+	 * By default, `name` is used to resolve symbols in the [Datafeed API](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-API.md).
+	 * If you use {@link LibrarySymbolInfo.ticker}, the library will use the ticker for Datafeed API requests.
 	 */
 	name: string;
-	/**
-	 * The full name of the symbol (contains name and exchange)
-	 * Example: `BTCE:BTCUSD`
-	 */
-	full_name: string;
 	/**
 	 * Array of base symbols
 	 * Example: for `AAPL*MSFT` it is `['NASDAQ:AAPL', 'NASDAQ:MSFT']`
@@ -11786,9 +13894,10 @@ export interface LibrarySymbolInfo {
 		string
 	];
 	/**
-	 * Unique symbol id
-	 * It's an unique identifier for this particular symbol in your symbology.
-	 * If you specify this property then its value will be used for all data requests for this symbol. ticker will be treated the same as {@link LibrarySymbolInfo.name} if not specified explicitly.
+	 * It is an unique identifier for a particular symbol in your [symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md).
+	 * If you specify this property, its value will be used for all data requests for this symbol.
+	 * `ticker` will be treated the same as {@link LibrarySymbolInfo.name} if not specified explicitly.
+	 * Note that it should not contain the exchange name.
 	 */
 	ticker?: string;
 	/**
@@ -11808,7 +13917,7 @@ export interface LibrarySymbolInfo {
 	 */
 	type: string;
 	/**
-	 * Trading hours for this symbol. See the [Trading Sessions article](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions) to learn more details.
+	 * Trading hours for this symbol. See the [Trading sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions.md) article to learn more details.
 	 * @example "1700-0200"
 	 */
 	session: string;
@@ -11817,16 +13926,23 @@ export interface LibrarySymbolInfo {
 	 */
 	session_display?: string;
 	/**
-	 * List of holidays for this symbol. These dates are not displayed on the chart.
-	 * It's a string in the following format: `YYYYMMDD[,YYYYMMDD]`.
+	 * A string that contains a list of non-trading holidays for the symbol.
+	 * Holiday dates should be in the `YYYYMMDD` format.
+	 * These dates are not displayed on the chart.
+	 *
+	 * You can specify a correction for a holiday using {@link LibrarySymbolInfo.corrections}.
 	 * @example "20181105,20181107,20181112"
 	 */
 	session_holidays?: string;
 	/**
-	 * List of corrections for this symbol. Corrections are days with specific trading sessions. They can be applied to holidays as well.
+	 * List of corrections for a symbol. The corrections are days when the trading session differs from the default one set in {@link LibrarySymbolInfo.session}.
+	 * The `corrections` value is a string in the following format: `SESSION:YYYYMMDD`.
+	 * For more information, refer to [corrections](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#corrections).
 	 *
-	 * It's a string in the following format: `SESSION:YYYYMMDD[,YYYYMMDD][;SESSION:YYYYMMDD[,YYYYMMDD]]`
-	 * Where SESSION has the same format as [Trading Sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Trading-Sessions).
+	 * The string below specifies corrections for two trading days:
+	 *
+	 * - November 13, 2018. This trading day is split into two sessions. The first session starts at 19:00 four days before (November 9, 2018) and ends at 23:50 four days before. The second session starts at 10:00 and ends at 18:45.
+	 * - November 14, 2018. The session starts at 10:00 and ends at 14:00.
 	 *
 	 * @example "1900F4-2350F4,1000-1845:20181113;1000-1400:20181114"
 	 */
@@ -11846,14 +13962,14 @@ export interface LibrarySymbolInfo {
 	 */
 	listed_exchange: string;
 	/**
-	 * Timezone of the exchange for this symbol. We expect to get the name of the time zone in `olsondb` format.
-	 * See [Timezones](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology#timezone) for a full list of supported timezones
+	 * Time zone of the exchange for this symbol. We expect to get the name of the time zone in `olsondb` format.
+	 * See [Time zones](https://www.tradingview.com/charting-library-docs/latest/ui_elements/timezones.md) for a full list of supported time zones.
 	 */
 	timezone: Timezone;
 	/**
 	 * Format of displaying labels on the price scale:
 	 *
-	 * `price` - formats decimal or fractional numbers based on `minmov`, `pricescale`, `minmove2`, `fractional` and `variableMinTick` values. See [Price Formatting](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology#price-format) for more details
+	 * `price` - formats decimal or fractional numbers based on `minmov`, `pricescale`, `minmove2`, `fractional` and `variableMinTick` values. See [Price format](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#price-format) for more details.
 	 * `volume` - formats decimal numbers in thousands, millions, billions or trillions
 	 */
 	format: SeriesFormat;
@@ -11911,18 +14027,17 @@ export interface LibrarySymbolInfo {
 	 * If it's `false` then all buttons for intraday resolutions will be disabled for this particular symbol.
 	 * If it is set to `true`, all intradays resolutions that are supplied directly by the datafeed must be provided in `intraday_multipliers` array.
 	 *
-	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions!
+	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions.
 	 *
 	 * `false` if DWM only
 	 * @default false
 	 */
 	has_intraday?: boolean;
 	/**
-	 * An array of resolutions which should be enabled in resolutions picker for this symbol.
+	 * An array of [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md) which should be enabled in the _Resolution_ drop-down menu for this symbol.
+	 * Each item of the array is expected to be a string that has a specific [format](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format).
 	 *
-	 * Each item of an array is expected to be a string. Format is described in another article.
-	 *
-	 * If one changes the symbol and new symbol does not support the selected resolution then resolution will be switched to the first available one in the list.
+	 * If one changes the symbol and the new symbol does not support the selected resolution, the resolution will be switched to the first available one in the list.
 	 *
 	 * **Resolution availability logic (pseudocode):**
 	 * ```
@@ -11932,10 +14047,15 @@ export interface LibrarySymbolInfo {
 	 *         : symbol.supported_resolutions(resolution);
 	 * ```
 	 *
-	 * In case of absence of `supported_resolutions` in a symbol info all DWM resolutions will be available. Intraday resolutions will be available if `has_intraday` is `true`.
-	 * Supported resolutions affect available timeframes too. The timeframe will not be available if it requires the resolution that is not supported.
+	 * If `supported_resolutions` is `[]` (empty array), all resolutions are disabled in the _Resolution_ drop-down menu.
+	 *
+	 * If `supported_resolutions` is `undefined`, all resolutions that the chart support ({@link DatafeedConfiguration.supported_resolutions}) and custom resolutions are enabled.
+	 *
+	 * Note that the list of available time frames depends on supported resolutions.
+	 * Time frames that require resolutions that are unavailable for a particular symbol will be hidden.
+	 * Refer to [Time frame toolbar](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale.md#time-frame-toolbar) for more information.
 	 */
-	supported_resolutions: ResolutionString[];
+	supported_resolutions?: ResolutionString[];
 	/**
 	 * Array of resolutions (in minutes) supported directly by the data feed. Each such resolution may be passed to, and should be implemented by, `getBars`. The default of [] means that the data feed supports aggregating by any number of minutes.
 	 *
@@ -11981,7 +14101,7 @@ export interface LibrarySymbolInfo {
 	 */
 	has_daily?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#days) (in days - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-format) (in days - without the suffix) supported by the datafeed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -12001,7 +14121,7 @@ export interface LibrarySymbolInfo {
 	 */
 	has_weekly_and_monthly?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#weeks) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-weeks--months) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -12012,7 +14132,7 @@ export interface LibrarySymbolInfo {
 	 */
 	weekly_multipliers?: string[];
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution.md#resolution-in-weeks--months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
 	 *
 	 * For example it could be something like
 	 *
@@ -12034,9 +14154,9 @@ export interface LibrarySymbolInfo {
 	/**
 	 * Represents what values are supported by the symbol. Possible values:
 	 *
-	 * - `ohlcv` - the symbol supports open, high, low, close and has volume
-	 * - `ohlc` - the symbol supports open, high, low, close, but doesn't have volume
-	 * - `c` - the symbol supports only close, it's displayed on the chart using line-based styles only
+	 * - `ohlcv` — the symbol supports open, high, low, close prices and has volume.
+	 * - `ohlc` — the symbol supports open, high, low, close, prices but doesn't have volume.
+	 * - `c` — the symbol supports only close price. This makes the chart show the symbol data using only line-based styles.
 	 * @default 'ohlcv'
 	 */
 	visible_plots_set?: VisiblePlotsSet;
@@ -12049,15 +14169,16 @@ export interface LibrarySymbolInfo {
 	volume_precision?: number;
 	/**
 	 * The status code of a series with this symbol.
-	 * This could be represented as an icon in the legend, next to the market status icon for `delayed_streaming` & `endofday` type of data.
+	 * For `delayed_streaming` and `endofday` type of data, the status is displayed as an icon and the *Data is delayed* section in the [_Legend_](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend.md#display-delayed-data-information), next to the market status icon.
+	 * Note that you should also enable the [`display_data_mode`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#display_data_mode) featureset.
+	 *
 	 * When declaring `delayed_streaming` you also have to specify its {@link LibrarySymbolInfo.delay} in seconds.
 	 */
-	data_status?: "streaming" | "endofday" | "pulsed" | "delayed_streaming";
+	data_status?: "streaming" | "endofday" | "delayed_streaming";
 	/**
 	 * Type of delay that is associated to the data or real delay for real time data.
 	 * - `0` for realtime
 	 * - `-1` for endofday
-	 * - `-2` for pulsed
 	 * - or delay in seconds (for delayed realtime)
 	 */
 	delay?: number;
@@ -12096,24 +14217,28 @@ export interface LibrarySymbolInfo {
 	 */
 	unit_conversion_types?: string[];
 	/**
-	 * Subsession ID. Must match the `id` property of one of the subsessions.
+	 * An ID of a subsession specified in {@link subsessions}. The value must match the subsession that is currently displayed on the chart.
+	 * For more information, refer to the [Extended sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#extended-sessions) section.
 	 */
 	subsession_id?: string;
 	/**
-	 * Subsessions definitions.
+	 * An array of objects that contain information about certain subsessions within the extended session.
+	 * For more information, refer to the [Extended sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology.md#extended-sessions) section.
 	 */
 	subsessions?: LibrarySubsessionInfo[];
 	/**
-	 * Optional ID of a price source for this symbol. Should match one of the price sources from the {@link price_sources} array.
+	 * Optional ID of a price source for a symbol. Should match one of the price sources from the {@link price_sources} array.
+	 *
+	 * Note that you should set the [`symbol_info_price_source`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#symbol_info_price_source) featureset to `true` to display the symbol price source in the main series legend.
 	 */
 	price_source_id?: string;
 	/**
-	 * Supported price sources for the symbol. The source of the values that this symbol's bars represent.
+	 * Supported price sources for the symbol.
+	 * Price sources appear in the series legend and indicate the origin of values represented by symbol bars.
+	 * Example price sources: "Spot Price", "Ask", "Bid", etc.
+	 * The price source information is valuable when viewing non-OHLC series types.
 	 *
-	 * For example 'Spot Price', 'Ask', 'Bid', etc.
-	 *
-	 * Mostly useful when viewing non-OHLC series types. The price source will be shown in the series legend.
-	 *
+	 * Note that you should set the [`symbol_info_price_source`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md#symbol_info_price_source) featureset to `true` to display the symbol price source in the main series legend.
 	 * @example [{ id: '1', name: 'Spot Price' }, { id: '321', name: 'Bid' }]
 	 */
 	price_sources?: SymbolInfoPriceSource[];
@@ -12181,6 +14306,102 @@ export interface LineStylePreferences {
 	linewidth: number;
 }
 /**
+ * Represents the state of a Drawing
+ */
+export interface LineToolState {
+	/** The entity ID of the drawing */
+	id: EntityId;
+	/** The associated symbol ID for the drawing */
+	symbol?: string;
+	/** The source ID of the object's owner */
+	ownerSource: string;
+	/** The ID of the group to which drawing belongs */
+	groupId?: string;
+	/** The associated symbol's currency ID */
+	currencyId?: string | null;
+	/** The associated symbol's unit ID */
+	unitId?: string | null;
+	/** The current state object of the drawing */
+	state: unknown;
+}
+/**
+ * Additional information for the {@link IExternalSaveLoadAdapter.loadLineToolsAndGroups} request.
+ */
+export interface LineToolsAndGroupsLoadRequestContext {
+	/** The name / identifier of the symbol displayed as the main series on the chart. */
+	symbol?: string;
+}
+/**
+ * Represents the state of drawings and groups
+ */
+export interface LineToolsAndGroupsState {
+	/** A map of sources to drawing states */
+	sources: Map<EntityId, LineToolState | null> | null;
+	/** A map of group IDs to drawings group states */
+	groups: Map<string, LineToolsGroupState | null>;
+	/** The symbol ID associated with the drawings and groups */
+	symbol?: string;
+}
+/**
+ * Represents the state of a group of LineTools
+ */
+export interface LineToolsGroupState {
+	/** The ID of the drawings group */
+	id: string;
+	/** The name of the drawings group */
+	name: string;
+	/** The symbol associated with the drawings group */
+	symbol: string;
+	/** The associated symbol's currency ID */
+	currencyId?: string | null;
+	/** The associated symbol's unit ID */
+	unitId?: string | null;
+}
+/**
+ * Overrides for the 'Linear Regression Curve' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface LinearRegressionCurveIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Linear Regression Slope' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface LinearRegressionSlopeIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Color styling options for the loading screen (spinner)
  */
 export interface LoadingScreenOptions {
@@ -12188,6 +14409,178 @@ export interface LoadingScreenOptions {
 	foregroundColor?: string;
 	/** Background color for the loading screen */
 	backgroundColor?: string;
+}
+/**
+ * Overrides for the 'MACD' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MACDIndicatorOverrides {
+	/** Default value: `15` */
+	"histogram.display": number;
+	/** Default value: `0` */
+	"histogram.linestyle": number;
+	/** Default value: `1` */
+	"histogram.linewidth": number;
+	/** Default value: `columns` */
+	"histogram.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"histogram.trackprice": boolean;
+	/** Default value: `0` */
+	"histogram.transparency": number;
+	/** Default value: `#FF5252` */
+	"histogram.color": string;
+	/** Default value: `15` */
+	"macd.display": number;
+	/** Default value: `0` */
+	"macd.linestyle": number;
+	/** Default value: `1` */
+	"macd.linewidth": number;
+	/** Default value: `line` */
+	"macd.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"macd.trackprice": boolean;
+	/** Default value: `0` */
+	"macd.transparency": number;
+	/** Default value: `#2196F3` */
+	"macd.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#FF6D00` */
+	"signal.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'MA Cross' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MACrossIndicatorOverrides {
+	/** Default value: `15` */
+	"short:plot.display": number;
+	/** Default value: `0` */
+	"short:plot.linestyle": number;
+	/** Default value: `1` */
+	"short:plot.linewidth": number;
+	/** Default value: `line` */
+	"short:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"short:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"short:plot.transparency": number;
+	/** Default value: `#43A047` */
+	"short:plot.color": string;
+	/** Default value: `15` */
+	"long:plot.display": number;
+	/** Default value: `0` */
+	"long:plot.linestyle": number;
+	/** Default value: `1` */
+	"long:plot.linewidth": number;
+	/** Default value: `line` */
+	"long:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"long:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"long:plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"long:plot.color": string;
+	/** Default value: `15` */
+	"crosses.display": number;
+	/** Default value: `0` */
+	"crosses.linestyle": number;
+	/** Default value: `4` */
+	"crosses.linewidth": number;
+	/** Default value: `cross` */
+	"crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"crosses.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'MA with EMA Cross' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MAwithEMACrossIndicatorOverrides {
+	/** Default value: `15` */
+	"ma.display": number;
+	/** Default value: `0` */
+	"ma.linestyle": number;
+	/** Default value: `1` */
+	"ma.linewidth": number;
+	/** Default value: `line` */
+	"ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma.trackprice": boolean;
+	/** Default value: `0` */
+	"ma.transparency": number;
+	/** Default value: `#FF6D00` */
+	"ma.color": string;
+	/** Default value: `15` */
+	"ema.display": number;
+	/** Default value: `0` */
+	"ema.linestyle": number;
+	/** Default value: `1` */
+	"ema.linewidth": number;
+	/** Default value: `line` */
+	"ema.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ema.trackprice": boolean;
+	/** Default value: `0` */
+	"ema.transparency": number;
+	/** Default value: `#43A047` */
+	"ema.color": string;
+	/** Default value: `15` */
+	"crosses.display": number;
+	/** Default value: `0` */
+	"crosses.linestyle": number;
+	/** Default value: `4` */
+	"crosses.linewidth": number;
+	/** Default value: `cross` */
+	"crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"crosses.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Majority Rule' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MajorityRuleIndicatorOverrides {
+	/** Default value: `15` */
+	"majority rule.display": number;
+	/** Default value: `0` */
+	"majority rule.linestyle": number;
+	/** Default value: `1` */
+	"majority rule.linewidth": number;
+	/** Default value: `line` */
+	"majority rule.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"majority rule.trackprice": boolean;
+	/** Default value: `0` */
+	"majority rule.transparency": number;
+	/** Default value: `#FF5252` */
+	"majority rule.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface MappedObject<TValue> {
 	[key: string]: TValue | undefined;
@@ -12197,7 +14590,7 @@ export interface Mark {
 	id: string | number;
 	/**
 	 * Time for the mark.
-	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
+	 * Unix timestamp in seconds.
 	 */
 	time: number;
 	/** Color for the mark */
@@ -12241,10 +14634,156 @@ export interface MarkCustomColor {
 	/** Background color */
 	background: string;
 }
+/**
+ * Overrides for the 'Mass Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MassIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'McGinley Dynamic' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface McGinleyDynamicIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Median Price' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MedianPriceIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 /** Separator for a dropdown or context menu */
 export interface MenuSeparator extends ActionDescription {
 	/** Is a menu separator */
 	separator: boolean;
+}
+/**
+ * Overrides for the 'Momentum' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MomentumIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"mom.display": number;
+	/** Default value: `0` */
+	"mom.linestyle": number;
+	/** Default value: `1` */
+	"mom.linewidth": number;
+	/** Default value: `line` */
+	"mom.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"mom.trackprice": boolean;
+	/** Default value: `0` */
+	"mom.transparency": number;
+	/** Default value: `#2196F3` */
+	"mom.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Money Flow Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MoneyFlowIndexIndicatorOverrides {
+	/** Default value: `#7E57C2` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface MouseEventParams {
 	/** X (horizontal) coordinate (in pixels) at which the mouse event occurred, relative to the left edge of the applications viewport. */
@@ -12260,11 +14799,387 @@ export interface MouseEventParams {
 	/** Y (vertical) coordinate (in pixels) at which the mouse event occurred, in global screen coordinates. */
 	screenY: number;
 }
+/**
+ * Overrides for the 'Moving Average Adaptive' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageAdaptiveIndicatorOverrides {
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `#AB47BC` */
+	"plot 1.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Channel' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageChannelIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"plots background.color": string;
+	/** Default value: `90` */
+	"plots background.transparency": number;
+	/** Default value: `true` */
+	"plots background.visible": boolean;
+	/** Default value: `15` */
+	"upper.display": number;
+	/** Default value: `0` */
+	"upper.linestyle": number;
+	/** Default value: `1` */
+	"upper.linewidth": number;
+	/** Default value: `line` */
+	"upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"upper.trackprice": boolean;
+	/** Default value: `0` */
+	"upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"upper.color": string;
+	/** Default value: `15` */
+	"lower.display": number;
+	/** Default value: `0` */
+	"lower.linestyle": number;
+	/** Default value: `1` */
+	"lower.linewidth": number;
+	/** Default value: `line` */
+	"lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lower.trackprice": boolean;
+	/** Default value: `0` */
+	"lower.transparency": number;
+	/** Default value: `#FF6D00` */
+	"lower.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Double' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageDoubleIndicatorOverrides {
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `#FF6D00` */
+	"plot 1.color": string;
+	/** Default value: `15` */
+	"plot 2.display": number;
+	/** Default value: `0` */
+	"plot 2.linestyle": number;
+	/** Default value: `1` */
+	"plot 2.linewidth": number;
+	/** Default value: `line` */
+	"plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 2.trackprice": boolean;
+	/** Default value: `0` */
+	"plot 2.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot 2.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Exponential' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageExponentialIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Hamming' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageHammingIndicatorOverrides {
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `#4CAF50` */
+	"plot 1.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Multiple' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageMultipleIndicatorOverrides {
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `#9C27B0` */
+	"plot 1.color": string;
+	/** Default value: `15` */
+	"plot 2.display": number;
+	/** Default value: `0` */
+	"plot 2.linestyle": number;
+	/** Default value: `1` */
+	"plot 2.linewidth": number;
+	/** Default value: `0` */
+	"plot 2.transparency": number;
+	/** Default value: `line` */
+	"plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 2.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"plot 2.color": string;
+	/** Default value: `15` */
+	"plot 3.display": number;
+	/** Default value: `0` */
+	"plot 3.linestyle": number;
+	/** Default value: `1` */
+	"plot 3.linewidth": number;
+	/** Default value: `0` */
+	"plot 3.transparency": number;
+	/** Default value: `line` */
+	"plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 3.trackprice": boolean;
+	/** Default value: `#43A047` */
+	"plot 3.color": string;
+	/** Default value: `15` */
+	"plot 4.display": number;
+	/** Default value: `0` */
+	"plot 4.linestyle": number;
+	/** Default value: `1` */
+	"plot 4.linewidth": number;
+	/** Default value: `0` */
+	"plot 4.transparency": number;
+	/** Default value: `line` */
+	"plot 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 4.trackprice": boolean;
+	/** Default value: `#26C6DA` */
+	"plot 4.color": string;
+	/** Default value: `15` */
+	"plot 5.display": number;
+	/** Default value: `0` */
+	"plot 5.linestyle": number;
+	/** Default value: `1` */
+	"plot 5.linewidth": number;
+	/** Default value: `0` */
+	"plot 5.transparency": number;
+	/** Default value: `line` */
+	"plot 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 5.trackprice": boolean;
+	/** Default value: `#F50057` */
+	"plot 5.color": string;
+	/** Default value: `15` */
+	"plot 6.display": number;
+	/** Default value: `0` */
+	"plot 6.linestyle": number;
+	/** Default value: `1` */
+	"plot 6.linewidth": number;
+	/** Default value: `0` */
+	"plot 6.transparency": number;
+	/** Default value: `line` */
+	"plot 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 6.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"plot 6.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Triple' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageTripleIndicatorOverrides {
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"plot 1.color": string;
+	/** Default value: `15` */
+	"plot 2.display": number;
+	/** Default value: `0` */
+	"plot 2.linestyle": number;
+	/** Default value: `1` */
+	"plot 2.linewidth": number;
+	/** Default value: `0` */
+	"plot 2.transparency": number;
+	/** Default value: `line` */
+	"plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 2.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"plot 2.color": string;
+	/** Default value: `15` */
+	"plot 3.display": number;
+	/** Default value: `0` */
+	"plot 3.linestyle": number;
+	/** Default value: `1` */
+	"plot 3.linewidth": number;
+	/** Default value: `0` */
+	"plot 3.transparency": number;
+	/** Default value: `line` */
+	"plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 3.trackprice": boolean;
+	/** Default value: `#26C6DA` */
+	"plot 3.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Moving Average Weighted' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface MovingAverageWeightedIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface NegativeBaseInputFieldValidatorResult extends BaseInputFieldValidatorResult {
 	/** @inheritDoc */
 	valid: false;
 	/** Reason why base input value is invalid  */
 	errorMessage: string;
+}
+/**
+ * Overrides for the 'Net Volume' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface NetVolumeIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface NewsItem {
 	/** News item title */
@@ -12337,6 +15252,40 @@ export interface NumericFormattingParams {
 	decimal_sign: string;
 }
 /**
+ * Overrides for the 'On Balance Volume' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface OnBalanceVolumeIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Interface for an URL which will be opened
  */
 export interface OpenUrlSolution {
@@ -12352,7 +15301,7 @@ export interface OpenUrlSolution {
 }
 export interface OrderDialogOptions extends TradingDialogOptions {
 	/**
-	 * Using this flag you can change `Trade Value` to `Total` in the Order Info section of the Order dialog.
+	 * Using this flag, you can change `Trade Value` to `Total` in the *Order Info* section of the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md).
 	 */
 	showTotal?: boolean;
 }
@@ -12365,7 +15314,8 @@ export interface OrderDuration {
 	datetime?: number;
 }
 /**
- * Expiration options for orders
+ * Order duration options that determine how long the order remains active.
+ * Refer to [Set order duration](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#set-order-duration) for more information.
  */
 export interface OrderDurationMetaInfo {
 	/** If it is set to `true`, then the Display date control in Order Ticket for this duration type will be displayed. */
@@ -12461,6 +15411,8 @@ export interface OrderLineToolOverrides {
 	"linetoolorder.lineInactiveSellColor": string;
 	/** Default value: `inherit` */
 	"linetoolorder.lineLength": string;
+	/** Default value: `percentage` */
+	"linetoolorder.lineLengthUnit": string;
 	/** Default value: `inherit` */
 	"linetoolorder.lineStyle": string;
 	/** Default value: `inherit` */
@@ -12541,8 +15493,8 @@ export interface OrderRule {
 	severity: "warning" | "error";
 }
 /**
- * Input value of the order ticket
- * This info is not sufficient to place an order
+ * Input value of the Order Ticket.
+ * This information is not sufficient to place an order.
  */
 export interface OrderTemplate {
 	/** Symbol identifier */
@@ -12570,8 +15522,38 @@ export interface OrderTemplate {
 	/** Custom input fields */
 	customFields?: CustomInputFieldsValues;
 }
+/**
+ * Overrides for the 'Overlay' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface OverlayIndicatorOverrides {
+	[key: string]: StudyOverrideValueType;
+}
 export interface Overrides {
 	[key: string]: string | number | boolean;
+}
+/**
+ * Overrides for the 'Parabolic SAR' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ParabolicSARIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `cross` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Parallelchannel drawing tool.
@@ -12585,6 +15567,20 @@ export interface ParallelchannelLineToolOverrides {
 	"linetoolparallelchannel.extendRight": boolean;
 	/** Default value: `true` */
 	"linetoolparallelchannel.fillBackground": boolean;
+	/** Default value: `false` */
+	"linetoolparallelchannel.labelBold": boolean;
+	/** Default value: `14` */
+	"linetoolparallelchannel.labelFontSize": number;
+	/** Default value: `left` */
+	"linetoolparallelchannel.labelHorzAlign": string;
+	/** Default value: `false` */
+	"linetoolparallelchannel.labelItalic": boolean;
+	/** Default value: `#2962FF` */
+	"linetoolparallelchannel.labelTextColor": string;
+	/** Default value: `bottom` */
+	"linetoolparallelchannel.labelVertAlign": string;
+	/** Default value: `false` */
+	"linetoolparallelchannel.labelVisible": boolean;
 	/** Default value: `#2962FF` */
 	"linetoolparallelchannel.linecolor": string;
 	/** Default value: `0` */
@@ -12702,7 +15698,7 @@ export interface PineJSStd {
 	 * Current bar time
 	 *
 	 * @param context - PineJS execution context.
-	 * @returns UNIX time of current bar
+	 * @returns UNIX time of current bar according to the symbol timezone and not UTC.
 	 */
 	time(context: IContext): number;
 	/**
@@ -12710,10 +15706,9 @@ export interface PineJSStd {
 	 *
 	 * @param context - PineJS execution context.
 	 * @param period - Period
-	 * @param spec
-	 * @returns UNIX time of current bar
+	 * @returns UNIX time of current bar according to the symbol timezone and not UTC.
 	 */
-	time(context: IContext, period: string, spec: unknown): number;
+	time(context: IContext, period: string): number;
 	/**
 	 * Is a shortcut for (high + low)/2
 	 *
@@ -13556,7 +16551,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level0.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level0.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level0.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level0.visible": boolean;
@@ -13566,7 +16561,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level1.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level1.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level1.visible": boolean;
@@ -13576,7 +16571,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level2.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfan.level2.visible": boolean;
@@ -13586,7 +16581,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level3.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level3.visible": boolean;
@@ -13596,7 +16591,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level4.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level4.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level4.visible": boolean;
@@ -13606,7 +16601,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level5.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfan.level5.visible": boolean;
@@ -13616,7 +16611,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level6.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level6.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level6.visible": boolean;
@@ -13626,7 +16621,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level7.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level7.visible": boolean;
@@ -13636,7 +16631,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.level8.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfan.level8.visible": boolean;
@@ -13644,7 +16639,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.median.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfan.median.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfan.median.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfan.median.visible": boolean;
@@ -13665,7 +16660,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level0.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level0.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level0.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level0.visible": boolean;
@@ -13675,7 +16670,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level1.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level1.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level1.visible": boolean;
@@ -13685,7 +16680,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level2.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfork.level2.visible": boolean;
@@ -13695,7 +16690,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level3.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level3.visible": boolean;
@@ -13705,7 +16700,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level4.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level4.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level4.visible": boolean;
@@ -13715,7 +16710,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level5.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfork.level5.visible": boolean;
@@ -13725,7 +16720,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level6.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level6.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level6.visible": boolean;
@@ -13735,7 +16730,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level7.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level7.visible": boolean;
@@ -13745,7 +16740,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.level8.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolpitchfork.level8.visible": boolean;
@@ -13753,7 +16748,7 @@ export interface PitchforkLineToolOverrides {
 	"linetoolpitchfork.median.color": string;
 	/** Default value: `0` */
 	"linetoolpitchfork.median.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpitchfork.median.linewidth": number;
 	/** Default value: `true` */
 	"linetoolpitchfork.median.visible": boolean;
@@ -13762,6 +16757,14 @@ export interface PitchforkLineToolOverrides {
 	/** Default value: `80` */
 	"linetoolpitchfork.transparency": number;
 }
+/**
+ * Overrides for the 'Pivot Points Standard' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface PivotPointsStandardIndicatorOverrides {
+	[key: string]: StudyOverrideValueType;
+}
 export interface PlaceOrderResult {
 	/** Order id */
 	orderId?: string;
@@ -13769,7 +16772,7 @@ export interface PlaceOrderResult {
 export interface PlacedOrder extends PlacedOrderBase, CustomFields {
 }
 /**
- * Info about a placed order
+ * An object that contains information about a placed order.
  */
 export interface PlacedOrderBase {
 	/** Order ID */
@@ -13852,7 +16855,7 @@ export interface PolylineLineToolOverrides {
 	"linetoolpolyline.linecolor": string;
 	/** Default value: `0` */
 	"linetoolpolyline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolpolyline.linewidth": number;
 	/** Default value: `80` */
 	"linetoolpolyline.transparency": number;
@@ -13928,6 +16931,8 @@ export interface PositionLineToolOverrides {
 	"linetoolposition.lineBuyColor": string;
 	/** Default value: `inherit` */
 	"linetoolposition.lineLength": string;
+	/** Default value: `percentage` */
+	"linetoolposition.lineLengthUnit": string;
 	/** Default value: `#e75656` */
 	"linetoolposition.lineSellColor": string;
 	/** Default value: `inherit` */
@@ -13992,8 +16997,8 @@ export interface PositiveBaseInputFieldValidatorResult extends BaseInputFieldVal
 	valid: true;
 }
 /**
- * Output value of the order ticket and input value of the broker's place order command
- * This info is sufficient to place an order
+ * Output value of the Order Ticket and input value of the broker's place order command.
+ * This information is sufficient to place an order.
  */
 export interface PreOrder extends OrderTemplate {
 	/** @inheritDoc */
@@ -14027,7 +17032,7 @@ export interface PredictionLineToolOverrides {
 	"linetoolprediction.intermediateTextColor": string;
 	/** Default value: `#2962FF` */
 	"linetoolprediction.linecolor": string;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolprediction.linewidth": number;
 	/** Default value: `#2962FF` */
 	"linetoolprediction.sourceBackColor": string;
@@ -14047,6 +17052,100 @@ export interface PredictionLineToolOverrides {
 	"linetoolprediction.targetTextColor": string;
 	/** Default value: `10` */
 	"linetoolprediction.transparency": number;
+}
+/**
+ * Overrides for the 'Price Channel' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface PriceChannelIndicatorOverrides {
+	/** Default value: `15` */
+	"highprice line.display": number;
+	/** Default value: `0` */
+	"highprice line.linestyle": number;
+	/** Default value: `1` */
+	"highprice line.linewidth": number;
+	/** Default value: `line` */
+	"highprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"highprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"highprice line.transparency": number;
+	/** Default value: `#F50057` */
+	"highprice line.color": string;
+	/** Default value: `15` */
+	"lowprice line.display": number;
+	/** Default value: `0` */
+	"lowprice line.linestyle": number;
+	/** Default value: `1` */
+	"lowprice line.linewidth": number;
+	/** Default value: `line` */
+	"lowprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lowprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"lowprice line.transparency": number;
+	/** Default value: `#F50057` */
+	"lowprice line.color": string;
+	/** Default value: `15` */
+	"centerprice line.display": number;
+	/** Default value: `0` */
+	"centerprice line.linestyle": number;
+	/** Default value: `1` */
+	"centerprice line.linewidth": number;
+	/** Default value: `line` */
+	"centerprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"centerprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"centerprice line.transparency": number;
+	/** Default value: `#2196F3` */
+	"centerprice line.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Price Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface PriceOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#089981` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Price Volume Trend' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface PriceVolumeTrendIndicatorOverrides {
+	/** Default value: `15` */
+	"pvt.display": number;
+	/** Default value: `0` */
+	"pvt.linestyle": number;
+	/** Default value: `1` */
+	"pvt.linewidth": number;
+	/** Default value: `line` */
+	"pvt.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"pvt.trackprice": boolean;
+	/** Default value: `0` */
+	"pvt.transparency": number;
+	/** Default value: `#2196F3` */
+	"pvt.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Position defined by a price and time.
@@ -14088,11 +17187,11 @@ export interface ProjectionLineToolOverrides {
 	"linetoolprojection.level1.color": string;
 	/** Default value: `0` */
 	"linetoolprojection.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolprojection.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetoolprojection.level1.visible": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolprojection.linewidth": number;
 	/** Default value: `true` */
 	"linetoolprojection.showCoeffs": boolean;
@@ -14155,6 +17254,86 @@ export interface RangeOptions {
 	 */
 	res: ResolutionString;
 }
+/**
+ * Overrides for the 'Rate Of Change' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RateOfChangeIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero line.color": string;
+	/** Default value: `2` */
+	"zero line.linestyle": number;
+	/** Default value: `1` */
+	"zero line.linewidth": number;
+	/** Default value: `true` */
+	"zero line.visible": boolean;
+	/** Default value: `0` */
+	"zero line.value": number;
+	/** Default value: `15` */
+	"roc.display": number;
+	/** Default value: `0` */
+	"roc.linestyle": number;
+	/** Default value: `1` */
+	"roc.linewidth": number;
+	/** Default value: `line` */
+	"roc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"roc.trackprice": boolean;
+	/** Default value: `0` */
+	"roc.transparency": number;
+	/** Default value: `#2196F3` */
+	"roc.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Ratio' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RatioIndicatorOverrides {
+	/** Default value: `` */
+	"negativefill.color": string;
+	/** Default value: `0` */
+	"negativefill.transparency": number;
+	/** Default value: `true` */
+	"negativefill.visible": boolean;
+	/** Default value: `` */
+	"positivefill.color": string;
+	/** Default value: `0` */
+	"positivefill.transparency": number;
+	/** Default value: `true` */
+	"positivefill.visible": boolean;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `2` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `35` */
+	"plot.transparency": number;
+	/** Default value: `#800080` */
+	"plot.color": string;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"baseline.linestyle": number;
+	/** Default value: `2` */
+	"baseline.linewidth": number;
+	/** Default value: `line` */
+	"baseline.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"baseline.trackprice": boolean;
+	/** Default value: `0` */
+	"baseline.transparency": number;
+	/** Default value: `rgba(0, 0, 0, 0)` */
+	"baseline.color": string;
+	/** Default value: `0` */
+	"baseline.display": number;
+	[key: string]: StudyOverrideValueType;
+}
 export interface RawStudyMetaInfo extends RawStudyMetaInfoBase {
 	/** Identifier for Study */
 	readonly id: RawStudyMetaInfoId;
@@ -14168,11 +17347,18 @@ export interface RawStudyMetaInfoBase {
 	readonly shortDescription: string;
 	/** Name for the study */
 	readonly name?: string;
-	/** Metainfo version of the study, the current is 51. Default is 0. */
+	/** Metainfo version of the study. The current version is 53, and the default one is 0. */
 	readonly _metainfoVersion?: number;
-	/** Precision of the study's output values (quantity of digits after the decimal separator) */
+	/** Use {@link format} instead.
+	 * @deprecated
+	 */
 	readonly precision?: number | string;
-	/** Info about the Price Scale formatting */
+	/**
+	 * A type of data that an indicator displays, such as `volume` or `price`. Values on the [Price Scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale.md) depend on this data type.
+	 * Additionally, you can adjust a precision of indicator values. To do this, specify the `precision` property in {@link StudyPlotValuePrecisionFormat}.
+	 *
+	 * For more information about `format`, refer to the [Metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/metainfo.md) article.
+	 */
 	readonly format: StudyPlotValueFormat;
 	/** Whether the study should appear on the main series pane */
 	readonly is_price_study?: boolean;
@@ -14184,13 +17370,13 @@ export interface RawStudyMetaInfoBase {
 	readonly priceScale?: StudyTargetPriceScale;
 	/** Whether the study should appear in Indicators list. */
 	readonly is_hidden_study?: boolean;
-	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults) */
+	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults.md) */
 	readonly defaults: Readonly<Partial<StudyDefaults>>;
 	/** Bands */
 	readonly bands?: readonly Readonly<StudyBandInfo>[];
 	/** Filled area is a special object, which allows coloring an area between two plots or hlines. Please note, that it is impossible to fill the area between a band and a hline. */
 	readonly filledAreas?: readonly Readonly<StudyFilledAreaInfo>[];
-	/** array with inputs info depending on type. See dedicated article: [Custom Studies Inputs](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Inputs) */
+	/** array with inputs info depending on type. See dedicated article: [Custom Studies Inputs](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Inputs.md) */
 	readonly inputs?: StudyInputInfoList;
 	/** Symbol source */
 	readonly symbolSource?: SymbolSource;
@@ -14203,11 +17389,11 @@ export interface RawStudyMetaInfoBase {
 	 * - `addDefaultColor` - boolean, if true the defaults are used for colorer type plot, when its value is null or undefined.
 	 */
 	readonly palettes?: MappedObject<Readonly<StudyPalettesInfo>>;
-	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots) */
+	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots.md) */
 	readonly plots?: readonly Readonly<StudyPlotInfo>[];
 	/** an object with plot id as keys and style info as values. */
 	readonly styles?: MappedObject<Readonly<StudyStylesInfo>>;
-	/** array with study plots info. See dedicated article: [Custom Studies OHLC Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-OHLC-Plots) */
+	/** array with study plots info. See dedicated article: [Custom Studies OHLC Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-OHLC-Plots.md) */
 	readonly ohlcPlots?: MappedObject<Readonly<StudyOhlcStylesInfo>>;
 	/** Financial Period */
 	readonly financialPeriod?: FinancialPeriod;
@@ -14291,8 +17477,16 @@ export interface RectangleLineToolOverrides {
 	"linetoolrectangle.horzLabelsAlign": string;
 	/** Default value: `false` */
 	"linetoolrectangle.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolrectangle.linewidth": number;
+	/** Default value: `#9c27b0` */
+	"linetoolrectangle.middleLine.lineColor": string;
+	/** Default value: `2` */
+	"linetoolrectangle.middleLine.lineStyle": number;
+	/** Default value: `1` */
+	"linetoolrectangle.middleLine.lineWidth": number;
+	/** Default value: `false` */
+	"linetoolrectangle.middleLine.showLine": boolean;
 	/** Default value: `false` */
 	"linetoolrectangle.showLabel": boolean;
 	/** Default value: `#9c27b0` */
@@ -14301,6 +17495,14 @@ export interface RectangleLineToolOverrides {
 	"linetoolrectangle.transparency": number;
 	/** Default value: `bottom` */
 	"linetoolrectangle.vertLabelsAlign": string;
+}
+/**
+ * Overrides for the 'Regression Trend' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RegressionTrendIndicatorOverrides {
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Regressiontrend drawing tool.
@@ -14356,6 +17558,166 @@ export interface RegressiontrendLineToolOverrides {
 	"linetoolregressiontrend.styles.upLine.linestyle": number;
 	/** Default value: `2` */
 	"linetoolregressiontrend.styles.upLine.linewidth": number;
+}
+/**
+ * Overrides for the 'Relative Strength Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RelativeStrengthIndexIndicatorOverrides {
+	/** Default value: `#7E57C2` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `70` */
+	"upperlimit.value": number;
+	/** Default value: `-1.1` */
+	"upperlimit.zorder": number;
+	/** Default value: `#787B86` */
+	"middlelimit.color": string;
+	/** Default value: `2` */
+	"middlelimit.linestyle": number;
+	/** Default value: `1` */
+	"middlelimit.linewidth": number;
+	/** Default value: `true` */
+	"middlelimit.visible": boolean;
+	/** Default value: `50` */
+	"middlelimit.value": number;
+	/** Default value: `-1.11` */
+	"middlelimit.zorder": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `30` */
+	"lowerlimit.value": number;
+	/** Default value: `-1.111` */
+	"lowerlimit.zorder": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"plot.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Relative Vigor Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RelativeVigorIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"rvgi.display": number;
+	/** Default value: `0` */
+	"rvgi.linestyle": number;
+	/** Default value: `1` */
+	"rvgi.linewidth": number;
+	/** Default value: `line` */
+	"rvgi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"rvgi.trackprice": boolean;
+	/** Default value: `0` */
+	"rvgi.transparency": number;
+	/** Default value: `#089981` */
+	"rvgi.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#F23645` */
+	"signal.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Relative Volatility Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RelativeVolatilityIndexIndicatorOverrides {
+	/** Default value: `#7E57C2` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface RenkoStylePreferences {
 	/** Up bar color */
@@ -14485,7 +17847,7 @@ export interface RotatedrectangleLineToolOverrides {
 	"linetoolrotatedrectangle.color": string;
 	/** Default value: `true` */
 	"linetoolrotatedrectangle.fillBackground": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolrotatedrectangle.linewidth": number;
 	/** Default value: `50` */
 	"linetoolrotatedrectangle.transparency": number;
@@ -14504,6 +17866,67 @@ export interface RssNewsFeedParams {
 	default: RssNewsFeedItem;
 	/** Additional news feeds */
 	[symbolType: string]: RssNewsFeedItem;
+}
+/**
+ * Overrides for the 'SMI Ergodic Indicator/Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SMIErgodicIndicatorOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"indicator.display": number;
+	/** Default value: `0` */
+	"indicator.linestyle": number;
+	/** Default value: `1` */
+	"indicator.linewidth": number;
+	/** Default value: `line` */
+	"indicator.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"indicator.trackprice": boolean;
+	/** Default value: `0` */
+	"indicator.transparency": number;
+	/** Default value: `#2196F3` */
+	"indicator.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#FF6D00` */
+	"signal.color": string;
+	/** Default value: `15` */
+	"oscillator.display": number;
+	/** Default value: `0` */
+	"oscillator.linestyle": number;
+	/** Default value: `1` */
+	"oscillator.linewidth": number;
+	/** Default value: `histogram` */
+	"oscillator.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"oscillator.trackprice": boolean;
+	/** Default value: `0` */
+	"oscillator.transparency": number;
+	/** Default value: `#FF5252` */
+	"oscillator.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Save Chart Options
+ */
+export interface SaveChartOptions {
+	/**
+	 * Whether drawings should be included in the saved data.
+	 *
+	 * @default true
+	 */
+	includeDrawings?: boolean;
 }
 /**
  * Options: Save Chart to Server
@@ -14550,7 +17973,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level0.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level0.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level0.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level0.visible": boolean;
@@ -14560,7 +17983,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level1.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level1.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level1.visible": boolean;
@@ -14570,7 +17993,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level2.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork2.level2.visible": boolean;
@@ -14580,7 +18003,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level3.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level3.visible": boolean;
@@ -14590,7 +18013,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level4.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level4.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level4.visible": boolean;
@@ -14600,7 +18023,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level5.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork2.level5.visible": boolean;
@@ -14610,7 +18033,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level6.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level6.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level6.visible": boolean;
@@ -14620,7 +18043,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level7.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level7.visible": boolean;
@@ -14630,7 +18053,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.level8.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork2.level8.visible": boolean;
@@ -14638,7 +18061,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.median.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork2.median.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork2.median.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork2.median.visible": boolean;
@@ -14661,7 +18084,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level0.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level0.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level0.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level0.visible": boolean;
@@ -14671,7 +18094,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level1.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level1.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level1.visible": boolean;
@@ -14681,7 +18104,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level2.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork.level2.visible": boolean;
@@ -14691,7 +18114,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level3.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level3.visible": boolean;
@@ -14701,7 +18124,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level4.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level4.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level4.visible": boolean;
@@ -14711,7 +18134,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level5.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork.level5.visible": boolean;
@@ -14721,7 +18144,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level6.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level6.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level6.visible": boolean;
@@ -14731,7 +18154,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level7.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level7.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level7.visible": boolean;
@@ -14741,7 +18164,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.level8.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.level8.linewidth": number;
 	/** Default value: `false` */
 	"linetoolschiffpitchfork.level8.visible": boolean;
@@ -14749,7 +18172,7 @@ export interface SchiffpitchforkLineToolOverrides {
 	"linetoolschiffpitchfork.median.color": string;
 	/** Default value: `0` */
 	"linetoolschiffpitchfork.median.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolschiffpitchfork.median.linewidth": number;
 	/** Default value: `true` */
 	"linetoolschiffpitchfork.median.visible": boolean;
@@ -14880,6 +18303,14 @@ export interface SeriesPreferencesMap {
 	[ChartStyle.Column]: ColumnStylePreferences;
 }
 /**
+ * Overrides for the 'Sessions' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SessionsIndicatorOverrides {
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Options for setting a chart's resolution.
  */
 export interface SetResolutionOptions {
@@ -14949,7 +18380,7 @@ export interface SinelineLineToolOverrides {
 	"linetoolsineline.linecolor": string;
 	/** Default value: `0` */
 	"linetoolsineline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolsineline.linewidth": number;
 }
 export interface SingleBrokerMetaInfo {
@@ -14968,13 +18399,13 @@ export interface SingleBrokerMetaInfo {
 	 */
 	customNotificationFields?: string[];
 	/**
-	 * List of expiration options of orders. It is optional. Do not set it if you don't want the durations to be displayed in Order Ticket.
+	 * List of order duration options that determine how long the order remains active.
+	 * Specifying `durations` enables a drop-down menu in the Order Ticket for supported orders.
+	 * Refer to [Set order duration](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#set-order-duration) for more information.
 	 *
 	 * The objects have the following keys: `{ name, value, hasDatePicker?, hasTimePicker?, default?, supportedOrderTypes? }`.
 	 */
 	durations?: OrderDurationMetaInfo[];
-	/** Dialog options for Positions (order type) */
-	positionDialogOptions?: PositionDialogOptions;
 	/**
 	 * Order Rules
 	 */
@@ -14989,7 +18420,7 @@ export interface SingleBrokerMetaInfo {
 	 * ```ts
 	 * customUI: {
 	 *     showOrderDialog?: (order: Order, focus?: OrderTicketFocusControl) => Promise<boolean>;
-	 *     showPositionDialog?: (position: Position | Trade, brackets: Brackets, focus?: OrderTicketFocusControl) => Promise<boolean>;
+	 *     showPositionDialog?: (position: Position | IndividualPosition, brackets: Brackets, focus?: OrderTicketFocusControl) => Promise<boolean>;
 	 *     showCancelOrderDialog?: (order: Order) => Promise<boolean>;
 	 *     showClosePositionDialog?: (position: Position) => Promise<boolean>;
 	 * }
@@ -14997,12 +18428,186 @@ export interface SingleBrokerMetaInfo {
 	 */
 	customUI?: BrokerCustomUI;
 }
+/**
+ * Overrides for the 'Smoothed Moving Average' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SmoothedMovingAverageIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#673AB7` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface SortingParameters {
 	/** `property` of the data object that will be used for sorting */
 	property: string;
 	/** Ascending sorting order (default `true`) - If it is `false`, then initial sorting will be in descending order */
 	asc?: boolean;
 }
+/**
+ * Overrides for the 'Spread' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SpreadIndicatorOverrides {
+	/** Default value: `` */
+	"negative fill.color": string;
+	/** Default value: `0` */
+	"negative fill.transparency": number;
+	/** Default value: `true` */
+	"negative fill.visible": boolean;
+	/** Default value: `` */
+	"positive fill.color": string;
+	/** Default value: `0` */
+	"positive fill.transparency": number;
+	/** Default value: `true` */
+	"positive fill.visible": boolean;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `2` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `35` */
+	"plot.transparency": number;
+	/** Default value: `#800080` */
+	"plot.color": string;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"baseline.linestyle": number;
+	/** Default value: `2` */
+	"baseline.linewidth": number;
+	/** Default value: `line` */
+	"baseline.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"baseline.trackprice": boolean;
+	/** Default value: `0` */
+	"baseline.transparency": number;
+	/** Default value: `rgba(0, 0, 0, 0)` */
+	"baseline.color": string;
+	/** Default value: `0` */
+	"baseline.display": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Standard Deviation' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface StandardDeviationIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#089981` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Standard Error Bands' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface StandardErrorBandsIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"background.color": string;
+	/** Default value: `95` */
+	"background.transparency": number;
+	/** Default value: `true` */
+	"background.visible": boolean;
+	/** Default value: `15` */
+	"plot 1.display": number;
+	/** Default value: `0` */
+	"plot 1.linestyle": number;
+	/** Default value: `1` */
+	"plot 1.linewidth": number;
+	/** Default value: `line` */
+	"plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"plot 1.transparency": number;
+	/** Default value: `false` */
+	"plot 1.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"plot 1.color": string;
+	/** Default value: `15` */
+	"plot 2.display": number;
+	/** Default value: `0` */
+	"plot 2.linestyle": number;
+	/** Default value: `1` */
+	"plot 2.linewidth": number;
+	/** Default value: `0` */
+	"plot 2.transparency": number;
+	/** Default value: `line` */
+	"plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 2.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"plot 2.color": string;
+	/** Default value: `15` */
+	"plot 3.display": number;
+	/** Default value: `0` */
+	"plot 3.linestyle": number;
+	/** Default value: `1` */
+	"plot 3.linewidth": number;
+	/** Default value: `0` */
+	"plot 3.transparency": number;
+	/** Default value: `line` */
+	"plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot 3.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"plot 3.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Standard Error' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface StandardErrorIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * The interface that describes the mapping of values in the {@link AccountManagerColumnBase.formatter} and {@link AccountManagerColumnBase.dataFields} properties of the Account Manager columns.
+ * Refer to the [Value formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters.md) section for more information.
+ */
 /* eslint-disable jsdoc/require-jsdoc */
 export interface StandardFormattersDependenciesMapping {
 	[StandardFormatterName.Default]: string[];
@@ -15100,6 +18705,130 @@ export interface StickerLineToolOverrides {
 	"linetoolsticker.size": number;
 	/** Default value: `bitcoin` */
 	"linetoolsticker.sticker": string;
+}
+/**
+ * Overrides for the 'Stochastic' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface StochasticIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"%k.display": number;
+	/** Default value: `0` */
+	"%k.linestyle": number;
+	/** Default value: `1` */
+	"%k.linewidth": number;
+	/** Default value: `line` */
+	"%k.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"%k.trackprice": boolean;
+	/** Default value: `0` */
+	"%k.transparency": number;
+	/** Default value: `#2196F3` */
+	"%k.color": string;
+	/** Default value: `15` */
+	"%d.display": number;
+	/** Default value: `0` */
+	"%d.linestyle": number;
+	/** Default value: `1` */
+	"%d.linewidth": number;
+	/** Default value: `line` */
+	"%d.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"%d.trackprice": boolean;
+	/** Default value: `0` */
+	"%d.transparency": number;
+	/** Default value: `#FF6D00` */
+	"%d.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Stochastic RSI' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface StochasticRSIIndicatorOverrides {
+	/** Default value: `#2196F3` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"%k.display": number;
+	/** Default value: `0` */
+	"%k.linestyle": number;
+	/** Default value: `1` */
+	"%k.linewidth": number;
+	/** Default value: `line` */
+	"%k.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"%k.trackprice": boolean;
+	/** Default value: `0` */
+	"%k.transparency": number;
+	/** Default value: `#2196F3` */
+	"%k.color": string;
+	/** Default value: `15` */
+	"%d.display": number;
+	/** Default value: `0` */
+	"%d.linestyle": number;
+	/** Default value: `1` */
+	"%d.linewidth": number;
+	/** Default value: `line` */
+	"%d.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"%d.trackprice": boolean;
+	/** Default value: `0` */
+	"%d.transparency": number;
+	/** Default value: `#FF6D00` */
+	"%d.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * A description of a study arrows plot.
@@ -15429,6 +19158,12 @@ export interface StudyFilledAreaInfo {
 	 * Color for the bottom of the filled area.
 	 */
 	readonly bottomColor?: string;
+	/**
+	 * Should the area be filled up to the point that two plots intersect, instead of by plot index?
+	 *
+	 * Used for plot_plot filled area types.
+	 */
+	readonly fillToIntersection?: boolean;
 }
 /**
  * Study solid color filled area style preferences.
@@ -15484,6 +19219,8 @@ export interface StudyInputBaseInfo {
 	readonly isHidden?: boolean;
 	/** Is the input visible */
 	readonly visible?: string;
+	/** An array of plot ids, upon the hiding of which, this input should also be hidden within the legend */
+	readonly hideWhenPlotsHidden?: string[];
 }
 /**
  * A description of a study input.
@@ -15620,6 +19357,10 @@ export interface StudyOhlcStylesInfo {
 	readonly drawBorder?: boolean;
 	/** Show last value */
 	readonly showLast?: number;
+	/**
+	 * Info about the Price Scale formatting
+	 */
+	readonly format?: Partial<StudyPlotValuePrecisionFormat>;
 }
 /**
  * Parameter object passed to event callback.
@@ -15631,15 +19372,4810 @@ export interface StudyOrDrawingAddedToChartEventParams {
 	value: string;
 }
 /**
- * Study overrides.
- * See [Studies Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides) to get a list of all possible properties to override.
+ * Indicator overrides.
+ * See [Indicator Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md).
  *
- * @example { 'a.overridable.property': 123 }
+ * Use these properties to specify default indicator style via {@link ChartingLibraryWidgetOptions.studies_overrides} and {@link IChartingLibraryWidget.applyStudiesOverrides}.
  */
 export interface StudyOverrides {
 	/**
-	 * Override values.
+	 * - Default value: `close`
+	 * - Input type: `text`
+	 * - Options: `["close","high"]`
 	 */
+	"52 week high/low.high source": string;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `text`
+	 * - Options: `["close","low"]`
+	 */
+	"52 week high/low.low source": string;
+	/** Default value: `15` */
+	"accelerator oscillator.plot.display": number;
+	/** Default value: `0` */
+	"accelerator oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"accelerator oscillator.plot.linewidth": number;
+	/** Default value: `histogram` */
+	"accelerator oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"accelerator oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"accelerator oscillator.plot.transparency": number;
+	/** Default value: `#000080` */
+	"accelerator oscillator.plot.color": string;
+	/** Default value: `15` */
+	"accumulation/distribution.plot.display": number;
+	/** Default value: `0` */
+	"accumulation/distribution.plot.linestyle": number;
+	/** Default value: `1` */
+	"accumulation/distribution.plot.linewidth": number;
+	/** Default value: `line` */
+	"accumulation/distribution.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"accumulation/distribution.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"accumulation/distribution.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"accumulation/distribution.plot.color": string;
+	/** Default value: `15` */
+	"accumulative swing index.asi.display": number;
+	/** Default value: `0` */
+	"accumulative swing index.asi.linestyle": number;
+	/** Default value: `1` */
+	"accumulative swing index.asi.linewidth": number;
+	/** Default value: `line` */
+	"accumulative swing index.asi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"accumulative swing index.asi.trackprice": boolean;
+	/** Default value: `0` */
+	"accumulative swing index.asi.transparency": number;
+	/** Default value: `#2196F3` */
+	"accumulative swing index.asi.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `float`
+	 * - Min: `0.1`
+	 * - Max: `100000`
+	 */
+	"accumulative swing index.limit move value": number;
+	/** Default value: `15` */
+	"advance/decline.plot.display": number;
+	/** Default value: `0` */
+	"advance/decline.plot.linestyle": number;
+	/** Default value: `1` */
+	"advance/decline.plot.linewidth": number;
+	/** Default value: `line` */
+	"advance/decline.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"advance/decline.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"advance/decline.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"advance/decline.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"advance/decline.length": number;
+	/** Default value: `15` */
+	"anchored vwap.vwap.display": number;
+	/** Default value: `#1e88e5` */
+	"anchored vwap.vwap.color": string;
+	/** Default value: `0` */
+	"anchored vwap.vwap.linestyle": number;
+	/** Default value: `1` */
+	"anchored vwap.vwap.linewidth": number;
+	/** Default value: `line` */
+	"anchored vwap.vwap.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"anchored vwap.vwap.trackprice": boolean;
+	/** Default value: `0` */
+	"anchored vwap.vwap.transparency": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"anchored vwap.start time": number;
+	/**
+	 * - Default value: `hlc3`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"anchored vwap.source": string;
+	/** Default value: `15` */
+	"arnaud legoux moving average.plot.display": number;
+	/** Default value: `0` */
+	"arnaud legoux moving average.plot.linestyle": number;
+	/** Default value: `1` */
+	"arnaud legoux moving average.plot.linewidth": number;
+	/** Default value: `line` */
+	"arnaud legoux moving average.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"arnaud legoux moving average.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"arnaud legoux moving average.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"arnaud legoux moving average.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `0`
+	 * - Max: `5000`
+	 */
+	"arnaud legoux moving average.window size": number;
+	/**
+	 * - Default value: `0.85`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"arnaud legoux moving average.offset": number;
+	/**
+	 * - Default value: `6`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"arnaud legoux moving average.sigma": number;
+	/** Default value: `15` */
+	"aroon.upper.display": number;
+	/** Default value: `0` */
+	"aroon.upper.linestyle": number;
+	/** Default value: `1` */
+	"aroon.upper.linewidth": number;
+	/** Default value: `line` */
+	"aroon.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"aroon.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"aroon.upper.transparency": number;
+	/** Default value: `#FB8C00` */
+	"aroon.upper.color": string;
+	/** Default value: `15` */
+	"aroon.lower.display": number;
+	/** Default value: `0` */
+	"aroon.lower.linestyle": number;
+	/** Default value: `1` */
+	"aroon.lower.linewidth": number;
+	/** Default value: `line` */
+	"aroon.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"aroon.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"aroon.lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"aroon.lower.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"aroon.length": number;
+	/** Default value: `15` */
+	"average directional index.adx.display": number;
+	/** Default value: `0` */
+	"average directional index.adx.linestyle": number;
+	/** Default value: `1` */
+	"average directional index.adx.linewidth": number;
+	/** Default value: `line` */
+	"average directional index.adx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"average directional index.adx.trackprice": boolean;
+	/** Default value: `0` */
+	"average directional index.adx.transparency": number;
+	/** Default value: `#FF5252` */
+	"average directional index.adx.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"average directional index.adx smoothing": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"average directional index.di length": number;
+	/** Default value: `15` */
+	"average price.plot.display": number;
+	/** Default value: `0` */
+	"average price.plot.linestyle": number;
+	/** Default value: `1` */
+	"average price.plot.linewidth": number;
+	/** Default value: `line` */
+	"average price.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"average price.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"average price.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"average price.plot.color": string;
+	/** Default value: `15` */
+	"average true range.plot.display": number;
+	/** Default value: `0` */
+	"average true range.plot.linestyle": number;
+	/** Default value: `1` */
+	"average true range.plot.linewidth": number;
+	/** Default value: `line` */
+	"average true range.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"average true range.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"average true range.plot.transparency": number;
+	/** Default value: `#801922` */
+	"average true range.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"average true range.length": number;
+	/** Default value: `15` */
+	"awesome oscillator.plot.display": number;
+	/** Default value: `0` */
+	"awesome oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"awesome oscillator.plot.linewidth": number;
+	/** Default value: `histogram` */
+	"awesome oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"awesome oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"awesome oscillator.plot.transparency": number;
+	/** Default value: `#000080` */
+	"awesome oscillator.plot.color": string;
+	/** Default value: `15` */
+	"balance of power.plot.display": number;
+	/** Default value: `0` */
+	"balance of power.plot.linestyle": number;
+	/** Default value: `1` */
+	"balance of power.plot.linewidth": number;
+	/** Default value: `line` */
+	"balance of power.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"balance of power.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"balance of power.plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"balance of power.plot.color": string;
+	/** Default value: `#2196F3` */
+	"bollinger bands.plots background.color": string;
+	/** Default value: `95` */
+	"bollinger bands.plots background.transparency": number;
+	/** Default value: `true` */
+	"bollinger bands.plots background.visible": boolean;
+	/** Default value: `15` */
+	"bollinger bands.median.display": number;
+	/** Default value: `0` */
+	"bollinger bands.median.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands.median.linewidth": number;
+	/** Default value: `line` */
+	"bollinger bands.median.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"bollinger bands.median.trackprice": boolean;
+	/** Default value: `0` */
+	"bollinger bands.median.transparency": number;
+	/** Default value: `#FF6D00` */
+	"bollinger bands.median.color": string;
+	/** Default value: `15` */
+	"bollinger bands.upper.display": number;
+	/** Default value: `0` */
+	"bollinger bands.upper.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands.upper.linewidth": number;
+	/** Default value: `line` */
+	"bollinger bands.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"bollinger bands.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"bollinger bands.upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"bollinger bands.upper.color": string;
+	/** Default value: `15` */
+	"bollinger bands.lower.display": number;
+	/** Default value: `0` */
+	"bollinger bands.lower.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands.lower.linewidth": number;
+	/** Default value: `line` */
+	"bollinger bands.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"bollinger bands.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"bollinger bands.lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"bollinger bands.lower.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"bollinger bands.length": number;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `float`
+	 * - Min: `0.001`
+	 * - Max: `50`
+	 */
+	"bollinger bands.mult": number;
+	/** Default value: `#26A69A` */
+	"bollinger bands %b.hlines background.color": string;
+	/** Default value: `90` */
+	"bollinger bands %b.hlines background.transparency": number;
+	/** Default value: `true` */
+	"bollinger bands %b.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"bollinger bands %b.upperlimit.color": string;
+	/** Default value: `2` */
+	"bollinger bands %b.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands %b.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"bollinger bands %b.upperlimit.visible": boolean;
+	/** Default value: `1` */
+	"bollinger bands %b.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"bollinger bands %b.lowerlimit.color": string;
+	/** Default value: `2` */
+	"bollinger bands %b.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands %b.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"bollinger bands %b.lowerlimit.visible": boolean;
+	/** Default value: `0` */
+	"bollinger bands %b.lowerlimit.value": number;
+	/** Default value: `15` */
+	"bollinger bands %b.plot.display": number;
+	/** Default value: `0` */
+	"bollinger bands %b.plot.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands %b.plot.linewidth": number;
+	/** Default value: `line` */
+	"bollinger bands %b.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"bollinger bands %b.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"bollinger bands %b.plot.transparency": number;
+	/** Default value: `#22AB94` */
+	"bollinger bands %b.plot.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"bollinger bands %b.length": number;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `float`
+	 * - Min: `0.001`
+	 * - Max: `50`
+	 */
+	"bollinger bands %b.mult": number;
+	/** Default value: `15` */
+	"bollinger bands width.plot.display": number;
+	/** Default value: `0` */
+	"bollinger bands width.plot.linestyle": number;
+	/** Default value: `1` */
+	"bollinger bands width.plot.linewidth": number;
+	/** Default value: `line` */
+	"bollinger bands width.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"bollinger bands width.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"bollinger bands width.plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"bollinger bands width.plot.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"bollinger bands width.length": number;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `float`
+	 * - Min: `0.001`
+	 * - Max: `50`
+	 */
+	"bollinger bands width.mult": number;
+	/** Default value: `#787B86` */
+	"chaikin money flow.zero.color": string;
+	/** Default value: `2` */
+	"chaikin money flow.zero.linestyle": number;
+	/** Default value: `1` */
+	"chaikin money flow.zero.linewidth": number;
+	/** Default value: `true` */
+	"chaikin money flow.zero.visible": boolean;
+	/** Default value: `0` */
+	"chaikin money flow.zero.value": number;
+	/** Default value: `15` */
+	"chaikin money flow.plot.display": number;
+	/** Default value: `0` */
+	"chaikin money flow.plot.linestyle": number;
+	/** Default value: `1` */
+	"chaikin money flow.plot.linewidth": number;
+	/** Default value: `line` */
+	"chaikin money flow.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chaikin money flow.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"chaikin money flow.plot.transparency": number;
+	/** Default value: `#43A047` */
+	"chaikin money flow.plot.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"chaikin money flow.length": number;
+	/** Default value: `#787B86` */
+	"chaikin oscillator.zero.color": string;
+	/** Default value: `2` */
+	"chaikin oscillator.zero.linestyle": number;
+	/** Default value: `1` */
+	"chaikin oscillator.zero.linewidth": number;
+	/** Default value: `true` */
+	"chaikin oscillator.zero.visible": boolean;
+	/** Default value: `0` */
+	"chaikin oscillator.zero.value": number;
+	/** Default value: `15` */
+	"chaikin oscillator.plot.display": number;
+	/** Default value: `0` */
+	"chaikin oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"chaikin oscillator.plot.linewidth": number;
+	/** Default value: `line` */
+	"chaikin oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chaikin oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"chaikin oscillator.plot.transparency": number;
+	/** Default value: `#EC407A` */
+	"chaikin oscillator.plot.color": string;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"chaikin oscillator.short": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"chaikin oscillator.long": number;
+	/** Default value: `#787B86` */
+	"chaikin volatility.zero.color": string;
+	/** Default value: `2` */
+	"chaikin volatility.zero.linestyle": number;
+	/** Default value: `1` */
+	"chaikin volatility.zero.linewidth": number;
+	/** Default value: `true` */
+	"chaikin volatility.zero.visible": boolean;
+	/** Default value: `0` */
+	"chaikin volatility.zero.value": number;
+	/** Default value: `15` */
+	"chaikin volatility.plot.display": number;
+	/** Default value: `0` */
+	"chaikin volatility.plot.linestyle": number;
+	/** Default value: `1` */
+	"chaikin volatility.plot.linewidth": number;
+	/** Default value: `line` */
+	"chaikin volatility.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chaikin volatility.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"chaikin volatility.plot.transparency": number;
+	/** Default value: `#AB47BC` */
+	"chaikin volatility.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 */
+	"chaikin volatility.periods": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 */
+	"chaikin volatility.rate of change lookback": number;
+	/** Default value: `15` */
+	"chande kroll stop.long.display": number;
+	/** Default value: `0` */
+	"chande kroll stop.long.linestyle": number;
+	/** Default value: `1` */
+	"chande kroll stop.long.linewidth": number;
+	/** Default value: `line` */
+	"chande kroll stop.long.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chande kroll stop.long.trackprice": boolean;
+	/** Default value: `0` */
+	"chande kroll stop.long.transparency": number;
+	/** Default value: `#2196F3` */
+	"chande kroll stop.long.color": string;
+	/** Default value: `15` */
+	"chande kroll stop.short.display": number;
+	/** Default value: `0` */
+	"chande kroll stop.short.linestyle": number;
+	/** Default value: `1` */
+	"chande kroll stop.short.linewidth": number;
+	/** Default value: `line` */
+	"chande kroll stop.short.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chande kroll stop.short.trackprice": boolean;
+	/** Default value: `0` */
+	"chande kroll stop.short.transparency": number;
+	/** Default value: `#FF6D00` */
+	"chande kroll stop.short.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"chande kroll stop.p": number;
+	/**
+	 * - Default value: `1`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"chande kroll stop.x": number;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"chande kroll stop.q": number;
+	/** Default value: `15` */
+	"chande momentum oscillator.plot.display": number;
+	/** Default value: `0` */
+	"chande momentum oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"chande momentum oscillator.plot.linewidth": number;
+	/** Default value: `line` */
+	"chande momentum oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chande momentum oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"chande momentum oscillator.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"chande momentum oscillator.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"chande momentum oscillator.length": number;
+	/** Default value: `15` */
+	"chop zone.plot.display": number;
+	/** Default value: `0` */
+	"chop zone.plot.linestyle": number;
+	/** Default value: `1` */
+	"chop zone.plot.linewidth": number;
+	/** Default value: `columns` */
+	"chop zone.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"chop zone.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"chop zone.plot.transparency": number;
+	/** Default value: `#000080` */
+	"chop zone.plot.color": string;
+	/** Default value: `#2196F3` */
+	"choppiness index.hlines background.color": string;
+	/** Default value: `90` */
+	"choppiness index.hlines background.transparency": number;
+	/** Default value: `true` */
+	"choppiness index.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"choppiness index.upperlimit.color": string;
+	/** Default value: `2` */
+	"choppiness index.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"choppiness index.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"choppiness index.upperlimit.visible": boolean;
+	/** Default value: `61.8` */
+	"choppiness index.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"choppiness index.lowerlimit.color": string;
+	/** Default value: `2` */
+	"choppiness index.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"choppiness index.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"choppiness index.lowerlimit.visible": boolean;
+	/** Default value: `38.2` */
+	"choppiness index.lowerlimit.value": number;
+	/** Default value: `15` */
+	"choppiness index.plot.display": number;
+	/** Default value: `0` */
+	"choppiness index.plot.linestyle": number;
+	/** Default value: `1` */
+	"choppiness index.plot.linewidth": number;
+	/** Default value: `line` */
+	"choppiness index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"choppiness index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"choppiness index.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"choppiness index.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"choppiness index.length": number;
+	/** Default value: `#2196F3` */
+	"commodity channel index.hlines background.color": string;
+	/** Default value: `90` */
+	"commodity channel index.hlines background.transparency": number;
+	/** Default value: `true` */
+	"commodity channel index.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"commodity channel index.upperlimit.color": string;
+	/** Default value: `2` */
+	"commodity channel index.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"commodity channel index.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"commodity channel index.upperlimit.visible": boolean;
+	/** Default value: `100` */
+	"commodity channel index.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"commodity channel index.lowerlimit.color": string;
+	/** Default value: `2` */
+	"commodity channel index.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"commodity channel index.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"commodity channel index.lowerlimit.visible": boolean;
+	/** Default value: `-100` */
+	"commodity channel index.lowerlimit.value": number;
+	/** Default value: `15` */
+	"commodity channel index.plot.display": number;
+	/** Default value: `0` */
+	"commodity channel index.plot.linestyle": number;
+	/** Default value: `1` */
+	"commodity channel index.plot.linewidth": number;
+	/** Default value: `line` */
+	"commodity channel index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"commodity channel index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"commodity channel index.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"commodity channel index.plot.color": string;
+	/** Default value: `0` */
+	"commodity channel index.smoothed ma.display": number;
+	/** Default value: `0` */
+	"commodity channel index.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"commodity channel index.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"commodity channel index.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"commodity channel index.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"commodity channel index.smoothed ma.transparency": number;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"commodity channel index.length": number;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"commodity channel index.smoothing line": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"commodity channel index.smoothing length": number;
+	/** Default value: `15` */
+	"compare.plot.display": number;
+	/** Default value: `0` */
+	"compare.plot.linestyle": number;
+	/** Default value: `2` */
+	"compare.plot.linewidth": number;
+	/** Default value: `line` */
+	"compare.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"compare.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"compare.plot.transparency": number;
+	/** Default value: `#9C27B0` */
+	"compare.plot.color": string;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `text`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"compare.source": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - IsHidden: `true`
+	 */
+	"compare.symbol": string;
+	/** Default value: `#2196F3` */
+	"connors rsi.hlines background.color": string;
+	/** Default value: `90` */
+	"connors rsi.hlines background.transparency": number;
+	/** Default value: `true` */
+	"connors rsi.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"connors rsi.upperlimit.color": string;
+	/** Default value: `2` */
+	"connors rsi.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"connors rsi.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"connors rsi.upperlimit.visible": boolean;
+	/** Default value: `70` */
+	"connors rsi.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"connors rsi.lowerlimit.color": string;
+	/** Default value: `2` */
+	"connors rsi.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"connors rsi.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"connors rsi.lowerlimit.visible": boolean;
+	/** Default value: `30` */
+	"connors rsi.lowerlimit.value": number;
+	/** Default value: `15` */
+	"connors rsi.crsi.display": number;
+	/** Default value: `0` */
+	"connors rsi.crsi.linestyle": number;
+	/** Default value: `1` */
+	"connors rsi.crsi.linewidth": number;
+	/** Default value: `line` */
+	"connors rsi.crsi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"connors rsi.crsi.trackprice": boolean;
+	/** Default value: `0` */
+	"connors rsi.crsi.transparency": number;
+	/** Default value: `#2196F3` */
+	"connors rsi.crsi.color": string;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 */
+	"connors rsi.rsi length": number;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 */
+	"connors rsi.updown length": number;
+	/**
+	 * - Default value: `100`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 */
+	"connors rsi.roc length": number;
+	/** Default value: `15` */
+	"coppock curve.plot.display": number;
+	/** Default value: `0` */
+	"coppock curve.plot.linestyle": number;
+	/** Default value: `1` */
+	"coppock curve.plot.linewidth": number;
+	/** Default value: `line` */
+	"coppock curve.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"coppock curve.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"coppock curve.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"coppock curve.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `-1000000000000`
+	 * - Max: `5000`
+	 */
+	"coppock curve.wma length": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"coppock curve.long roc length": number;
+	/**
+	 * - Default value: `11`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"coppock curve.short roc length": number;
+	/** Default value: `15` */
+	"correlation - log.plot.display": number;
+	/** Default value: `0` */
+	"correlation - log.plot.linestyle": number;
+	/** Default value: `1` */
+	"correlation - log.plot.linewidth": number;
+	/** Default value: `line` */
+	"correlation - log.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"correlation - log.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"correlation - log.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"correlation - log.plot.color": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Confirm: `true`
+	 */
+	"correlation - log.instrument 1": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Confirm: `true`
+	 */
+	"correlation - log.instrument 2": string;
+	/**
+	 * - Default value: `25`
+	 * - Input type: `integer`
+	 */
+	"correlation - log.periods": number;
+	/** Default value: `15` */
+	"correlation coefficient.plot.display": number;
+	/** Default value: `0` */
+	"correlation coefficient.plot.linestyle": number;
+	/** Default value: `1` */
+	"correlation coefficient.plot.linewidth": number;
+	/** Default value: `area` */
+	"correlation coefficient.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"correlation coefficient.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"correlation coefficient.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"correlation coefficient.plot.color": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 */
+	"correlation coefficient.sym": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"correlation coefficient.length": number;
+	/** Default value: `#787B86` */
+	"detrended price oscillator.zero.color": string;
+	/** Default value: `2` */
+	"detrended price oscillator.zero.linestyle": number;
+	/** Default value: `1` */
+	"detrended price oscillator.zero.linewidth": number;
+	/** Default value: `true` */
+	"detrended price oscillator.zero.visible": boolean;
+	/** Default value: `0` */
+	"detrended price oscillator.zero.value": number;
+	/** Default value: `15` */
+	"detrended price oscillator.dpo.display": number;
+	/** Default value: `0` */
+	"detrended price oscillator.dpo.linestyle": number;
+	/** Default value: `1` */
+	"detrended price oscillator.dpo.linewidth": number;
+	/** Default value: `line` */
+	"detrended price oscillator.dpo.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"detrended price oscillator.dpo.trackprice": boolean;
+	/** Default value: `0` */
+	"detrended price oscillator.dpo.transparency": number;
+	/** Default value: `#43A047` */
+	"detrended price oscillator.dpo.color": string;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"detrended price oscillator.period": number;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 */
+	"detrended price oscillator.iscentered": boolean;
+	/** Default value: `15` */
+	"directional movement.+di.display": number;
+	/** Default value: `0` */
+	"directional movement.+di.linestyle": number;
+	/** Default value: `1` */
+	"directional movement.+di.linewidth": number;
+	/** Default value: `line` */
+	"directional movement.+di.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"directional movement.+di.trackprice": boolean;
+	/** Default value: `0` */
+	"directional movement.+di.transparency": number;
+	/** Default value: `#2196F3` */
+	"directional movement.+di.color": string;
+	/** Default value: `15` */
+	"directional movement.-di.display": number;
+	/** Default value: `0` */
+	"directional movement.-di.linestyle": number;
+	/** Default value: `1` */
+	"directional movement.-di.linewidth": number;
+	/** Default value: `line` */
+	"directional movement.-di.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"directional movement.-di.trackprice": boolean;
+	/** Default value: `0` */
+	"directional movement.-di.transparency": number;
+	/** Default value: `#FF6D00` */
+	"directional movement.-di.color": string;
+	/** Default value: `15` */
+	"directional movement.adx.display": number;
+	/** Default value: `0` */
+	"directional movement.adx.linestyle": number;
+	/** Default value: `1` */
+	"directional movement.adx.linewidth": number;
+	/** Default value: `line` */
+	"directional movement.adx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"directional movement.adx.trackprice": boolean;
+	/** Default value: `0` */
+	"directional movement.adx.transparency": number;
+	/** Default value: `#F50057` */
+	"directional movement.adx.color": string;
+	/** Default value: `15` */
+	"directional movement.dx.display": number;
+	/** Default value: `0` */
+	"directional movement.dx.linestyle": number;
+	/** Default value: `1` */
+	"directional movement.dx.linewidth": number;
+	/** Default value: `line` */
+	"directional movement.dx.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"directional movement.dx.trackprice": boolean;
+	/** Default value: `0` */
+	"directional movement.dx.transparency": number;
+	/** Default value: `#FFA726` */
+	"directional movement.dx.color": string;
+	/** Default value: `15` */
+	"directional movement.adxr.display": number;
+	/** Default value: `0` */
+	"directional movement.adxr.linestyle": number;
+	/** Default value: `1` */
+	"directional movement.adxr.linewidth": number;
+	/** Default value: `line` */
+	"directional movement.adxr.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"directional movement.adxr.trackprice": boolean;
+	/** Default value: `0` */
+	"directional movement.adxr.transparency": number;
+	/** Default value: `#ab47bc` */
+	"directional movement.adxr.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"directional movement.di length": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `50`
+	 */
+	"directional movement.adx smoothing": number;
+	/** Default value: `#2196F3` */
+	"donchian channels.plots background.color": string;
+	/** Default value: `95` */
+	"donchian channels.plots background.transparency": number;
+	/** Default value: `true` */
+	"donchian channels.plots background.visible": boolean;
+	/** Default value: `15` */
+	"donchian channels.lower.display": number;
+	/** Default value: `0` */
+	"donchian channels.lower.linestyle": number;
+	/** Default value: `1` */
+	"donchian channels.lower.linewidth": number;
+	/** Default value: `line` */
+	"donchian channels.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"donchian channels.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"donchian channels.lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"donchian channels.lower.color": string;
+	/** Default value: `15` */
+	"donchian channels.upper.display": number;
+	/** Default value: `0` */
+	"donchian channels.upper.linestyle": number;
+	/** Default value: `1` */
+	"donchian channels.upper.linewidth": number;
+	/** Default value: `line` */
+	"donchian channels.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"donchian channels.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"donchian channels.upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"donchian channels.upper.color": string;
+	/** Default value: `15` */
+	"donchian channels.basis.display": number;
+	/** Default value: `0` */
+	"donchian channels.basis.linestyle": number;
+	/** Default value: `1` */
+	"donchian channels.basis.linewidth": number;
+	/** Default value: `line` */
+	"donchian channels.basis.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"donchian channels.basis.trackprice": boolean;
+	/** Default value: `0` */
+	"donchian channels.basis.transparency": number;
+	/** Default value: `#FF6D00` */
+	"donchian channels.basis.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"donchian channels.length": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-1000`
+	 * - Max: `1000`
+	 */
+	"donchian channels.offset": number;
+	/** Default value: `15` */
+	"double ema.plot.display": number;
+	/** Default value: `0` */
+	"double ema.plot.linestyle": number;
+	/** Default value: `1` */
+	"double ema.plot.linewidth": number;
+	/** Default value: `line` */
+	"double ema.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"double ema.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"double ema.plot.transparency": number;
+	/** Default value: `#43A047` */
+	"double ema.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"double ema.length": number;
+	/** Default value: `15` */
+	"ema cross.short:plot.display": number;
+	/** Default value: `0` */
+	"ema cross.short:plot.linestyle": number;
+	/** Default value: `1` */
+	"ema cross.short:plot.linewidth": number;
+	/** Default value: `line` */
+	"ema cross.short:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ema cross.short:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"ema cross.short:plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"ema cross.short:plot.color": string;
+	/** Default value: `15` */
+	"ema cross.long:plot.display": number;
+	/** Default value: `0` */
+	"ema cross.long:plot.linestyle": number;
+	/** Default value: `1` */
+	"ema cross.long:plot.linewidth": number;
+	/** Default value: `line` */
+	"ema cross.long:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ema cross.long:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"ema cross.long:plot.transparency": number;
+	/** Default value: `#43A047` */
+	"ema cross.long:plot.color": string;
+	/** Default value: `15` */
+	"ema cross.crosses.display": number;
+	/** Default value: `0` */
+	"ema cross.crosses.linestyle": number;
+	/** Default value: `4` */
+	"ema cross.crosses.linewidth": number;
+	/** Default value: `cross` */
+	"ema cross.crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ema cross.crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"ema cross.crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"ema cross.crosses.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ema cross.short:input": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ema cross.long:input": number;
+	/** Default value: `15` */
+	"ease of movement.plot.display": number;
+	/** Default value: `0` */
+	"ease of movement.plot.linestyle": number;
+	/** Default value: `1` */
+	"ease of movement.plot.linewidth": number;
+	/** Default value: `line` */
+	"ease of movement.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ease of movement.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"ease of movement.plot.transparency": number;
+	/** Default value: `#43A047` */
+	"ease of movement.plot.color": string;
+	/**
+	 * - Default value: `10000`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000`
+	 */
+	"ease of movement.divisor": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ease of movement.length": number;
+	/** Default value: `#787B86` */
+	"elder's force index.zero.color": string;
+	/** Default value: `2` */
+	"elder's force index.zero.linestyle": number;
+	/** Default value: `1` */
+	"elder's force index.zero.linewidth": number;
+	/** Default value: `true` */
+	"elder's force index.zero.visible": boolean;
+	/** Default value: `0` */
+	"elder's force index.zero.value": number;
+	/** Default value: `15` */
+	"elder's force index.plot.display": number;
+	/** Default value: `0` */
+	"elder's force index.plot.linestyle": number;
+	/** Default value: `1` */
+	"elder's force index.plot.linewidth": number;
+	/** Default value: `line` */
+	"elder's force index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"elder's force index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"elder's force index.plot.transparency": number;
+	/** Default value: `#F23645` */
+	"elder's force index.plot.color": string;
+	/**
+	 * - Default value: `13`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"elder's force index.length": number;
+	/** Default value: `#2196F3` */
+	"envelopes.plots background.color": string;
+	/** Default value: `95` */
+	"envelopes.plots background.transparency": number;
+	/** Default value: `true` */
+	"envelopes.plots background.visible": boolean;
+	/** Default value: `15` */
+	"envelopes.average.display": number;
+	/** Default value: `0` */
+	"envelopes.average.linestyle": number;
+	/** Default value: `1` */
+	"envelopes.average.linewidth": number;
+	/** Default value: `line` */
+	"envelopes.average.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"envelopes.average.trackprice": boolean;
+	/** Default value: `0` */
+	"envelopes.average.transparency": number;
+	/** Default value: `#FF6D00` */
+	"envelopes.average.color": string;
+	/** Default value: `15` */
+	"envelopes.upper.display": number;
+	/** Default value: `0` */
+	"envelopes.upper.linestyle": number;
+	/** Default value: `1` */
+	"envelopes.upper.linewidth": number;
+	/** Default value: `line` */
+	"envelopes.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"envelopes.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"envelopes.upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"envelopes.upper.color": string;
+	/** Default value: `15` */
+	"envelopes.lower.display": number;
+	/** Default value: `0` */
+	"envelopes.lower.linestyle": number;
+	/** Default value: `1` */
+	"envelopes.lower.linewidth": number;
+	/** Default value: `line` */
+	"envelopes.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"envelopes.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"envelopes.lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"envelopes.lower.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"envelopes.length": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `float`
+	 * - Min: `0`
+	 */
+	"envelopes.upper percentage": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `float`
+	 * - Min: `0`
+	 */
+	"envelopes.lower percentage": number;
+	/**
+	 * - Default value: `Simple`
+	 * - Input type: `text`
+	 * - Options: `["Simple","Exponential","Weighted"]`
+	 */
+	"envelopes.method": string;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"envelopes.source": string;
+	/** Default value: `#E91E63` */
+	"fisher transform.level:band.color": string;
+	/** Default value: `2` */
+	"fisher transform.level:band.linestyle": number;
+	/** Default value: `1` */
+	"fisher transform.level:band.linewidth": number;
+	/** Default value: `true` */
+	"fisher transform.level:band.visible": boolean;
+	/** Default value: `-1.5` */
+	"fisher transform.level:band.value": number;
+	/** Default value: `15` */
+	"fisher transform.fisher.display": number;
+	/** Default value: `0` */
+	"fisher transform.fisher.linestyle": number;
+	/** Default value: `1` */
+	"fisher transform.fisher.linewidth": number;
+	/** Default value: `line` */
+	"fisher transform.fisher.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fisher transform.fisher.trackprice": boolean;
+	/** Default value: `0` */
+	"fisher transform.fisher.transparency": number;
+	/** Default value: `#2196F3` */
+	"fisher transform.fisher.color": string;
+	/** Default value: `15` */
+	"fisher transform.trigger.display": number;
+	/** Default value: `0` */
+	"fisher transform.trigger.linestyle": number;
+	/** Default value: `1` */
+	"fisher transform.trigger.linewidth": number;
+	/** Default value: `line` */
+	"fisher transform.trigger.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fisher transform.trigger.trackprice": boolean;
+	/** Default value: `0` */
+	"fisher transform.trigger.transparency": number;
+	/** Default value: `#FF6D00` */
+	"fisher transform.trigger.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"fisher transform.length": number;
+	/** Default value: `#ff0000` */
+	"fixed range.developing poc.color": string;
+	/** Default value: `0` */
+	"fixed range.developing poc.linestyle": number;
+	/** Default value: `1` */
+	"fixed range.developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"fixed range.developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fixed range.developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"fixed range.developing poc.transparency": number;
+	/** Default value: `0` */
+	"fixed range.developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"fixed range.developing va high.color": string;
+	/** Default value: `0` */
+	"fixed range.developing va high.linestyle": number;
+	/** Default value: `1` */
+	"fixed range.developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"fixed range.developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fixed range.developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"fixed range.developing va high.transparency": number;
+	/** Default value: `0` */
+	"fixed range.developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"fixed range.developing va low.color": string;
+	/** Default value: `0` */
+	"fixed range.developing va low.linestyle": number;
+	/** Default value: `1` */
+	"fixed range.developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"fixed range.developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"fixed range.developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"fixed range.developing va low.transparency": number;
+	/** Default value: `0` */
+	"fixed range.developing va low.display": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"fixed range.first bar time": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"fixed range.last bar time": number;
+	/**
+	 * - Default value: `24`
+	 * - Input type: `integer`
+	 * - Max: `1000000`
+	 * - Min: `1`
+	 */
+	"fixed range.row size": number;
+	/**
+	 * - Default value: `Number Of Rows`
+	 * - Input type: `text`
+	 * - Options: `["Number Of Rows","Ticks Per Row"]`
+	 */
+	"fixed range.rows layout": string;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 * - IsHidden: `true`
+	 */
+	"fixed range.subscriberealtime": boolean;
+	/**
+	 * - Default value: `70`
+	 * - Input type: `integer`
+	 * - Max: `100`
+	 * - Min: `0`
+	 */
+	"fixed range.value area volume": number;
+	/**
+	 * - Default value: `Up/Down`
+	 * - Input type: `text`
+	 * - Options: `["Up/Down","Total","Delta"]`
+	 */
+	"fixed range.volume": string;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 1.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 1.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 1.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 1.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 1.trackprice": boolean;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 1.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 2.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 2.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 2.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 2.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 2.trackprice": boolean;
+	/** Default value: `12` */
+	"guppy multiple moving average.trader ema 2.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 3.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 3.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 3.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 3.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 3.trackprice": boolean;
+	/** Default value: `9` */
+	"guppy multiple moving average.trader ema 3.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 4.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 4.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 4.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 4.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 4.trackprice": boolean;
+	/** Default value: `6` */
+	"guppy multiple moving average.trader ema 4.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 5.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 5.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 5.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 5.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 5.trackprice": boolean;
+	/** Default value: `3` */
+	"guppy multiple moving average.trader ema 5.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.trader ema 6.display": number;
+	/** Default value: `#00FFFF` */
+	"guppy multiple moving average.trader ema 6.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 6.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.trader ema 6.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.trader ema 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.trader ema 6.trackprice": boolean;
+	/** Default value: `0` */
+	"guppy multiple moving average.trader ema 6.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 1.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 1.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 1.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 1.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 1.trackprice": boolean;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 1.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 2.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 2.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 2.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 2.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 2.trackprice": boolean;
+	/** Default value: `12` */
+	"guppy multiple moving average.investor ema 2.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 3.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 3.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 3.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 3.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 3.trackprice": boolean;
+	/** Default value: `9` */
+	"guppy multiple moving average.investor ema 3.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 4.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 4.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 4.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 4.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 4.trackprice": boolean;
+	/** Default value: `6` */
+	"guppy multiple moving average.investor ema 4.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 5.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 5.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 5.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 5.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 5.trackprice": boolean;
+	/** Default value: `3` */
+	"guppy multiple moving average.investor ema 5.transparency": number;
+	/** Default value: `15` */
+	"guppy multiple moving average.investor ema 6.display": number;
+	/** Default value: `#FF0000` */
+	"guppy multiple moving average.investor ema 6.color": string;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 6.linestyle": number;
+	/** Default value: `1` */
+	"guppy multiple moving average.investor ema 6.linewidth": number;
+	/** Default value: `line` */
+	"guppy multiple moving average.investor ema 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"guppy multiple moving average.investor ema 6.trackprice": boolean;
+	/** Default value: `0` */
+	"guppy multiple moving average.investor ema 6.transparency": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 1 length": number;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 2 length": number;
+	/**
+	 * - Default value: `8`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 3 length": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 4 length": number;
+	/**
+	 * - Default value: `12`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 5 length": number;
+	/**
+	 * - Default value: `15`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.trader ema 6 length": number;
+	/**
+	 * - Default value: `30`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 1 length": number;
+	/**
+	 * - Default value: `35`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 2 length": number;
+	/**
+	 * - Default value: `40`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 3 length": number;
+	/**
+	 * - Default value: `45`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 4 length": number;
+	/**
+	 * - Default value: `50`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 5 length": number;
+	/**
+	 * - Default value: `60`
+	 * - Input type: `integer`
+	 * - Max: `1000`
+	 * - Min: `1`
+	 */
+	"guppy multiple moving average.investor ema 6 length": number;
+	/** Default value: `15` */
+	"historical volatility.plot.display": number;
+	/** Default value: `0` */
+	"historical volatility.plot.linestyle": number;
+	/** Default value: `1` */
+	"historical volatility.plot.linewidth": number;
+	/** Default value: `line` */
+	"historical volatility.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"historical volatility.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"historical volatility.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"historical volatility.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"historical volatility.length": number;
+	/** Default value: `15` */
+	"hull moving average.plot.display": number;
+	/** Default value: `0` */
+	"hull moving average.plot.linestyle": number;
+	/** Default value: `1` */
+	"hull moving average.plot.linewidth": number;
+	/** Default value: `line` */
+	"hull moving average.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"hull moving average.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"hull moving average.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"hull moving average.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"hull moving average.length": number;
+	/** Default value: `#000080` */
+	"ichimoku cloud.plots background.color": string;
+	/** Default value: `90` */
+	"ichimoku cloud.plots background.transparency": number;
+	/** Default value: `true` */
+	"ichimoku cloud.plots background.visible": boolean;
+	/** Default value: `15` */
+	"ichimoku cloud.conversion line.display": number;
+	/** Default value: `0` */
+	"ichimoku cloud.conversion line.linestyle": number;
+	/** Default value: `1` */
+	"ichimoku cloud.conversion line.linewidth": number;
+	/** Default value: `line` */
+	"ichimoku cloud.conversion line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ichimoku cloud.conversion line.trackprice": boolean;
+	/** Default value: `0` */
+	"ichimoku cloud.conversion line.transparency": number;
+	/** Default value: `#2196F3` */
+	"ichimoku cloud.conversion line.color": string;
+	/** Default value: `15` */
+	"ichimoku cloud.base line.display": number;
+	/** Default value: `0` */
+	"ichimoku cloud.base line.linestyle": number;
+	/** Default value: `1` */
+	"ichimoku cloud.base line.linewidth": number;
+	/** Default value: `line` */
+	"ichimoku cloud.base line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ichimoku cloud.base line.trackprice": boolean;
+	/** Default value: `0` */
+	"ichimoku cloud.base line.transparency": number;
+	/** Default value: `#801922` */
+	"ichimoku cloud.base line.color": string;
+	/** Default value: `15` */
+	"ichimoku cloud.lagging span.display": number;
+	/** Default value: `0` */
+	"ichimoku cloud.lagging span.linestyle": number;
+	/** Default value: `1` */
+	"ichimoku cloud.lagging span.linewidth": number;
+	/** Default value: `line` */
+	"ichimoku cloud.lagging span.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ichimoku cloud.lagging span.trackprice": boolean;
+	/** Default value: `0` */
+	"ichimoku cloud.lagging span.transparency": number;
+	/** Default value: `#43A047` */
+	"ichimoku cloud.lagging span.color": string;
+	/** Default value: `15` */
+	"ichimoku cloud.leading span a.display": number;
+	/** Default value: `0` */
+	"ichimoku cloud.leading span a.linestyle": number;
+	/** Default value: `1` */
+	"ichimoku cloud.leading span a.linewidth": number;
+	/** Default value: `line` */
+	"ichimoku cloud.leading span a.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ichimoku cloud.leading span a.trackprice": boolean;
+	/** Default value: `0` */
+	"ichimoku cloud.leading span a.transparency": number;
+	/** Default value: `#A5D6A7` */
+	"ichimoku cloud.leading span a.color": string;
+	/** Default value: `15` */
+	"ichimoku cloud.leading span b.display": number;
+	/** Default value: `0` */
+	"ichimoku cloud.leading span b.linestyle": number;
+	/** Default value: `1` */
+	"ichimoku cloud.leading span b.linewidth": number;
+	/** Default value: `line` */
+	"ichimoku cloud.leading span b.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ichimoku cloud.leading span b.trackprice": boolean;
+	/** Default value: `0` */
+	"ichimoku cloud.leading span b.transparency": number;
+	/** Default value: `#FAA1A4` */
+	"ichimoku cloud.leading span b.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ichimoku cloud.conversion line periods": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ichimoku cloud.base line periods": number;
+	/**
+	 * - Default value: `52`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ichimoku cloud.leading span periods": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ichimoku cloud.lagging span periods": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ichimoku cloud.leading shift periods": number;
+	/** Default value: `#2196F3` */
+	"keltner channels.plots background.color": string;
+	/** Default value: `95` */
+	"keltner channels.plots background.transparency": number;
+	/** Default value: `true` */
+	"keltner channels.plots background.visible": boolean;
+	/** Default value: `15` */
+	"keltner channels.upper.display": number;
+	/** Default value: `0` */
+	"keltner channels.upper.linestyle": number;
+	/** Default value: `1` */
+	"keltner channels.upper.linewidth": number;
+	/** Default value: `line` */
+	"keltner channels.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"keltner channels.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"keltner channels.upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"keltner channels.upper.color": string;
+	/** Default value: `15` */
+	"keltner channels.middle.display": number;
+	/** Default value: `0` */
+	"keltner channels.middle.linestyle": number;
+	/** Default value: `1` */
+	"keltner channels.middle.linewidth": number;
+	/** Default value: `line` */
+	"keltner channels.middle.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"keltner channels.middle.trackprice": boolean;
+	/** Default value: `0` */
+	"keltner channels.middle.transparency": number;
+	/** Default value: `#2196F3` */
+	"keltner channels.middle.color": string;
+	/** Default value: `15` */
+	"keltner channels.lower.display": number;
+	/** Default value: `0` */
+	"keltner channels.lower.linestyle": number;
+	/** Default value: `1` */
+	"keltner channels.lower.linewidth": number;
+	/** Default value: `line` */
+	"keltner channels.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"keltner channels.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"keltner channels.lower.transparency": number;
+	/** Default value: `#2196F3` */
+	"keltner channels.lower.color": string;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 */
+	"keltner channels.usetruerange": boolean;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"keltner channels.length": number;
+	/**
+	 * - Default value: `1`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"keltner channels.mult": number;
+	/** Default value: `15` */
+	"klinger oscillator.plot.display": number;
+	/** Default value: `0` */
+	"klinger oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"klinger oscillator.plot.linewidth": number;
+	/** Default value: `line` */
+	"klinger oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"klinger oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"klinger oscillator.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"klinger oscillator.plot.color": string;
+	/** Default value: `15` */
+	"klinger oscillator.signal.display": number;
+	/** Default value: `0` */
+	"klinger oscillator.signal.linestyle": number;
+	/** Default value: `1` */
+	"klinger oscillator.signal.linewidth": number;
+	/** Default value: `line` */
+	"klinger oscillator.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"klinger oscillator.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"klinger oscillator.signal.transparency": number;
+	/** Default value: `#43A047` */
+	"klinger oscillator.signal.color": string;
+	/** Default value: `#787B86` */
+	"know sure thing.zero.color": string;
+	/** Default value: `2` */
+	"know sure thing.zero.linestyle": number;
+	/** Default value: `1` */
+	"know sure thing.zero.linewidth": number;
+	/** Default value: `true` */
+	"know sure thing.zero.visible": boolean;
+	/** Default value: `0` */
+	"know sure thing.zero.value": number;
+	/** Default value: `15` */
+	"know sure thing.kst.display": number;
+	/** Default value: `0` */
+	"know sure thing.kst.linestyle": number;
+	/** Default value: `1` */
+	"know sure thing.kst.linewidth": number;
+	/** Default value: `line` */
+	"know sure thing.kst.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"know sure thing.kst.trackprice": boolean;
+	/** Default value: `0` */
+	"know sure thing.kst.transparency": number;
+	/** Default value: `#089981` */
+	"know sure thing.kst.color": string;
+	/** Default value: `15` */
+	"know sure thing.signal.display": number;
+	/** Default value: `0` */
+	"know sure thing.signal.linestyle": number;
+	/** Default value: `1` */
+	"know sure thing.signal.linewidth": number;
+	/** Default value: `line` */
+	"know sure thing.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"know sure thing.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"know sure thing.signal.transparency": number;
+	/** Default value: `#F23645` */
+	"know sure thing.signal.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.roclen1": number;
+	/**
+	 * - Default value: `15`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.roclen2": number;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.roclen3": number;
+	/**
+	 * - Default value: `30`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.roclen4": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.smalen1": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.smalen2": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.smalen3": number;
+	/**
+	 * - Default value: `15`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.smalen4": number;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"know sure thing.siglen": number;
+	/** Default value: `15` */
+	"least squares moving average.plot.display": number;
+	/** Default value: `0` */
+	"least squares moving average.plot.linestyle": number;
+	/** Default value: `1` */
+	"least squares moving average.plot.linewidth": number;
+	/** Default value: `line` */
+	"least squares moving average.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"least squares moving average.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"least squares moving average.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"least squares moving average.plot.color": string;
+	/**
+	 * - Default value: `25`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"least squares moving average.length": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"least squares moving average.offset": number;
+	/** Default value: `15` */
+	"linear regression curve.plot.display": number;
+	/** Default value: `0` */
+	"linear regression curve.plot.linestyle": number;
+	/** Default value: `1` */
+	"linear regression curve.plot.linewidth": number;
+	/** Default value: `line` */
+	"linear regression curve.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"linear regression curve.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"linear regression curve.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"linear regression curve.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"linear regression curve.length": number;
+	/** Default value: `15` */
+	"linear regression slope.plot.display": number;
+	/** Default value: `0` */
+	"linear regression slope.plot.linestyle": number;
+	/** Default value: `1` */
+	"linear regression slope.plot.linewidth": number;
+	/** Default value: `line` */
+	"linear regression slope.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"linear regression slope.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"linear regression slope.plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"linear regression slope.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 */
+	"linear regression slope.periods": number;
+	/** Default value: `15` */
+	"ma cross.short:plot.display": number;
+	/** Default value: `0` */
+	"ma cross.short:plot.linestyle": number;
+	/** Default value: `1` */
+	"ma cross.short:plot.linewidth": number;
+	/** Default value: `line` */
+	"ma cross.short:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma cross.short:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"ma cross.short:plot.transparency": number;
+	/** Default value: `#43A047` */
+	"ma cross.short:plot.color": string;
+	/** Default value: `15` */
+	"ma cross.long:plot.display": number;
+	/** Default value: `0` */
+	"ma cross.long:plot.linestyle": number;
+	/** Default value: `1` */
+	"ma cross.long:plot.linewidth": number;
+	/** Default value: `line` */
+	"ma cross.long:plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma cross.long:plot.trackprice": boolean;
+	/** Default value: `0` */
+	"ma cross.long:plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"ma cross.long:plot.color": string;
+	/** Default value: `15` */
+	"ma cross.crosses.display": number;
+	/** Default value: `0` */
+	"ma cross.crosses.linestyle": number;
+	/** Default value: `4` */
+	"ma cross.crosses.linewidth": number;
+	/** Default value: `cross` */
+	"ma cross.crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma cross.crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"ma cross.crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"ma cross.crosses.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ma cross.short:input": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ma cross.long:input": number;
+	/** Default value: `15` */
+	"ma with ema cross.ma.display": number;
+	/** Default value: `0` */
+	"ma with ema cross.ma.linestyle": number;
+	/** Default value: `1` */
+	"ma with ema cross.ma.linewidth": number;
+	/** Default value: `line` */
+	"ma with ema cross.ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma with ema cross.ma.trackprice": boolean;
+	/** Default value: `0` */
+	"ma with ema cross.ma.transparency": number;
+	/** Default value: `#FF6D00` */
+	"ma with ema cross.ma.color": string;
+	/** Default value: `15` */
+	"ma with ema cross.ema.display": number;
+	/** Default value: `0` */
+	"ma with ema cross.ema.linestyle": number;
+	/** Default value: `1` */
+	"ma with ema cross.ema.linewidth": number;
+	/** Default value: `line` */
+	"ma with ema cross.ema.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma with ema cross.ema.trackprice": boolean;
+	/** Default value: `0` */
+	"ma with ema cross.ema.transparency": number;
+	/** Default value: `#43A047` */
+	"ma with ema cross.ema.color": string;
+	/** Default value: `15` */
+	"ma with ema cross.crosses.display": number;
+	/** Default value: `0` */
+	"ma with ema cross.crosses.linestyle": number;
+	/** Default value: `4` */
+	"ma with ema cross.crosses.linewidth": number;
+	/** Default value: `cross` */
+	"ma with ema cross.crosses.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ma with ema cross.crosses.trackprice": boolean;
+	/** Default value: `0` */
+	"ma with ema cross.crosses.transparency": number;
+	/** Default value: `#2196F3` */
+	"ma with ema cross.crosses.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ma with ema cross.length ma": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"ma with ema cross.length ema": number;
+	/** Default value: `15` */
+	"macd.histogram.display": number;
+	/** Default value: `0` */
+	"macd.histogram.linestyle": number;
+	/** Default value: `1` */
+	"macd.histogram.linewidth": number;
+	/** Default value: `columns` */
+	"macd.histogram.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"macd.histogram.trackprice": boolean;
+	/** Default value: `0` */
+	"macd.histogram.transparency": number;
+	/** Default value: `#FF5252` */
+	"macd.histogram.color": string;
+	/** Default value: `15` */
+	"macd.macd.display": number;
+	/** Default value: `0` */
+	"macd.macd.linestyle": number;
+	/** Default value: `1` */
+	"macd.macd.linewidth": number;
+	/** Default value: `line` */
+	"macd.macd.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"macd.macd.trackprice": boolean;
+	/** Default value: `0` */
+	"macd.macd.transparency": number;
+	/** Default value: `#2196F3` */
+	"macd.macd.color": string;
+	/** Default value: `15` */
+	"macd.signal.display": number;
+	/** Default value: `0` */
+	"macd.signal.linestyle": number;
+	/** Default value: `1` */
+	"macd.signal.linewidth": number;
+	/** Default value: `line` */
+	"macd.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"macd.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"macd.signal.transparency": number;
+	/** Default value: `#FF6D00` */
+	"macd.signal.color": string;
+	/**
+	 * - Default value: `12`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"macd.fastlength": number;
+	/**
+	 * - Default value: `26`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"macd.slowlength": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"macd.source": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `50`
+	 */
+	"macd.signallength": number;
+	/** Default value: `15` */
+	"majority rule.majority rule.display": number;
+	/** Default value: `0` */
+	"majority rule.majority rule.linestyle": number;
+	/** Default value: `1` */
+	"majority rule.majority rule.linewidth": number;
+	/** Default value: `line` */
+	"majority rule.majority rule.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"majority rule.majority rule.trackprice": boolean;
+	/** Default value: `0` */
+	"majority rule.majority rule.transparency": number;
+	/** Default value: `#FF5252` */
+	"majority rule.majority rule.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 */
+	"majority rule.rolling period": number;
+	/** Default value: `15` */
+	"mass index.plot.display": number;
+	/** Default value: `0` */
+	"mass index.plot.linestyle": number;
+	/** Default value: `1` */
+	"mass index.plot.linewidth": number;
+	/** Default value: `line` */
+	"mass index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"mass index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"mass index.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"mass index.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"mass index.length": number;
+	/** Default value: `15` */
+	"mcginley dynamic.plot.display": number;
+	/** Default value: `0` */
+	"mcginley dynamic.plot.linestyle": number;
+	/** Default value: `1` */
+	"mcginley dynamic.plot.linewidth": number;
+	/** Default value: `line` */
+	"mcginley dynamic.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"mcginley dynamic.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"mcginley dynamic.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"mcginley dynamic.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"mcginley dynamic.length": number;
+	/** Default value: `15` */
+	"median price.plot.display": number;
+	/** Default value: `0` */
+	"median price.plot.linestyle": number;
+	/** Default value: `1` */
+	"median price.plot.linewidth": number;
+	/** Default value: `line` */
+	"median price.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"median price.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"median price.plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"median price.plot.color": string;
+	/** Default value: `#787B86` */
+	"momentum.zero.color": string;
+	/** Default value: `2` */
+	"momentum.zero.linestyle": number;
+	/** Default value: `1` */
+	"momentum.zero.linewidth": number;
+	/** Default value: `true` */
+	"momentum.zero.visible": boolean;
+	/** Default value: `0` */
+	"momentum.zero.value": number;
+	/** Default value: `15` */
+	"momentum.mom.display": number;
+	/** Default value: `0` */
+	"momentum.mom.linestyle": number;
+	/** Default value: `1` */
+	"momentum.mom.linewidth": number;
+	/** Default value: `line` */
+	"momentum.mom.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"momentum.mom.trackprice": boolean;
+	/** Default value: `0` */
+	"momentum.mom.transparency": number;
+	/** Default value: `#2196F3` */
+	"momentum.mom.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"momentum.length": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"momentum.source": string;
+	/** Default value: `#7E57C2` */
+	"money flow index.hlines background.color": string;
+	/** Default value: `90` */
+	"money flow index.hlines background.transparency": number;
+	/** Default value: `true` */
+	"money flow index.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"money flow index.upperlimit.color": string;
+	/** Default value: `2` */
+	"money flow index.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"money flow index.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"money flow index.upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"money flow index.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"money flow index.lowerlimit.color": string;
+	/** Default value: `2` */
+	"money flow index.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"money flow index.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"money flow index.lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"money flow index.lowerlimit.value": number;
+	/** Default value: `15` */
+	"money flow index.plot.display": number;
+	/** Default value: `0` */
+	"money flow index.plot.linestyle": number;
+	/** Default value: `1` */
+	"money flow index.plot.linewidth": number;
+	/** Default value: `line` */
+	"money flow index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"money flow index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"money flow index.plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"money flow index.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"money flow index.length": number;
+	/** Default value: `15` */
+	"moving average.plot.display": number;
+	/** Default value: `0` */
+	"moving average.plot.linestyle": number;
+	/** Default value: `1` */
+	"moving average.plot.linewidth": number;
+	/** Default value: `line` */
+	"moving average.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"moving average.plot.color": string;
+	/** Default value: `0` */
+	"moving average.smoothed ma.display": number;
+	/** Default value: `0` */
+	"moving average.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"moving average.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"moving average.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average.smoothed ma.transparency": number;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Optional: `true`
+	 * - IsHidden: `false`
+	 */
+	"moving average.other symbol": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average.length": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"moving average.source": string;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-10000`
+	 * - Max: `10000`
+	 */
+	"moving average.offset": number;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"moving average.smoothing line": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average.smoothing length": number;
+	/** Default value: `15` */
+	"moving average adaptive.plot 1.display": number;
+	/** Default value: `0` */
+	"moving average adaptive.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"moving average adaptive.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"moving average adaptive.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"moving average adaptive.plot 1.transparency": number;
+	/** Default value: `false` */
+	"moving average adaptive.plot 1.trackprice": boolean;
+	/** Default value: `#AB47BC` */
+	"moving average adaptive.plot 1.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 * - Max: `10000`
+	 */
+	"moving average adaptive.period": number;
+	/** Default value: `#2196F3` */
+	"moving average channel.plots background.color": string;
+	/** Default value: `90` */
+	"moving average channel.plots background.transparency": number;
+	/** Default value: `true` */
+	"moving average channel.plots background.visible": boolean;
+	/** Default value: `15` */
+	"moving average channel.upper.display": number;
+	/** Default value: `0` */
+	"moving average channel.upper.linestyle": number;
+	/** Default value: `1` */
+	"moving average channel.upper.linewidth": number;
+	/** Default value: `line` */
+	"moving average channel.upper.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average channel.upper.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average channel.upper.transparency": number;
+	/** Default value: `#2196F3` */
+	"moving average channel.upper.color": string;
+	/** Default value: `15` */
+	"moving average channel.lower.display": number;
+	/** Default value: `0` */
+	"moving average channel.lower.linestyle": number;
+	/** Default value: `1` */
+	"moving average channel.lower.linewidth": number;
+	/** Default value: `line` */
+	"moving average channel.lower.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average channel.lower.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average channel.lower.transparency": number;
+	/** Default value: `#FF6D00` */
+	"moving average channel.lower.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average channel.upper length": number;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average channel.lower length": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-10000`
+	 * - Max: `10000`
+	 */
+	"moving average channel.upper offset": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-10000`
+	 * - Max: `10000`
+	 */
+	"moving average channel.lower offset": number;
+	/** Default value: `15` */
+	"moving average double.plot 1.display": number;
+	/** Default value: `0` */
+	"moving average double.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"moving average double.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"moving average double.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average double.plot 1.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average double.plot 1.transparency": number;
+	/** Default value: `#FF6D00` */
+	"moving average double.plot 1.color": string;
+	/** Default value: `15` */
+	"moving average double.plot 2.display": number;
+	/** Default value: `0` */
+	"moving average double.plot 2.linestyle": number;
+	/** Default value: `1` */
+	"moving average double.plot 2.linewidth": number;
+	/** Default value: `line` */
+	"moving average double.plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average double.plot 2.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average double.plot 2.transparency": number;
+	/** Default value: `#2196F3` */
+	"moving average double.plot 2.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average double.1st period": number;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average double.2nd period": number;
+	/**
+	 * - Default value: `Simple`
+	 * - Input type: `text`
+	 * - Options: `["Simple","Exponential","Weighted"]`
+	 */
+	"moving average double.method": string;
+	/** Default value: `15` */
+	"moving average exponential.plot.display": number;
+	/** Default value: `0` */
+	"moving average exponential.plot.linestyle": number;
+	/** Default value: `1` */
+	"moving average exponential.plot.linewidth": number;
+	/** Default value: `line` */
+	"moving average exponential.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average exponential.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average exponential.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"moving average exponential.plot.color": string;
+	/** Default value: `0` */
+	"moving average exponential.smoothed ma.display": number;
+	/** Default value: `0` */
+	"moving average exponential.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"moving average exponential.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"moving average exponential.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average exponential.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average exponential.smoothed ma.transparency": number;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average exponential.length": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"moving average exponential.source": string;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-10000`
+	 * - Max: `10000`
+	 */
+	"moving average exponential.offset": number;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"moving average exponential.smoothing line": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average exponential.smoothing length": number;
+	/** Default value: `15` */
+	"moving average hamming.plot 1.display": number;
+	/** Default value: `0` */
+	"moving average hamming.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"moving average hamming.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"moving average hamming.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"moving average hamming.plot 1.transparency": number;
+	/** Default value: `false` */
+	"moving average hamming.plot 1.trackprice": boolean;
+	/** Default value: `#4CAF50` */
+	"moving average hamming.plot 1.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average hamming.period": number;
+	/** Default value: `15` */
+	"moving average multiple.plot 1.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"moving average multiple.plot 1.transparency": number;
+	/** Default value: `false` */
+	"moving average multiple.plot 1.trackprice": boolean;
+	/** Default value: `#9C27B0` */
+	"moving average multiple.plot 1.color": string;
+	/** Default value: `15` */
+	"moving average multiple.plot 2.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 2.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 2.linewidth": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 2.transparency": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average multiple.plot 2.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"moving average multiple.plot 2.color": string;
+	/** Default value: `15` */
+	"moving average multiple.plot 3.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 3.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 3.linewidth": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 3.transparency": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average multiple.plot 3.trackprice": boolean;
+	/** Default value: `#43A047` */
+	"moving average multiple.plot 3.color": string;
+	/** Default value: `15` */
+	"moving average multiple.plot 4.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 4.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 4.linewidth": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 4.transparency": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 4.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average multiple.plot 4.trackprice": boolean;
+	/** Default value: `#26C6DA` */
+	"moving average multiple.plot 4.color": string;
+	/** Default value: `15` */
+	"moving average multiple.plot 5.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 5.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 5.linewidth": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 5.transparency": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 5.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average multiple.plot 5.trackprice": boolean;
+	/** Default value: `#F50057` */
+	"moving average multiple.plot 5.color": string;
+	/** Default value: `15` */
+	"moving average multiple.plot 6.display": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 6.linestyle": number;
+	/** Default value: `1` */
+	"moving average multiple.plot 6.linewidth": number;
+	/** Default value: `0` */
+	"moving average multiple.plot 6.transparency": number;
+	/** Default value: `line` */
+	"moving average multiple.plot 6.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average multiple.plot 6.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"moving average multiple.plot 6.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.1st period": number;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.2nd period": number;
+	/**
+	 * - Default value: `35`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.3rd period": number;
+	/**
+	 * - Default value: `50`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.4th period": number;
+	/**
+	 * - Default value: `100`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.5th period": number;
+	/**
+	 * - Default value: `200`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average multiple.6th period": number;
+	/**
+	 * - Default value: `Simple`
+	 * - Input type: `text`
+	 * - Options: `["Simple","Exponential","Weighted"]`
+	 */
+	"moving average multiple.method": string;
+	/** Default value: `15` */
+	"moving average triple.plot 1.display": number;
+	/** Default value: `0` */
+	"moving average triple.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"moving average triple.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"moving average triple.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"moving average triple.plot 1.transparency": number;
+	/** Default value: `false` */
+	"moving average triple.plot 1.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"moving average triple.plot 1.color": string;
+	/** Default value: `15` */
+	"moving average triple.plot 2.display": number;
+	/** Default value: `0` */
+	"moving average triple.plot 2.linestyle": number;
+	/** Default value: `1` */
+	"moving average triple.plot 2.linewidth": number;
+	/** Default value: `0` */
+	"moving average triple.plot 2.transparency": number;
+	/** Default value: `line` */
+	"moving average triple.plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average triple.plot 2.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"moving average triple.plot 2.color": string;
+	/** Default value: `15` */
+	"moving average triple.plot 3.display": number;
+	/** Default value: `0` */
+	"moving average triple.plot 3.linestyle": number;
+	/** Default value: `1` */
+	"moving average triple.plot 3.linewidth": number;
+	/** Default value: `0` */
+	"moving average triple.plot 3.transparency": number;
+	/** Default value: `line` */
+	"moving average triple.plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average triple.plot 3.trackprice": boolean;
+	/** Default value: `#26C6DA` */
+	"moving average triple.plot 3.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average triple.1st period": number;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average triple.2nd period": number;
+	/**
+	 * - Default value: `35`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"moving average triple.3rd period": number;
+	/**
+	 * - Default value: `Simple`
+	 * - Input type: `text`
+	 * - Options: `["Simple","Exponential","Weighted"]`
+	 */
+	"moving average triple.method": string;
+	/** Default value: `15` */
+	"moving average weighted.plot.display": number;
+	/** Default value: `0` */
+	"moving average weighted.plot.linestyle": number;
+	/** Default value: `1` */
+	"moving average weighted.plot.linewidth": number;
+	/** Default value: `line` */
+	"moving average weighted.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"moving average weighted.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"moving average weighted.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"moving average weighted.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"moving average weighted.length": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"moving average weighted.source": string;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `-10000`
+	 * - Max: `10000`
+	 */
+	"moving average weighted.offset": number;
+	/** Default value: `15` */
+	"net volume.plot.display": number;
+	/** Default value: `0` */
+	"net volume.plot.linestyle": number;
+	/** Default value: `1` */
+	"net volume.plot.linewidth": number;
+	/** Default value: `line` */
+	"net volume.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"net volume.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"net volume.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"net volume.plot.color": string;
+	/** Default value: `15` */
+	"on balance volume.plot.display": number;
+	/** Default value: `0` */
+	"on balance volume.plot.linestyle": number;
+	/** Default value: `1` */
+	"on balance volume.plot.linewidth": number;
+	/** Default value: `line` */
+	"on balance volume.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"on balance volume.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"on balance volume.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"on balance volume.plot.color": string;
+	/** Default value: `0` */
+	"on balance volume.smoothed ma.display": number;
+	/** Default value: `0` */
+	"on balance volume.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"on balance volume.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"on balance volume.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"on balance volume.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"on balance volume.smoothed ma.transparency": number;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"on balance volume.smoothing line": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"on balance volume.smoothing length": number;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - IsHidden: `true`
+	 */
+	"overlay.symbol": string;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `boolean`
+	 * - IsHidden: `true`
+	 */
+	"overlay.extendtimescale": boolean;
+	/** Default value: `15` */
+	"parabolic sar.plot.display": number;
+	/** Default value: `0` */
+	"parabolic sar.plot.linestyle": number;
+	/** Default value: `1` */
+	"parabolic sar.plot.linewidth": number;
+	/** Default value: `cross` */
+	"parabolic sar.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"parabolic sar.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"parabolic sar.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"parabolic sar.plot.color": string;
+	/**
+	 * - Default value: `0.02`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"parabolic sar.start": number;
+	/**
+	 * - Default value: `0.02`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"parabolic sar.increment": number;
+	/**
+	 * - Default value: `0.2`
+	 * - Input type: `float`
+	 * - Min: `-1000000000000`
+	 * - Max: `1000000000000`
+	 */
+	"parabolic sar.maximum": number;
+	/**
+	 * - Default value: `Traditional`
+	 * - Input type: `text`
+	 * - Options: `["Traditional","Fibonacci","Woodie","Classic","DeMark","Camarilla","Floor"]`
+	 */
+	"pivot points standard.type": string;
+	/**
+	 * - Default value: `15`
+	 * - Input type: `integer`
+	 * - Max: `5000`
+	 * - Min: `1`
+	 */
+	"pivot points standard.number of pivots back": number;
+	/**
+	 * - Default value: `Auto`
+	 * - Input type: `text`
+	 * - Options: `["Auto","Daily","Weekly","Monthly","Yearly"]`
+	 */
+	"pivot points standard.pivots timeframe": string;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 */
+	"pivot points standard.show historical pivots": boolean;
+	/** Default value: `15` */
+	"price channel.highprice line.display": number;
+	/** Default value: `0` */
+	"price channel.highprice line.linestyle": number;
+	/** Default value: `1` */
+	"price channel.highprice line.linewidth": number;
+	/** Default value: `line` */
+	"price channel.highprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"price channel.highprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"price channel.highprice line.transparency": number;
+	/** Default value: `#F50057` */
+	"price channel.highprice line.color": string;
+	/** Default value: `15` */
+	"price channel.lowprice line.display": number;
+	/** Default value: `0` */
+	"price channel.lowprice line.linestyle": number;
+	/** Default value: `1` */
+	"price channel.lowprice line.linewidth": number;
+	/** Default value: `line` */
+	"price channel.lowprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"price channel.lowprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"price channel.lowprice line.transparency": number;
+	/** Default value: `#F50057` */
+	"price channel.lowprice line.color": string;
+	/** Default value: `15` */
+	"price channel.centerprice line.display": number;
+	/** Default value: `0` */
+	"price channel.centerprice line.linestyle": number;
+	/** Default value: `1` */
+	"price channel.centerprice line.linewidth": number;
+	/** Default value: `line` */
+	"price channel.centerprice line.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"price channel.centerprice line.trackprice": boolean;
+	/** Default value: `0` */
+	"price channel.centerprice line.transparency": number;
+	/** Default value: `#2196F3` */
+	"price channel.centerprice line.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"price channel.length": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"price channel.offset length": number;
+	/** Default value: `15` */
+	"price oscillator.plot.display": number;
+	/** Default value: `0` */
+	"price oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"price oscillator.plot.linewidth": number;
+	/** Default value: `line` */
+	"price oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"price oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"price oscillator.plot.transparency": number;
+	/** Default value: `#089981` */
+	"price oscillator.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"price oscillator.shortlen": number;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"price oscillator.longlen": number;
+	/** Default value: `15` */
+	"price volume trend.pvt.display": number;
+	/** Default value: `0` */
+	"price volume trend.pvt.linestyle": number;
+	/** Default value: `1` */
+	"price volume trend.pvt.linewidth": number;
+	/** Default value: `line` */
+	"price volume trend.pvt.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"price volume trend.pvt.trackprice": boolean;
+	/** Default value: `0` */
+	"price volume trend.pvt.transparency": number;
+	/** Default value: `#2196F3` */
+	"price volume trend.pvt.color": string;
+	/** Default value: `#787B86` */
+	"rate of change.zero line.color": string;
+	/** Default value: `2` */
+	"rate of change.zero line.linestyle": number;
+	/** Default value: `1` */
+	"rate of change.zero line.linewidth": number;
+	/** Default value: `true` */
+	"rate of change.zero line.visible": boolean;
+	/** Default value: `0` */
+	"rate of change.zero line.value": number;
+	/** Default value: `15` */
+	"rate of change.roc.display": number;
+	/** Default value: `0` */
+	"rate of change.roc.linestyle": number;
+	/** Default value: `1` */
+	"rate of change.roc.linewidth": number;
+	/** Default value: `line` */
+	"rate of change.roc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"rate of change.roc.trackprice": boolean;
+	/** Default value: `0` */
+	"rate of change.roc.transparency": number;
+	/** Default value: `#2196F3` */
+	"rate of change.roc.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"rate of change.length": number;
+	/** Default value: `` */
+	"ratio.negativefill.color": string;
+	/** Default value: `0` */
+	"ratio.negativefill.transparency": number;
+	/** Default value: `true` */
+	"ratio.negativefill.visible": boolean;
+	/** Default value: `` */
+	"ratio.positivefill.color": string;
+	/** Default value: `0` */
+	"ratio.positivefill.transparency": number;
+	/** Default value: `true` */
+	"ratio.positivefill.visible": boolean;
+	/** Default value: `0` */
+	"ratio.plot.linestyle": number;
+	/** Default value: `2` */
+	"ratio.plot.linewidth": number;
+	/** Default value: `line` */
+	"ratio.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ratio.plot.trackprice": boolean;
+	/** Default value: `35` */
+	"ratio.plot.transparency": number;
+	/** Default value: `#800080` */
+	"ratio.plot.color": string;
+	/** Default value: `15` */
+	"ratio.plot.display": number;
+	/** Default value: `0` */
+	"ratio.baseline.linestyle": number;
+	/** Default value: `2` */
+	"ratio.baseline.linewidth": number;
+	/** Default value: `line` */
+	"ratio.baseline.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ratio.baseline.trackprice": boolean;
+	/** Default value: `0` */
+	"ratio.baseline.transparency": number;
+	/** Default value: `rgba(0, 0, 0, 0)` */
+	"ratio.baseline.color": string;
+	/** Default value: `0` */
+	"ratio.baseline.display": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `text`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"ratio.source": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Confirm: `true`
+	 */
+	"ratio.symbol": string;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"regression trend.first bar time": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"regression trend.last bar time": number;
+	/**
+	 * - Default value: `-2`
+	 * - Input type: `float`
+	 * - Max: `500`
+	 * - Min: `-500`
+	 */
+	"regression trend.lower deviation": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"regression trend.source": string;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `float`
+	 * - Max: `500`
+	 * - Min: `-500`
+	 */
+	"regression trend.upper deviation": number;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 */
+	"regression trend.use lower deviation": boolean;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 */
+	"regression trend.use upper deviation": boolean;
+	/** Default value: `#7E57C2` */
+	"relative strength index.hlines background.color": string;
+	/** Default value: `90` */
+	"relative strength index.hlines background.transparency": number;
+	/** Default value: `true` */
+	"relative strength index.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"relative strength index.upperlimit.color": string;
+	/** Default value: `2` */
+	"relative strength index.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"relative strength index.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"relative strength index.upperlimit.visible": boolean;
+	/** Default value: `70` */
+	"relative strength index.upperlimit.value": number;
+	/** Default value: `-1.1` */
+	"relative strength index.upperlimit.zorder": number;
+	/** Default value: `#787B86` */
+	"relative strength index.middlelimit.color": string;
+	/** Default value: `2` */
+	"relative strength index.middlelimit.linestyle": number;
+	/** Default value: `1` */
+	"relative strength index.middlelimit.linewidth": number;
+	/** Default value: `true` */
+	"relative strength index.middlelimit.visible": boolean;
+	/** Default value: `50` */
+	"relative strength index.middlelimit.value": number;
+	/** Default value: `-1.11` */
+	"relative strength index.middlelimit.zorder": number;
+	/** Default value: `#787B86` */
+	"relative strength index.lowerlimit.color": string;
+	/** Default value: `2` */
+	"relative strength index.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"relative strength index.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"relative strength index.lowerlimit.visible": boolean;
+	/** Default value: `30` */
+	"relative strength index.lowerlimit.value": number;
+	/** Default value: `-1.111` */
+	"relative strength index.lowerlimit.zorder": number;
+	/** Default value: `15` */
+	"relative strength index.plot.display": number;
+	/** Default value: `0` */
+	"relative strength index.plot.linestyle": number;
+	/** Default value: `1` */
+	"relative strength index.plot.linewidth": number;
+	/** Default value: `line` */
+	"relative strength index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"relative strength index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"relative strength index.plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"relative strength index.plot.color": string;
+	/** Default value: `0` */
+	"relative strength index.smoothed ma.display": number;
+	/** Default value: `0` */
+	"relative strength index.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"relative strength index.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"relative strength index.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"relative strength index.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"relative strength index.smoothed ma.transparency": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"relative strength index.length": number;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"relative strength index.smoothing line": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"relative strength index.smoothing length": number;
+	/** Default value: `15` */
+	"relative vigor index.rvgi.display": number;
+	/** Default value: `0` */
+	"relative vigor index.rvgi.linestyle": number;
+	/** Default value: `1` */
+	"relative vigor index.rvgi.linewidth": number;
+	/** Default value: `line` */
+	"relative vigor index.rvgi.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"relative vigor index.rvgi.trackprice": boolean;
+	/** Default value: `0` */
+	"relative vigor index.rvgi.transparency": number;
+	/** Default value: `#089981` */
+	"relative vigor index.rvgi.color": string;
+	/** Default value: `15` */
+	"relative vigor index.signal.display": number;
+	/** Default value: `0` */
+	"relative vigor index.signal.linestyle": number;
+	/** Default value: `1` */
+	"relative vigor index.signal.linewidth": number;
+	/** Default value: `line` */
+	"relative vigor index.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"relative vigor index.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"relative vigor index.signal.transparency": number;
+	/** Default value: `#F23645` */
+	"relative vigor index.signal.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"relative vigor index.length": number;
+	/** Default value: `#7E57C2` */
+	"relative volatility index.hlines background.color": string;
+	/** Default value: `90` */
+	"relative volatility index.hlines background.transparency": number;
+	/** Default value: `true` */
+	"relative volatility index.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"relative volatility index.upperlimit.color": string;
+	/** Default value: `2` */
+	"relative volatility index.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"relative volatility index.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"relative volatility index.upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"relative volatility index.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"relative volatility index.lowerlimit.color": string;
+	/** Default value: `2` */
+	"relative volatility index.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"relative volatility index.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"relative volatility index.lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"relative volatility index.lowerlimit.value": number;
+	/** Default value: `15` */
+	"relative volatility index.plot.display": number;
+	/** Default value: `0` */
+	"relative volatility index.plot.linestyle": number;
+	/** Default value: `1` */
+	"relative volatility index.plot.linewidth": number;
+	/** Default value: `line` */
+	"relative volatility index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"relative volatility index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"relative volatility index.plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"relative volatility index.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"relative volatility index.length": number;
+	/** Default value: `15` */
+	"smi ergodic indicator/oscillator.indicator.display": number;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.indicator.linestyle": number;
+	/** Default value: `1` */
+	"smi ergodic indicator/oscillator.indicator.linewidth": number;
+	/** Default value: `line` */
+	"smi ergodic indicator/oscillator.indicator.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smi ergodic indicator/oscillator.indicator.trackprice": boolean;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.indicator.transparency": number;
+	/** Default value: `#2196F3` */
+	"smi ergodic indicator/oscillator.indicator.color": string;
+	/** Default value: `15` */
+	"smi ergodic indicator/oscillator.signal.display": number;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.signal.linestyle": number;
+	/** Default value: `1` */
+	"smi ergodic indicator/oscillator.signal.linewidth": number;
+	/** Default value: `line` */
+	"smi ergodic indicator/oscillator.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smi ergodic indicator/oscillator.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.signal.transparency": number;
+	/** Default value: `#FF6D00` */
+	"smi ergodic indicator/oscillator.signal.color": string;
+	/** Default value: `15` */
+	"smi ergodic indicator/oscillator.oscillator.display": number;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.oscillator.linestyle": number;
+	/** Default value: `1` */
+	"smi ergodic indicator/oscillator.oscillator.linewidth": number;
+	/** Default value: `histogram` */
+	"smi ergodic indicator/oscillator.oscillator.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smi ergodic indicator/oscillator.oscillator.trackprice": boolean;
+	/** Default value: `0` */
+	"smi ergodic indicator/oscillator.oscillator.transparency": number;
+	/** Default value: `#FF5252` */
+	"smi ergodic indicator/oscillator.oscillator.color": string;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"smi ergodic indicator/oscillator.shortlen": number;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"smi ergodic indicator/oscillator.longlen": number;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"smi ergodic indicator/oscillator.siglen": number;
+	/** Default value: `15` */
+	"smoothed moving average.plot.display": number;
+	/** Default value: `0` */
+	"smoothed moving average.plot.linestyle": number;
+	/** Default value: `1` */
+	"smoothed moving average.plot.linewidth": number;
+	/** Default value: `line` */
+	"smoothed moving average.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed moving average.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed moving average.plot.transparency": number;
+	/** Default value: `#673AB7` */
+	"smoothed moving average.plot.color": string;
+	/**
+	 * - Default value: `7`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"smoothed moving average.length": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"smoothed moving average.source": string;
+	/** Default value: `` */
+	"spread.negative fill.color": string;
+	/** Default value: `0` */
+	"spread.negative fill.transparency": number;
+	/** Default value: `true` */
+	"spread.negative fill.visible": boolean;
+	/** Default value: `` */
+	"spread.positive fill.color": string;
+	/** Default value: `0` */
+	"spread.positive fill.transparency": number;
+	/** Default value: `true` */
+	"spread.positive fill.visible": boolean;
+	/** Default value: `0` */
+	"spread.plot.linestyle": number;
+	/** Default value: `2` */
+	"spread.plot.linewidth": number;
+	/** Default value: `line` */
+	"spread.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"spread.plot.trackprice": boolean;
+	/** Default value: `35` */
+	"spread.plot.transparency": number;
+	/** Default value: `#800080` */
+	"spread.plot.color": string;
+	/** Default value: `15` */
+	"spread.plot.display": number;
+	/** Default value: `0` */
+	"spread.baseline.linestyle": number;
+	/** Default value: `2` */
+	"spread.baseline.linewidth": number;
+	/** Default value: `line` */
+	"spread.baseline.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"spread.baseline.trackprice": boolean;
+	/** Default value: `0` */
+	"spread.baseline.transparency": number;
+	/** Default value: `rgba(0, 0, 0, 0)` */
+	"spread.baseline.color": string;
+	/** Default value: `0` */
+	"spread.baseline.display": number;
+	/**
+	 * - Default value: `close`
+	 * - Input type: `text`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"spread.source": string;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Confirm: `true`
+	 */
+	"spread.symbol": string;
+	/** Default value: `15` */
+	"standard deviation.plot.display": number;
+	/** Default value: `0` */
+	"standard deviation.plot.linestyle": number;
+	/** Default value: `1` */
+	"standard deviation.plot.linewidth": number;
+	/** Default value: `line` */
+	"standard deviation.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"standard deviation.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"standard deviation.plot.transparency": number;
+	/** Default value: `#089981` */
+	"standard deviation.plot.color": string;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 */
+	"standard deviation.periods": number;
+	/**
+	 * - Default value: `1`
+	 * - Input type: `float`
+	 */
+	"standard deviation.deviations": number;
+	/** Default value: `15` */
+	"standard error.plot.display": number;
+	/** Default value: `0` */
+	"standard error.plot.linestyle": number;
+	/** Default value: `1` */
+	"standard error.plot.linewidth": number;
+	/** Default value: `line` */
+	"standard error.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"standard error.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"standard error.plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"standard error.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `3`
+	 */
+	"standard error.length": number;
+	/** Default value: `#2196F3` */
+	"standard error bands.background.color": string;
+	/** Default value: `95` */
+	"standard error bands.background.transparency": number;
+	/** Default value: `true` */
+	"standard error bands.background.visible": boolean;
+	/** Default value: `15` */
+	"standard error bands.plot 1.display": number;
+	/** Default value: `0` */
+	"standard error bands.plot 1.linestyle": number;
+	/** Default value: `1` */
+	"standard error bands.plot 1.linewidth": number;
+	/** Default value: `line` */
+	"standard error bands.plot 1.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"standard error bands.plot 1.transparency": number;
+	/** Default value: `false` */
+	"standard error bands.plot 1.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"standard error bands.plot 1.color": string;
+	/** Default value: `15` */
+	"standard error bands.plot 2.display": number;
+	/** Default value: `0` */
+	"standard error bands.plot 2.linestyle": number;
+	/** Default value: `1` */
+	"standard error bands.plot 2.linewidth": number;
+	/** Default value: `0` */
+	"standard error bands.plot 2.transparency": number;
+	/** Default value: `line` */
+	"standard error bands.plot 2.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"standard error bands.plot 2.trackprice": boolean;
+	/** Default value: `#FF6D00` */
+	"standard error bands.plot 2.color": string;
+	/** Default value: `15` */
+	"standard error bands.plot 3.display": number;
+	/** Default value: `0` */
+	"standard error bands.plot 3.linestyle": number;
+	/** Default value: `1` */
+	"standard error bands.plot 3.linewidth": number;
+	/** Default value: `0` */
+	"standard error bands.plot 3.transparency": number;
+	/** Default value: `line` */
+	"standard error bands.plot 3.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"standard error bands.plot 3.trackprice": boolean;
+	/** Default value: `#2196F3` */
+	"standard error bands.plot 3.color": string;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 */
+	"standard error bands.periods": number;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `float`
+	 */
+	"standard error bands.standard errors": number;
+	/**
+	 * - Default value: `Simple`
+	 * - Input type: `text`
+	 * - Options: `["Simple","Exponential","Weighted"]`
+	 */
+	"standard error bands.method": string;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 */
+	"standard error bands.averaging periods": number;
+	/** Default value: `#2196F3` */
+	"stochastic.hlines background.color": string;
+	/** Default value: `90` */
+	"stochastic.hlines background.transparency": number;
+	/** Default value: `true` */
+	"stochastic.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"stochastic.upperlimit.color": string;
+	/** Default value: `2` */
+	"stochastic.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"stochastic.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"stochastic.upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"stochastic.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"stochastic.lowerlimit.color": string;
+	/** Default value: `2` */
+	"stochastic.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"stochastic.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"stochastic.lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"stochastic.lowerlimit.value": number;
+	/** Default value: `15` */
+	"stochastic.%k.display": number;
+	/** Default value: `0` */
+	"stochastic.%k.linestyle": number;
+	/** Default value: `1` */
+	"stochastic.%k.linewidth": number;
+	/** Default value: `line` */
+	"stochastic.%k.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"stochastic.%k.trackprice": boolean;
+	/** Default value: `0` */
+	"stochastic.%k.transparency": number;
+	/** Default value: `#2196F3` */
+	"stochastic.%k.color": string;
+	/** Default value: `15` */
+	"stochastic.%d.display": number;
+	/** Default value: `0` */
+	"stochastic.%d.linestyle": number;
+	/** Default value: `1` */
+	"stochastic.%d.linewidth": number;
+	/** Default value: `line` */
+	"stochastic.%d.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"stochastic.%d.trackprice": boolean;
+	/** Default value: `0` */
+	"stochastic.%d.transparency": number;
+	/** Default value: `#FF6D00` */
+	"stochastic.%d.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic.%k length": number;
+	/**
+	 * - Default value: `1`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic.%k smoothing": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic.%d smoothing": number;
+	/** Default value: `#2196F3` */
+	"stochastic rsi.hlines background.color": string;
+	/** Default value: `90` */
+	"stochastic rsi.hlines background.transparency": number;
+	/** Default value: `true` */
+	"stochastic rsi.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"stochastic rsi.upperlimit.color": string;
+	/** Default value: `2` */
+	"stochastic rsi.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"stochastic rsi.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"stochastic rsi.upperlimit.visible": boolean;
+	/** Default value: `80` */
+	"stochastic rsi.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"stochastic rsi.lowerlimit.color": string;
+	/** Default value: `2` */
+	"stochastic rsi.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"stochastic rsi.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"stochastic rsi.lowerlimit.visible": boolean;
+	/** Default value: `20` */
+	"stochastic rsi.lowerlimit.value": number;
+	/** Default value: `15` */
+	"stochastic rsi.%k.display": number;
+	/** Default value: `0` */
+	"stochastic rsi.%k.linestyle": number;
+	/** Default value: `1` */
+	"stochastic rsi.%k.linewidth": number;
+	/** Default value: `line` */
+	"stochastic rsi.%k.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"stochastic rsi.%k.trackprice": boolean;
+	/** Default value: `0` */
+	"stochastic rsi.%k.transparency": number;
+	/** Default value: `#2196F3` */
+	"stochastic rsi.%k.color": string;
+	/** Default value: `15` */
+	"stochastic rsi.%d.display": number;
+	/** Default value: `0` */
+	"stochastic rsi.%d.linestyle": number;
+	/** Default value: `1` */
+	"stochastic rsi.%d.linewidth": number;
+	/** Default value: `line` */
+	"stochastic rsi.%d.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"stochastic rsi.%d.trackprice": boolean;
+	/** Default value: `0` */
+	"stochastic rsi.%d.transparency": number;
+	/** Default value: `#FF6D00` */
+	"stochastic rsi.%d.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic rsi.lengthrsi": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic rsi.lengthstoch": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic rsi.smoothk": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"stochastic rsi.smoothd": number;
+	/** Default value: `15` */
+	"supertrend.supertrend.display": number;
+	/** Default value: `0` */
+	"supertrend.supertrend.linestyle": number;
+	/** Default value: `3` */
+	"supertrend.supertrend.linewidth": number;
+	/** Default value: `line` */
+	"supertrend.supertrend.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"supertrend.supertrend.trackprice": boolean;
+	/** Default value: `35` */
+	"supertrend.supertrend.transparency": number;
+	/** Default value: `#000080` */
+	"supertrend.supertrend.color": string;
+	/** Default value: `15` */
+	"supertrend.up arrow.display": number;
+	/** Default value: `0` */
+	"supertrend.up arrow.linestyle": number;
+	/** Default value: `3` */
+	"supertrend.up arrow.linewidth": number;
+	/** Default value: `shape_arrow_up` */
+	"supertrend.up arrow.plottype": string;
+	/** Default value: `false` */
+	"supertrend.up arrow.trackprice": boolean;
+	/** Default value: `BelowBar` */
+	"supertrend.up arrow.location": string;
+	/** Default value: `35` */
+	"supertrend.up arrow.transparency": number;
+	/** Default value: `#00FF00` */
+	"supertrend.up arrow.color": string;
+	/** Default value: `15` */
+	"supertrend.down arrow.display": number;
+	/** Default value: `0` */
+	"supertrend.down arrow.linestyle": number;
+	/** Default value: `3` */
+	"supertrend.down arrow.linewidth": number;
+	/** Default value: `shape_arrow_down` */
+	"supertrend.down arrow.plottype": string;
+	/** Default value: `false` */
+	"supertrend.down arrow.trackprice": boolean;
+	/** Default value: `AboveBar` */
+	"supertrend.down arrow.location": string;
+	/** Default value: `35` */
+	"supertrend.down arrow.transparency": number;
+	/** Default value: `#FF0000` */
+	"supertrend.down arrow.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `100`
+	 */
+	"supertrend.length": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `float`
+	 * - Min: `1`
+	 * - Max: `100`
+	 */
+	"supertrend.factor": number;
+	/** Default value: `#787B86` */
+	"trix.zero.color": string;
+	/** Default value: `2` */
+	"trix.zero.linestyle": number;
+	/** Default value: `1` */
+	"trix.zero.linewidth": number;
+	/** Default value: `true` */
+	"trix.zero.visible": boolean;
+	/** Default value: `0` */
+	"trix.zero.value": number;
+	/** Default value: `15` */
+	"trix.trix.display": number;
+	/** Default value: `0` */
+	"trix.trix.linestyle": number;
+	/** Default value: `1` */
+	"trix.trix.linewidth": number;
+	/** Default value: `line` */
+	"trix.trix.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trix.trix.trackprice": boolean;
+	/** Default value: `0` */
+	"trix.trix.transparency": number;
+	/** Default value: `#F23645` */
+	"trix.trix.color": string;
+	/**
+	 * - Default value: `18`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"trix.length": number;
+	/** Default value: `15` */
+	"trend strength index.plot.display": number;
+	/** Default value: `0` */
+	"trend strength index.plot.linestyle": number;
+	/** Default value: `1` */
+	"trend strength index.plot.linewidth": number;
+	/** Default value: `line` */
+	"trend strength index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trend strength index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"trend strength index.plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"trend strength index.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 */
+	"trend strength index.periods": number;
+	/** Default value: `15` */
+	"triple ema.plot.display": number;
+	/** Default value: `0` */
+	"triple ema.plot.linestyle": number;
+	/** Default value: `1` */
+	"triple ema.plot.linewidth": number;
+	/** Default value: `line` */
+	"triple ema.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"triple ema.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"triple ema.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"triple ema.plot.color": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"triple ema.length": number;
+	/** Default value: `#787B86` */
+	"true strength index.zero.color": string;
+	/** Default value: `2` */
+	"true strength index.zero.linestyle": number;
+	/** Default value: `1` */
+	"true strength index.zero.linewidth": number;
+	/** Default value: `true` */
+	"true strength index.zero.visible": boolean;
+	/** Default value: `0` */
+	"true strength index.zero.value": number;
+	/** Default value: `15` */
+	"true strength index.true strength index.display": number;
+	/** Default value: `0` */
+	"true strength index.true strength index.linestyle": number;
+	/** Default value: `1` */
+	"true strength index.true strength index.linewidth": number;
+	/** Default value: `line` */
+	"true strength index.true strength index.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"true strength index.true strength index.trackprice": boolean;
+	/** Default value: `0` */
+	"true strength index.true strength index.transparency": number;
+	/** Default value: `#2196F3` */
+	"true strength index.true strength index.color": string;
+	/** Default value: `15` */
+	"true strength index.signal.display": number;
+	/** Default value: `0` */
+	"true strength index.signal.linestyle": number;
+	/** Default value: `1` */
+	"true strength index.signal.linewidth": number;
+	/** Default value: `line` */
+	"true strength index.signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"true strength index.signal.trackprice": boolean;
+	/** Default value: `0` */
+	"true strength index.signal.transparency": number;
+	/** Default value: `#E91E63` */
+	"true strength index.signal.color": string;
+	/**
+	 * - Default value: `25`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"true strength index.long": number;
+	/**
+	 * - Default value: `13`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"true strength index.short": number;
+	/**
+	 * - Default value: `13`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"true strength index.siglen": number;
+	/** Default value: `15` */
+	"typical price.plot.display": number;
+	/** Default value: `0` */
+	"typical price.plot.linestyle": number;
+	/** Default value: `1` */
+	"typical price.plot.linewidth": number;
+	/** Default value: `line` */
+	"typical price.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"typical price.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"typical price.plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"typical price.plot.color": string;
+	/** Default value: `15` */
+	"ultimate oscillator.uo.display": number;
+	/** Default value: `0` */
+	"ultimate oscillator.uo.linestyle": number;
+	/** Default value: `1` */
+	"ultimate oscillator.uo.linewidth": number;
+	/** Default value: `line` */
+	"ultimate oscillator.uo.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"ultimate oscillator.uo.trackprice": boolean;
+	/** Default value: `0` */
+	"ultimate oscillator.uo.transparency": number;
+	/** Default value: `#F23645` */
+	"ultimate oscillator.uo.color": string;
+	/**
+	 * - Default value: `7`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ultimate oscillator.length7": number;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ultimate oscillator.length14": number;
+	/**
+	 * - Default value: `28`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"ultimate oscillator.length28": number;
+	/** Default value: `15` */
+	"vwap.vwap.display": number;
+	/** Default value: `0` */
+	"vwap.vwap.linestyle": number;
+	/** Default value: `1` */
+	"vwap.vwap.linewidth": number;
+	/** Default value: `line` */
+	"vwap.vwap.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"vwap.vwap.trackprice": number;
+	/** Default value: `0` */
+	"vwap.vwap.transparency": number;
+	/** Default value: `#2196F3` */
+	"vwap.vwap.color": string;
+	/**
+	 * - Default value: `hlc3`
+	 * - Input type: `source`
+	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
+	 */
+	"vwap.source": string;
+	/**
+	 * - Default value: `Session`
+	 * - Input type: `text`
+	 * - Options: `["Session","Week","Month","Quarter","Year","Decade","Century"]`
+	 */
+	"vwap.anchor period": string;
+	/** Default value: `15` */
+	"vwma.plot.display": number;
+	/** Default value: `0` */
+	"vwma.plot.linestyle": number;
+	/** Default value: `1` */
+	"vwma.plot.linewidth": number;
+	/** Default value: `line` */
+	"vwma.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vwma.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"vwma.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"vwma.plot.color": string;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"vwma.len": number;
+	/** Default value: `15` */
+	"volatility close-to-close.plot.display": number;
+	/** Default value: `0` */
+	"volatility close-to-close.plot.linestyle": number;
+	/** Default value: `1` */
+	"volatility close-to-close.plot.linewidth": number;
+	/** Default value: `line` */
+	"volatility close-to-close.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volatility close-to-close.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"volatility close-to-close.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"volatility close-to-close.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 */
+	"volatility close-to-close.periods": number;
+	/**
+	 * - Default value: `252`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `366`
+	 */
+	"volatility close-to-close.days per year": number;
+	/** Default value: `15` */
+	"volatility index.plot.display": number;
+	/** Default value: `0` */
+	"volatility index.plot.linestyle": number;
+	/** Default value: `1` */
+	"volatility index.plot.linewidth": number;
+	/** Default value: `line` */
+	"volatility index.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volatility index.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"volatility index.plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"volatility index.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 */
+	"volatility index.periods": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `float`
+	 */
+	"volatility index.atr mult": number;
+	/**
+	 * - Default value: `Wilder Smoothing`
+	 * - Input type: `text`
+	 * - Options: `["Exponential","Wilder Smoothing"]`
+	 */
+	"volatility index.method": string;
+	/** Default value: `15` */
+	"volatility o-h-l-c.plot.display": number;
+	/** Default value: `0` */
+	"volatility o-h-l-c.plot.linestyle": number;
+	/** Default value: `1` */
+	"volatility o-h-l-c.plot.linewidth": number;
+	/** Default value: `line` */
+	"volatility o-h-l-c.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volatility o-h-l-c.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"volatility o-h-l-c.plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"volatility o-h-l-c.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 */
+	"volatility o-h-l-c.periods": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `float`
+	 * - Min: `0`
+	 * - Max: `0.999`
+	 */
+	"volatility o-h-l-c.market closed percentage": number;
+	/**
+	 * - Default value: `252`
+	 * - Input type: `integer`
+	 */
+	"volatility o-h-l-c.days per year": number;
+	/** Default value: `15` */
+	"volatility zero trend close-to-close.plot.display": number;
+	/** Default value: `0` */
+	"volatility zero trend close-to-close.plot.linestyle": number;
+	/** Default value: `1` */
+	"volatility zero trend close-to-close.plot.linewidth": number;
+	/** Default value: `line` */
+	"volatility zero trend close-to-close.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volatility zero trend close-to-close.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"volatility zero trend close-to-close.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"volatility zero trend close-to-close.plot.color": string;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `0`
+	 * - Max: `10000`
+	 */
+	"volatility zero trend close-to-close.periods": number;
+	/**
+	 * - Default value: `252`
+	 * - Input type: `integer`
+	 */
+	"volatility zero trend close-to-close.days per year": number;
+	/** Default value: `15` */
+	"volume.volume.display": number;
+	/** Default value: `0` */
+	"volume.volume.linestyle": number;
+	/** Default value: `1` */
+	"volume.volume.linewidth": number;
+	/** Default value: `columns` */
+	"volume.volume.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume.volume.trackprice": boolean;
+	/** Default value: `50` */
+	"volume.volume.transparency": number;
+	/** Default value: `#000080` */
+	"volume.volume.color": string;
+	/** Default value: `0` */
+	"volume.volume ma.display": number;
+	/** Default value: `0` */
+	"volume.volume ma.linestyle": number;
+	/** Default value: `1` */
+	"volume.volume ma.linewidth": number;
+	/** Default value: `line` */
+	"volume.volume ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume.volume ma.trackprice": boolean;
+	/** Default value: `0` */
+	"volume.volume ma.transparency": number;
+	/** Default value: `#2196F3` */
+	"volume.volume ma.color": string;
+	/** Default value: `0` */
+	"volume.smoothed ma.display": number;
+	/** Default value: `0` */
+	"volume.smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"volume.smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"volume.smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume.smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"volume.smoothed ma.transparency": number;
+	/** Default value: `#2196F3` */
+	"volume.smoothed ma.color": string;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 * - IsHidden: `true`
+	 */
+	"volume.show ma": boolean;
+	/**
+	 * - Default value: `20`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"volume.ma length": number;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 */
+	"volume.color based on previous close": boolean;
+	/**
+	 * - Default value: ``
+	 * - Input type: `symbol`
+	 * - Optional: `true`
+	 * - IsHidden: `false`
+	 */
+	"volume.other symbol": string;
+	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"volume.smoothing line": string;
+	/**
+	 * - Default value: `9`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `10000`
+	 */
+	"volume.smoothing length": number;
+	/** Default value: `#787B86` */
+	"volume oscillator.zero.color": string;
+	/** Default value: `2` */
+	"volume oscillator.zero.linestyle": number;
+	/** Default value: `1` */
+	"volume oscillator.zero.linewidth": number;
+	/** Default value: `true` */
+	"volume oscillator.zero.visible": boolean;
+	/** Default value: `0` */
+	"volume oscillator.zero.value": number;
+	/** Default value: `15` */
+	"volume oscillator.plot.display": number;
+	/** Default value: `0` */
+	"volume oscillator.plot.linestyle": number;
+	/** Default value: `1` */
+	"volume oscillator.plot.linewidth": number;
+	/** Default value: `line` */
+	"volume oscillator.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume oscillator.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"volume oscillator.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"volume oscillator.plot.color": string;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"volume oscillator.shortlen": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `4999`
+	 */
+	"volume oscillator.longlen": number;
+	/** Default value: `#ff0000` */
+	"volume profile fixed range.developing poc.color": string;
+	/** Default value: `0` */
+	"volume profile fixed range.developing poc.linestyle": number;
+	/** Default value: `1` */
+	"volume profile fixed range.developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile fixed range.developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile fixed range.developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile fixed range.developing poc.transparency": number;
+	/** Default value: `0` */
+	"volume profile fixed range.developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"volume profile fixed range.developing va high.color": string;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va high.linestyle": number;
+	/** Default value: `1` */
+	"volume profile fixed range.developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile fixed range.developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile fixed range.developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va high.transparency": number;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"volume profile fixed range.developing va low.color": string;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va low.linestyle": number;
+	/** Default value: `1` */
+	"volume profile fixed range.developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile fixed range.developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile fixed range.developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va low.transparency": number;
+	/** Default value: `0` */
+	"volume profile fixed range.developing va low.display": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"volume profile fixed range.first bar time": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"volume profile fixed range.last bar time": number;
+	/**
+	 * - Default value: `24`
+	 * - Input type: `integer`
+	 * - Max: `1000000`
+	 * - Min: `1`
+	 */
+	"volume profile fixed range.row size": number;
+	/**
+	 * - Default value: `Number Of Rows`
+	 * - Input type: `text`
+	 * - Options: `["Number Of Rows","Ticks Per Row"]`
+	 */
+	"volume profile fixed range.rows layout": string;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 * - IsHidden: `true`
+	 */
+	"volume profile fixed range.subscriberealtime": boolean;
+	/**
+	 * - Default value: `70`
+	 * - Input type: `integer`
+	 * - Max: `100`
+	 * - Min: `0`
+	 */
+	"volume profile fixed range.value area volume": number;
+	/**
+	 * - Default value: `Up/Down`
+	 * - Input type: `text`
+	 * - Options: `["Up/Down","Total","Delta"]`
+	 */
+	"volume profile fixed range.volume": string;
+	/** Default value: `#ff0000` */
+	"volume profile visible range.developing poc.color": string;
+	/** Default value: `0` */
+	"volume profile visible range.developing poc.linestyle": number;
+	/** Default value: `1` */
+	"volume profile visible range.developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile visible range.developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile visible range.developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile visible range.developing poc.transparency": number;
+	/** Default value: `0` */
+	"volume profile visible range.developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"volume profile visible range.developing va high.color": string;
+	/** Default value: `0` */
+	"volume profile visible range.developing va high.linestyle": number;
+	/** Default value: `1` */
+	"volume profile visible range.developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile visible range.developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile visible range.developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile visible range.developing va high.transparency": number;
+	/** Default value: `0` */
+	"volume profile visible range.developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"volume profile visible range.developing va low.color": string;
+	/** Default value: `0` */
+	"volume profile visible range.developing va low.linestyle": number;
+	/** Default value: `1` */
+	"volume profile visible range.developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"volume profile visible range.developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume profile visible range.developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"volume profile visible range.developing va low.transparency": number;
+	/** Default value: `0` */
+	"volume profile visible range.developing va low.display": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"volume profile visible range.first visible bar time": number;
+	/**
+	 * - Default value: `0`
+	 * - Input type: `time`
+	 * - IsHidden: `true`
+	 * - Max: `253370764800`
+	 * - Min: `-253370764800`
+	 */
+	"volume profile visible range.last visible bar time": number;
+	/**
+	 * - Default value: `24`
+	 * - Input type: `integer`
+	 * - Max: `1000000`
+	 * - Min: `1`
+	 */
+	"volume profile visible range.row size": number;
+	/**
+	 * - Default value: `Number Of Rows`
+	 * - Input type: `text`
+	 * - Options: `["Number Of Rows","Ticks Per Row"]`
+	 */
+	"volume profile visible range.rows layout": string;
+	/**
+	 * - Default value: `70`
+	 * - Input type: `integer`
+	 * - Max: `100`
+	 * - Min: `0`
+	 */
+	"volume profile visible range.value area volume": number;
+	/**
+	 * - Default value: `Up/Down`
+	 * - Input type: `text`
+	 * - Options: `["Up/Down","Total","Delta"]`
+	 */
+	"volume profile visible range.volume": string;
+	/** Default value: `15` */
+	"vortex indicator.vi +.display": number;
+	/** Default value: `0` */
+	"vortex indicator.vi +.linestyle": number;
+	/** Default value: `1` */
+	"vortex indicator.vi +.linewidth": number;
+	/** Default value: `line` */
+	"vortex indicator.vi +.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vortex indicator.vi +.trackprice": boolean;
+	/** Default value: `0` */
+	"vortex indicator.vi +.transparency": number;
+	/** Default value: `#2196F3` */
+	"vortex indicator.vi +.color": string;
+	/** Default value: `15` */
+	"vortex indicator.vi -.display": number;
+	/** Default value: `0` */
+	"vortex indicator.vi -.linestyle": number;
+	/** Default value: `1` */
+	"vortex indicator.vi -.linewidth": number;
+	/** Default value: `line` */
+	"vortex indicator.vi -.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vortex indicator.vi -.trackprice": boolean;
+	/** Default value: `0` */
+	"vortex indicator.vi -.transparency": number;
+	/** Default value: `#E91E63` */
+	"vortex indicator.vi -.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 * - Max: `1000000000000`
+	 */
+	"vortex indicator.period": number;
+	/** Default value: `#7E57C2` */
+	"williams %r.hlines background.color": string;
+	/** Default value: `90` */
+	"williams %r.hlines background.transparency": number;
+	/** Default value: `true` */
+	"williams %r.hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"williams %r.upperlimit.color": string;
+	/** Default value: `2` */
+	"williams %r.upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"williams %r.upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"williams %r.upperlimit.visible": boolean;
+	/** Default value: `-20` */
+	"williams %r.upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"williams %r.lowerlimit.color": string;
+	/** Default value: `2` */
+	"williams %r.lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"williams %r.lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"williams %r.lowerlimit.visible": boolean;
+	/** Default value: `-80` */
+	"williams %r.lowerlimit.value": number;
+	/** Default value: `15` */
+	"williams %r.plot.display": number;
+	/** Default value: `0` */
+	"williams %r.plot.linestyle": number;
+	/** Default value: `1` */
+	"williams %r.plot.linewidth": number;
+	/** Default value: `line` */
+	"williams %r.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"williams %r.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"williams %r.plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"williams %r.plot.color": string;
+	/**
+	 * - Default value: `14`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams %r.length": number;
+	/** Default value: `15` */
+	"williams alligator.jaw.display": number;
+	/** Default value: `0` */
+	"williams alligator.jaw.linestyle": number;
+	/** Default value: `1` */
+	"williams alligator.jaw.linewidth": number;
+	/** Default value: `line` */
+	"williams alligator.jaw.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"williams alligator.jaw.trackprice": boolean;
+	/** Default value: `0` */
+	"williams alligator.jaw.transparency": number;
+	/** Default value: `#2196F3` */
+	"williams alligator.jaw.color": string;
+	/** Default value: `15` */
+	"williams alligator.teeth.display": number;
+	/** Default value: `0` */
+	"williams alligator.teeth.linestyle": number;
+	/** Default value: `1` */
+	"williams alligator.teeth.linewidth": number;
+	/** Default value: `line` */
+	"williams alligator.teeth.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"williams alligator.teeth.trackprice": boolean;
+	/** Default value: `0` */
+	"williams alligator.teeth.transparency": number;
+	/** Default value: `#E91E63` */
+	"williams alligator.teeth.color": string;
+	/** Default value: `15` */
+	"williams alligator.lips.display": number;
+	/** Default value: `0` */
+	"williams alligator.lips.linestyle": number;
+	/** Default value: `1` */
+	"williams alligator.lips.linewidth": number;
+	/** Default value: `line` */
+	"williams alligator.lips.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"williams alligator.lips.trackprice": boolean;
+	/** Default value: `0` */
+	"williams alligator.lips.transparency": number;
+	/** Default value: `#66BB6A` */
+	"williams alligator.lips.color": string;
+	/**
+	 * - Default value: `21`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.jaw length": number;
+	/**
+	 * - Default value: `13`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.teeth length": number;
+	/**
+	 * - Default value: `8`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.lips length": number;
+	/**
+	 * - Default value: `8`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.jaw offset": number;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.teeth offset": number;
+	/**
+	 * - Default value: `3`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `2000`
+	 */
+	"williams alligator.lips offset": number;
+	/** Default value: `15` */
+	"williams fractal.down fractals.display": number;
+	/** Default value: `shape_triangle_down` */
+	"williams fractal.down fractals.plottype": string;
+	/** Default value: `BelowBar` */
+	"williams fractal.down fractals.location": string;
+	/** Default value: `0` */
+	"williams fractal.down fractals.transparency": number;
+	/** Default value: `#F23645` */
+	"williams fractal.down fractals.color": string;
+	/** Default value: `15` */
+	"williams fractal.up fractals.display": number;
+	/** Default value: `shape_triangle_up` */
+	"williams fractal.up fractals.plottype": string;
+	/** Default value: `AboveBar` */
+	"williams fractal.up fractals.location": string;
+	/** Default value: `0` */
+	"williams fractal.up fractals.transparency": number;
+	/** Default value: `#089981` */
+	"williams fractal.up fractals.color": string;
+	/**
+	 * - Default value: `2`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 * - Max: `1000000000000`
+	 */
+	"williams fractal.periods": number;
+	/** Default value: `15` */
+	"zig zag.plot.display": number;
+	/** Default value: `0` */
+	"zig zag.plot.linestyle": number;
+	/** Default value: `2` */
+	"zig zag.plot.linewidth": number;
+	/** Default value: `line` */
+	"zig zag.plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"zig zag.plot.trackprice": boolean;
+	/** Default value: `0` */
+	"zig zag.plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"zig zag.plot.color": string;
+	/**
+	 * - Default value: `5`
+	 * - Input type: `float`
+	 * - Min: `0.001`
+	 * - Max: `100`
+	 */
+	"zig zag.deviation": number;
+	/**
+	 * - Default value: `10`
+	 * - Input type: `integer`
+	 * - Min: `2`
+	 * - Max: `1000`
+	 */
+	"zig zag.depth": number;
 	[key: string]: StudyOverrideValueType;
 }
 /**
@@ -16005,6 +24541,10 @@ export interface StudyStylesInfo {
 	 * Used to control the zorder of the plot. Control if a plot is visually behind or in front of another.
 	 */
 	readonly zorder?: number;
+	/**
+	 * Info about the Price Scale formatting
+	 */
+	readonly format?: Partial<StudyPlotValuePrecisionFormat>;
 }
 export interface StudySymbolInputInfo extends StudyInputBaseInfo {
 	/** Input type is Symbol */
@@ -16088,6 +24628,107 @@ export interface StudyTimeInputInfo extends StudyInputBaseInfo {
 export interface StudyUpColorerPlotInfo extends StudyPalettedPlotInfo, StudyTargetedPlotInfo {
 	/** @inheritDoc */
 	readonly type: StudyPlotType.UpColorer;
+}
+/**
+ * Text with styles
+ */
+export interface StyledText {
+	/**
+	 * Text
+	 */
+	text: string;
+	/**
+	 * Font
+	 */
+	font?: string;
+	/**
+	 * Font family
+	 */
+	fontFamily?: string;
+	/**
+	 * Font feature settings
+	 */
+	fontFeatureSettings?: string;
+	/**
+	 * Font kerning
+	 */
+	fontKerning?: string;
+	/**
+	 * Font optical sizing
+	 */
+	fontOpticalSizing?: string;
+	/**
+	 * Font palette
+	 */
+	fontPalette?: string;
+	/**
+	 * Font size
+	 */
+	fontSize?: string;
+	/**
+	 * Font size adjust
+	 */
+	fontSizeAdjust?: string;
+	/**
+	 * Font stretch
+	 */
+	fontStretch?: string;
+	/**
+	 * Font style
+	 */
+	fontStyle?: string;
+	/**
+	 * Font synthesis
+	 */
+	fontSynthesis?: string;
+	/**
+	 * Font variant
+	 */
+	fontVariant?: string;
+	/**
+	 * Font variant alternates
+	 */
+	fontVariantAlternates?: string;
+	/**
+	 * Font variant caps
+	 */
+	fontVariantCaps?: string;
+	/**
+	 * Font variant east asian
+	 */
+	fontVariantEastAsian?: string;
+	/**
+	 * Font variant ligatures
+	 */
+	fontVariantLigatures?: string;
+	/**
+	 * Font variant numerics
+	 */
+	fontVariantNumeric?: string;
+	/**
+	 * Font variant position
+	 */
+	fontVariantPosition?: string;
+	/**
+	 * Font variation settings
+	 */
+	fontVariationSettings?: string;
+	/**
+	 * Font weight
+	 */
+	fontWeight?: string;
+	/**
+	 * Color
+	 */
+	color?: string;
+	/**
+	 * Line height
+	 */
+	lineHeight?: string;
+	/**
+	 * Letter spacing
+	 */
+	letterSpacing?: string;
 }
 export interface SubscribeEventsMap {
 	/**
@@ -16247,6 +24888,11 @@ export interface SubscribeEventsMap {
 	 * Panes' order has changed.
 	 */
 	panes_order_changed: () => void;
+	/**
+	 * Chart's widget bar is shown/hidden.
+	 * @param  {boolean} isVisible - if the widget bar is currently hidden
+	 */
+	widgetbar_visibility_changed: (isVisible: boolean) => void;
 }
 export interface SuccessFormatterParseResult<T> extends FormatterParseResult {
 	/** @inheritDoc */
@@ -16255,6 +24901,60 @@ export interface SuccessFormatterParseResult<T> extends FormatterParseResult {
 	value: T;
 	/** Optional value returned by the default formatter */
 	suggest?: string;
+}
+/**
+ * Overrides for the 'SuperTrend' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SuperTrendIndicatorOverrides {
+	/** Default value: `15` */
+	"supertrend.display": number;
+	/** Default value: `0` */
+	"supertrend.linestyle": number;
+	/** Default value: `3` */
+	"supertrend.linewidth": number;
+	/** Default value: `line` */
+	"supertrend.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"supertrend.trackprice": boolean;
+	/** Default value: `35` */
+	"supertrend.transparency": number;
+	/** Default value: `#000080` */
+	"supertrend.color": string;
+	/** Default value: `15` */
+	"up arrow.display": number;
+	/** Default value: `0` */
+	"up arrow.linestyle": number;
+	/** Default value: `3` */
+	"up arrow.linewidth": number;
+	/** Default value: `shape_arrow_up` */
+	"up arrow.plottype": string;
+	/** Default value: `false` */
+	"up arrow.trackprice": boolean;
+	/** Default value: `BelowBar` */
+	"up arrow.location": string;
+	/** Default value: `35` */
+	"up arrow.transparency": number;
+	/** Default value: `#00FF00` */
+	"up arrow.color": string;
+	/** Default value: `15` */
+	"down arrow.display": number;
+	/** Default value: `0` */
+	"down arrow.linestyle": number;
+	/** Default value: `3` */
+	"down arrow.linewidth": number;
+	/** Default value: `shape_arrow_down` */
+	"down arrow.plottype": string;
+	/** Default value: `false` */
+	"down arrow.trackprice": boolean;
+	/** Default value: `AboveBar` */
+	"down arrow.location": string;
+	/** Default value: `35` */
+	"down arrow.transparency": number;
+	/** Default value: `#FF0000` */
+	"down arrow.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Extended symbol information.
@@ -16307,7 +25007,7 @@ export interface SymbolResolveExtension {
 	/**
 	 * Indicates the currency for conversions if `currency_codes` configuration field is set,
 	 * and `currency_code` is provided in the original symbol information ({@link LibrarySymbolInfo}).
-	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale#currency-conversion).
+	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale.md#currency-conversion).
 	 */
 	currencyCode?: string;
 	/**
@@ -16316,7 +25016,7 @@ export interface SymbolResolveExtension {
 	 */
 	unitId?: string;
 	/**
-	 * Trading session string
+	 * Trading session type, such as `"regular"` or `"extended"`, that the chart should currently display.
 	 */
 	session?: string;
 }
@@ -16332,6 +25032,77 @@ export interface SymbolSearchCompleteData {
 	 * The human friendly symbol name to display to users.
 	 */
 	name: string;
+}
+export interface SymbolSpecificTradingOptions {
+	/** Array of strings with valid duration values. You can check that in Order Ticket. */
+	allowedDurations?: string[];
+	/** Supported order types for the instrument. */
+	allowedOrderTypes?: OrderType[];
+	/**
+	 * Whether order brackets are supported for the symbol.
+	 * Defaults to the value in the config.
+	 */
+	supportOrderBrackets?: boolean;
+	/**
+	 * Using this flag you can disable adding brackets to the existing order.
+	 */
+	supportAddBracketsToExistingOrder?: boolean;
+	/**
+	 * Using this flag you can disable existing order's brackets modification. If you set it to `false`,
+	 * additional fields will be disabled in Order Ticket on the chart,
+	 */
+	supportModifyBrackets?: boolean;
+	/**
+	 * Whether position brackets are supported for the symbol.
+	 * Defaults to the value in the config.
+	 */
+	supportPositionBrackets?: boolean;
+	/**
+	 * Whether trade brackets are supported for the symbol.
+	 * Defaults to the value in the config.
+	 */
+	supportIndividualPositionBrackets?: boolean;
+	/**
+	 * Whether position reversing is supported for the symbol.
+	 * Defaults to the value in the config.
+	 */
+	supportReversePosition?: boolean;
+	/**
+	 * A symbol-specific message that can be used to warn users.
+	 */
+	warningMessage?: string;
+}
+/**
+ * Overrides for the 'TRIX' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface TRIXIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"trix.display": number;
+	/** Default value: `0` */
+	"trix.linestyle": number;
+	/** Default value: `1` */
+	"trix.linewidth": number;
+	/** Default value: `line` */
+	"trix.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"trix.trackprice": boolean;
+	/** Default value: `0` */
+	"trix.transparency": number;
+	/** Default value: `#F23645` */
+	"trix.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface TableFormatterInputs<T extends TableFormatterInputValues = TableFormatterInputValues> {
 	/** Array of values to be formatted. Values are obtained by extracting dependent properties from the data object. */
@@ -16446,7 +25217,7 @@ export interface ThreedriversLineToolOverrides {
 	"linetoolthreedrivers.fontsize": number;
 	/** Default value: `false` */
 	"linetoolthreedrivers.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetoolthreedrivers.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetoolthreedrivers.textcolor": string;
@@ -16462,7 +25233,7 @@ export interface TimeFieldDescriptor {
 	type: "time";
 }
 /**
- * Definition of visible timeframes that can be selected at the bottom of the chart
+ * Definition of visible time frames that can be selected at the bottom of the chart
  * @example
  * ```javascript
  * { text: "3y", resolution: "1W", description: "3 Years", title: "3yr" }
@@ -16522,7 +25293,7 @@ export interface TimecyclesLineToolOverrides {
 	"linetooltimecycles.linecolor": string;
 	/** Default value: `0` */
 	"linetooltimecycles.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltimecycles.linewidth": number;
 	/** Default value: `50` */
 	"linetooltimecycles.transparency": number;
@@ -16532,7 +25303,7 @@ export interface TimescaleMark {
 	id: string | number;
 	/**
 	 * Time for the mark.
-	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
+	 * Unix timestamp in seconds.
 	 */
 	time: number;
 	/** Color for the timescale mark */
@@ -16586,25 +25357,6 @@ export interface TimezoneInfo {
 	 */
 	alias?: TimezoneId | GmtTimezoneId;
 }
-export interface Trade extends TradeBase, CustomFields {
-}
-/**
- * Describes a single trade (individual position).
- */
-export interface TradeBase {
-	/** Trade ID. Usually id should be equal to brokerSymbol */
-	id: string;
-	/** Trade date (UNIX timestamp in milliseconds) */
-	date: number;
-	/** Symbol name */
-	symbol: string;
-	/** Trade Quantity */
-	qty: number;
-	/** Trade Side */
-	side: Side;
-	/** Trade price */
-	price: number;
-}
 export interface TradeContext {
 	/** Symbol name */
 	symbol: string;
@@ -16624,7 +25376,8 @@ export interface TradingCustomization {
 	order: Overrides;
 }
 export interface TradingDialogOptions {
-	/** Custom fields to be displayed in the dialog (adds additional input fields to the Order dialog).
+	/** Custom fields that are displayed in the Order Ticket.
+	 * Refer to the [Add custom fields](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket.md#add-custom-fields) section for more information.
 	 *
 	 * **Example**
 	 * ```javascript
@@ -16675,7 +25428,7 @@ export interface TradingQuotes {
 }
 export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidgetOptions, "enabled_features" | "disabled_features" | "favorites"> {
 	/**
-	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed [here](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
+	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
 	 *
 	 * Example:
 	 * ```javascript
@@ -16684,7 +25437,7 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 */
 	disabled_features?: TradingTerminalFeatureset[];
 	/**
-	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed [here](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
+	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets.md).
 	 *
 	 * Example:
 	 * ```javascript
@@ -16696,15 +25449,15 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 * See {@link ChartingLibraryWidgetOptions.favorites}
 	 */
 	favorites?: Favorites<TradingTerminalChartTypeFavorites>;
-	/** configuration flags for the Trading Platform. */
+	/** Defines the [configuration flags](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/trading-features-configuration.md) for the Trading Platform. */
 	brokerConfig?: SingleBrokerMetaInfo;
-	/** configuration flags for the Trading Platform. */
+	/** Defines the [configuration flags](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/trading-features-configuration.md) for the Trading Platform. */
 	broker_config?: SingleBrokerMetaInfo;
 	/** Connection configuration settings for Rest Broker API */
 	restConfig?: RestBrokerConnectionInfo;
 	/**
 	 * Settings for the widget panel on the right side of the chart.
-	 * Watchlist, news, details and data window widgets on the right side of the chart can be enabled using the `widgetbar` field in Widget constructor
+	 * Watchlist, news, details and data window widgets on the right side of the chart can be enabled using the `widgetbar` field in Widget Constructor
 	 */
 	widgetbar?: WidgetBarParams;
 	/**
@@ -16773,16 +25526,11 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 *
 	 * **NOTE 3:** If both `news_provider` and `rss_news_feed` are available then the `rss_news_feed` will be ignored.
 	 *
-	 * See [News API examples](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/News-Api-Examples) for usage examples.
+	 * See [News API examples](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/News-Api-Examples.md) for usage examples.
 	 */
 	news_provider?: GetNewsFunction;
 	/** Override customizations for trading */
 	trading_customization?: TradingCustomization;
-	/**
-	 * @deprecated
-	 * Alias for {@link broker_factory}
-	 */
-	brokerFactory?(host: IBrokerConnectionAdapterHost): IBrokerWithoutRealtime | IBrokerTerminal;
 	/**
 	 * Use this field to pass the function that returns a new object which implements Broker API. This is a function that accepts the Trading Host ({@link IBrokerConnectionAdapterHost}).
 	 *
@@ -16793,6 +25541,28 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 * @param host - Trading Host
 	 */
 	broker_factory?(host: IBrokerConnectionAdapterHost): IBrokerWithoutRealtime | IBrokerTerminal;
+}
+/**
+ * Overrides for the 'Trend Strength Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface TrendStrengthIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Override properties for the Trendangle drawing tool.
@@ -16997,7 +25767,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level9.visible": boolean;
 	/** Default value: `0` */
 	"linetooltrendbasedfibextension.levelsStyle.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibextension.levelsStyle.linewidth": number;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.reverse": boolean;
@@ -17011,7 +25781,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.trendline.color": string;
 	/** Default value: `2` */
 	"linetooltrendbasedfibextension.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibextension.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.trendline.visible": boolean;
@@ -17032,7 +25802,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level1.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level1.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level1.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level1.visible": boolean;
@@ -17042,7 +25812,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level10.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level10.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level10.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level10.visible": boolean;
@@ -17052,7 +25822,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level11.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level11.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level11.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level11.visible": boolean;
@@ -17062,7 +25832,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level2.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level2.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level2.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level2.visible": boolean;
@@ -17072,7 +25842,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level3.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level3.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level3.linewidth": number;
 	/** Default value: `false` */
 	"linetooltrendbasedfibtime.level3.visible": boolean;
@@ -17082,7 +25852,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level4.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level4.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level4.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level4.visible": boolean;
@@ -17092,7 +25862,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level5.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level5.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level5.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level5.visible": boolean;
@@ -17102,7 +25872,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level6.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level6.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level6.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level6.visible": boolean;
@@ -17112,7 +25882,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level7.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level7.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level7.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level7.visible": boolean;
@@ -17122,7 +25892,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level8.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level8.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level8.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level8.visible": boolean;
@@ -17132,7 +25902,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.level9.color": string;
 	/** Default value: `0` */
 	"linetooltrendbasedfibtime.level9.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.level9.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.level9.visible": boolean;
@@ -17144,7 +25914,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.trendline.color": string;
 	/** Default value: `2` */
 	"linetooltrendbasedfibtime.trendline.linestyle": number;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrendbasedfibtime.trendline.linewidth": number;
 	/** Default value: `true` */
 	"linetooltrendbasedfibtime.trendline.visible": boolean;
@@ -17216,7 +25986,7 @@ export interface TriangleLineToolOverrides {
 	"linetooltriangle.color": string;
 	/** Default value: `true` */
 	"linetooltriangle.fillBackground": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltriangle.linewidth": number;
 	/** Default value: `80` */
 	"linetooltriangle.transparency": number;
@@ -17237,12 +26007,124 @@ export interface TrianglepatternLineToolOverrides {
 	"linetooltrianglepattern.fontsize": number;
 	/** Default value: `false` */
 	"linetooltrianglepattern.italic": boolean;
-	/** Default value: `1` */
+	/** Default value: `2` */
 	"linetooltrianglepattern.linewidth": number;
 	/** Default value: `#ffffff` */
 	"linetooltrianglepattern.textcolor": string;
 	/** Default value: `85` */
 	"linetooltrianglepattern.transparency": number;
+}
+/**
+ * Overrides for the 'Triple EMA' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface TripleEMAIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'True Strength Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface TrueStrengthIndexIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"true strength index.display": number;
+	/** Default value: `0` */
+	"true strength index.linestyle": number;
+	/** Default value: `1` */
+	"true strength index.linewidth": number;
+	/** Default value: `line` */
+	"true strength index.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"true strength index.trackprice": boolean;
+	/** Default value: `0` */
+	"true strength index.transparency": number;
+	/** Default value: `#2196F3` */
+	"true strength index.color": string;
+	/** Default value: `15` */
+	"signal.display": number;
+	/** Default value: `0` */
+	"signal.linestyle": number;
+	/** Default value: `1` */
+	"signal.linewidth": number;
+	/** Default value: `line` */
+	"signal.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"signal.trackprice": boolean;
+	/** Default value: `0` */
+	"signal.transparency": number;
+	/** Default value: `#E91E63` */
+	"signal.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Typical Price' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface TypicalPriceIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF6D00` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Ultimate Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface UltimateOscillatorIndicatorOverrides {
+	/** Default value: `15` */
+	"uo.display": number;
+	/** Default value: `0` */
+	"uo.linestyle": number;
+	/** Default value: `1` */
+	"uo.linewidth": number;
+	/** Default value: `line` */
+	"uo.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"uo.trackprice": boolean;
+	/** Default value: `0` */
+	"uo.transparency": number;
+	/** Default value: `#F23645` */
+	"uo.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 /**
  * Undo options.
@@ -17276,6 +26158,12 @@ export interface Unit {
 	/** Description */
 	description: string;
 }
+export interface UnitInfo {
+	/** Unit displayed on the price scale if any is specified */
+	selectedUnit: string | null;
+	/** Groups of units (for example weight, energy, ...) */
+	availableGroups: string[];
+}
 /**
  * Used in the schema defined in exportData API to describe the user time field.
  * This is used when `includeUserTime: true` is defined in `exportData` to add user time (aka time that is displayed to the user on the chart) to exported data.
@@ -17283,6 +26171,50 @@ export interface Unit {
 export interface UserTimeFieldDescriptor {
 	/** user time field descriptor */
 	type: "userTime";
+}
+/**
+ * Overrides for the 'VWAP' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VWAPIndicatorOverrides {
+	/** Default value: `15` */
+	"vwap.display": number;
+	/** Default value: `0` */
+	"vwap.linestyle": number;
+	/** Default value: `1` */
+	"vwap.linewidth": number;
+	/** Default value: `line` */
+	"vwap.plottype": LineStudyPlotStyleName;
+	/** Default value: `0` */
+	"vwap.trackprice": number;
+	/** Default value: `0` */
+	"vwap.transparency": number;
+	/** Default value: `#2196F3` */
+	"vwap.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'VWMA' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VWMAIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export interface ValueByStyleId<TValue> {
 	[styleId: string]: TValue | undefined;
@@ -17355,6 +26287,312 @@ export interface VisibleTimeRange {
 	 */
 	to: number;
 }
+/**
+ * Overrides for the 'Volatility Close-to-Close' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolatilityClosetoCloseIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volatility Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolatilityIndexIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volatility O-H-L-C' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolatilityOHLCIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#FF5252` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volatility Zero Trend Close-to-Close' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolatilityZeroTrendClosetoCloseIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volume' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolumeIndicatorOverrides {
+	/** Default value: `15` */
+	"volume.display": number;
+	/** Default value: `0` */
+	"volume.linestyle": number;
+	/** Default value: `1` */
+	"volume.linewidth": number;
+	/** Default value: `columns` */
+	"volume.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume.trackprice": boolean;
+	/** Default value: `50` */
+	"volume.transparency": number;
+	/** Default value: `#000080` */
+	"volume.color": string;
+	/** Default value: `0` */
+	"volume ma.display": number;
+	/** Default value: `0` */
+	"volume ma.linestyle": number;
+	/** Default value: `1` */
+	"volume ma.linewidth": number;
+	/** Default value: `line` */
+	"volume ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"volume ma.trackprice": boolean;
+	/** Default value: `0` */
+	"volume ma.transparency": number;
+	/** Default value: `#2196F3` */
+	"volume ma.color": string;
+	/** Default value: `0` */
+	"smoothed ma.display": number;
+	/** Default value: `0` */
+	"smoothed ma.linestyle": number;
+	/** Default value: `1` */
+	"smoothed ma.linewidth": number;
+	/** Default value: `line` */
+	"smoothed ma.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"smoothed ma.trackprice": boolean;
+	/** Default value: `0` */
+	"smoothed ma.transparency": number;
+	/** Default value: `#2196F3` */
+	"smoothed ma.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volume Oscillator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolumeOscillatorIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero.color": string;
+	/** Default value: `2` */
+	"zero.linestyle": number;
+	/** Default value: `1` */
+	"zero.linewidth": number;
+	/** Default value: `true` */
+	"zero.visible": boolean;
+	/** Default value: `0` */
+	"zero.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volume Profile Fixed Range' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolumeProfileFixedRangeIndicatorOverrides {
+	/** Default value: `#ff0000` */
+	"developing poc.color": string;
+	/** Default value: `0` */
+	"developing poc.linestyle": number;
+	/** Default value: `1` */
+	"developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"developing poc.transparency": number;
+	/** Default value: `0` */
+	"developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"developing va high.color": string;
+	/** Default value: `0` */
+	"developing va high.linestyle": number;
+	/** Default value: `1` */
+	"developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va high.transparency": number;
+	/** Default value: `0` */
+	"developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"developing va low.color": string;
+	/** Default value: `0` */
+	"developing va low.linestyle": number;
+	/** Default value: `1` */
+	"developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va low.transparency": number;
+	/** Default value: `0` */
+	"developing va low.display": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Volume Profile Visible Range' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VolumeProfileVisibleRangeIndicatorOverrides {
+	/** Default value: `#ff0000` */
+	"developing poc.color": string;
+	/** Default value: `0` */
+	"developing poc.linestyle": number;
+	/** Default value: `1` */
+	"developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"developing poc.transparency": number;
+	/** Default value: `0` */
+	"developing poc.display": number;
+	/** Default value: `#0000ff` */
+	"developing va high.color": string;
+	/** Default value: `0` */
+	"developing va high.linestyle": number;
+	/** Default value: `1` */
+	"developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va high.transparency": number;
+	/** Default value: `0` */
+	"developing va high.display": number;
+	/** Default value: `#0000ff` */
+	"developing va low.color": string;
+	/** Default value: `0` */
+	"developing va low.linestyle": number;
+	/** Default value: `1` */
+	"developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va low.transparency": number;
+	/** Default value: `0` */
+	"developing va low.display": number;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Vortex Indicator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface VortexIndicatorIndicatorOverrides {
+	/** Default value: `15` */
+	"vi +.display": number;
+	/** Default value: `0` */
+	"vi +.linestyle": number;
+	/** Default value: `1` */
+	"vi +.linewidth": number;
+	/** Default value: `line` */
+	"vi +.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vi +.trackprice": boolean;
+	/** Default value: `0` */
+	"vi +.transparency": number;
+	/** Default value: `#2196F3` */
+	"vi +.color": string;
+	/** Default value: `15` */
+	"vi -.display": number;
+	/** Default value: `0` */
+	"vi -.linestyle": number;
+	/** Default value: `1` */
+	"vi -.linewidth": number;
+	/** Default value: `line` */
+	"vi -.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"vi -.trackprice": boolean;
+	/** Default value: `0` */
+	"vi -.transparency": number;
+	/** Default value: `#E91E63` */
+	"vi -.color": string;
+	[key: string]: StudyOverrideValueType;
+}
 export interface WatchListSymbolList extends WatchListSymbolListData {
 	/** Symbol ID */
 	id: string;
@@ -17374,6 +26612,24 @@ export interface WatchedValueSubscribeOptions {
 	once?: boolean;
 	/** if it is set to true then the callback will be executed with the previous value (if available) */
 	callWithLast?: boolean;
+}
+export interface WatchlistSettings {
+	/**
+	 * Sets the list of default symbols for watchlist.
+	 * Any item in the list which is prefixed with `###` will be considered a section divider in the watchlist.
+	 * @default []
+	 *
+	 * **Example:**
+	 * ```js
+	 * default_symbols: ['###TOP SECTION', 'AAPL', 'IBM', '###SECOND SECTION', 'MSFT']
+	 * ```
+	 */
+	default_symbols: string[];
+	/**
+	 * Enables read-only mode for the watchlist.
+	 * @default false
+	 */
+	readonly?: boolean;
 }
 /**
  * Data provided to the {@link WatermarkContentProvider}.
@@ -17435,26 +26691,155 @@ export interface WidgetBarParams {
 	 */
 	datawindow?: boolean;
 	/** Watchlist settings */
-	watchlist_settings?: {
-		/**
-		 * Sets the list of default symbols for watchlist.
-		 *
-		 * Any item in the list which is prefixed with `###` will be considered a
-		 * section divider in the watchlist.
-		 * @default []
-		 *
-		 * **Example:**
-		 * ```
-		 * default_symbols: ['###TOP SECTION', 'AAPL', 'IBM', '###SECOND SECTION', 'MSFT']
-		 * ```
-		 */
-		default_symbols: string[];
-		/**
-		 * Enables read-only mode for the watchlist
-		 * @default false
-		 */
-		readonly?: boolean;
-	};
+	watchlist_settings?: WatchlistSettings;
+}
+/**
+ * Overrides for the 'Williams Alligator' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface WilliamsAlligatorIndicatorOverrides {
+	/** Default value: `15` */
+	"jaw.display": number;
+	/** Default value: `0` */
+	"jaw.linestyle": number;
+	/** Default value: `1` */
+	"jaw.linewidth": number;
+	/** Default value: `line` */
+	"jaw.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"jaw.trackprice": boolean;
+	/** Default value: `0` */
+	"jaw.transparency": number;
+	/** Default value: `#2196F3` */
+	"jaw.color": string;
+	/** Default value: `15` */
+	"teeth.display": number;
+	/** Default value: `0` */
+	"teeth.linestyle": number;
+	/** Default value: `1` */
+	"teeth.linewidth": number;
+	/** Default value: `line` */
+	"teeth.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"teeth.trackprice": boolean;
+	/** Default value: `0` */
+	"teeth.transparency": number;
+	/** Default value: `#E91E63` */
+	"teeth.color": string;
+	/** Default value: `15` */
+	"lips.display": number;
+	/** Default value: `0` */
+	"lips.linestyle": number;
+	/** Default value: `1` */
+	"lips.linewidth": number;
+	/** Default value: `line` */
+	"lips.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"lips.trackprice": boolean;
+	/** Default value: `0` */
+	"lips.transparency": number;
+	/** Default value: `#66BB6A` */
+	"lips.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Williams Fractal' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface WilliamsFractalIndicatorOverrides {
+	/** Default value: `15` */
+	"down fractals.display": number;
+	/** Default value: `shape_triangle_down` */
+	"down fractals.plottype": string;
+	/** Default value: `BelowBar` */
+	"down fractals.location": string;
+	/** Default value: `0` */
+	"down fractals.transparency": number;
+	/** Default value: `#F23645` */
+	"down fractals.color": string;
+	/** Default value: `15` */
+	"up fractals.display": number;
+	/** Default value: `shape_triangle_up` */
+	"up fractals.plottype": string;
+	/** Default value: `AboveBar` */
+	"up fractals.location": string;
+	/** Default value: `0` */
+	"up fractals.transparency": number;
+	/** Default value: `#089981` */
+	"up fractals.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Williams %R' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface WilliamsRIndicatorOverrides {
+	/** Default value: `#7E57C2` */
+	"hlines background.color": string;
+	/** Default value: `90` */
+	"hlines background.transparency": number;
+	/** Default value: `true` */
+	"hlines background.visible": boolean;
+	/** Default value: `#787B86` */
+	"upperlimit.color": string;
+	/** Default value: `2` */
+	"upperlimit.linestyle": number;
+	/** Default value: `1` */
+	"upperlimit.linewidth": number;
+	/** Default value: `true` */
+	"upperlimit.visible": boolean;
+	/** Default value: `-20` */
+	"upperlimit.value": number;
+	/** Default value: `#787B86` */
+	"lowerlimit.color": string;
+	/** Default value: `2` */
+	"lowerlimit.linestyle": number;
+	/** Default value: `1` */
+	"lowerlimit.linewidth": number;
+	/** Default value: `true` */
+	"lowerlimit.visible": boolean;
+	/** Default value: `-80` */
+	"lowerlimit.value": number;
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `1` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#7E57C2` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Overrides for the 'Zig Zag' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface ZigZagIndicatorOverrides {
+	/** Default value: `15` */
+	"plot.display": number;
+	/** Default value: `0` */
+	"plot.linestyle": number;
+	/** Default value: `2` */
+	"plot.linewidth": number;
+	/** Default value: `line` */
+	"plot.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"plot.trackprice": boolean;
+	/** Default value: `0` */
+	"plot.transparency": number;
+	/** Default value: `#2196F3` */
+	"plot.color": string;
+	[key: string]: StudyOverrideValueType;
 }
 export type AccountId = Nominal<string, "AccountID">;
 export type AccountManagerColumn = {
@@ -17474,6 +26859,10 @@ export type CellAlignment = "left" | "right";
  * A chart action ID.
  */
 export type ChartActionId = "chartProperties" | "compareOrAdd" | "scalesProperties" | "paneObjectTree" | "insertIndicator" | "symbolSearch" | "changeInterval" | "timeScaleReset" | "chartReset" | "seriesHide" | "studyHide" | "lineToggleLock" | "lineHide" | "scaleSeriesOnly" | "drawingToolbarAction" | "stayInDrawingModeAction" | "hideAllMarks" | "showCountdown" | "showSeriesLastValue" | "showSymbolLabelsAction" | "showStudyLastValue" | "showStudyPlotNamesAction" | "undo" | "redo" | "paneRemoveAllStudiesDrawingTools" | "showSymbolInfoDialog";
+/**
+ * Function to provide a description of the chart described by the context data
+ */
+export type ChartDescriptorFunction = (context: ChartDescriptionContext) => Promise<string | null>;
 /**
  * Chart type names for use within the `favorites` Widget Constructor option. This type is for Advanced Charts, if you are looking for the Trading Platform type then please see {@link TradingTerminalChartTypeFavorites}.
  *
@@ -17588,6 +26977,8 @@ export type ChartingLibraryFeatureset =
 "header_compare" | 
 /** Hides the undo/redo button from the header @default true */
 "header_undo_redo" | 
+/** Hides the quick search button from the header @default true */
+"header_quick_search" | 
 /** Hides the screenshot button from the header @default true */
 "header_screenshot" | 
 /** Hides the fullscreen button from the header @default true */
@@ -17741,6 +27132,8 @@ export type ChartingLibraryFeatureset =
 "request_only_visible_range_on_reset" | 
 /** Clear pane price scales when the main series has an error or has no bars. @default true */
 "clear_price_scale_on_error_or_empty_bars" | 
+/** Enables the ability to in-place edit of studies or series in legend. @default true */
+"legend_inplace_edit" | 
 /**
  * Display logos for the symbols within the symbol search dialog, and the watchlist widget. The datafeed should provide the image url within the search result item, and the SymbolInfo. {@link LibrarySymbolInfo.logo_urls}, {@link SearchSymbolResultItem.logo_urls}
  * @default false
@@ -17768,11 +27161,38 @@ export type ChartingLibraryFeatureset =
 "always_show_legend_values_on_mobile" | 
 /** Enable studies to extend the time scale, if enabled in the study metainfo */
 "studies_extend_time_scale" | 
+/** Replace Alt + Z with Tab, Tab with Shift + Arrow right, Shift + Tab with Shift + Arrow left @default false */
+"accessible_keyboard_shortcuts" | 
 /**
  * Enable accessibility features. Adds a keyboard shortcut which turns on keyboard navigation (alt/opt + z).
  * @default true
  */
-"accessibility";
+"accessibility" | 
+/**
+ * Generates a more detailed ARIA description of the chart for screen readers when the active chart is changed
+ * by the user. The more detailed description includes a brief description of the price values for the main series.
+ * ARIA descriptions are currently only provided for the English language, however you can use the
+ * {@link ChartingLibraryWidgetOptions.custom_chart_description_function} constructor option if you wish to add
+ * support for additional languages.
+ * @default false
+ */
+"aria_detailed_chart_descriptions" | 
+/**
+ * Announces, via the screen reader, the price when the crosshair is moved on the chart.
+ * Currently only supported for the English language.
+ * @default false
+ */
+"aria_crosshair_price_description" | 
+/**
+ * Enables an [alternative saving and loading mode](https://www.tradingview.com/charting-library-docs/latest/saving_loading/saving_loading.md#saving-drawings-separately) for the library. This mode saves the state of the drawings separately from the chart layout.
+ * @default false
+ */
+"saveload_separate_drawings_storage" | 
+/**
+ * Disables the pulse animation when chart type is set to Line.
+ * @default false
+ */
+"disable_pulse_animation";
 /** These are defining the types for a background */
 export type ColorTypes = "solid" | "gradient";
 /**
@@ -17786,14 +27206,15 @@ export type ContextMenuItemsProcessor = (items: readonly IActionVariant[], actio
  * @param  {readonlyIActionVariant[]} items - an array of items the library wants to display
  * @param  {CreateContextMenuParams} params - an object representing where the user right-clicked on (only if there is an existing menu)
  * @param  {()=>void} onDestroy - function that you should call once a created menu is hidden/destroyed
+ * @returns {Promise<IContextMenuRenderer | null>} - promise for a renderer or null. If the promise resolves with null, default chart menu is used
  */
-export type ContextMenuRendererFactory = (items: readonly IActionVariant[], params: CreateContextMenuParams, onDestroy: () => void) => Promise<IContextMenuRenderer>;
+export type ContextMenuRendererFactory = (items: readonly IActionVariant[], params: CreateContextMenuParams, onDestroy: () => void) => Promise<IContextMenuRenderer | null>;
 export type CreateButtonOptions = CreateHTMLButtonOptions | CreateTradingViewStyledButtonOptions;
 export type CustomStudyFormatter = Omit<INumberFormatter, "parse">;
 /**
  * Factory function that can be implemented to create custom study formatters.
  */
-export type CustomStudyFormatterFactory = (format: CustomStudyFormatterFormat, symbolInfo: LibrarySymbolInfo | null) => CustomStudyFormatter | null;
+export type CustomStudyFormatterFactory = (format: CustomStudyFormatterFormat, symbolInfo: LibrarySymbolInfo | null, precision: string | undefined) => CustomStudyFormatter | null;
 /**
  * A function that takes an {@link TableFormatterInputs} object and returns a `string` or an `HTMLElement`.
  */
@@ -17802,7 +27223,7 @@ export type CustomTableFormatElementFunction<T extends TableFormatterInputValues
  * Identifier for a custom timezone (string).
  */
 export type CustomTimezoneId = Nominal<"CustomTimezoneId", string>;
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 /**
  * Custom translation function
  * @param  {string} key - key for string to be translated
@@ -17831,9 +27252,10 @@ export type Direction = "buy" | "sell";
  */
 export type DrawingEventType = "click" | "move" | "remove" | "hide" | "show" | "create" | "properties_changed" | "points_changed";
 /**
- * **Override properties for drawing tools.**
+ * Override properties for drawings.
+ * Refer to the [Drawing Overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Drawings-Overrides.md) article for information on how to customize drawings.
  *
- * **The following constants are used within the default properties. You cannot use these names directly.**
+ * The following constants are used within the default properties. You cannot use these names directly.
  *
  * - LINESTYLE
  *   - SOLID = 0
@@ -17865,7 +27287,7 @@ export type DrawingEventType = "click" | "move" | "remove" | "hide" | "show" | "
  *   - PERCENTAGE = 'percents'
  *   - MONEY = 'money'
  */
-export type DrawingOverrides = FivepointspatternLineToolOverrides | AbcdLineToolOverrides | AnchoredvwapLineToolOverrides | ArcLineToolOverrides | ArrowLineToolOverrides | ArrowmarkdownLineToolOverrides | ArrowmarkerLineToolOverrides | ArrowmarkleftLineToolOverrides | ArrowmarkrightLineToolOverrides | ArrowmarkupLineToolOverrides | BalloonLineToolOverrides | BarspatternLineToolOverrides | BeziercubicLineToolOverrides | BezierquadroLineToolOverrides | BrushLineToolOverrides | CalloutLineToolOverrides | CircleLineToolOverrides | CirclelinesLineToolOverrides | CommentLineToolOverrides | CrosslineLineToolOverrides | CypherpatternLineToolOverrides | DisjointangleLineToolOverrides | ElliottcorrectionLineToolOverrides | ElliottdoublecomboLineToolOverrides | ElliottimpulseLineToolOverrides | ElliotttriangleLineToolOverrides | ElliotttriplecomboLineToolOverrides | EllipseLineToolOverrides | EmojiLineToolOverrides | ExecutionLineToolOverrides | ExtendedLineToolOverrides | FibchannelLineToolOverrides | FibcirclesLineToolOverrides | FibretracementLineToolOverrides | FibspeedresistancearcsLineToolOverrides | FibspeedresistancefanLineToolOverrides | FibspiralLineToolOverrides | FibtimezoneLineToolOverrides | FibwedgeLineToolOverrides | FlagmarkLineToolOverrides | FlatbottomLineToolOverrides | GanncomplexLineToolOverrides | GannfanLineToolOverrides | GannfixedLineToolOverrides | GannsquareLineToolOverrides | GhostfeedLineToolOverrides | HeadandshouldersLineToolOverrides | HighlighterLineToolOverrides | HorzlineLineToolOverrides | HorzrayLineToolOverrides | IconLineToolOverrides | ImageLineToolOverrides | InfolineLineToolOverrides | InsidepitchforkLineToolOverrides | NoteLineToolOverrides | NoteabsoluteLineToolOverrides | OrderLineToolOverrides | ParallelchannelLineToolOverrides | PathLineToolOverrides | PitchfanLineToolOverrides | PitchforkLineToolOverrides | PolylineLineToolOverrides | PositionLineToolOverrides | PredictionLineToolOverrides | PricelabelLineToolOverrides | ProjectionLineToolOverrides | RayLineToolOverrides | RectangleLineToolOverrides | RegressiontrendLineToolOverrides | RiskrewardlongLineToolOverrides | RiskrewardshortLineToolOverrides | RotatedrectangleLineToolOverrides | SchiffpitchforkLineToolOverrides | Schiffpitchfork2LineToolOverrides | SignpostLineToolOverrides | SinelineLineToolOverrides | StickerLineToolOverrides | TextLineToolOverrides | TextabsoluteLineToolOverrides | ThreedriversLineToolOverrides | TimecyclesLineToolOverrides | TrendangleLineToolOverrides | TrendbasedfibextensionLineToolOverrides | TrendbasedfibtimeLineToolOverrides | TrendlineLineToolOverrides | TriangleLineToolOverrides | TrianglepatternLineToolOverrides | VertlineLineToolOverrides;
+export type DrawingOverrides = FivepointspatternLineToolOverrides | AbcdLineToolOverrides | AnchoredvwapLineToolOverrides | ArcLineToolOverrides | ArrowLineToolOverrides | ArrowmarkdownLineToolOverrides | ArrowmarkerLineToolOverrides | ArrowmarkleftLineToolOverrides | ArrowmarkrightLineToolOverrides | ArrowmarkupLineToolOverrides | BalloonLineToolOverrides | BarspatternLineToolOverrides | BeziercubicLineToolOverrides | BezierquadroLineToolOverrides | BrushLineToolOverrides | CalloutLineToolOverrides | CircleLineToolOverrides | CommentLineToolOverrides | CrosslineLineToolOverrides | CypherpatternLineToolOverrides | DisjointangleLineToolOverrides | ElliottcorrectionLineToolOverrides | ElliottdoublecomboLineToolOverrides | ElliottimpulseLineToolOverrides | ElliotttriangleLineToolOverrides | ElliotttriplecomboLineToolOverrides | EllipseLineToolOverrides | EmojiLineToolOverrides | ExecutionLineToolOverrides | ExtendedLineToolOverrides | FibchannelLineToolOverrides | FibcirclesLineToolOverrides | FibretracementLineToolOverrides | FibspeedresistancearcsLineToolOverrides | FibspeedresistancefanLineToolOverrides | FibtimezoneLineToolOverrides | FibwedgeLineToolOverrides | FlagmarkLineToolOverrides | FlatbottomLineToolOverrides | GanncomplexLineToolOverrides | GannfanLineToolOverrides | GannfixedLineToolOverrides | GannsquareLineToolOverrides | GhostfeedLineToolOverrides | HeadandshouldersLineToolOverrides | HighlighterLineToolOverrides | HorzlineLineToolOverrides | HorzrayLineToolOverrides | IconLineToolOverrides | ImageLineToolOverrides | InfolineLineToolOverrides | InsidepitchforkLineToolOverrides | NoteLineToolOverrides | NoteabsoluteLineToolOverrides | OrderLineToolOverrides | ParallelchannelLineToolOverrides | PathLineToolOverrides | PitchfanLineToolOverrides | PitchforkLineToolOverrides | PolylineLineToolOverrides | PositionLineToolOverrides | PredictionLineToolOverrides | PricelabelLineToolOverrides | ProjectionLineToolOverrides | RayLineToolOverrides | RectangleLineToolOverrides | RegressiontrendLineToolOverrides | RiskrewardlongLineToolOverrides | RiskrewardshortLineToolOverrides | RotatedrectangleLineToolOverrides | SchiffpitchforkLineToolOverrides | Schiffpitchfork2LineToolOverrides | SignpostLineToolOverrides | SinelineLineToolOverrides | StickerLineToolOverrides | TextLineToolOverrides | TextabsoluteLineToolOverrides | ThreedriversLineToolOverrides | TimecyclesLineToolOverrides | TrendangleLineToolOverrides | TrendbasedfibextensionLineToolOverrides | TrendbasedfibtimeLineToolOverrides | TrendlineLineToolOverrides | TriangleLineToolOverrides | TrianglepatternLineToolOverrides | VertlineLineToolOverrides;
 export type DrawingToolIdentifier = "arrow" | "cursor" | "dot" | "eraser" | "LineTool5PointsPattern" | "LineToolABCD" | "LineToolArc" | "LineToolArrow" | "LineToolArrowMarkDown" | "LineToolArrowMarker" | "LineToolArrowMarkLeft" | "LineToolArrowMarkRight" | "LineToolArrowMarkUp" | "LineToolBarsPattern" | "LineToolBezierCubic" | "LineToolBezierQuadro" | "LineToolBrush" | "LineToolCallout" | "LineToolCircle" | "LineToolCircleLines" | "LineToolComment" | "LineToolCrossLine" | "LineToolCypherPattern" | "LineToolDateAndPriceRange" | "LineToolDateRange" | "LineToolDisjointAngle" | "LineToolElliottCorrection" | "LineToolElliottDoubleCombo" | "LineToolElliottImpulse" | "LineToolElliottTriangle" | "LineToolElliottTripleCombo" | "LineToolEllipse" | "LineToolExtended" | "LineToolFibChannel" | "LineToolFibCircles" | "LineToolFibRetracement" | "LineToolFibSpeedResistanceArcs" | "LineToolFibSpeedResistanceFan" | "LineToolFibSpiral" | "LineToolFibTimeZone" | "LineToolFibWedge" | "LineToolFixedRangeVolumeProfile" | "LineToolFlagMark" | "LineToolFlatBottom" | "LineToolGannComplex" | "LineToolGannFan" | "LineToolGannFixed" | "LineToolGannSquare" | "LineToolGhostFeed" | "LineToolHeadAndShoulders" | "LineToolHighlighter" | "LineToolHorzLine" | "LineToolHorzRay" | "LineToolInfoLine" | "LineToolInsidePitchfork" | "LineToolNote" | "LineToolNoteAbsolute" | "LineToolParallelChannel" | "LineToolPath" | "LineToolPitchfan" | "LineToolPitchfork" | "LineToolPolyline" | "LineToolPrediction" | "LineToolPriceLabel" | "LineToolPriceNote" | "LineToolPriceRange" | "LineToolProjection" | "LineToolRay" | "LineToolRectangle" | "LineToolRegressionTrend" | "LineToolRiskRewardLong" | "LineToolRiskRewardShort" | "LineToolRotatedRectangle" | "LineToolSchiffPitchfork" | "LineToolSchiffPitchfork2" | "LineToolSignpost" | "LineToolSineLine" | "LineToolText" | "LineToolTextAbsolute" | "LineToolThreeDrivers" | "LineToolTimeCycles" | "LineToolTrendAngle" | "LineToolTrendBasedFibExtension" | "LineToolTrendBasedFibTime" | "LineToolTrendLine" | "LineToolTriangle" | "LineToolTrianglePattern" | "LineToolVertLine";
 /** Dropdown options which can be adjusted on an existing menu. */
 export type DropdownUpdateParams = Partial<Omit<DropdownParams, "align">>;
@@ -17935,17 +27357,19 @@ export type IProjectionBar = [
 /**
  * An array of bar values.
  *
- * [time, open, high, low, close, volume, updatetime, isBarClosed]
+ * [time, open, high, low, close, volume, updatetime, isBarClosed, emptyBars, emptyBarsPrice]
  */
 export type ISeriesStudyResult = [
-	number,
-	number,
-	number,
-	number,
-	number,
-	number,
-	number | undefined,
-	boolean | undefined
+	time: number,
+	open: number,
+	high: number,
+	low: number,
+	close: number,
+	volume: number,
+	updatetime: number | undefined,
+	isBarClosed: boolean | undefined,
+	emptyBars: number[] | undefined,
+	emptyBarsPrice: number | undefined
 ];
 /**
  * Input field validator
@@ -17953,12 +27377,25 @@ export type ISeriesStudyResult = [
  */
 export type InputFieldValidator = (value: any) => InputFieldValidatorResult;
 export type InputFieldValidatorResult = PositiveBaseInputFieldValidatorResult | NegativeBaseInputFieldValidatorResult;
-export type LanguageCode = "ar" | "zh" | "cs" | "ca_ES" | "nl_NL" | "en" | "fr" | "de" | "el" | "he_IL" | "hu_HU" | "id_ID" | "it" | "ja" | "ko" | "pl" | "pt" | "ro" | "ru" | "es" | "sv" | "th" | "tr" | "vi" | "ms_MY" | "zh_TW";
+export type LanguageCode = "ar" | "zh" | "ca_ES" | "en" | "fr" | "de" | "he_IL" | "id_ID" | "it" | "ja" | "ko" | "pl" | "pt" | "ru" | "es" | "sv" | "th" | "tr" | "vi" | "ms_MY" | "zh_TW";
 export type LayoutType = SingleChartLayoutType | MultipleChartsLayoutType;
 export type LegendMode = "horizontal" | "vertical";
 export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarket";
+/**
+ * Plot Style. Used for `plottype` properties within [Indicator overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Studies-Overrides.md).
+ */
+export type LineStudyPlotStyleName = "line" | "histogram" | "cross" | "area" | "columns" | "circles" | "line_with_breaks" | "area_with_breaks" | "step_line" | "step_line_with_breaks" | "step_line_with_diamonds";
+/**
+ * The type of data being requested from the {@link IExternalSaveLoadAdapter.loadLineToolsAndGroups} method.
+ *
+ * Usually, the 'mainSeriesLineTools' is the requested type that is important for implementing the restoration of drawings associated with a chart.
+ */
+export type LineToolsAndGroupsLoadRequestType = "allLineTools" | "lineToolsWithoutSymbol" | "studiesLineTools" | "mainSeriesLineTools";
 export type MarkConstColors = "red" | "green" | "blue" | "yellow";
 export type MultipleChartsLayoutType = "2h" | "2v" | "2-1" | "3s" | "3h" | "3v" | "4" | "6" | "8" | "1-2" | "3r" | "4h" | "4v" | "4s" | "5h" | "6h" | "7h" | "8h" | "1-3" | "2-2" | "2-3" | "1-4" | "5s" | "6c" | "8c";
+export type OmitActionId<T extends {
+	actionId: ActionId;
+}> = Omit<T, "actionId">;
 export type OnActionExecuteHandler = (action: IAction) => void;
 export type OnActionUpdateHandler = (action: IAction) => void;
 export type OnReadyCallback = (configuration: DatafeedConfiguration) => void;
@@ -17985,6 +27422,8 @@ export type PageName = "watchlist_details_news" | "data_window" | "object_tree";
  */
 export type PlotShapeId = "shape_arrow_down" | "shape_arrow_up" | "shape_circle" | "shape_cross" | "shape_xcross" | "shape_diamond" | "shape_flag" | "shape_square" | "shape_label_down" | "shape_label_up" | "shape_triangle_down" | "shape_triangle_up";
 export type PositionLineLengthUnit = "pixel" | "percentage";
+/** A price scale can either have a specific currency (string) or be a 'mix' of if multiple symbols with different currencies share the same scale. */
+export type PriceScaleSelectedCurrency = "Mixed" | string;
 export type PriceSource = "open" | "high" | "low" | "close";
 export type QuoteData = QuoteOkData | QuoteErrorData;
 /**
@@ -17999,9 +27438,9 @@ export type QuotesCallback = (data: QuoteData[]) => void;
 export type QuotesErrorCallback = (reason: string) => void;
 export type RawStudyMetaInfoId = Nominal<string, "RawStudyMetaInfoId">;
 export type RawStudyMetaInformation = Omit<RawStudyMetaInfo, "defaults" | "plots"> & {
-	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots) */
+	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots.md) */
 	readonly plots?: readonly Readonly<StudyPlotInformation>[];
-	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults) */
+	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults.md) */
 	readonly defaults?: Readonly<DeepPartial<StudyDefaults>>;
 };
 /**
@@ -18047,9 +27486,10 @@ export type SetVisibleTimeRange = Omit<VisibleTimeRange, "to"> & Partial<Pick<Vi
 export type ShapePoint = StickedPoint | PricedPoint | TimePoint;
 export type ShapesGroupId = Nominal<string, "ShapesGroupId">;
 export type SingleChartLayoutType = "s";
+export type SingleIndicatorOverrides = FiftyTwoWeekHighLowIndicatorOverrides | AcceleratorOscillatorIndicatorOverrides | AccumulationDistributionIndicatorOverrides | AccumulativeSwingIndexIndicatorOverrides | AdvanceDeclineIndicatorOverrides | AnchoredVWAPIndicatorOverrides | ArnaudLegouxMovingAverageIndicatorOverrides | AroonIndicatorOverrides | AverageDirectionalIndexIndicatorOverrides | AveragePriceIndicatorOverrides | AverageTrueRangeIndicatorOverrides | AwesomeOscillatorIndicatorOverrides | BalanceofPowerIndicatorOverrides | BollingerBandsIndicatorOverrides | BollingerBandsBIndicatorOverrides | BollingerBandsWidthIndicatorOverrides | ChaikinMoneyFlowIndicatorOverrides | ChaikinOscillatorIndicatorOverrides | ChaikinVolatilityIndicatorOverrides | ChandeKrollStopIndicatorOverrides | ChandeMomentumOscillatorIndicatorOverrides | ChopZoneIndicatorOverrides | ChoppinessIndexIndicatorOverrides | CommodityChannelIndexIndicatorOverrides | CompareIndicatorOverrides | ConnorsRSIIndicatorOverrides | CoppockCurveIndicatorOverrides | CorrelationLogIndicatorOverrides | CorrelationCoefficientIndicatorOverrides | DetrendedPriceOscillatorIndicatorOverrides | DirectionalMovementIndicatorOverrides | DonchianChannelsIndicatorOverrides | DoubleEMAIndicatorOverrides | EMACrossIndicatorOverrides | EaseOfMovementIndicatorOverrides | EldersForceIndexIndicatorOverrides | EnvelopesIndicatorOverrides | FisherTransformIndicatorOverrides | FixedRangeIndicatorOverrides | GuppyMultipleMovingAverageIndicatorOverrides | HistoricalVolatilityIndicatorOverrides | HullMovingAverageIndicatorOverrides | IchimokuCloudIndicatorOverrides | KeltnerChannelsIndicatorOverrides | KlingerOscillatorIndicatorOverrides | KnowSureThingIndicatorOverrides | LeastSquaresMovingAverageIndicatorOverrides | LinearRegressionCurveIndicatorOverrides | LinearRegressionSlopeIndicatorOverrides | MACrossIndicatorOverrides | MAwithEMACrossIndicatorOverrides | MACDIndicatorOverrides | MajorityRuleIndicatorOverrides | MassIndexIndicatorOverrides | McGinleyDynamicIndicatorOverrides | MedianPriceIndicatorOverrides | MomentumIndicatorOverrides | MoneyFlowIndexIndicatorOverrides | MovingAverageIndicatorOverrides | MovingAverageAdaptiveIndicatorOverrides | MovingAverageChannelIndicatorOverrides | MovingAverageDoubleIndicatorOverrides | MovingAverageExponentialIndicatorOverrides | MovingAverageHammingIndicatorOverrides | MovingAverageMultipleIndicatorOverrides | MovingAverageTripleIndicatorOverrides | MovingAverageWeightedIndicatorOverrides | NetVolumeIndicatorOverrides | OnBalanceVolumeIndicatorOverrides | OverlayIndicatorOverrides | ParabolicSARIndicatorOverrides | PivotPointsStandardIndicatorOverrides | PriceChannelIndicatorOverrides | PriceOscillatorIndicatorOverrides | PriceVolumeTrendIndicatorOverrides | RateOfChangeIndicatorOverrides | RatioIndicatorOverrides | RegressionTrendIndicatorOverrides | RelativeStrengthIndexIndicatorOverrides | RelativeVigorIndexIndicatorOverrides | RelativeVolatilityIndexIndicatorOverrides | SMIErgodicIndicatorOscillatorIndicatorOverrides | SessionsIndicatorOverrides | SmoothedMovingAverageIndicatorOverrides | SpreadIndicatorOverrides | StandardDeviationIndicatorOverrides | StandardErrorIndicatorOverrides | StandardErrorBandsIndicatorOverrides | StochasticIndicatorOverrides | StochasticRSIIndicatorOverrides | SuperTrendIndicatorOverrides | TRIXIndicatorOverrides | TrendStrengthIndexIndicatorOverrides | TripleEMAIndicatorOverrides | TrueStrengthIndexIndicatorOverrides | TypicalPriceIndicatorOverrides | UltimateOscillatorIndicatorOverrides | VWAPIndicatorOverrides | VWMAIndicatorOverrides | VolatilityClosetoCloseIndicatorOverrides | VolatilityIndexIndicatorOverrides | VolatilityOHLCIndicatorOverrides | VolatilityZeroTrendClosetoCloseIndicatorOverrides | VolumeIndicatorOverrides | VolumeOscillatorIndicatorOverrides | VolumeProfileFixedRangeIndicatorOverrides | VolumeProfileVisibleRangeIndicatorOverrides | VortexIndicatorIndicatorOverrides | WilliamsRIndicatorOverrides | WilliamsAlligatorIndicatorOverrides | WilliamsFractalIndicatorOverrides | ZigZagIndicatorOverrides;
 export type StudyAvailableConstSources = "open" | "high" | "low" | "close" | "hl2" | "hlc3" | "ohlc4" | "hlcc4";
 /** An event related to a study. */
-export type StudyEventType = "remove" | "price_scale_changed" | "paste_study";
+export type StudyEventType = "create" | "remove" | "price_scale_changed" | "paste_study";
 export type StudyFilledAreaStyle = StudyFilledAreaSolidColorStyle | StudyFilledAreaGradientColorStyle;
 export type StudyInputId = Nominal<string, "StudyInputId">;
 export type StudyInputInfo = StudyBooleanInputInfo | StudyTextInputInfo | StudySymbolInputInfo | StudyResolutionInputInfo | StudySessionInputInfo | StudySourceInputInfo | StudyNumericInputInfo | StudyPriceInputInfo | StudyColorInputInfo | StudyTimeInputInfo | StudyBarTimeInputInfo | StudyTextareaInputInfo;
@@ -18087,6 +27527,7 @@ export type StudyPlotValueFormat = StudyPlotValueInheritFormat | StudyPlotValueP
 export type StudyPriceScale = "new-left" | "new-right" | "no-scale" | "as-series";
 export type StudyPrimitiveResult = (number | StudyResultValueWithOffset)[];
 export type SubscribeBarsCallback = (bar: Bar) => void;
+export type SuggestedQtyChangedListener = (newQty: number) => void;
 export type SupportedLineTools = "text" | "anchored_text" | "note" | "anchored_note" | "signpost" | "double_curve" | "arc" | "icon" | "emoji" | "sticker" | "arrow_up" | "arrow_down" | "arrow_left" | "arrow_right" | "price_label" | "price_note" | "arrow_marker" | "flag" | "vertical_line" | "horizontal_line" | "cross_line" | "horizontal_ray" | "trend_line" | "info_line" | "trend_angle" | "arrow" | "ray" | "extended" | "parallel_channel" | "disjoint_angle" | "flat_bottom" | "anchored_vwap" | "pitchfork" | "schiff_pitchfork_modified" | "schiff_pitchfork" | "balloon" | "comment" | "inside_pitchfork" | "pitchfan" | "gannbox" | "gannbox_square" | "gannbox_fixed" | "gannbox_fan" | "fib_retracement" | "fib_trend_ext" | "fib_speed_resist_fan" | "fib_timezone" | "fib_trend_time" | "fib_circles" | "fib_spiral" | "fib_speed_resist_arcs" | "fib_channel" | "xabcd_pattern" | "cypher_pattern" | "abcd_pattern" | "callout" | "triangle_pattern" | "3divers_pattern" | "head_and_shoulders" | "fib_wedge" | "elliott_impulse_wave" | "elliott_triangle_wave" | "elliott_triple_combo" | "elliott_correction" | "elliott_double_combo" | "cyclic_lines" | "time_cycles" | "sine_line" | "long_position" | "short_position" | "forecast" | "date_range" | "price_range" | "date_and_price_range" | "bars_pattern" | "ghost_feed" | "projection" | "rectangle" | "rotated_rectangle" | "circle" | "ellipse" | "triangle" | "polyline" | "path" | "curve" | "cursor" | "dot" | "arrow_cursor" | "eraser" | "measure" | "zoom" | "brush" | "highlighter" | "regression_trend" | "fixed_range_volume_profile";
 /**
  * function to override the symbol input from symbol search dialogs
@@ -18094,7 +27535,7 @@ export type SupportedLineTools = "text" | "anchored_text" | "note" | "anchored_n
  */
 export type SymbolSearchCompleteOverrideFunction = (symbol: string, searchResultItem?: SearchSymbolResultItem) => Promise<SymbolSearchCompleteData>;
 export type SymbolSource = SymbolInputSymbolSource;
-export type SymbolType = "stock" | "index" | "forex" | "futures" | "bitcoin" | "crypto" | "undefined" | "expression" | "spread" | "cfd" | "economic" | "equity" | "dr" | "bond" | "right" | "warrant" | "fund" | "structured" | "commodity" | "fundamental" | "spot";
+export type SymbolType = "stock" | "index" | "forex" | "futures" | "bitcoin" | "crypto" | "undefined" | "expression" | "spread" | "cfd" | "economic" | "equity" | "dr" | "bond" | "right" | "warrant" | "fund" | "structured" | "commodity" | "fundamental" | "spot" | "swap";
 /**
  * A function that takes an {@link TableFormatterInputs} object and returns a `string`.
  */
@@ -18123,7 +27564,11 @@ export type TickMarkType =
 /**
  * A time with seconds.
  */
- | "TimeWithSeconds";
+ | "TimeWithSeconds"
+/**
+ * A time with milliseconds.
+ */
+ | "TimeWithMilliseconds";
 /**
  * Type of timeframe defined in the UI.
  * Can either be a single one {@link TimeFramePeriodBack} or a range {@link TimeFrameTimeRange}
@@ -18188,7 +27633,7 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
 "right_toolbar" | 
 /** Shows the Order Panel @default true */
 "order_panel" | 
-/** Shows the Order info section in the Order dialog @default true */
+/** Shows the Order info section in the Order Ticket @default true */
 "order_info" | 
 /** Shows the Buy/Sell Buttons in Legend @default true */
 "buy_sell_buttons" | 
@@ -18212,8 +27657,8 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
 "keep_object_tree_widget_in_right_toolbar" | 
 /** Show only the last price and change values in the main series legend @default false */
 "show_last_price_and_change_only_in_series_legend" | 
-/** Show a context menu on clicking the crosshair menu even when there's only 1 item to show @default false */
-"show_context_menu_in_crosshair_if_only_one_item" | 
+/** Adds the _Last day change values_ option to the _Chart Settings_ dialog in the UI. This option allows users to show/hide the last day change values in the main series legend. @default false */
+"legend_last_day_change" | 
 /** Enable context menu support in the watchlist. */
 "watchlist_context_menu " | 
 /** Hide the right_toolbar when initialising the chart. Can be expanded using the widgetBar API {@link IWidgetbarApi}  @default false */
