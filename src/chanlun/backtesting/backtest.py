@@ -123,7 +123,8 @@ class BackTest:
         if self.save_file is None:
             return
 
-        self.strategy.clear()
+        if self.strategy is not None:
+            self.strategy.clear()
 
         save_dict = {
             "save_file": self.save_file,
@@ -187,20 +188,22 @@ class BackTest:
         输出回测信息
         """
         self.log.info(fun.now_dt())
-        self.log.info(f"Save File : {self.save_file}")
+        self.log.info(f"保存地址 : {self.save_file}")
         self.log.info(
-            f"Mode {self.mode} init balance {self.init_balance} fee rate {self.fee_rate}"
+            f"回测模式 【{self.mode}】 初始资金 【{self.init_balance}】 手续费率 【{self.fee_rate}】"
         )
-        self.log.info(f"is stock {self.is_stock} is futures {self.is_futures}")
-        self.log.info(f"STR Class : {self.strategy}")
-        self.log.info(f"Base Code : {self.base_code}")
-        self.log.info(f"Run Codes : {self.codes}")
-        self.log.info(f"Frequencys : {self.frequencys}")
         self.log.info(
-            f"Start time : {self.start_datetime} End time : {self.end_datetime}"
+            f"股票 【{self.is_stock}】 期货 【{self.is_futures}】 (股票限制当日卖出，期货限制是否做空)"
         )
-        self.log.info(f"CL Config : {self.cl_config}")
-        self.log.info(f"Fee Total : {self.trader.fee_total}")
+        self.log.info(f"策略 : {self.strategy}")
+        self.log.info(f"基准代码 : {self.base_code}")
+        self.log.info(f"回测代码 : {self.codes}")
+        self.log.info(f"周期 : {self.frequencys}")
+        self.log.info(
+            f"起始时间 : {self.start_datetime} 结束时间 : {self.end_datetime}"
+        )
+        self.log.info(f"缠论配置 : {self.cl_config}")
+        self.log.info(f"交易总手续费 : {self.trader.fee_total}")
         return True
 
     def run(
@@ -244,8 +247,7 @@ class BackTest:
             try:
                 # 如果有开启操作二次过滤，则调用一下进行执行
                 self.trader.buffer_opts = self.strategy.filter_opts(
-                    self.trader.buffer_opts,
-                    self.trader
+                    self.trader.buffer_opts, self.trader
                 )
                 self.trader.run_buffer_opts()
             except Exception as e:
@@ -326,8 +328,10 @@ class BackTest:
                 for _code, _poss in BT.trader.positions_history.items():
                     self.trader.positions_history[_code] = _poss
                 # 持仓盈亏合并
-                for _code, _hold_profits in BT.trader.hold_profit_history.items():
-                    self.trader.hold_profit_history[_code] = _hold_profits
+                for _dt, _hold_profits in BT.trader.hold_profit_history.items():
+                    if _dt not in self.trader.hold_profit_history.keys():
+                        self.trader.hold_profit_history[_dt] = 0
+                    self.trader.hold_profit_history[_dt] += _hold_profits
                 # 合并订单记录
                 for _code, _orders in BT.trader.orders.items():
                     self.trader.orders[_code] = _orders
@@ -820,7 +824,7 @@ class BackTest:
                 f'首个交易日：{res["start_date"]} 最后交易日：{res["end_date"]} 总交易日：{res["total_days"]}'
             )
             print(
-                f'起始资金：{res["init_balance"]} 结束资金：{res["end_balance"]:,.2f} 总手续费：{res["total_fee"]:,.2f}'
+                f'起始资金：{res["init_balance"]:,.2f} 结束资金：{res["end_balance"]:,.2f} 总手续费：{res["total_fee"]:,.2f}'
             )
             print(
                 f'基准收益率：{res["base_return"]:,.2f}%  基准年化收益：{res["base_annual_return"]:,.2f}%%'
@@ -844,6 +848,7 @@ class BackTest:
         if self.mode != "trade":
             print("只有交易模式才能使用 pyfolio 计算回测结果")
             return None
+
         # 按照日期聚合资产变化
         new_day_balances = {}
         for dt, b in self.trader.balance_history.items():
@@ -920,7 +925,6 @@ class BackTest:
         base_prices = {"datetime": [], "val": []}
         balance_history = {"datetime": [], "val": []}
         hold_profit_history = {"datetime": [], "val": []}
-        hold_num_history = {"datetime": [], "val": []}
 
         # 获取所有的交易日期节点
         base_klines = self.datas.ex.klines(
@@ -935,21 +939,15 @@ class BackTest:
 
         # 按照时间统计当前时间持仓累计盈亏
         _hold_profit_sums = {}
-        _hold_num_sums = {}
-        for _code, _hp in self.trader.hold_profit_history.items():
-            for _dt, _p in _hp.items():
-                if _dt not in _hold_profit_sums.keys():
-                    _hold_profit_sums[_dt] = _p
-                    _hold_num_sums[_dt] = 1 if _p != 0 else 0
-                else:
-                    _hold_profit_sums[_dt] += _p
-                    _hold_num_sums[_dt] += 1 if _p != 0 else 0
+        for _dt, _p in self.trader.hold_profit_history.items():
+            if _dt not in _hold_profit_sums.keys():
+                _hold_profit_sums[_dt] = _p
+            else:
+                _hold_profit_sums[_dt] += _p
 
         # 按照时间累加总的收益
-        total_np = 0
         for _dt in dts:
             _dt = _dt.strftime("%Y-%m-%d %H:%M:%S")
-
             base_prices["datetime"].append(_dt)
 
             # 资金余额
@@ -969,22 +967,11 @@ class BackTest:
             else:
                 hold_profit_history["val"].append(0)
 
-            # 当前时间持仓数量
-            hold_num_history["datetime"].append(_dt)
-            if _dt in _hold_num_sums.keys():
-                hold_num_history["val"].append(_hold_num_sums[_dt])
-            else:
-                hold_num_history["val"].append(0)
-
-        # 平均持仓量
-        print("平均持仓数量：", np.mean(hold_num_history["val"]))
-
         return self.__create_backtest_charts(
-            base_prices, balance_history, hold_profit_history, hold_num_history
+            base_prices, balance_history, hold_profit_history
         )
 
     def backtest_charts_by_close_profit(self):
-
         # 获取所有的交易日期节点
         base_prices = {"datetime": [], "val": []}
         base_klines = self.datas.ex.klines(
@@ -999,12 +986,12 @@ class BackTest:
 
         # 获取所有的持仓历史，并按照平仓时间排序
         positions: List[POSITION] = []
-        for _code in self.trader.positions_history:
+        for _code in self.trader.positions_history.keys():
             positions.extend(iter(self.trader.positions_history[_code]))
         positions = sorted(positions, key=lambda p: p.close_datetime, reverse=False)
 
         # 持仓中的唯一买卖点
-        mmds = set([p.mmd for p in positions])
+        mmds = list(set([p.mmd for p in positions]))
         # 记录不同买卖点的收益总和
         dts_mmd_nps = {_m: {} for _m in mmds}
         # 按照平仓时间统计其中的收益总和
@@ -1095,31 +1082,68 @@ class BackTest:
         else:
             return chart.dump_options()
 
-    def positions(self, code=None, add_columns=None):
+    def positions(
+        self,
+        code: str = None,
+        add_columns: List[str] = None,
+        close_uids: List[str] = None,
+    ):
         """
         输出历史持仓信息
         如果 code 为 str 返回 特定 code 的数据
         """
         pos_objs = []
 
+        def get_close_profit(pos: POSITION, uids: List[str] = None):
+            if uids is None:
+                return {
+                    "close_datetime": pos.close_datetime,
+                    "profit": pos.profit,
+                    "profit_rate": pos.profit_rate,
+                    "max_profit_rate": pos.max_profit_rate,
+                    "max_loss_rate": pos.max_loss_rate,
+                    "close_msg": pos.close_msg,
+                }
+            if "clear" not in uids:
+                uids.append("clear")
+            # 按照时间从早到晚排序
+            close_profit = sorted(
+                pos.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
+            )
+            for _r in close_profit:
+                if _r[0] in uids:
+                    return {
+                        "close_datetime": _r[1]["close_datetime"],
+                        "profit": _r[1]["profit"],
+                        "profit_rate": _r[1]["profit_rate"],
+                        "max_profit_rate": _r[1]["max_profit_rate"],
+                        "max_loss_rate": _r[1]["max_loss_rate"],
+                        "close_msg": _r[1]["close_msg"],
+                    }
+            raise Exception(
+                f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {uids}"
+            )
+
         for _code in self.trader.positions_history.keys():
             if code is not None and _code != code:
                 continue
             for p in self.trader.positions_history[_code]:
+                p_profit = get_close_profit(p, close_uids)
                 p_obj = {
                     "code": _code,
                     "mmd": p.mmd,
                     "open_datetime": p.open_datetime,
-                    "close_datetime": p.close_datetime,
+                    "close_datetime": p_profit["close_datetime"],
                     "type": p.type,
                     "price": p.price,
                     "amount": p.amount,
                     "loss_price": p.loss_price,
-                    "profit_rate": p.profit_rate,
-                    "max_profit_rate": p.max_profit_rate,
-                    "max_loss_rate": p.max_loss_rate,
+                    "profit_rate": p_profit["profit_rate"],
+                    "max_profit_rate": p_profit["max_profit_rate"],
+                    "max_loss_rate": p_profit["max_loss_rate"],
                     "open_msg": p.open_msg,
-                    "close_msg": p.close_msg,
+                    "close_msg": p_profit["close_msg"],
+                    "open_uid": p.open_uid,
                 }
                 if add_columns is not None:
                     for _col in add_columns:
@@ -1156,10 +1180,7 @@ class BackTest:
 
     @staticmethod
     def __create_backtest_charts(
-        base_prices,
-        balance_history: dict,
-        hold_profit_history: dict,
-        hold_num_history: dict,
+        base_prices, balance_history: dict, hold_profit_history: dict
     ):
         """
         回测结果图表展示
@@ -1265,26 +1286,6 @@ class BackTest:
             )
         )
 
-        hold_num_chart = (
-            Bar()
-            .add_xaxis(xaxis_data=hold_num_history["datetime"])
-            .add_yaxis(
-                series_name="持仓数",
-                y_axis=hold_num_history["val"],
-                yaxis_index=3,
-                label_opts=opts.LabelOpts(is_show=False),
-            )
-            .set_global_opts(
-                tooltip_opts=opts.TooltipOpts(
-                    trigger="axis", axis_pointer_type="cross"
-                ),
-                yaxis_opts=opts.AxisOpts(position="right"),
-                legend_opts=opts.LegendOpts(
-                    is_show=True, pos_right="10%", background_color="yellow"
-                ),
-            )
-        )
-
         chart = Grid(
             init_opts=opts.InitOpts(width="90%", height="700px", theme="white")
         )
@@ -1292,22 +1293,11 @@ class BackTest:
             main_chart,
             is_control_axis_index=True,
             grid_opts=opts.GridOpts(
-                width="96%", height="80%", pos_left="1%", pos_right="3%"
+                width="96%", height="90%", pos_left="1%", pos_right="3%"
             ),
         )
         chart.add(
             hold_profit_chart,
-            is_control_axis_index=True,
-            grid_opts=opts.GridOpts(
-                height="10%",
-                width="96%",
-                pos_left="1%",
-                pos_right="3%",
-                pos_bottom="10%",
-            ),
-        )
-        chart.add(
-            hold_num_chart,
             is_control_axis_index=True,
             grid_opts=opts.GridOpts(
                 height="10%",

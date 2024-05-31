@@ -15,7 +15,9 @@ class StrategyMultipleZsMMDS(Strategy):
     def __init__(self):
         super().__init__()
 
-    def open(self, code, market_data: MarketDatas, poss: Dict[str, POSITION]) -> List[Operation]:
+    def open(
+        self, code, market_data: MarketDatas, poss: Dict[str, POSITION]
+    ) -> List[Operation]:
         """
         开仓监控，返回开仓配置
         """
@@ -30,7 +32,7 @@ class StrategyMultipleZsMMDS(Strategy):
         high_bi = self.last_done_bi(high_data.get_bis())
 
         # 当前笔所有配置中枢出现的买点交集，如果没有买卖点，退出
-        mmds = high_bi.line_mmds('&')
+        mmds = high_bi.line_mmds("&")
         if len(mmds) == 0:
             return opts
 
@@ -47,18 +49,36 @@ class StrategyMultipleZsMMDS(Strategy):
         # 止损放在笔结束分型的顶底
         loss_price = high_bi.end.val
 
-        if high_bi.mmd_exists(['1buy', '2buy', '3buy', 'l3buy'], '&'):
-            opts.append(Operation(opt='buy', mmd=high_bi.line_mmds('&')[0], loss_price=loss_price, info={},
-                                  msg=f'高级别笔出现买卖点 {high_bi.line_mmds("&")}'))
+        if high_bi.mmd_exists(["1buy", "2buy", "3buy", "l3buy"], "&"):
+            opts.append(
+                Operation(
+                    code=code,
+                    opt="buy",
+                    mmd=high_bi.line_mmds("&")[0],
+                    loss_price=loss_price,
+                    info={},
+                    msg=f'高级别笔出现买卖点 {high_bi.line_mmds("&")}',
+                )
+            )
             return opts
-        elif high_bi.mmd_exists(['1sell', '2sell', '3sell', 'l3sell'], '&'):
-            opts.append(Operation(opt='buy', mmd=high_bi.line_mmds('&')[0], loss_price=loss_price, info={},
-                                  msg=f'高级别笔出现买卖点 {high_bi.line_mmds("&")}'))
+        elif high_bi.mmd_exists(["1sell", "2sell", "3sell", "l3sell"], "&"):
+            opts.append(
+                Operation(
+                    code=code,
+                    opt="buy",
+                    mmd=high_bi.line_mmds("&")[0],
+                    loss_price=loss_price,
+                    info={},
+                    msg=f'高级别笔出现买卖点 {high_bi.line_mmds("&")}',
+                )
+            )
             return opts
 
         return opts
 
-    def close(self, code, mmd: str, pos: POSITION, market_data: MarketDatas) -> [Operation, None]:
+    def close(
+        self, code, mmd: str, pos: POSITION, market_data: MarketDatas
+    ) -> Union[Operation, None]:
         """
         持仓监控，返回平仓配置
 
@@ -78,15 +98,36 @@ class StrategyMultipleZsMMDS(Strategy):
             return loss_opt
 
         high_bi = self.last_done_bi(high_data.get_bis())
-        if 'buy' in mmd and (
-                high_bi.mmd_exists(['1sell', '2sell', '3sell', 'l3sell'], '|') or
-                (high_bi.type == 'up' and high_bi.bc_exists(['bi', 'pz', 'qs'], '|'))
-        ) and self.bi_td(high_bi, high_data):
-            return Operation('sell', mmd, msg=f'高级别笔出现 卖点 {high_bi.line_mmds("|")} 或 背驰 {high_bi.line_bcs("|")}')
-        elif 'sell' in mmd and (
-                high_bi.mmd_exists(['1buy', '2buy', '3buy', 'l3buy'], '|') or
-                (high_bi.type == 'down' and high_bi.bc_exists(['bi', 'pz', 'qs'], '|'))
-        ) and self.bi_td(high_bi, high_data):
-            return Operation('sell', mmd, msg=f'高级别笔出现 买点 {high_bi.line_mmds("|")} 或 背驰 {high_bi.line_bcs("|")}')
+        if (
+            "buy" in mmd
+            and (
+                high_bi.mmd_exists(["1sell", "2sell", "3sell", "l3sell"], "|")
+                or (high_bi.type == "up" and high_bi.bc_exists(["bi", "pz", "qs"], "|"))
+            )
+            and self.bi_td(high_bi, high_data)
+        ):
+            return Operation(
+                code,
+                "sell",
+                mmd,
+                msg=f'高级别笔出现 卖点 {high_bi.line_mmds("|")} 或 背驰 {high_bi.line_bcs("|")}',
+            )
+        elif (
+            "sell" in mmd
+            and (
+                high_bi.mmd_exists(["1buy", "2buy", "3buy", "l3buy"], "|")
+                or (
+                    high_bi.type == "down"
+                    and high_bi.bc_exists(["bi", "pz", "qs"], "|")
+                )
+            )
+            and self.bi_td(high_bi, high_data)
+        ):
+            return Operation(
+                code,
+                "sell",
+                mmd,
+                msg=f'高级别笔出现 买点 {high_bi.line_mmds("|")} 或 背驰 {high_bi.line_bcs("|")}',
+            )
 
         return None

@@ -100,7 +100,10 @@ def xg_single_xd_bi_zs_zf_5(cl_datas: List[ICL]):
         and kline.h > bi_zs.zg >= kline.l
         and (kline.c - kline.o) / kline.o > 0.05
     ):
-        return {"code": cd.get_code(), "msg": "线段向上，当前K线突破中枢高点，并且涨幅大于 5% 涨幅"}
+        return {
+            "code": cd.get_code(),
+            "msg": "线段向上，当前K线突破中枢高点，并且涨幅大于 5% 涨幅",
+        }
 
     return None
 
@@ -140,7 +143,10 @@ def xg_single_xd_bi_23_overlapped(cl_datas: List[ICL]):
         or overlapped_23_bi_2
         or overlapped_23_bi_3
     ):
-        return {"code": cd.get_code(), "msg": "线段向上，当前笔突破中枢高点后 2，3 买重叠"}
+        return {
+            "code": cd.get_code(),
+            "msg": "线段向上，当前笔突破中枢高点后 2，3 买重叠",
+        }
 
     return None
 
@@ -262,7 +268,10 @@ def xg_single_bi_1mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "1buy" and _m.zs.line_num < 9:
-                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔一买"}
+                return {
+                    "code": cd.get_code(),
+                    "msg": f"{cd.get_frequency()} 出现本级别笔一买",
+                }
 
     return None
 
@@ -284,7 +293,10 @@ def xg_single_bi_2mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "2buy" and _m.zs.line_num < 9:
-                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔二买"}
+                return {
+                    "code": cd.get_code(),
+                    "msg": f"{cd.get_frequency()} 出现本级别笔二买",
+                }
 
     return None
 
@@ -306,7 +318,10 @@ def xg_single_bi_3mmd(cl_datas: List[ICL], opt_type: list = []):
     for _zs_type, _mmds in bi.zs_type_mmds.items():
         for _m in _mmds:
             if _m.name == "3buy" and _m.zs.line_num < 9:
-                return {"code": cd.get_code(), "msg": f"{cd.get_frequency()} 出现本级别笔三买"}
+                return {
+                    "code": cd.get_code(),
+                    "msg": f"{cd.get_frequency()} 出现本级别笔三买",
+                }
 
     return None
 
@@ -409,7 +424,10 @@ def xg_single_pre_bi_tk_and_3buy(cl_datas: List[ICL]):
     # 出现三类买点，并且前笔的高点大于等于中枢的 gg 点
     for mmd in now_bi.mmds:
         if mmd.name == "3buy" and pre_bi.high >= mmd.zs.gg:
-            return {"code": cd.get_code(), "msg": f"三买前一笔出现 {up_qk_num} 缺口，可重点关注"}
+            return {
+                "code": cd.get_code(),
+                "msg": f"三买前一笔出现 {up_qk_num} 缺口，可重点关注",
+            }
     return None
 
 
@@ -446,7 +464,10 @@ def xg_single_find_3buy_by_1buy(cl_datas: List[ICL], opt_type: list = []):
                 if _l.mmd_exists(
                     ["1buy"] if bi.type == "down" else ["1sell"], _zs_type
                 ):
-                    return {"code": cd.get_code(), "msg": f"出现三买，并且之前有出现一买"}
+                    return {
+                        "code": cd.get_code(),
+                        "msg": f"出现三买，并且之前有出现一买",
+                    }
     return None
 
 
@@ -470,7 +491,12 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
     bi = cd.get_bis()[-1]
     if bi.type not in opt_direction:
         return None
-    if bi.mmd_exists(["3buy"] if bi.type == "down" else ["3sell"], "|", Config.ZS_TYPE_DN.value) is False:
+    if (
+        bi.mmd_exists(
+            ["3buy"] if bi.type == "down" else ["3sell"], "|", Config.ZS_TYPE_DN.value
+        )
+        is False
+    ):
         return None
     dn_zss = cd.get_bi_zss(Config.ZS_TYPE_DN.value)
     if (
@@ -576,7 +602,7 @@ if __name__ == "__main__":
     cl_config = query_cl_chart_config(market, code)
 
     klines = ex.klines(code, freq)
-    cds = web_batch_get_cl_datas(market, market, {freq: klines}, cl_config)
+    cds = web_batch_get_cl_datas(market, code, {freq: klines}, cl_config)
 
     res = xg_single_bi_1buy_next_l3buy_mmd(cds)
     print(res)
