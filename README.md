@@ -14,8 +14,6 @@
 
 [B站视频教程](https://space.bilibili.com/384267873/video)
 
-[缠论解盘 - Windows版本](https://chanlun-pro.readthedocs.io/WINDOWS_VERSION/)
-
 [更新日志](https://chanlun-pro.readthedocs.io/UPDATE/)
 
 

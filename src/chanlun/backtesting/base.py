@@ -691,8 +691,6 @@ class Strategy(ABC):
         平均K线，笔转折判断
         """
         cl_config = cd.get_config()
-        if cl_config["kline_type"] != Config.KLINE_TYPE_HEIKIN_ASHI.value:
-            return False
         # 笔要完成
         if bi.is_done() is False:
             return False
