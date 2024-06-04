@@ -21,7 +21,6 @@ class Config(Enum):
 
     # K 线类型
     KLINE_TYPE_DEFAULT = "kline_default"  # 默认K线
-    KLINE_TYPE_HEIKIN_ASHI = "kline_heikin_ashi"  # 平均K线
     KLINE_TYPE_CHANLUN = "kline_chanlun"  # 包含处理后的缠论K线
     # K 线缺口定义 (个人定制，不清楚的使用默认 none 配置)
     KLINE_QK_NONE = "none"
@@ -1053,9 +1052,10 @@ class ICL(metaclass=ABCMeta):
     @abstractmethod
     def get_klines(self) -> List[Kline]:
         """
-        返回原始K线列表
+        返回K线列表
         如果 kline_type == kline_default 则返回原始 K 线数据
-        如果 kline_type == kline_heikin_ashi 则返回经过处理后的平均K线数据，如需获取原始K线数据，使用 get_src_klines 方法
+        如果 kline_type == kline_chanlun 则返回缠论 K 线数据
+        如需获取原始K线数据，使用 get_src_klines 方法
         """
         pass
 
