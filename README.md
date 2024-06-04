@@ -16,18 +16,8 @@
 
 [缠论解盘 - Windows版本](https://chanlun-pro.readthedocs.io/WINDOWS_VERSION/)
 
-**项目的核心 `cl.py` 缠论计算，需要授权许可文件才可运行，加微信好友可免费获取20天使用授权。**
-
 [更新日志](https://chanlun-pro.readthedocs.io/UPDATE/)
 
-
-**加好友可免费获取20天使用授权**
-
-> 请先阅读安装文档，确保自己能够正常安装后，在添加微信好友；
->
-> 如需免费20天试用，需通过 pyarmor hdinfo 命令获取默认网卡地址后，发送给作者获取授权文件
-
-![微信](cookbook/docs/img/wx.jpg)
 
 * 缠论图表展示(沪深股市、港股、美股、期货、数字货币)
 * 行情数据下载（沪深股市、港股、美股、期货、数字货币）
@@ -62,13 +52,7 @@
 
 > 请先阅读安装文档，确保自己能够正常安装后，在添加微信好友；
 >
-> 如需免费20天试用，需通过
->
-> pip install pyarmor==7.7.4
->
-> pyarmor hdinfo
->
-> 命令获取默认网卡地址后，发送给作者获取授权文件
+> 扫码添加作者微信，备注 ：“chanlun-pro 试用”
 
 ![微信](cookbook/docs/img/wx.jpg)
 
@@ -87,10 +71,6 @@ QQ 群
 
 ![掘金量化回测](cookbook/docs/img/my_quant_backtest.png)
 
-**通过掘金量化进行回测**
-
-![掘金量化回测](cookbook/docs/img/my_quant_backtest.png)
-
 **通过 Jupyterlab 进行策略回测，图表展示回测结果；并展示回测标的历史行情，并标注买卖订单，从而进行策略优化**
 
 ![策略回测结果查看](cookbook/docs/img/back_test_1.png)
@@ -104,18 +84,4 @@ QQ 群
 
 ![监控任务管理](cookbook/docs/img/check.png)
 
-**通过掘金量化进行回测**
-
-![掘金量化回测](cookbook/docs/img/my_quant_backtest.png)
-
-**通过 Jupyterlab 进行策略回测，图表展示回测结果；并展示回测标的历史行情，并标注买卖订单，从而进行策略优化**
-
-![策略回测结果查看](cookbook/docs/img/back_test_1.png)
-
-**项目的回测没有资金与仓位管理，每次下单固定金额10W，主要用于测试策略信号的胜率与盈亏比**
-
-![策略回测结果查看](cookbook/docs/img/back_test_2.png)
-![策略回测结果查看](cookbook/docs/img/back_test_3.png)
-![策略回测结果查看](cookbook/docs/img/back_test_4.png)
-![策略回测结果查看](cookbook/docs/img/back_test_5.png)
 
