@@ -1,19 +1,26 @@
 <script type="text/javascript">
     (function () {
         if (window.JSON && window.JSON.parse) {
-            var c = document.getElementsByTagName("head"),
-                a = document.createElement("link");
+            var c = document.getElementsByTagName("head");
+
             try {
                 var b = JSON.parse(localStorage.tv_chart);
             } catch (d) {
                 b = {};
             }
-            "dark" === b.theme &&
-                ((a.href =
-                    "{{ url_for('static', filename='css/layui-theme-dark.css') }}"),
-                    (a.rel = "stylesheet"),
-                    (a.id = "layuicss-theme-dark"),
-                    c[0].appendChild(a));
+            if ("dark" === b.theme) {
+                var a = document.createElement("link");
+                a.href = "{{ url_for('static', filename='css/layui-theme-dark.css') }}";
+                a.rel = "stylesheet";
+                a.id = "layuicss-theme-dark";
+                c[0].appendChild(a)
+
+                var b = document.createElement("link");
+                b.href = "{{ url_for('static', filename='css/xm-select-dark.css') }}";
+                b.rel = "stylesheet";
+                b.id = "xmselectcss-theme-dark";
+                c[0].appendChild(b)
+            }
         }
     })();
 
