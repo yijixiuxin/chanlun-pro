@@ -43,8 +43,9 @@
             <label class="layui-form-label">运行间隔(分钟)</label>
             <div class="layui-input-block" title="设置每几分钟检测一次">
                 <label for="interval_minutes">
-                    <input type="text" name="interval_minutes" value="{{ interval_minutes }}" placeholder="设置每几分钟检测一次"
-                        lay-filter="alert_config" lay-verify="required" class="layui-input" />
+                    <input type="text" name="interval_minutes" value="{{ interval_minutes }}"
+                        placeholder="设置每几分钟检测一次（小于60）" lay-filter="alert_config" lay-verify="required|number"
+                        class="layui-input" />
                 </label>
             </div>
         </div>
@@ -220,6 +221,10 @@
                     }
                     alert_config[_name] = _val
                 });
+                if (alert_config['interval_minutes'] >= 60) {
+                    layer.msg('运行间隔(分钟)必须小于60分钟');
+                    return false;
+                }
                 if (alert_config['check_bi_bc'] === '' && alert_config['check_bi_mmd'] === '' && alert_config['check_xd_bc'] === '' && alert_config['check_xd_mmd'] === '') {
                     layer.msg('监控项目必须至少选择一项');
                     return false;
