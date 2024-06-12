@@ -1,4 +1,4 @@
-# Pyarmor 8.4.7 (pro), 005445, 2024-02-04T10:29:44.130355
+# Pyarmor 8.5.9 (pro), 005445, 2024-06-12T15:07:29.882580
 def __pyarmor__():
     import platform
     import sys
@@ -24,7 +24,7 @@ def __pyarmor__():
     def format_machine():
         mach = platform.machine().lower()
         arch_table = (
-            ('x86', ('i386', 'i486', 'i586', 'i686')),
+            ('x86', ('i386', 'i486', 'i586', 'i686', 'x86')),
             ('x86_64', ('x64', 'x86_64', 'amd64', 'intel')),
             ('arm', ('armv5',)),
             ('armv6', ('armv6l',)),
