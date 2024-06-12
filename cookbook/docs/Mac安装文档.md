@@ -51,3 +51,25 @@
 
          cd web/chanlun_chart
          python app.py
+
+
+
+---
+
+> ## 针对于 M系列芯片 的处理  
+> 
+> 如果运行程序，被系统 kill 掉，启动不了，可以按照以下操作进行处理
+
+
+1. 打开“钥匙串访问”，菜单栏选择“证书助手”，“创建证书”，名称输入 “chanlun”，证书类型选择“代码签名”，然后创建；
+
+2. 在“命令行”中，输入 `security find-identity`，查看刚刚创建的证书（后面跟着 chanlun 这个名字）；
+
+3. 使用 codesign 进行签名，命令：
+        
+        # 进入程序目录下的 pyarmor_run_time_005445/darwin_aarch64 文件夹
+        cd /你的项目目录/chanlun-pro/src/pyarmor_run_time_005445/darwin_aarch64
+
+        # 使用 condesign 进行签名，`6DCA**替换你的证书ID**9ADF` 替换成 `security find-identity` 命令输出中的证书 ID
+        codesign -s "6DCA**替换你的证书ID**9ADF" pyarmor_runtime.cpython-310-darwin.so
+        
