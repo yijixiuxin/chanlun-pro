@@ -1,5 +1,6 @@
-# 回放行情所需
+# 信号回测文件，转换成交易模式
 
+import time
 import datetime
 from chanlun import fun
 from chanlun.backtesting.base import Operation, Strategy
@@ -53,9 +54,15 @@ class SignalToTrade(BackTestTrader):
 
         self.trade_strategy: Strategy = None
 
+        self.start_date: str = None
+        self.end_date: str = None
+
         # 根据信号中的价格赋值
         self.code_price: Dict[str, float] = {}
         self.now_datetime: datetime.datetime = None
+
+        # 缓存K线
+        self.cache_klines: Dict[str, pd.DataFrame] = {}
 
         self.market: str = None
         self.ex: ExchangeDB = None
@@ -63,31 +70,36 @@ class SignalToTrade(BackTestTrader):
 
     def get_price(self, code):
         try:
+            if code not in self.cache_klines.keys():
+                s_time = time.time()
+                self.cache_klines[code] = self.ex.klines(
+                    code,
+                    self.frequencys[-1],
+                    start_date=self.start_date,
+                    end_date=self.end_date,
+                    args={"limit": 9999999},
+                )
+                self.add_times("st_cache_klines", time.time() - s_time)
+
+            s_time = time.time()
+
             if self.market in ["us"]:
                 end_date = self.now_datetime - datetime.timedelta(days=1)
-                kline = self.ex.klines(
-                    code,
-                    self.frequencys[-1],
-                    end_date=fun.datetime_to_str(end_date),
-                    args={"limit": 10},
-                )
+                kline = self.cache_klines[code][
+                    self.cache_klines[code]["date"] <= end_date
+                ]
             elif self.market in ["currency", "futures"]:
                 end_date = self.now_datetime
-                kline = self.ex.klines(
-                    code,
-                    self.frequencys[-1],
-                    end_date=fun.datetime_to_str(end_date),
-                    args={"limit": 10},
-                )
-                kline = kline.iloc[0:-1:]
+                kline = self.cache_klines[code][
+                    self.cache_klines[code]["date"] < end_date
+                ]
             else:
-                kline = self.ex.klines(
-                    code,
-                    self.frequencys[-1],
-                    end_date=fun.datetime_to_str(self.now_datetime),
-                    args={"limit": 10},
-                )
+                kline = self.cache_klines[code][
+                    self.cache_klines[code]["date"] <= self.now_datetime
+                ]
             # tqdm.write(f"{self.now_datetime} {code} {kline.iloc[-1]['close']}")
+            self.add_times("st_get_price", time.time() - s_time)
+
             return {
                 "date": kline.iloc[-1]["date"],
                 "open": float(kline.iloc[-1]["open"]),
@@ -126,6 +138,9 @@ class SignalToTrade(BackTestTrader):
             BT.end_datetime = self.trade_end_date
         if self.trade_strategy is not None:
             BT.strategy = self.trade_strategy
+
+        self.start_date = BT.start_datetime
+        self.end_date = BT.end_datetime
 
         self.ex = ExchangeDB(BT.market)
 
@@ -176,14 +191,23 @@ class SignalToTrade(BackTestTrader):
 
             # 查询当前要平仓的仓位
             close_poss: List[Dict] = []
-            for _, _pos in pos_df.iterrows():
-                if _pos["close_datetime"] == _d and _pos["code"] in trade_pos_codes:
-                    close_poss.append(_pos)
+            if len(trade_pos_codes) > 0:
+                s_time = time.time()
+                close_poss: pd.DataFrame = pos_df.query(
+                    "code in @trade_pos_codes and close_datetime == @_d"
+                )
+                if len(close_poss) == 0:
+                    close_poss = []
+                else:
+                    close_poss = close_poss.to_dict(orient="records")
+                self.add_times("st_query_close_poss", time.time() - s_time)
+
             # 查询当前要开仓的仓位
-            open_poss: List[Dict] = []
-            for _, _pos in pos_df.iterrows():
-                if _pos["open_datetime"] == _d:
-                    open_poss.append(_pos)
+            s_time = time.time()
+            open_poss: List[Dict] = pos_df.query("open_datetime == @_d").to_dict(
+                orient="records"
+            )
+            self.add_times("st_query_open_poss", time.time() - s_time)
 
             # 优先进行平仓操作
             for _pos in close_poss:
@@ -223,9 +247,15 @@ class SignalToTrade(BackTestTrader):
                 open_opts.append(opt)
             if BT.strategy.is_filter_opts():
                 open_opts = BT.strategy.filter_opts(open_opts, self)
+
+            s_time = time.time()
             for _opt in open_opts:
                 self.execute(_opt.code, _opt)
+            self.add_times("st_execute", time.time() - s_time)
+
+            s_time = time.time()
             self.update_position_record()
+            self.add_times("st_update_position_record", time.time() - s_time)
 
         self.end()
 

@@ -59,7 +59,7 @@ class BackTestTrader(Trader):
         self.log_history = []
 
         # 时间统计
-        self._use_times = {
+        self.use_times = {
             "strategy_close": 0,
             "strategy_open": 0,
             "execute": 0,
@@ -166,6 +166,13 @@ class BackTestTrader(Trader):
         # 缓冲区的执行操作，用于在特定时间点批量进行开盘检测后，对要执行的开盘信号再次进行过滤筛选
         self.buffer_opts: List[Operation] = []
 
+    def add_times(self, key, ts):
+        if key not in self.use_times.keys():
+            self.use_times[key] = 0
+
+        self.use_times[key] += ts
+        return True
+
     def set_strategy(self, _strategy: Strategy):
         """
         设置策略对象
@@ -267,7 +274,7 @@ class BackTestTrader(Trader):
             opts = self.strategy.close(
                 code=code, mmd=pos.mmd, pos=pos, market_data=self.datas
             )
-            self._use_times["strategy_close"] += time.time() - _time
+            self.add_times("strategy_close", time.time() - _time)
 
             if opts is False or opts is None:
                 continue
@@ -290,7 +297,7 @@ class BackTestTrader(Trader):
 
         _time = time.time()
         opts = self.strategy.open(code=code, market_data=self.datas, poss=poss)
-        self._use_times["strategy_open"] += time.time() - _time
+        self.add_times("strategy_open", time.time() - _time)
 
         for opt in opts:
             opt.code = code
@@ -462,7 +469,7 @@ class BackTestTrader(Trader):
 
         hold_balance += pos.balance * pos.now_pos_rate
 
-        self._use_times["position_record"] += time.time() - s_time
+        self.add_times("position_record", time.time() - s_time)
         return now_profit, hold_balance
 
     def position_codes(self):
@@ -940,7 +947,7 @@ class BackTestTrader(Trader):
 
             return False
         finally:
-            self._use_times["execute"] += time.time() - _time
+            self.add_times("execute", time.time() - _time)
 
     def order_draw_tv_mark(
         self,
