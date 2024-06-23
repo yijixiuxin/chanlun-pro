@@ -163,10 +163,6 @@ class SignalToTrade(BackTestTrader):
         pos_df["_win"] = pos_df["profit_rate"].apply(lambda r: 1 if r > 0 else 0)
         if self.trade_mmds is not None:
             pos_df = pos_df.query("mmd in @self.trade_mmds")
-        # if self.trade_start_date is not None:
-        #     pos_df = pos_df.query(f"open_datetime >= '{self.trade_start_date}'")
-        # if self.trade_end_date is not None:
-        #     pos_df = pos_df.query(f"open_datetime <= '{self.trade_end_date}'")
 
         if self.trade_pos_querys is not None:
             for _mmd, _qs in self.trade_pos_querys.items():

@@ -235,7 +235,12 @@ class BackTest:
             if is_ok is False:
                 break
             # 更新持仓盈亏与资金变化
-            self.trader.update_position_record()
+            try:
+                self.trader.update_position_record()
+            except Exception as e:
+                self.log.error(f"执行记录持仓信息 : {self.datas.now_date} 异常")
+                self.log.error(traceback.format_exc())
+
             for code in self.codes:
                 try:
                     self.strategy.on_bt_loop_start(self)
