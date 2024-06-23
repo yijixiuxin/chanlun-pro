@@ -635,20 +635,25 @@ if __name__ == "__main__":
     from chanlun.exchange.exchange_db import ExchangeDB
     import pandas as pd
 
-    code = "BTC/USDT"
+    code = "AADR"
+    end_date = "2023-10-03 08:30:00"
 
-    ex = ExchangeDB("currency")
-    klines_w = ex.klines(code, "60m", end_date="2023-02-15 18:00:00")
-    klines_d = ex.klines(code, "10m", end_date="2023-02-15 18:00:00")
+    ex = ExchangeDB("us")
+    klines_h = ex.klines(code, "d", end_date=end_date)
+    klines_l = ex.klines(code, "60m", end_date=end_date)
 
-    print("周线最后10跟")
-    print(klines_w.tail(10))
-    print("日线最后10根")
-    print(klines_d.tail(10))
+    # 去除成交量为0的
+    klines_h = klines_h[klines_h['volume'] > 0]
+    klines_l = klines_l[klines_l['volume'] > 0]
 
-    convert_w = convert_currency_kline_frequency(klines_d, "60m")
-    print("转换成周线的最后10根")
-    print(convert_w.tail(10))
+    print("高周期最后10跟")
+    print(klines_h.tail(10))
+    print("多周期最后10根")
+    print(klines_l.tail(10))
+
+    convert_ch = convert_us_kline_frequency(klines_l, "d")
+    print("转换成高周期的最后10根")
+    print(convert_ch.tail(10))
     print("Done")
 
     # convert_klines_d = convert_us_kline_frequency(klines_30m, 'd')
