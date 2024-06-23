@@ -300,7 +300,7 @@ class BackTestKlines(MarketDatas):
                 if close_price is None:
                     close_price = _ks.iloc[-1]["close"]
                 if close_price != _ks.iloc[-1]["close"]:
-                    raise RuntimeError(
+                    raise RuntimeWarning(
                         f"{code} 获取K线异常，{_f} 周期的收盘价与其他周期数据不同"
                     )
 

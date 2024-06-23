@@ -245,7 +245,15 @@ class Strategy(ABC):
 
     def __init__(self):
         self.allow_close_uid = None
+        self.use_times = {}
         pass
+
+    def add_times(self, key: str, use_time: float):
+        if key not in self.use_times.keys():
+            self.use_times[key] = use_time
+        else:
+            self.use_times[key] += use_time
+        return True
 
     @abstractmethod
     def open(
