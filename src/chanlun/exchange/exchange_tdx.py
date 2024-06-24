@@ -674,7 +674,7 @@ if __name__ == "__main__":
     # print(len(all_stocks))
 
     s_time = time.time()
-    klines = ex.klines("SH.605296", "30m")
+    klines = ex.klines("SH.600000", "30m")
     print(klines.head(5))
     print(klines.tail(50))
     print(len(klines))
