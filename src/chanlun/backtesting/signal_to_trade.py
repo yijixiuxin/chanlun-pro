@@ -45,6 +45,7 @@ class SignalToTrade(BackTestTrader):
 
         self.log = tqdm.write
 
+        self.base_code: str = None
         self.trade_max_pos: int = None
         self.trade_start_date: str = None
         self.trade_end_date: str = None
@@ -84,9 +85,8 @@ class SignalToTrade(BackTestTrader):
             s_time = time.time()
 
             if self.market in ["us"]:
-                end_date = self.now_datetime - datetime.timedelta(days=1)
                 kline = self.cache_klines[code][
-                    self.cache_klines[code]["date"] <= end_date
+                    self.cache_klines[code]["date"] < self.now_datetime
                 ]
             elif self.market in ["currency", "futures"]:
                 end_date = self.now_datetime
@@ -130,6 +130,8 @@ class SignalToTrade(BackTestTrader):
         self.frequencys = BT.frequencys
         self.datas = BT.datas
 
+        if self.base_code is not None:
+            BT.base_code = self.base_code
         if self.trade_max_pos is not None:
             self.max_pos = self.trade_max_pos
         if self.trade_end_date is not None:

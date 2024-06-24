@@ -5,6 +5,7 @@ import talib
 
 from chanlun.cl_interface import *
 from chanlun.cl_utils import cal_zs_macd_infos
+from chanlun.fun import get_logger
 
 
 class POSITION:
@@ -253,6 +254,11 @@ class Strategy(ABC):
             self.use_times[key] = use_time
         else:
             self.use_times[key] += use_time
+        return True
+
+    def write_log(self, file_name: str, msg: str):
+        log = get_logger(file_name)
+        log.info(msg)
         return True
 
     @abstractmethod
