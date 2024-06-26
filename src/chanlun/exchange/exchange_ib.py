@@ -285,7 +285,7 @@ if __name__ == "__main__":
     # stock_info = ex.stock_info('DOCU')
     # print(stock_info)
     #
-    klines = ex.klines("NDX_IND_NASDAQ", "m")
+    klines = ex.klines("NVDA", "60m")
     print(klines.tail(20))
 
     # balance = ex.balance()
