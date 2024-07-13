@@ -2,6 +2,8 @@
 
 ---
 
+### [B站视频教程](https://space.bilibili.com/384267873)
+
 JupyterLab 作为一种基于 web 的集成开发环境，可以很方便在网页进行编写并运行 Python 代码。
 
 项目中策略回测与查看主要是在 JupyterLab 运行，建议使用。

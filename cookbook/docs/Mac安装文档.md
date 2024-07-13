@@ -49,6 +49,7 @@
 
 ### 7. 到 `web/chanlun_chart` 目录，启动 web 服务
 
+         conda activate chanlun
          cd web/chanlun_chart
          python app.py
 
