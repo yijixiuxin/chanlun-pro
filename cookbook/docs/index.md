@@ -4,11 +4,10 @@
 
 **基于缠论的市场行情量化分析工具**
 
-## [B站视频教程](https://space.bilibili.com/384267873/video)
+### [B站视频教程](https://space.bilibili.com/384267873)
 
 ----
 
-[缠论解盘 - Windows版本](WINDOWS_VERSION.md)
 
 **项目的核心 `cl.py` 缠论计算，需要授权许可文件才可运行，加微信好友可免费获取20天使用授权。**
 

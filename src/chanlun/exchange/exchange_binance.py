@@ -130,35 +130,39 @@ class ExchangeBinance(Exchange):
                 )
                 self.db_exchange.insert_klines(code, frequency, online_klines)
                 return online_klines
-
-            # 查询数据库，如果数据库为0，api查询并插入数据库
-            db_klines = self.db_exchange.klines(code, frequency, args={"limit": 10000})
-            if len(db_klines) == 0:
-                online_klines = self.online_klines(
-                    code, frequency, start_date, end_date, args
+            else:
+                # 查询数据库，如果数据库为0，api查询并插入数据库
+                db_klines = self.db_exchange.klines(
+                    code, frequency, args={"limit": 10000}
                 )
-                self.db_exchange.insert_klines(code, frequency, online_klines)
-                return online_klines
-
-            while True:
-                # 根据数据库中的最后时间，调用api进行返回数据
-                last_datetime = db_klines.iloc[-2]["date"].strftime("%Y-%m-%d %H:%M:%S")
-                online_klines = self.online_klines(
-                    code, frequency, start_date=last_datetime
-                )
-                self.db_exchange.insert_klines(code, frequency, online_klines)
-                if (
-                    len(online_klines) == 1500
-                ):  # 如果api获取的还是 1500，则说明没有跟新到最新的数据，则继续调用
-                    db_klines = self.db_exchange.klines(
-                        code, frequency, args={"limit": 10000}
+                if len(db_klines) == 0:
+                    online_klines = self.online_klines(
+                        code, frequency, start_date, end_date, args
                     )
-                else:
-                    break
+                    self.db_exchange.insert_klines(code, frequency, online_klines)
+                    return online_klines
 
-            klines = pd.concat([db_klines, online_klines], ignore_index=True)
-            klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
-            return klines[-10000::]
+                while True:
+                    # 根据数据库中的最后时间，调用api进行返回数据
+                    last_datetime = db_klines.iloc[-2]["date"].strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                    online_klines = self.online_klines(
+                        code, frequency, start_date=last_datetime
+                    )
+                    self.db_exchange.insert_klines(code, frequency, online_klines)
+                    if (
+                        len(online_klines) == 1500
+                    ):  # 如果api获取的还是 1500，则说明没有跟新到最新的数据，则继续调用
+                        db_klines = self.db_exchange.klines(
+                            code, frequency, args={"limit": 10000}
+                        )
+                    else:
+                        break
+
+                klines = pd.concat([db_klines, online_klines], ignore_index=True)
+                klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
+                return klines[-10000::]
         except Exception as e:
             print(traceback.format_exc())
 
