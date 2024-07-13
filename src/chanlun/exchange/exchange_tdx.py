@@ -266,8 +266,6 @@ class ExchangeTDX(Exchange):
                 # 将时间转换成 15:00:00
                 ks["date"] = ks["date"].apply(lambda _d: _d.replace(hour=15, minute=0))
 
-            if frequency == "w":  # 周设置为每周一
-                ks["date"] = ks["date"].apply(self.get_monday)
             if frequency == "m":  # 月设置为每月的一号
                 ks["date"] = ks["date"].apply(lambda _d: _d.replace(day=1))
             if frequency == "y":  # 年设置为一月一号
@@ -277,10 +275,10 @@ class ExchangeTDX(Exchange):
             if args["fq"] in ["qfq", "hfq"]:
                 ks = self.klines_fq(ks, self.xdxr(market, code, tdx_code), args["fq"])
 
+            ks.reset_index(inplace=True)
             if frequency in ["w", "120m", "10m", "2m"]:
                 ks = convert_stock_kline_frequency(ks, frequency)
 
-            ks.reset_index(inplace=True)
             ks = ks[["code", "date", "open", "close", "high", "low", "volume"]]
             return ks
         except TdxConnectionError:
@@ -674,9 +672,9 @@ if __name__ == "__main__":
     # print(len(all_stocks))
 
     s_time = time.time()
-    klines = ex.klines("SH.510300", "1m")
-    print(klines.head(5))
-    print(klines.tail(50))
+    klines = ex.klines("SH.600519", "w")
+    # print(klines.head(5))
+    print(klines.tail(10))
     print(len(klines))
 
     print("use time : ", time.time() - s_time)
