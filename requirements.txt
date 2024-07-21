@@ -28,7 +28,7 @@ pyarmor
 setuptools
 
 futu-api
-ccxt~=4.1.95
+ccxt==4.3.59
 baostock
 polygon-api-client
 alpaca-py
