@@ -123,6 +123,7 @@ class ExchangeBinance(Exchange):
         if "use_online" in args.keys() and args["use_online"]:
             # 个别情况需要直接调用交易所结果，不需要通过数据库
             return self.online_klines(code, frequency, start_date, end_date, args)
+
         try:
             if start_date is not None or end_date is not None:
                 online_klines = self.online_klines(
@@ -164,7 +165,9 @@ class ExchangeBinance(Exchange):
                 klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
                 return klines[-10000::]
         except Exception as e:
-            print(traceback.format_exc())
+            print(f"{code} - {frequency} Error : {e}")
+            # print(traceback.format_exc())
+            # exit()
 
         return None
 
@@ -220,12 +223,17 @@ class ExchangeBinance(Exchange):
                 )
                 * 1000
             )
+        params = {}
+        if start_date is not None:
+            params["startTime"] = start_date
+        if end_date is not None:
+            params["endTime"] = end_date
 
         kline = self.exchange.fetch_ohlcv(
             symbol=code,
             timeframe=frequency_map[frequency],
-            limit=1500,
-            params={"startTime": start_date, "endTime": end_date},
+            limit=1000,
+            params=params,
         )
         kline_pd = pd.DataFrame(
             kline, columns=["date", "open", "high", "low", "close", "volume"]
@@ -355,11 +363,29 @@ class ExchangeBinance(Exchange):
 
 
 if __name__ == "__main__":
+    from chanlun import zixuan
+
     ex = ExchangeBinance()
 
-    # klines = ex.klines("BTC/USDT", "d")
-    # print(klines.tail())
-    # print(len(klines))
+    # klines = ex.klines("DOGE/USDT", "60m")
+    # print(klines)
 
-    balance = ex.balance()
-    print(balance)
+    zx = zixuan.ZiXuan("currency")
+    zx_group = "选股"
+    run_codes = zx.zx_stocks("策略代码")
+    run_codes = [_s["code"] for _s in run_codes]
+    error_codes = []
+    for code in run_codes:
+        try:
+            klines = ex.klines(code, "60m")
+            print(code)
+            print(klines.tail())
+            print(len(klines))
+        except Exception as e:
+            print(f"ERROR {code}")
+            error_codes.append(code)
+
+    print("Error codes : ", error_codes)
+
+    # balance = ex.balance()
+    # print(balance)
