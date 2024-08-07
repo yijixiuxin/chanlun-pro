@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import warnings
 
-import pathlib
-
 from sqlalchemy import (
     UniqueConstraint,
     create_engine,
@@ -19,12 +17,12 @@ from sqlalchemy import (
     Text,
     func,
 )
-import sqlalchemy
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
+from chanlun.base import Market
 from chanlun import fun
 from chanlun import config
 from chanlun.config import get_data_path
@@ -52,7 +50,7 @@ class TableByZxGroup(Base):
     __table_args__ = (
         UniqueConstraint("market", "zx_group", name="table_market_group_unique"),
     )
-    market = Column(String(10), primary_key=True, comment="市场")
+    market = Column(String(20), primary_key=True, comment="市场")
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
 
@@ -61,7 +59,7 @@ class TableByZixuan(Base):
     # 自选表
     __tablename__ = "cl_zixuan_watchlist"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(10), comment="市场")  # 市场
+    market = Column(String(20), comment="市场")  # 市场
     zx_group = Column(String(20), comment="自选组")  # 自选组
     stock_code = Column(String(20), comment="标的代码")  # 标的代码
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
@@ -78,7 +76,7 @@ class TableByAlertTask(Base):
         UniqueConstraint("market", "task_name", name="table_market_task_name_unique"),
     )
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(10), comment="市场")  # 市场
+    market = Column(String(20), comment="市场")  # 市场
     task_name = Column(String(100), comment="任务名称")  # 任务名称
     zx_group = Column(String(20), comment="自选组")  # 自选组
     frequency = Column(String(20), comment="检查周期")  # 检查周期
@@ -98,7 +96,7 @@ class TableByAlertRecord(Base):
     # 提醒记录
     __tablename__ = "cl_alert_record"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(10), comment="市场")  # 市场
+    market = Column(String(20), comment="市场")  # 市场
     task_name = Column(String(100), comment="任务名称")  # 任务名称
     stock_code = Column(String(20), comment="标的")  # 标的
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
@@ -115,7 +113,7 @@ class TableByTVMarks(Base):
     # TV 图表的 mark 标记
     __tablename__ = "cl_tv_marks"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(10), comment="市场")  # 市场
+    market = Column(String(20), comment="市场")  # 市场
     stock_code = Column(String(20), comment="标的代码")  # 标的代码
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
     frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
@@ -131,7 +129,7 @@ class TableByOrder(Base):
     # 订单
     __tablename__ = "cl_order"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(10), comment="市场")  # 市场
+    market = Column(String(20), comment="市场")  # 市场
     stock_code = Column(String(20), comment="标的代码")  # 标的代码
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
     order_type = Column(String(20), comment="订单类型")  # 订单类型
@@ -198,15 +196,17 @@ class DB(object):
             .replace("@", "_")
             .lower()
         )
-        if market == "hk":
+        if market == Market.HK.value:
             table_name = f"{market}_klines_{stock_code[-3:]}"
-        elif market == "a":
+        elif market == Market.A.value:
             table_name = f"{market}_klines_{stock_code[:7]}"
-        elif market == "us":
+        elif market == Market.US.value:
             table_name = f"{market}_klines_{stock_code[0]}"
-        elif market == "currency":
+        elif market == Market.CURRENCY.value:
             table_name = f"{market}_klines_{stock_code}"
-        elif market == "futures":
+        elif market == Market.CURRENCY_SPOT.value:
+            table_name = f"{market}_klines_{stock_code}"
+        elif market == Market.FUTURES.value:
             table_name = f"{market}_klines_{stock_code}"
         else:
             raise Exception(f"市场错误：{market}")

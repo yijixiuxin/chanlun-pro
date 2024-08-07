@@ -1,21 +1,21 @@
-import traceback
 from typing import Union
 
 import ccxt
-import pymysql.err
 import pytz
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
+
 from chanlun import config, fun
 from chanlun.utils import config_get_proxy
+from chanlun.base import Market
 from chanlun.exchange.exchange import *
 from chanlun.exchange.exchange_db import ExchangeDB
 
 
 @fun.singleton
-class ExchangeBinance(Exchange):
+class ExchangeBinanceSpot(Exchange):
     """
-    数字货币交易所接口
+    数字货币交易所接口(现货交易)
     """
 
     g_all_stocks = []
@@ -38,9 +38,9 @@ class ExchangeBinance(Exchange):
             params["apiKey"] = config.BINANCE_APIKEY
             params["secret"] = config.BINANCE_SECRET
 
-        self.exchange = ccxt.binanceusdm(params)
+        self.exchange = ccxt.binance(params)
 
-        self.db_exchange = ExchangeDB("currency")
+        self.db_exchange = ExchangeDB(Market.CURRENCY_SPOT.value)
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -288,72 +288,17 @@ class ExchangeBinance(Exchange):
         return codes
 
     def balance(self):
-        b = self.exchange.fetch_balance()
-        balances = {
-            "total": b["USDT"]["total"],
-            "free": b["USDT"]["free"],
-            "used": b["USDT"]["used"],
-            "profit": b["info"]["totalUnrealizedProfit"],
-        }
-        for asset in b["info"]["assets"]:
-            balances[asset["asset"]] = {
-                "total": asset["availableBalance"],
-                "profit": asset["unrealizedProfit"],
-            }
-        return balances
+        raise RuntimeWarning("交易接口未实现")
 
     def positions(self, code: str = ""):
-        try:
-            position = self.exchange.fetch_positions(
-                symbols=[code] if code != "" else None
-            )
-        except Exception as e:
-            if "precision" in str(e):
-                self.__init__()
-                position = self.exchange.fetch_positions(
-                    symbols=[code] if code != "" else None
-                )
-            else:
-                raise e
-        """
-        symbol 标的
-        entryPrice 价格
-        contracts 持仓数量
-        side 方向 long short
-        leverage 杠杠倍数
-        unrealizedPnl 未实现盈亏
-        initialMargin 占用保证金
-        percentage 盈亏百分比
-        """
-        # 替换其中的 symbol ，去除后面的 :USDT
-        res_poss = []
-        for p in position:
-            if p["entryPrice"] != 0.0:
-                p["symbol"] = p["symbol"].replace(":USDT", "")
-                res_poss.append(p)
-        return res_poss
+        raise RuntimeWarning("交易接口未实现")
 
     # 撤销所有挂单
     def cancel_all_order(self, code):
-        self.exchange.cancel_all_orders(symbol=code)
-        return True
+        raise RuntimeWarning("交易接口未实现")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        trade_maps = {
-            "open_long": {"side": "BUY", "positionSide": "LONG"},
-            "open_short": {"side": "SELL", "positionSide": "SHORT"},
-            "close_long": {"side": "SELL", "positionSide": "LONG"},
-            "close_short": {"side": "BUY", "positionSide": "SHORT"},
-        }
-        if "open" in o_type:
-            self.exchange.set_leverage(args["leverage"], symbol=code)
-        return self.exchange.create_order(
-            symbol=code,
-            type="MARKET",
-            side=trade_maps[o_type]["side"],
-            amount=amount,
-            params={"positionSide": trade_maps[o_type]["positionSide"]},
-        )
+        raise RuntimeWarning("交易接口未实现")
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")
@@ -363,29 +308,8 @@ class ExchangeBinance(Exchange):
 
 
 if __name__ == "__main__":
-    from chanlun import zixuan
 
-    ex = ExchangeBinance()
+    ex = ExchangeBinanceSpot()
 
     klines = ex.klines("DOGE/USDT", "60m")
     print(klines)
-
-    # zx = zixuan.ZiXuan("currency")
-    # zx_group = "选股"
-    # run_codes = zx.zx_stocks("策略代码")
-    # run_codes = [_s["code"] for _s in run_codes]
-    # error_codes = []
-    # for code in run_codes:
-    #     try:
-    #         klines = ex.klines(code, "60m")
-    #         print(code)
-    #         print(klines.tail())
-    #         print(len(klines))
-    #     except Exception as e:
-    #         print(f"ERROR {code}")
-    #         error_codes.append(code)
-
-    # print("Error codes : ", error_codes)
-
-    balance = ex.balance()
-    print(balance)
