@@ -633,25 +633,27 @@ def convert_us_tdx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFr
 
 if __name__ == "__main__":
     from chanlun.exchange.exchange_db import ExchangeDB
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
     import pandas as pd
 
-    code = "AADR"
+    code = "SH.600519"
     end_date = "2023-10-03 08:30:00"
 
-    ex = ExchangeDB("us")
-    klines_h = ex.klines(code, "d", end_date=end_date)
-    klines_l = ex.klines(code, "60m", end_date=end_date)
+    # ex = ExchangeDB("us")
+    ex = ExchangeTDX()
+    # klines_h = ex.klines(code, "w", end_date=end_date)
+    klines_l = ex.klines(code, "d", end_date=end_date)
 
     # 去除成交量为0的
-    klines_h = klines_h[klines_h['volume'] > 0]
-    klines_l = klines_l[klines_l['volume'] > 0]
+    # klines_h = klines_h[klines_h["volume"] > 0]
+    klines_l = klines_l[klines_l["volume"] > 0]
 
-    print("高周期最后10跟")
-    print(klines_h.tail(10))
+    # print("高周期最后10跟")
+    # print(klines_h.tail(10))
     print("多周期最后10根")
     print(klines_l.tail(10))
 
-    convert_ch = convert_us_kline_frequency(klines_l, "d")
+    convert_ch = convert_stock_kline_frequency(klines_l, "w")
     print("转换成高周期的最后10根")
     print(convert_ch.tail(10))
     print("Done")

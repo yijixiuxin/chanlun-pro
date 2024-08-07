@@ -16,7 +16,7 @@ def check_env():
     # 检查 Python 版本
     version = f"{sys.version_info[0]}.{sys.version_info[1]}"
     print(f"当前Python版本：{version}")
-    allow_version = ["3.8", "3.9", "3.10"]
+    allow_version = ["3.8", "3.9", "3.10", "3.11"]
     if version not in allow_version:
         print(f"当前Python不在支持的列表中：{allow_version}")
         return

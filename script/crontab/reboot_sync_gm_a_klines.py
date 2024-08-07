@@ -91,8 +91,8 @@ if __name__ == "__main__":
                         f"Run code {code} frequency {f} klines len {len(klines)}"
                     )
                     db_ex.insert_klines(code, f, klines)
-                    if len(klines) < 500:
-                        break
+
+                    break
             except Exception as e:
                 tqdm.write(f"执行 {code} 同步K线异常")
                 traceback.format_exc()

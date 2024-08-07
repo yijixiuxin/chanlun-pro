@@ -198,7 +198,7 @@ class ExchangeTDX(Exchange):
                     get_bars = client.get_security_bars
 
                 ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if ks is None:
+                if ks is None or len(ks) == 0:
                     # 获取 8*800 = 6400 条数据
                     ks = pd.concat(
                         [

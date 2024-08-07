@@ -6,6 +6,7 @@ import pytz
 from chanlun import fun
 from chanlun.db import db
 
+from chanlun.base import Market
 from chanlun.exchange.exchange import (
     Exchange,
     convert_futures_kline_frequency,
@@ -35,20 +36,22 @@ class ExchangeDB(Exchange):
             self.tz = pytz.timezone("US/Eastern")
 
     def default_code(self):
-        if self.market == "a":
+        if self.market == Market.A.value:
             return "SH.000001"
-        elif self.market == "hk":
+        elif self.market == Market.HK.value:
             return "HK.00700"
-        elif self.market == "futures":
+        elif self.market == Market.FUTURES.value:
             return "KQ.m@SHFE.rb"
-        elif self.market == "us":
+        elif self.market == Market.US.value:
             return "AAPL"
-        elif self.market == "currency":
+        elif self.market == Market.CURRENCY.value:
+            return "BTC/USDT"
+        elif self.market == Market.CURRENCY_SPOT.value:
             return "BTC/USDT"
         return ""
 
     def support_frequencys(self):
-        if self.market == "a":
+        if self.market == Market.A.value:
             return {
                 "y": "Y",
                 "m": "M",
@@ -61,7 +64,7 @@ class ExchangeDB(Exchange):
                 "10m": "10m",
                 "5m": "5m",
             }
-        elif self.market == "hk":
+        elif self.market == Market.HK.value:
             return {
                 "y": "Y",
                 "q": "Q",
@@ -73,7 +76,7 @@ class ExchangeDB(Exchange):
                 "15m": "15m",
                 "5m": "5m",
             }
-        elif self.market == "futures":
+        elif self.market == Market.FUTURES.value:
             return {
                 "w": "W",
                 "d": "D",
@@ -85,7 +88,7 @@ class ExchangeDB(Exchange):
                 "5m": "5m",
                 "1m": "1m",
             }
-        elif self.market == "us":
+        elif self.market == Market.US.value:
             return {
                 "w": "Week",
                 "d": "Day",
@@ -95,7 +98,21 @@ class ExchangeDB(Exchange):
                 "15m": "15m",
                 "5m": "5m",
             }
-        elif self.market == "currency":
+        elif self.market == Market.CURRENCY.value:
+            return {
+                "w": "Week",
+                "d": "Day",
+                "4h": "4H",
+                "60m": "1H",
+                "30m": "30m",
+                "15m": "15m",
+                "10m": "5m",
+                "5m": "5m",
+                "3m": "3m",
+                "2m": "2m",
+                "1m": "1m",
+            }
+        elif self.market == Market.CURRENCY_SPOT.value:
             return {
                 "w": "Week",
                 "d": "Day",
@@ -111,7 +128,7 @@ class ExchangeDB(Exchange):
             }
         return ["d", "30m", "5m"]
 
-    def query_last_datetime(self, code, frequency) -> [None, str]:
+    def query_last_datetime(self, code, frequency) -> Union[None, str]:
         """
         查询交易对儿最后更新时间
         :param frequency:
@@ -209,16 +226,16 @@ class ExchangeDB(Exchange):
         TODO 需要根据自己数据源的数据格式进行调整
         TODO 将日及以上周期（大多数这类的时间都是 0点0分），修改为交易日结束或开始时间（根据日期是前对其还是后对其来决定是开盘时间还是收盘时间）
         """
-        if self.market == "a":
+        if self.market == Market.A.value:
             if dt.hour == 0 and dt.minute == 0:
                 return dt.replace(hour=15, minute=0)
-        if self.market == "hk":
+        if self.market == Market.HK.value:
             if dt.hour == 0 and dt.minute == 0:
                 return dt.replace(hour=16, minute=0)
-        if self.market == "futures":
+        if self.market == Market.FUTURES.value:
             if dt.hour == 0 and dt.minute == 0:
                 return dt.replace(hour=9, minute=0)
-        if self.market == "us":
+        if self.market == Market.US.value:
             if dt.hour == 0 and dt.minute == 0:
                 return dt.replace(hour=9, minute=30)
         return dt
@@ -227,11 +244,14 @@ class ExchangeDB(Exchange):
         """
         转换K线周期
         """
-        if self.market == "currency":
+        if (
+            self.market == Market.CURRENCY.value
+            or self.market == Market.CURRENCY_SPOT.value
+        ):
             return convert_currency_kline_frequency(klines, to_f)
-        elif self.market == "futures":
+        elif self.market == Market.FUTURES.value:
             return convert_futures_kline_frequency(klines, to_f)
-        elif self.market == "us":
+        elif self.market == Market.US.value:
             return convert_us_kline_frequency(klines, to_f)
         else:
             return convert_stock_kline_frequency(klines, to_f)
@@ -284,7 +304,7 @@ class ExchangeDB(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeDB("us")
+    ex = ExchangeDB(Market.US.value)
     # ticks = ex.ticks(['SHSE.000001'])
     # print(ticks)
 
