@@ -54,7 +54,8 @@
                     <option value="hk">港股</option>
                     <option value="futures">期货</option>
                     <option value="us">美股</option>
-                    <option value="currency">数字货币</option>
+                    <option value="currency">数字货币(合约)</option>
+                    <option value="currency_spot">数字货币(现货)</option>
                   </select>
                 </label>
               </div>
@@ -155,12 +156,15 @@
         futures_interval_2: "1D",
         currency_interval_1: "1D",
         currency_interval_2: "1D",
+        currency_spot_interval_1: "1D",
+        currency_spot_interval_2: "1D",
         chart_num: "1",
         a_code: "{{ market_default_codes.a }}",
         hk_code: "{{ market_default_codes.hk }}",
         us_code: "{{ market_default_codes.us }}",
         futures_code: "{{ market_default_codes.futures }}",
         currency_code: "{{ market_default_codes.currency }}",
+        currency_spot_code: "{{ market_default_codes.currency_spot }}",
       };
 
       if (layui.data("tv_chart")) {

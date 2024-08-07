@@ -28,8 +28,8 @@ from flask import Flask, send_file
 from flask import render_template
 from flask import request
 
+from chanlun.base import Market
 from chanlun import fun
-from chanlun.db import db
 from chanlun.cl_utils import (
     kcharts_frequency_h_l_map,
     query_cl_chart_config,
@@ -38,7 +38,8 @@ from chanlun.cl_utils import (
     set_cl_chart_config,
     del_cl_chart_config,
 )
-from chanlun.exchange import get_exchange, Market
+from chanlun.db import db
+from chanlun.exchange import get_exchange
 from chanlun.config import get_data_path
 from chanlun.zixuan import ZiXuan
 from .alert_tasks import AlertTasks
@@ -126,6 +127,9 @@ def create_app(test_config=None):
         "us": list(get_exchange(Market.US).support_frequencys().keys()),
         "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
         "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
+        "currency_spot": list(
+            get_exchange(Market.CURRENCY_SPOT).support_frequencys().keys()
+        ),
     }
 
     # 各个交易所默认的标的
@@ -135,6 +139,7 @@ def create_app(test_config=None):
         "us": get_exchange(Market.US).default_code(),
         "futures": get_exchange(Market.FUTURES).default_code(),
         "currency": get_exchange(Market.CURRENCY).default_code(),
+        "currency_spot": get_exchange(Market.CURRENCY_SPOT).default_code(),
     }
 
     # 各个市场的交易时间
@@ -144,6 +149,7 @@ def create_app(test_config=None):
         "us": "0400-0931,0930-1631,1600-2001",
         "futures": "24x7",
         "currency": "24x7",
+        "currency_spot": "24x7",
     }
 
     # 各个交易所的时区 统一时区
@@ -153,6 +159,7 @@ def create_app(test_config=None):
         "us": "America/New_York",
         "futures": "Asia/Shanghai",
         "currency": "Asia/Shanghai",
+        "currency_spot": "Asia/Shanghai",
     }
 
     market_types = {
@@ -161,6 +168,7 @@ def create_app(test_config=None):
         "us": "stock",
         "futures": "futures",
         "currency": "crypto",
+        "currency_spot": "crypto",
     }
 
     # 记录请求次数，超过则返回 no_data
@@ -200,6 +208,7 @@ def create_app(test_config=None):
             | set(market_frequencys["us"])
             | set(market_frequencys["futures"])
             | set(market_frequencys["currency"])
+            | set(market_frequencys["currency_spot"])
         )
         supportedResolutions = [v for k, v in frequency_maps.items() if k in frequencys]
         return {
@@ -214,7 +223,16 @@ def create_app(test_config=None):
                 {"value": "hk", "name": "港股", "desc": "港股"},
                 {"value": "us", "name": "美股", "desc": "美股"},
                 {"value": "futures", "name": "期货", "desc": "期货"},
-                {"value": "currency", "name": "数字货币", "desc": "数字货币"},
+                {
+                    "value": "currency",
+                    "name": "数字货币(Futures)",
+                    "desc": "数字货币（合约）",
+                },
+                {
+                    "value": "currency_spot",
+                    "name": "数字货币(Spot)",
+                    "desc": "数字货币（现货）",
+                },
             ],
         }
 
@@ -318,7 +336,7 @@ def create_app(test_config=None):
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
 
-        if exchange in ["us", "currency"]:
+        if exchange in ["us", "currency", "currency_spot"]:
             res_stocks = [
                 stock for stock in all_stocks if query.lower() in stock["code"].lower()
             ]

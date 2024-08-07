@@ -1,7 +1,9 @@
 from typing import List, Dict
 
+from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange import get_exchange, Market
+
+from chanlun.exchange import get_exchange
 
 
 class ZiXuan(object):
