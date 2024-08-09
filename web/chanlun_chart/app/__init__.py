@@ -4,6 +4,7 @@ import os
 import pathlib
 import time
 import traceback
+from flask_login import LoginManager, UserMixin, login_required, login_user
 
 import pinyin
 import pytz
@@ -24,12 +25,12 @@ from apscheduler.events import (
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, send_file
+from flask import Flask, redirect, send_file
 from flask import render_template
 from flask import request
 
 from chanlun.base import Market
-from chanlun import fun
+from chanlun import fun, config
 from chanlun.cl_utils import (
     kcharts_frequency_h_l_map,
     query_cl_chart_config,
@@ -189,7 +190,45 @@ def create_app(test_config=None):
         lambda record: "/static/" not in record.getMessage().lower()
     )  # 过滤静态资源请求日志
 
+    # 添加登录验证
+    app.secret_key = "cl_pro_secret_key"
+    login_manager = LoginManager()  # 实例化登录管理对象
+    login_manager.init_app(app)  # 初始化应用
+    login_manager.login_view = "login_opt"  # 设置用户登录视图函数 endpoint
+
+    class LoginUser(UserMixin):
+        def __init__(self) -> None:
+            super().__init__()
+            self.id = "cl_pro"
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return LoginUser()
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login_opt():
+        # 未设置登录密码，默认直接进行登录
+        if config.LOGIN_PWD == "":
+            login_user(
+                LoginUser(), remember=True, duration=datetime.timedelta(days=365)
+            )
+            return redirect("/")
+
+        emsg = ""
+        if request.method == "POST":
+            password = request.form.get("password")
+            if password == config.LOGIN_PWD:
+                login_user(
+                    LoginUser(), remember=True, duration=datetime.timedelta(days=365)
+                )
+                return redirect("/")
+            else:
+                emsg = "密码错误"
+
+        return render_template("login.html", emsg=emsg)
+
     @app.route("/")
+    @login_required
     def index_show():
         """
         首页
@@ -198,6 +237,7 @@ def create_app(test_config=None):
         return render_template("index.html", market_default_codes=market_default_codes)
 
     @app.route("/tv/config")
+    @login_required
     def tv_config():
         """
         配置项
@@ -237,6 +277,7 @@ def create_app(test_config=None):
         }
 
     @app.route("/tv/symbol_info")
+    @login_required
     def tv_symbol_info():
         """
         商品集合信息
@@ -255,6 +296,7 @@ def create_app(test_config=None):
         return info
 
     @app.route("/tv/symbols")
+    @login_required
     def tv_symbols():
         """
         商品解析
@@ -324,6 +366,7 @@ def create_app(test_config=None):
         return info
 
     @app.route("/tv/search")
+    @login_required
     def tv_search():
         """
         商品检索
@@ -374,6 +417,7 @@ def create_app(test_config=None):
         return infos
 
     @app.route("/tv/history")
+    @login_required
     def tv_history():
         """
         K线柱
@@ -484,6 +528,7 @@ def create_app(test_config=None):
         return info
 
     @app.route("/tv/timescale_marks")
+    @login_required
     def tv_timescale_marks():
         symbol = request.args.get("symbol")
         _from = int(request.args.get("from"))
@@ -553,6 +598,7 @@ def create_app(test_config=None):
         return marks
 
     @app.route("/tv/time")
+    @login_required
     def tv_time():
         """
         服务器时间
@@ -560,6 +606,7 @@ def create_app(test_config=None):
         return fun.datetime_to_int(datetime.datetime.now())
 
     @app.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
+    @login_required
     def tv_charts(version):
         """
         图表
@@ -636,6 +683,7 @@ def create_app(test_config=None):
                 return {"status": "ok"}
 
     @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
+    @login_required
     def tv_study_templates(version):
         """
         图表
@@ -678,6 +726,7 @@ def create_app(test_config=None):
 
     # 查询配置项
     @app.route("/get_cl_config/<market>/<code>")
+    @login_required
     def get_cl_config(market, code: str):
         code = code.replace("__", "/")  # 数字货币特殊处理
         cl_config = query_cl_chart_config(market, code)
@@ -687,6 +736,7 @@ def create_app(test_config=None):
 
     # 设置配置项
     @app.route("/set_cl_config", methods=["POST"])
+    @login_required
     def set_cl_config():
         market = request.form["market"]
         code = request.form["code"]
@@ -763,6 +813,7 @@ def create_app(test_config=None):
 
     # 股票涨跌幅
     @app.route("/ticks", methods=["POST"])
+    @login_required
     def ticks():
         market = request.form["market"]
         codes = request.form["codes"]
@@ -782,6 +833,7 @@ def create_app(test_config=None):
 
     # 获取自选组列表
     @app.route("/get_zixuan_groups/<market>")
+    @login_required
     def get_zixuan_groups(market):
         zx = ZiXuan(market)
         groups = zx.get_zx_groups()
@@ -789,12 +841,14 @@ def create_app(test_config=None):
 
     # 获取自选组的股票
     @app.route("/get_zixuan_stocks/<market>/<group_name>")
+    @login_required
     def get_zixuan_stocks(market, group_name):
         zx = ZiXuan(market)
         stock_list = zx.zx_stocks(group_name)
         return {"code": 0, "msg": "", "count": len(stock_list), "data": stock_list}
 
     @app.route("/get_stock_zixuan/<market>/<code>")
+    @login_required
     def get_stock_zixuan(market, code: str):
         code = code.replace("__", "/")  # 数字货币特殊处理
         zx = ZiXuan(market)
@@ -802,12 +856,14 @@ def create_app(test_config=None):
         return zx_groups
 
     @app.route("/zixuan_group/<market>", methods=["GET"])
+    @login_required
     def zixuan_group_view(market):
         zx = ZiXuan(market)
         zx_groups = zx.get_zx_groups()
         return render_template("zixuan.html", market=market, zx_groups=zx_groups)
 
     @app.route("/opt_zixuan_group/<market>", methods=["POST"])
+    @login_required
     def opt_zixuan_group(market):
         """
         操作自选组
@@ -821,6 +877,7 @@ def create_app(test_config=None):
             return {"ok": zx.add_zx_group(zx_group)}
 
     @app.route("/zixuan_opt_export", methods=["GET"])
+    @login_required
     def opt_zixuan_export():
         """
         导出自选组
@@ -845,6 +902,7 @@ def create_app(test_config=None):
                 pass
 
     @app.route("/zixuan_opt_import", methods=["POST"])
+    @login_required
     def opt_zixuan_import():
         """
         导入自选
@@ -894,6 +952,7 @@ def create_app(test_config=None):
 
     # 设置股票的自选组
     @app.route("/set_stock_zixuan", methods=["POST"])
+    @login_required
     def set_stock_zixuan():
         market = request.form["market"]
         opt = request.form["opt"]
@@ -920,6 +979,7 @@ def create_app(test_config=None):
 
     # 警报提醒列表
     @app.route("/alert_list/<market>")
+    @login_required
     def alert_list(market):
         al = _alert_tasks.task_list(market)
         al = [
@@ -945,6 +1005,7 @@ def create_app(test_config=None):
 
     # 警报编辑页面
     @app.route("/alert_edit/<market>/<id>")
+    @login_required
     def alert_edit(market, id):
         alert_config = {
             "id": "",
@@ -997,6 +1058,7 @@ def create_app(test_config=None):
         )
 
     @app.route("/alert_save", methods=["POST"])
+    @login_required
     def alert_save():
         alert_config = {
             "id": request.form["id"],
@@ -1018,11 +1080,13 @@ def create_app(test_config=None):
         return {"ok": True}
 
     @app.route("/alert_del/<id>")
+    @login_required
     def alert_del(id):
         res = _alert_tasks.alert_del(id)
         return {"ok": res}
 
     @app.route("/alert_records/<market>")
+    @login_required
     def alert_records(market):
         records = db.alert_record_query(market)
         rls = [
@@ -1045,10 +1109,12 @@ def create_app(test_config=None):
         }
 
     @app.route("/jobs")
+    @login_required
     def jobs():
         return render_template("jobs.html", jobs=list(scheduler.my_task_list.values()))
 
     @app.route("/xuangu/task_list/<market>")
+    @login_required
     def xuangu_task_list(market):
         # 获取自选组
         zx = ZiXuan(market)
@@ -1079,6 +1145,7 @@ def create_app(test_config=None):
         )
 
     @app.route("/xuangu/task_add", methods=["POST"])
+    @login_required
     def xuangu_task_add():
         market = request.form["market"]
         task_name = request.form["task_name"]
@@ -1111,6 +1178,7 @@ def create_app(test_config=None):
         }
 
     @app.route("/setting", methods=["GET"])
+    @login_required
     def setting():
         # 查询配置
         proxy = db.cache_get("req_proxy")
@@ -1127,6 +1195,7 @@ def create_app(test_config=None):
         return render_template("setting.html", **set_config)
 
     @app.route("/setting/save", methods=["POST"])
+    @login_required
     def setting_save():
         proxy = {
             "host": request.form["proxy_host"],
