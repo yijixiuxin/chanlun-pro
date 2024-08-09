@@ -13,6 +13,7 @@ apscheduler
 tenacity
 qiniu
 flask
+flask-login
 gevent
 tornado
 sqlalchemy

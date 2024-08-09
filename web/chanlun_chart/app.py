@@ -7,6 +7,7 @@ import sys
 import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
+from chanlun import config
 
 cmd_path = pathlib.Path.cwd()
 sys.path.append(str(cmd_path))
@@ -24,7 +25,7 @@ if __name__ == "__main__":
         app = create_app()
 
         s = HTTPServer(WSGIContainer(app, executor=ThreadPoolExecutor(10)))
-        s.bind(9900, "0.0.0.0")
+        s.bind(9900, config.WEB_HOST)
 
         print("启动成功")
         s.start(1)
