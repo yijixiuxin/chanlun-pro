@@ -74,9 +74,8 @@ class Config(Enum):
     ZS_QJ_CK = "zs_qj_ck"  # 中枢区间，使用线段中缠论K线的最高最低作为区间
     ZS_QJ_K = "zs_qj_k"  # 中枢区间，使用线段中原始K线的最高最低作为区间
     ZS_WZGX_ZGD = "zs_wzgx_zgd"  # 判断两个中枢的位置关系，比较方式，zg与zd 宽松比较
-    ZS_WZGX_ZGGDD = (
-        "zs_wzgx_zggdd"  # 判断两个中枢的位置关系，比较方式，zg与dd zd与gg 较为宽松比较
-    )
+    # 判断两个中枢的位置关系，比较方式，zg与dd zd与gg 较为宽松比较
+    ZS_WZGX_ZGGDD = "zs_wzgx_zggdd"
     ZS_WZGX_GD = "zs_wzgx_gd"  # 判断两个中枢的位置关系，比较方式，gg与dd 严格比较
 
 
