@@ -1087,6 +1087,36 @@ class BackTest:
         else:
             return chart.dump_options()
 
+    def __get_close_profit(self, pos: POSITION, uids: List[str] = None):
+        if uids is None:
+            return {
+                "close_datetime": pos.close_datetime,
+                "profit": pos.profit,
+                "profit_rate": pos.profit_rate,
+                "max_profit_rate": pos.max_profit_rate,
+                "max_loss_rate": pos.max_loss_rate,
+                "close_msg": pos.close_msg,
+            }
+        if "clear" not in uids:
+            uids.append("clear")
+        # 按照时间从早到晚排序
+        close_profit = sorted(
+            pos.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
+        )
+        for _r in close_profit:
+            if _r[0] in uids:
+                return {
+                    "close_datetime": _r[1]["close_datetime"],
+                    "profit": _r[1]["profit"],
+                    "profit_rate": _r[1]["profit_rate"],
+                    "max_profit_rate": _r[1]["max_profit_rate"],
+                    "max_loss_rate": _r[1]["max_loss_rate"],
+                    "close_msg": _r[1]["close_msg"],
+                }
+        raise Exception(
+            f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {uids}"
+        )
+
     def positions(
         self,
         code: str = None,
@@ -1098,42 +1128,11 @@ class BackTest:
         如果 code 为 str 返回 特定 code 的数据
         """
         pos_objs = []
-
-        def get_close_profit(pos: POSITION, uids: List[str] = None):
-            if uids is None:
-                return {
-                    "close_datetime": pos.close_datetime,
-                    "profit": pos.profit,
-                    "profit_rate": pos.profit_rate,
-                    "max_profit_rate": pos.max_profit_rate,
-                    "max_loss_rate": pos.max_loss_rate,
-                    "close_msg": pos.close_msg,
-                }
-            if "clear" not in uids:
-                uids.append("clear")
-            # 按照时间从早到晚排序
-            close_profit = sorted(
-                pos.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
-            )
-            for _r in close_profit:
-                if _r[0] in uids:
-                    return {
-                        "close_datetime": _r[1]["close_datetime"],
-                        "profit": _r[1]["profit"],
-                        "profit_rate": _r[1]["profit_rate"],
-                        "max_profit_rate": _r[1]["max_profit_rate"],
-                        "max_loss_rate": _r[1]["max_loss_rate"],
-                        "close_msg": _r[1]["close_msg"],
-                    }
-            raise Exception(
-                f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {uids}"
-            )
-
         for _code in self.trader.positions_history.keys():
             if code is not None and _code != code:
                 continue
             for p in self.trader.positions_history[_code]:
-                p_profit = get_close_profit(p, close_uids)
+                p_profit = self.__get_close_profit(p, close_uids)
                 p_obj = {
                     "code": _code,
                     "mmd": p.mmd,
