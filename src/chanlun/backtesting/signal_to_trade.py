@@ -53,6 +53,8 @@ class SignalToTrade(BackTestTrader):
         self.trade_pos_querys: Dict[str, List[str]] = None
         self.close_uids: List[str] = ["clear"]
 
+        self.allow_codes: List[str] = None  # 允许交易的代码
+
         self.trade_strategy: Strategy = None
 
         self.start_date: str = None
@@ -165,6 +167,8 @@ class SignalToTrade(BackTestTrader):
         pos_df["_win"] = pos_df["profit_rate"].apply(lambda r: 1 if r > 0 else 0)
         if self.trade_mmds is not None:
             pos_df = pos_df.query("mmd in @self.trade_mmds")
+        if self.allow_codes is not None:
+            pos_df = pos_df.query("code in @self.allow_codes")
 
         if self.trade_pos_querys is not None:
             for _mmd, _qs in self.trade_pos_querys.items():
@@ -235,7 +239,7 @@ class SignalToTrade(BackTestTrader):
                     opt="buy",
                     mmd=_pos["mmd"],
                     loss_price=_pos["loss_price"],
-                    info=_pos,
+                    info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
                     msg=_pos["open_msg"],
                     open_uid=f"{_pos['code']}:{_pos['open_uid']}",
                 )
