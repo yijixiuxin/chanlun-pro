@@ -245,6 +245,10 @@ class Strategy(ABC):
     """
 
     def __init__(self):
+        # 实盘中起效果，允许执行的 close_uid 列表
+        # 有两种格式
+        #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
+        #       字典格式：{'buy': ['a', 'b'0], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
         self.allow_close_uid = None
         self.use_times = {}
         pass

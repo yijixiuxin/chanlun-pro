@@ -19,7 +19,7 @@ from chanlun import cl
 from chanlun import kcharts, fun
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.backtest_trader import BackTestTrader
-from chanlun.backtesting.base import POSITION
+from chanlun.backtesting.base import POSITION, Strategy
 from chanlun.backtesting.klines_generator import KlinesGenerator
 from chanlun.backtesting.optimize import OptimizationSetting
 from chanlun.backtesting.klines_generator import KlinesGenerator
@@ -72,18 +72,18 @@ class BackTest:
         self.start_datetime = config["start_datetime"]
         self.end_datetime = config["end_datetime"]
 
-        self.init_balance = config["init_balance"]
-        self.fee_rate = config["fee_rate"]
-        self.max_pos = config["max_pos"]
+        self.init_balance: int = config["init_balance"]
+        self.fee_rate: float = config["fee_rate"]
+        self.max_pos: int = config["max_pos"]
 
-        self.cl_config = config["cl_config"]
-        self.is_stock = config["is_stock"]
-        self.is_futures = config["is_futures"]
+        self.cl_config: dict = config["cl_config"]
+        self.is_stock: bool = config["is_stock"]
+        self.is_futures: bool = config["is_futures"]
 
         # 执行策略
-        self.strategy = config["strategy"]
+        self.strategy: Strategy = config["strategy"]
 
-        self.save_file = config.get("save_file")
+        self.save_file: str = config.get("save_file")
 
         # 交易对象
         self.trader = BackTestTrader(
@@ -1097,14 +1097,20 @@ class BackTest:
                 "max_loss_rate": pos.max_loss_rate,
                 "close_msg": pos.close_msg,
             }
-        if "clear" not in uids:
-            uids.append("clear")
+
+        query_uids = (
+            uids
+            if isinstance(uids, list)
+            else uids["buy" if "buy" in pos.mmd else "sell"]
+        )
+        if "clear" not in query_uids:
+            query_uids.append("clear")
         # 按照时间从早到晚排序
         close_profit = sorted(
             pos.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
         )
         for _r in close_profit:
-            if _r[0] in uids:
+            if _r[0] in query_uids:
                 return {
                     "close_datetime": _r[1]["close_datetime"],
                     "profit": _r[1]["profit"],
@@ -1114,7 +1120,7 @@ class BackTest:
                     "close_msg": _r[1]["close_msg"],
                 }
         raise Exception(
-            f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {uids}"
+            f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {query_uids}"
         )
 
     def positions(

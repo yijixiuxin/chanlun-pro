@@ -224,7 +224,7 @@ class BackTestTrader(Trader):
         self.name = save_infos["name"]
         self.mode = save_infos["mode"]
         self.is_stock = save_infos["is_stock"]
-        self.is_futures = save_infos["is_stock"]
+        self.is_futures = save_infos["is_futures"]
         self.allow_mmds = save_infos["allow_mmds"]
         self.balance = save_infos["balance"]
         self.fee_rate = save_infos["fee_rate"]
@@ -284,7 +284,19 @@ class BackTestTrader(Trader):
             for _opt in opts:
                 _opt.code = code
                 if self.mode != "signal" and self.strategy.allow_close_uid is not None:
-                    if _opt.close_uid not in self.strategy.allow_close_uid:
+                    # 实盘中起效果，允许执行的 close_uid 列表
+                    # 有两种格式
+                    #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
+                    #       字典格式：{'buy': ['a', 'b'0], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
+                    if isinstance(self.strategy.allow_close_uid, dict):
+                        if (
+                            _opt.close_uid
+                            not in self.strategy.allow_close_uid[
+                                "buy" if "buy" in _opt.mmd else "sell"
+                            ]
+                        ):
+                            continue
+                    elif _opt.close_uid not in self.strategy.allow_close_uid:
                         continue
                 self.execute(code, _opt, pos)
 

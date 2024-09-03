@@ -47,11 +47,15 @@ def config_get_feishu_keys(market):
     db_fs_key = db.cache_get("fs_keys")
     if (
         db_fs_key is not None
-        and db_fs_key["app_id"] != ""
-        and db_fs_key["app_secret"] != ""
-        and db_fs_key["user_id"] != ""
+        and db_fs_key["fs_app_id"] != ""
+        and db_fs_key["fs_app_secret"] != ""
+        and db_fs_key["fs_user_id"] != ""
     ):
-        return db_fs_key
+        return {
+            "app_id": db_fs_key["fs_app_id"],
+            "app_secret": db_fs_key["fs_app_secret"],
+            "user_id": db_fs_key["fs_user_id"],
+        }
     keys = config.FEISHU_KEYS["default"]
     if market in config.FEISHU_KEYS.keys():
         keys = config.FEISHU_KEYS[market]
@@ -175,4 +179,6 @@ def send_fs_msg(market, title, contents: Union[str, list]):
 
 
 if __name__ == "__main__":
-    send_fs_msg("us", "这里是选股的测试消息", ["运行完成", "选出300只股票", "用时1000小时"])
+    send_fs_msg(
+        "us", "这里是选股的测试消息", ["运行完成", "选出300只股票", "用时1000小时"]
+    )

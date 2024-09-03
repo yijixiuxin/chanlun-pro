@@ -1,4 +1,4 @@
-import chanlun.encodefix  # Fix Windows print 乱码问题
+# import chanlun.encodefix  # Fix Windows print 乱码问题
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
