@@ -49,6 +49,7 @@ class FileCacheDB(object):
         self.config_keys = [
             "kline_type",
             "kline_qk",
+            "judge_zs_qs_level",
             "fx_qj",
             "fx_bh",
             "bi_type",

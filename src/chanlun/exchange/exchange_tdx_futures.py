@@ -350,15 +350,14 @@ class ExchangeTDXFutures(Exchange):
 if __name__ == "__main__":
     ex = ExchangeTDXFutures()
     # print(ex.market_maps)
-    stocks = ex.all_stocks()
-    print(len(stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
     # for s in stocks:
-    #     if s["code"][0:2] == "MA":
+    #     if '原油' in s["name"]:
     #         print(s)
-    # print(stocks)
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    # klines = ex.klines("QS.RBL8", "d")
-    # print(len(klines))
-    # print(klines.tail(60))
+    klines = ex.klines("QS.SCL8", "30m")
+    print(len(klines))
+    print(klines.tail(60))
