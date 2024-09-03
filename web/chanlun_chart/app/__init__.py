@@ -749,6 +749,7 @@ def create_app(test_config=None):
             "config_use_type",
             "kline_type",
             "kline_qk",
+            "judge_zs_qs_level",
             "fx_qj",
             "fx_bh",
             "bi_type",
@@ -806,7 +807,7 @@ def create_app(test_config=None):
                 cl_config[_k] = cl_config[_k].split(",")
             if cl_config[_k] == "":
                 cl_config[_k] = "0"
-            # print(f'{_k} : {config[_k]}')
+            # print(f"{_k} : {cl_config[_k]}")
 
         res = set_cl_chart_config(market, code, cl_config)
         return {"ok": res}

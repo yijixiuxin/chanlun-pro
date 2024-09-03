@@ -27,7 +27,8 @@
                         <option value="futures" {% if market=='futures' %} selected {% endif %}>期货</option>
                         <option value="us" {% if market=='us' %} selected {% endif %}>美股</option>
                         <option value="currency" {% if market=='currency' %} selected {% endif %}>数字货币(合约)</option>
-                        <option value="currency_spot" {% if market=='currency_spot' %} selected {% endif %}>数字货币(现货)</option>
+                        <option value="currency_spot" {% if market=='currency_spot' %} selected {% endif %}>数字货币(现货)
+                        </option>
                     </select>
                 </label>
             </div>
@@ -504,6 +505,17 @@
                         <option value="none" {% if kline_qk=='none' %} selected {% endif %}>默认方式
                         </option>
                         <option value="ck" {% if kline_qk=='ck' %} selected {% endif %}>缠论K线缺口</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">中枢趋势级别判断</label>
+            <div class="layui-input-block" title="中枢趋势级别判断">
+                <label for="judge_zs_qs_level">
+                    <select type="select" name="judge_zs_qs_level" lay-filter="cl_config">
+                        <option value="1" {% if judge_zs_qs_level=='1' %} selected {% endif %}>验证</option>
+                        <option value="0" {% if judge_zs_qs_level=='0' %} selected {% endif %}>不验证</option>
                     </select>
                 </label>
             </div>

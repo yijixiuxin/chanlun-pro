@@ -292,6 +292,7 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
         # 缠论默认配置项
         "kline_type": Config.KLINE_TYPE_DEFAULT.value,
         "kline_qk": Config.KLINE_QK_NONE.value,
+        "judge_zs_qs_level": "1",
         "fx_qj": Config.FX_QJ_K.value,
         "fx_bh": Config.FX_BH_NO.value,
         "bi_type": Config.BI_TYPE_OLD.value,
