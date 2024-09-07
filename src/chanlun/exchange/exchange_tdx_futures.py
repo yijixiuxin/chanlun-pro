@@ -225,13 +225,16 @@ class ExchangeTDXFutures(Exchange):
             self.fdb.save_tdx_klines(code, frequency, klines)
 
             klines.loc[:, "code"] = code
-            klines.loc[:, "volume"] = klines["amount"]
+            klines.loc[:, "volume"] = klines["trade"]
             klines.loc[:, "date"] = pd.to_datetime(klines["datetime"]).dt.tz_localize(
                 self.tz
             )
 
             if frequency in {"y", "q", "m", "w", "d"}:
                 klines["date"] = klines["date"].apply(self.__convert_date)
+
+            # 将 volume 转换成 float类型
+            klines[["volume"]] = klines[["volume"]].astype(float)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
@@ -302,11 +305,15 @@ class ExchangeTDXFutures(Exchange):
                         high=_quote["high"],
                         volume=_quote["zongliang"],
                         open=_quote["open"],
-                        rate=round(
-                            (_quote["price"] - _quote["pre_close"])
-                            / _quote["price"]
-                            * 100,
-                            2,
+                        rate=(
+                            round(
+                                (_quote["price"] - _quote["pre_close"])
+                                / _quote["price"]
+                                * 100,
+                                2,
+                            )
+                            if _quote["price"] > 0
+                            else 0
                         ),
                     )
         return ticks
@@ -358,6 +365,6 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("QS.SCL8", "30m")
+    klines = ex.klines("QS.RBL8", "30m")
     print(len(klines))
     print(klines.tail(60))
