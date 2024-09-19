@@ -7,6 +7,9 @@
 > Python 版本支持 3.8、3.9、3.10、3.11 ，不然运行会报 RuntimeError 错误  
 > 前置条件  
 > 已经安装 GitHub Desktop、 Anaconda、MySQL、Redis  
+> ### pytdx 必须使用项目目录 package 下提供的包进行安装
+> ### pytdx 必须使用项目目录 package 下提供的包进行安装
+> ### pytdx 必须使用项目目录 package 下提供的包进行安装
 
 ### 1. 通过 GitHub Desktop 克隆项目到本地
 
