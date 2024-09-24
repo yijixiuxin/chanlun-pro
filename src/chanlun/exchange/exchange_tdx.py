@@ -671,13 +671,13 @@ if __name__ == "__main__":
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
 
-    s_time = time.time()
-    klines = ex.klines("SH.600519", "w")
-    # print(klines.head(5))
-    print(klines.tail(10))
-    print(len(klines))
+    # s_time = time.time()
+    # klines = ex.klines("SH.600519", "w")
+    # # print(klines.head(5))
+    # print(klines.tail(10))
+    # print(len(klines))
 
-    print("use time : ", time.time() - s_time)
+    # print("use time : ", time.time() - s_time)
     # 207735
     #
     # klines = ex.klines('SH.600498', '5m')
@@ -685,3 +685,9 @@ if __name__ == "__main__":
 
     # ticks = ex.ticks(['SZ.300474'])
     # print(ticks)
+
+    # 获取复权相关信息
+    code = "SZ.002165"
+    market, tdx_code, _ = ex.to_tdx_code(code)
+    xdxr_data = ex.xdxr(market, code, tdx_code)
+    print(xdxr_data)

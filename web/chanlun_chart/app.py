@@ -1,9 +1,37 @@
 # import chanlun.encodefix  # Fix Windows print 乱码问题
+import sys
+
+is_wpf_launcher = False
+try:
+    # WPF 启动，每次 print 都 flush，并且将字符编码转为 GBK（避免乱码）
+    if "wpf_launcher" in sys.argv:
+        is_wpf_launcher = True
+
+        class filter:
+            def __init__(self, target):
+                self.target = target
+
+            def write(self, s):
+                self.target.buffer.write(s.encode("gbk"))
+                self.target.flush()
+
+            def flush(self):
+                self.target.flush()
+
+            def close(self):
+                self.target.close()
+
+        sys.stdin = filter(sys.stdin)
+        sys.stdout = filter(sys.stdout)
+        sys.stderr = filter(sys.stderr)
+
+except Exception as e:
+    pass
+
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 import pathlib
-import sys
 import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +46,8 @@ except Exception as e:
     print(e)
     traceback.print_exc()
 
-    input("出现异常，按回车键退出")
+    if is_wpf_launcher is False:
+        input("出现异常，按回车键退出")
 
 if __name__ == "__main__":
     try:
@@ -40,4 +69,5 @@ if __name__ == "__main__":
         print(e)
         traceback.print_exc()
 
-        input("出现异常，按回车键退出")
+        if is_wpf_launcher is False:
+            input("出现异常，按回车键退出")

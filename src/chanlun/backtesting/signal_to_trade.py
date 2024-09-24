@@ -3,7 +3,7 @@
 import time
 import datetime
 from chanlun import fun
-from chanlun.backtesting.base import Operation, Strategy
+from chanlun.backtesting.base import POSITION, Operation, Strategy
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.backtest import BackTest
 from chanlun.cl_interface import *
@@ -55,6 +55,9 @@ class SignalToTrade(BackTestTrader):
 
         self.allow_codes: List[str] = None  # 允许交易的代码
 
+        self.real_trade_mode = "default"  # default 默认，按照信号顺序执行； full 满仓，只要有信号就一直满仓持有
+        self.real_trade_full_sort = "default"  # default 默认，按照信号的顺序执行；zf 按照已有信号到目前的涨幅排序执行
+
         self.trade_strategy: Strategy = None
 
         self.start_date: str = None
@@ -70,6 +73,9 @@ class SignalToTrade(BackTestTrader):
         self.market: str = None
         self.ex: ExchangeDB = None
         self.frequencys = []
+
+        # 记录当前应当持仓的所有信号
+        self.positions_now_holding: List[dict] = []
 
     def get_price(self, code):
         try:
@@ -213,6 +219,18 @@ class SignalToTrade(BackTestTrader):
 
             # 优先进行平仓操作
             for _pos in close_poss:
+                # 删除在self.positions_now_holding中 _pos 持仓记录
+                self.positions_now_holding = [
+                    p
+                    for p in self.positions_now_holding
+                    if (
+                        p["code"] == _pos["code"]
+                        and p["mmd"] == _pos["mmd"]
+                        and p["open_uid"] == _pos["open_uid"]
+                    )
+                    == False
+                ]
+
                 opt = Operation(
                     code=_pos["code"],
                     opt="sell",
@@ -234,6 +252,9 @@ class SignalToTrade(BackTestTrader):
             # 进行开仓操作
             open_opts = []
             for _pos in open_poss:
+                # 将产生的持仓添加到持仓信号列表中
+                self.positions_now_holding.append(_pos)
+
                 opt = Operation(
                     code=_pos["code"],
                     opt="buy",
@@ -254,6 +275,43 @@ class SignalToTrade(BackTestTrader):
             for _opt in open_opts:
                 self.execute(_opt.code, _opt)
             self.add_times("st_execute", time.time() - s_time)
+
+            # 如果启动了补全交易模式，则进行补全操作（之前的持仓退出后，如果之前还有信号没有平仓，从未平仓的信号中，排序，并补充到最大持仓数量）
+            if (
+                self.real_trade_mode == "full"
+                and len(self.positions_now_holding) > 0
+                and len([_p for _p in self.positions.values() if _p.balance != 0])
+                < self.max_pos
+            ):
+                # 将当前还存在的持仓信号，生成操作信号
+                full_open_opts = []
+                for _pos in self.positions_now_holding:
+                    opt = Operation(
+                        code=_pos["code"],
+                        opt="buy",
+                        mmd=_pos["mmd"],
+                        loss_price=_pos["loss_price"],
+                        info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
+                        msg=_pos["open_msg"],
+                        open_uid=f"{_pos['code']}:{_pos['open_uid']}",
+                    )
+                    opt_now_price = self.get_price(_pos["code"])
+                    opt.info["__now_zf"] = (
+                        (opt_now_price['close'] - _pos["price"]) / _pos["price"] * 100
+                    )  # 记录持仓的价格
+                    full_open_opts.append(opt)
+                if self.real_trade_full_sort == "zf":
+                    # 按照 __now_zf 从高到低进行排序
+                    full_open_opts = sorted(
+                        full_open_opts, key=lambda x: x.info["__now_zf"], reverse=True
+                    )
+                else:
+                    if BT.strategy.is_filter_opts():
+                        full_open_opts = BT.strategy.filter_opts(full_open_opts, self)
+                s_time = time.time()
+                for _opt in full_open_opts:
+                    self.execute(_opt.code, _opt)
+                self.add_times("full_st_execute", time.time() - s_time)
 
             s_time = time.time()
             self.update_position_record()
