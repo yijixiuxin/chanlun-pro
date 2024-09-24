@@ -21,7 +21,7 @@ PROXY_PORT = 7890
 DB_TYPE = "sqlite"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填写 DB_DATABASE 即可
 DB_HOST = '127.0.0.1'
 DB_PORT = 3306
-DB_USER = 'chanlun'
+DB_USER = 'root'
 DB_PWD = '123456'
 DB_DATABASE = 'chanlun_klines'
 
