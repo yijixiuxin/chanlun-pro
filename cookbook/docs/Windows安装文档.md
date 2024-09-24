@@ -4,6 +4,16 @@
 
 ### [B站安装教程](https://www.bilibili.com/video/BV1XH4y1K7VM/)
 
+### Chanlun-PRO Windows 启动器 下载与教程
+> 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
+> 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
+> 百度网盘下载：    
+>     链接: https://pan.baidu.com/s/1U0F8GCC6emruMiV6xJ6Tfg    
+>     提取码: dfv8    
+> QQ 群文件下载： 723118857    
+
+---
+
 > Python 版本支持 3.8、3.9、3.10、3.11 ，不然运行会报 RuntimeError 错误  
 > 前置条件  
 > 已经安装 GitHub Desktop、 Anaconda、MySQL、Redis  
