@@ -42,6 +42,8 @@ class TableByCache(Base):
     expire = Column(
         Integer, default=0, comment="过期时间戳，0为永不过期"
     )  # 过期时间戳，0为永不过期
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByZxGroup(Base):
@@ -53,6 +55,8 @@ class TableByZxGroup(Base):
     market = Column(String(20), primary_key=True, comment="市场")
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByZixuan(Base):
@@ -67,6 +71,8 @@ class TableByZixuan(Base):
     add_datetime = Column(DateTime, comment="添加时间")  # 添加时间
     stock_color = Column(String(20), comment="自选颜色")  # 自选颜色
     stock_memo = Column(String(100), comment="附加信息")  # 附加信息
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByAlertTask(Base):
@@ -90,6 +96,8 @@ class TableByAlertTask(Base):
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByAlertRecord(Base):
@@ -107,6 +115,8 @@ class TableByAlertRecord(Base):
     bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
     line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByTVMarks(Base):
@@ -123,6 +133,8 @@ class TableByTVMarks(Base):
     mark_shape = Column(String(20), comment="形状")  # 形状
     mark_color = Column(String(20), comment="颜色")  # 颜色
     dt = Column(DateTime, comment="添加时间")
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByOrder(Base):
@@ -137,6 +149,8 @@ class TableByOrder(Base):
     order_amount = Column(Float, comment="订单数量")  # 订单数量
     order_memo = Column(String(200), comment="订单备注")  # 订单备注
     dt = Column(DateTime, comment="添加时间")  # 添加时间
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 class TableByTVCharts(Base):
@@ -151,6 +165,8 @@ class TableByTVCharts(Base):
     content = Column(Text, comment="布局内容")
     timestamp = Column(Integer, comment="时间戳")
     name = Column(String(50), comment="布局名称")
+    # 添加配置设置编码
+    __table_args__ = {"mysql_charset": "utf8"}
 
 
 @fun.singleton
@@ -229,6 +245,8 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
+            # 添加配置设置编码
+            __table_args__ = {"mysql_charset": "utf8"}
 
         self.__cache_tables[table_name] = TableByKlines
         Base.metadata.create_all(self.engine)
