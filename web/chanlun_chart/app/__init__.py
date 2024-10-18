@@ -747,31 +747,42 @@ def create_app(test_config=None):
 
         keys = [
             "config_use_type",
-            "kline_type",
+            # 个人定制配置
             "kline_qk",
             "judge_zs_qs_level",
+            # K线配置
+            "kline_type",
+            # 分型配置
+            "fx_qy",
             "fx_qj",
             "fx_bh",
+            # 笔配置
             "bi_type",
             "bi_bzh",
             "bi_qj",
             "bi_fx_cgd",
+            "bi_split_k_cross_nums",
+            "fx_check_k_nums",
+            "allow_bi_fx_strict",
+            # 线段配置
             "xd_qj",
             "zsd_qj",
+            "xd_zs_max_lines_split",
+            "xd_allow_bi_pohuai",
+            "xd_allow_split_no_highlow",
+            "xd_allow_split_zs_kz",
+            "xd_allow_split_zs_more_line",
+            "xd_allow_split_zs_no_direction",
+            # 中枢配置
             "zs_bi_type",
             "zs_xd_type",
             "zs_qj",
             "zs_wzgx",
+            # MACD 配置（计算力度背驰）
             "idx_macd_fast",
             "idx_macd_slow",
             "idx_macd_signal",
-            "fx_qy",
-            "xd_zs_max_lines_split",
-            "allow_split_one_line_to_xd",
-            "allow_bi_fx_strict",
-            "enable_kchart_low_to_high",
-            "bi_split_k_cross_nums",
-            "fx_check_k_nums",
+            # 买卖点计算
             "cl_mmd_cal_qs_1mmd",
             "cl_mmd_cal_not_qs_3mmd_1mmd",
             "cl_mmd_cal_qs_3mmd_1mmd",
@@ -782,6 +793,9 @@ def create_app(test_config=None):
             "cl_mmd_cal_3mmd_xgxd_not_bc_2mmd",
             "cl_mmd_cal_not_in_zs_3mmd",
             "cl_mmd_cal_not_in_zs_gt_9_3mmd",
+            # 画图配置
+            "enable_kchart_low_to_high",
+            "chart_show_fx",
             "chart_show_bi",
             "chart_show_xd",
             "chart_show_zsd",
@@ -798,7 +812,6 @@ def create_app(test_config=None):
             "chart_show_xd_bc",
             "chart_show_zsd_bc",
             "chart_show_qsd_bc",
-            "chart_show_fx",
         ]
         cl_config = {}
         for _k in keys:

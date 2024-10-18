@@ -154,7 +154,7 @@ class ExchangeTDXUS(Exchange):
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines_df is None:
-                    # 获取 8*800 = 6400 条数据
+                    # 获取 8*700 = 5600 条数据
                     klines_df = pd.concat(
                         [
                             client.to_df(
@@ -162,8 +162,8 @@ class ExchangeTDXUS(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)

@@ -172,7 +172,7 @@ class ExchangeTDXHK(Exchange):
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines_df is None:
-                    # 获取 8*800 = 6400 条数据
+                    # 获取 8*700 = 5600 条数据
                     klines_df = pd.concat(
                         [
                             client.to_df(
@@ -180,8 +180,8 @@ class ExchangeTDXHK(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -375,14 +375,14 @@ class ExchangeTDXHK(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXHK()
-    stocks = ex.all_stocks()
-    print(len(stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
     # print(stocks)
     #
     # print(ex.to_tdx_code('KH.00700'))
     #
-    # klines = ex.klines("KH.00006", "d")
-    # print(klines)
+    klines = ex.klines("KH.00006", "d", args={"pages": 1})
+    print(klines)
 
     # ticks = ex.ticks(['KH.00700'])
     # print(ticks)

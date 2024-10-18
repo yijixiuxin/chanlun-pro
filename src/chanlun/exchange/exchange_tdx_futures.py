@@ -176,7 +176,7 @@ class ExchangeTDXFutures(Exchange):
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines is None:
-                    # 获取 8*800 = 6400 条数据
+                    # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
                         [
                             client.to_df(
@@ -184,8 +184,8 @@ class ExchangeTDXFutures(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -365,6 +365,6 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("QS.RBL8", "30m")
+    klines = ex.klines("QS.RBL8", "30m", args={"pages": 1})
     print(len(klines))
-    print(klines.tail(60))
+    print(klines)
