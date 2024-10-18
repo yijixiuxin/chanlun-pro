@@ -52,11 +52,13 @@ class Config(Enum):
     BI_FX_CHD_NO = "bi_fx_cgd_no"  # 笔内分型，次高低不可以成笔
 
     # 线段配置项
-    XD_BZH_NO = "xd_bzh_no"  # TODO 移除配置。线段不进行标准化
-    XD_BZH_YES = "xd_bzh_yes"  # TODO 移除配置。线段进行标准化，则线段的起止点落在 线段的最高最低点
     XD_QJ_DD = "xd_qj_dd"  # 线段区间，使用线段的顶底点作为区间
     XD_QJ_CK = "xd_qj_ck"  # 线段区间，使用线段中缠论K线的最高最低作为区间
     XD_QJ_K = "xd_qj_k"  # 线段区间，使用线段中原始K线的最高最低作为区间
+    ### 笔破坏定义：线段的结束转折笔超过或低过线段的起始位置
+    XD_BI_POHUAI_NO = "no"  # 线段不支持笔破坏
+    XD_BI_POHUAI_YES = "yes"  # 线段支持笔破坏
+    XD_BI_POHUAI_YES_QK = "yes_qk"  # 线段支持笔破坏（笔内必须有缺口）
 
     # 走势段配置项
     ZSD_BZH_NO = "zsd_bzh_no"  # TODO 移除配置。走势段不进行标准化
@@ -293,12 +295,13 @@ class LINE:
     def __init__(self, start: FX, end: FX, _type: str, index: int):
         self.start: FX = start  # 线的起始位置，以分型来记录
         self.end: FX = end  # 线的结束位置，以分型来记录
-        self.high: float = (
-            0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
-        )
-        self.low: float = (
-            0  # 根据缠论配置，得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
-        )
+
+        # 根据缠论配置（笔/段区间），得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
+        self.high: float = 0
+        self.low: float = 0
+        # 根据缠论配置（中枢区间），得来的高低点（zs_qj_dd ZS_QJ_CK ZS_QJ_K）
+        self.zs_high: float = 0
+        self.zs_low: float = 0
         self.type: str = _type  # 线的方向类型 （up 上涨  down 下跌）
         self.index: int = index  # 线的索引，后续查找方便
 
@@ -643,8 +646,6 @@ class TZXL:
         bh_direction: str,
         line: Union[LINE, None],
         pre_line: LINE,
-        _max: float,
-        _min: float,
         line_bad: bool,
         done: bool,
     ):
@@ -658,22 +659,20 @@ class TZXL:
         self.lines: List[LINE] = [line]
         self.done: bool = done
 
+        self.max: float = 0
+        self.min: float = 0
+        self.update_maxmin()
+
     def __str__(self):
         return f"done {self.done} max {self.max} min {self.min} line_bad {self.line_bad} line {self.line} pre_line {self.pre_line} num {len(self.lines)}"
 
-    @property
-    def max(self):
+    def update_maxmin(self):
         if self.bh_direction == "up":
-            return max([_l.high for _l in self.lines])
+            self.max = max([_l.high for _l in self.lines])
+            self.min = max([_l.low for _l in self.lines])
         else:
-            return min([_l.high for _l in self.lines])
-
-    @property
-    def min(self):
-        if self.bh_direction == "up":
-            return max([_l.low for _l in self.lines])
-        else:
-            return min([_l.low for _l in self.lines])
+            self.max = min([_l.high for _l in self.lines])
+            self.min = min([_l.low for _l in self.lines])
 
     def get_start_fx(self):
         if self.bh_direction == "up":
@@ -716,6 +715,9 @@ class XLFX:
     @property
     def low(self):
         return self.xl.min
+
+    def get_last_xl(self) -> TZXL:
+        return [_xl for _xl in self.xls if _xl is not None][-1]
 
     def __str__(self):
         return f"XLFX type : {self.type} done : {self.done} qk : {self.qk} high : {self.high} low : {self.low} xl : {self.xl}"
@@ -762,6 +764,9 @@ class XD(LINE):
         self.zs_type_mmds: Dict[str, List[MMD]] = {}
         self.zs_type_bcs: Dict[str, List[BC]] = {}
 
+        self.not_del: bool = False  # 计算过程中，不允许删除重新计算
+        self.not_yx: bool = False  # 计算过程中，不允许进行延续计算
+
     def is_qk(self) -> bool:
         """
         成线段的分型是否有缺口
@@ -773,6 +778,12 @@ class XD(LINE):
         返回构成线段的结束特征序列分型是否完成
         """
         return self.ding_fx.done if self.type == "up" else self.di_fx.done
+
+    def fx_is_bad_line(self) -> bool:
+        """
+        返回构成线段的结束特征序列分型是否是有笔包含的情况
+        """
+        return self.ding_fx.is_line_bad if self.type == "up" else self.di_fx.is_line_bad
 
     def is_done(self) -> bool:
         return self.done
@@ -890,7 +901,7 @@ class XD(LINE):
         return len(set(bc_types) & set(bcs)) > 0
 
     def __str__(self):
-        return f"XD index: {self.index} type: {self.type} start: {self.start_line.start.k.date} end: {self.end_line.end.k.date} high: {self.high} low: {self.low} done: {self.is_done()}"
+        return f"XD index: {self.index} type: {self.type} start: {self.start_line.start.k.date} end: {self.end_line.end.k.date} high: {self.high} low: {self.low} is_qk: {self.is_qk()} done: {self.is_done()} ({self.is_split})"
 
 
 @dataclass

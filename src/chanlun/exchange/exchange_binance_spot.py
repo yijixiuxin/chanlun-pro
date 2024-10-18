@@ -39,6 +39,7 @@ class ExchangeBinanceSpot(Exchange):
             params["secret"] = config.BINANCE_SECRET
 
         self.exchange = ccxt.binance(params)
+        # self.exchange = ccxt.htx(params)
 
         self.db_exchange = ExchangeDB(Market.CURRENCY_SPOT.value)
 
@@ -311,5 +312,5 @@ if __name__ == "__main__":
 
     ex = ExchangeBinanceSpot()
 
-    klines = ex.klines("DOGE/USDT", "60m")
+    klines = ex.klines("BTC/USDT", "d")
     print(klines)

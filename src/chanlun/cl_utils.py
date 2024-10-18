@@ -289,34 +289,42 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
     # 默认配置设置，用于在前台展示设置值
     default_config = {
         "config_use_type": "common",
-        # 缠论默认配置项
-        "kline_type": Config.KLINE_TYPE_DEFAULT.value,
+        # 个人定制配置
         "kline_qk": Config.KLINE_QK_NONE.value,
         "judge_zs_qs_level": "1",
+        # K线配置
+        "kline_type": Config.KLINE_TYPE_DEFAULT.value,
+        # 分型配置
+        "fx_qy": Config.FX_QY_THREE.value,
         "fx_qj": Config.FX_QJ_K.value,
         "fx_bh": Config.FX_BH_NO.value,
+        # 笔配置
         "bi_type": Config.BI_TYPE_OLD.value,
         "bi_bzh": Config.BI_BZH_YES.value,
         "bi_qj": Config.BI_QJ_DD.value,
         "bi_fx_cgd": Config.BI_FX_CHD_YES.value,
+        "bi_split_k_cross_nums": "20,1",
+        "fx_check_k_nums": 13,
+        "allow_bi_fx_strict": "0",
+        # 线段配置
         "xd_qj": Config.XD_QJ_DD.value,
         "zsd_qj": Config.ZSD_QJ_DD.value,
+        "xd_zs_max_lines_split": 11,
+        "xd_allow_bi_pohuai": Config.XD_BI_POHUAI_YES.value,
+        "xd_allow_split_no_highlow": "1",
+        "xd_allow_split_zs_kz": "0",
+        "xd_allow_split_zs_more_line": "1",
+        "xd_allow_split_zs_no_direction": "1",
+        # 中枢配置
         "zs_bi_type": [Config.ZS_TYPE_DN.value],
         "zs_xd_type": [Config.ZS_TYPE_DN.value],
         "zs_qj": Config.ZS_QJ_DD.value,
         "zs_wzgx": Config.ZS_WZGX_ZGGDD.value,
         "zs_optimize": "0",
+        # MACD 配置（计算力度背驰）
         "idx_macd_fast": 12,
         "idx_macd_slow": 26,
         "idx_macd_signal": 9,
-        # 缠论高级配置
-        "fx_qy": Config.FX_QY_THREE.value,
-        "xd_zs_max_lines_split": 11,
-        "allow_split_one_line_to_xd": "1",
-        "allow_bi_fx_strict": "0",
-        "enable_kchart_low_to_high": "0",
-        "bi_split_k_cross_nums": "20,1",
-        "fx_check_k_nums": 13,
         # 买卖点配置
         # 两中枢及以上趋势背驰，产生一类买卖点
         "cl_mmd_cal_qs_1mmd": "1",
@@ -338,9 +346,11 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
         "cl_mmd_cal_not_in_zs_3mmd": "1",
         # 回调不进入中枢的(中枢大于等于9段)，产生三类买卖点
         "cl_mmd_cal_not_in_zs_gt_9_3mmd": "1",
+        # 缠论高级配置
+        "enable_kchart_low_to_high": "0",
         # 画图默认配置
         "chart_show_infos": "0",
-        "chart_show_fx": "1",
+        "chart_show_fx": "0",
         "chart_show_bi": "1",
         "chart_show_xd": "1",
         "chart_show_zsd": "1",
@@ -357,7 +367,7 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
         "chart_show_xd_bc": "1",
         "chart_show_zsd_bc": "1",
         "chart_show_qsd_bc": "1",
-        "chart_show_ma": "1",
+        "chart_show_ma": "0",
         "chart_show_boll": "0",
         "chart_show_futu": "macd",
         "chart_show_atr_stop_loss": False,

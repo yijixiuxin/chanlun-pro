@@ -199,7 +199,7 @@ class ExchangeTDX(Exchange):
 
                 ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if ks is None or len(ks) == 0:
-                    # 获取 8*800 = 6400 条数据
+                    # 获取 8*700 = 5600 条数据
                     ks = pd.concat(
                         [
                             client.to_df(
@@ -207,8 +207,8 @@ class ExchangeTDX(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -680,14 +680,14 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    # klines = ex.klines('SH.600498', '5m')
-    # print(klines[['date', 'close']].tail())
+    klines = ex.klines("SH.600498", "5m")
+    print(klines)
 
     # ticks = ex.ticks(['SZ.300474'])
     # print(ticks)
 
     # 获取复权相关信息
-    code = "SZ.002165"
-    market, tdx_code, _ = ex.to_tdx_code(code)
-    xdxr_data = ex.xdxr(market, code, tdx_code)
-    print(xdxr_data)
+    # code = "SZ.002165"
+    # market, tdx_code, _ = ex.to_tdx_code(code)
+    # xdxr_data = ex.xdxr(market, code, tdx_code)
+    # print(xdxr_data)
