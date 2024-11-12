@@ -40,6 +40,7 @@ class ExchangeBinanceSpot(Exchange):
 
         self.exchange = ccxt.binance(params)
         # self.exchange = ccxt.htx(params)
+        # self.exchange = ccxt.okx(params)
 
         self.db_exchange = ExchangeDB(Market.CURRENCY_SPOT.value)
 
