@@ -117,6 +117,7 @@ class SignalToTrade(BackTestTrader):
             }
         except Exception as e:
             print(code, self.now_datetime, e)
+            raise Exception(f"{code} - {self.now_datetime} 没有价格")
 
     def get_now_datetime(self):
         return self.now_datetime
@@ -297,7 +298,7 @@ class SignalToTrade(BackTestTrader):
                     )
                     opt_now_price = self.get_price(_pos["code"])
                     opt.info["__now_zf"] = (
-                        (opt_now_price['close'] - _pos["price"]) / _pos["price"] * 100
+                        (opt_now_price["close"] - _pos["price"]) / _pos["price"] * 100
                     )  # 记录持仓的价格
                     full_open_opts.append(opt)
                 if self.real_trade_full_sort == "zf":
@@ -319,6 +320,7 @@ class SignalToTrade(BackTestTrader):
 
         self.end()
 
+        self.cache_klines = {}
         BT.trader = self
 
         return BT

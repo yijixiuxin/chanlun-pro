@@ -287,16 +287,23 @@ class BackTestTrader(Trader):
                     # 实盘中起效果，允许执行的 close_uid 列表
                     # 有两种格式
                     #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
-                    #       字典格式：{'buy': ['a', 'b'0], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
-                    if isinstance(self.strategy.allow_close_uid, dict):
-                        if (
-                            _opt.close_uid
-                            not in self.strategy.allow_close_uid[
-                                "buy" if "buy" in _opt.mmd else "sell"
-                            ]
-                        ):
-                            continue
-                    elif _opt.close_uid not in self.strategy.allow_close_uid:
+                    #       字典格式：{'buy': ['a', 'b'], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
+                    #       字典格式：{'1buy': ['a', 'b'], '1sell' : ['c', 'd']}，按照给定的买卖点，分别设置平仓信号
+                    opt_type = "buy" if "buy" in _opt.mmd else "sell"
+                    if (
+                        isinstance(self.strategy.allow_close_uid, dict)
+                        and _opt.mmd in self.strategy.allow_close_uid.keys()
+                    ):
+                        allow_uids = self.strategy.allow_close_uid[_opt.mmd]
+                    elif (
+                        isinstance(self.strategy.allow_close_uid, dict)
+                        and opt_type in self.strategy.allow_close_uid.keys()
+                    ):
+                        allow_uids = self.strategy.allow_close_uid[opt_type]
+                    else:
+                        allow_uids = self.strategy.allow_close_uid
+
+                    if _opt.close_uid not in allow_uids:
                         continue
                 self.execute(code, _opt, pos)
 

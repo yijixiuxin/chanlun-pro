@@ -1098,11 +1098,15 @@ class BackTest:
                 "close_msg": pos.close_msg,
             }
 
-        query_uids = (
-            uids
-            if isinstance(uids, list)
-            else uids["buy" if "buy" in pos.mmd else "sell"]
-        )
+        pos_type = "buy" if "buy" in pos.mmd else "sell"
+
+        if isinstance(uids, dict) and pos.mmd in uids.keys():
+            query_uids = uids[pos.mmd]
+        elif isinstance(uids, dict) and pos_type in uids.keys():
+            query_uids = uids[pos_type]
+        else:
+            query_uids = uids
+
         if "clear" not in query_uids:
             query_uids.append("clear")
         # 按照时间从早到晚排序

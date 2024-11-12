@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Float,
     DateTime,
+    Date,
     Text,
     func,
 )

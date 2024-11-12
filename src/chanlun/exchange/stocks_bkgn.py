@@ -309,7 +309,7 @@ if __name__ == "__main__":
     """
     bkgn = StocksBKGN()
     # 重新更新并保存行业与板块信息
-    # bkgn.reload_dfcf_bkgn()
+    bkgn.reload_dfcf_bkgn()
 
     # 所有行业概念
     # hys, gns = bkgn.file_bkgns()
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     print(code_bkgn)
 
     # 根据行业获取其中的代码
-    codes = bkgn.get_codes_by_hy('塑料制品')
+    codes = bkgn.get_codes_by_hy("塑料制品")
     print(codes)
 
     # 根据概念获取其中的代码

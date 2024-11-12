@@ -96,6 +96,7 @@ def monitoring_code(
                     "frequency": frequency,
                     "bi": end_bi,
                     "bi_td": bi_td(end_bi, cd),
+                    "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
                 }
                 for bc_type in check_types["bi_beichi"]
@@ -108,6 +109,7 @@ def monitoring_code(
                     "frequency": frequency,
                     "bi": end_bi,
                     "bi_td": bi_td(end_bi, cd),
+                    "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
                 }
                 for mmd in check_types["bi_mmd"]
@@ -159,9 +161,8 @@ def monitoring_code(
             or is_exists.bi_is_done != is_done
             or is_exists.bi_is_td != is_td
         ) and is_send_msg:
-            msg = (
-                f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td})"
-            )
+            fx_ld = f" FX:{jh['fx_ld']}" if "fx_ld" in jh.keys() else ""  # 分型力度
+            msg = f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
             send_msgs.append(msg)
             db.alert_record_save(
                 market,
