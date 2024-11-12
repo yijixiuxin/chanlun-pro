@@ -153,7 +153,7 @@ export interface DatafeedConfiguration {
  * This object contains symbol quote values, where a quote represents a set of data describing the current price.
  * The library uses quote data for various trading functionalities, including the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket), [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend),
  * and widgets, such as [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List), [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details),
- * [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/), and [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market).
+ * [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), and [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market).
  *
  * While all properties in this object are marked as optional, populating most of them is required for supporting trading functionalities.
  * See property descriptions for more information.
@@ -169,7 +169,7 @@ export interface DatafeedQuoteValues {
 	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
 	 */
 	chp?: number;
-	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/) widget. */
+	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widgets. You can disable the [`prefer_quote_short_name`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#prefer_quote_short_name) to use the {@link LibrarySymbolInfo.ticker} value instead. */
 	short_name?: string;
 	/** The name of the exchange */
 	exchange?: string;

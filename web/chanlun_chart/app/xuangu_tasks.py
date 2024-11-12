@@ -9,6 +9,8 @@ from chanlun.exchange import Market, get_exchange
 from chanlun.xuangu import xuangu
 from tqdm.auto import tqdm
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 
 log = fun.get_logger()
 
@@ -70,11 +72,38 @@ xuangu_task_configs: Dict[str, Dict[str, object]] = {
         "frequency_num": 3,
         "frequency_memo": "三个周期",
     },
+    "xg_single_ma_250": {
+        "name": "均线250选股",
+        "task_fun": xuangu.xg_single_ma_250,
+        "task_memo": "最新价格在均线 250 之上 或者 之下",
+        "frequency_num": 1,
+        "frequency_memo": "一个周期",
+    },
 }
 
 
+def process_xuangu_by_code(args):
+    try:
+        code, market, frequencys, task_name, opt_types = args
+        ex = get_exchange(Market(market))
+        cl_config = query_cl_chart_config(market, "----")
+        klines = {_f: ex.klines(code, _f) for _f in frequencys if _f != ""}
+        task_fun = xuangu_task_configs[task_name]["task_fun"]
+        cds = web_batch_get_cl_datas(market, code, klines, cl_config)
+        xg_res = task_fun(cds, opt_types)
+        return xg_res
+    except Exception as e:
+        tqdm.write(f"{market} {code} {frequencys} 执行选股任务 {task_name} 失败：{e}")
+        return None
+
+
 def process_xuangu_task(
-    market: str, task_name: str, freqs: List[str], opt_type: List[str], to_zx_group: str
+    market: str,
+    task_name: str,
+    freqs: List[str],
+    opt_types: List[str],
+    src_zx_group: str,
+    target_zx_group: str,
 ):
     """
     执行选股的任务
@@ -83,36 +112,55 @@ def process_xuangu_task(
     try:
         zx = zixuan.ZiXuan(market)
         ex = get_exchange(Market(market))
-        # 获取交易所下的股票代码
-        run_codes = [_s["code"] for _s in ex.all_stocks()]
-        if market == "a":
-            run_codes = [
-                _c
-                for _c in run_codes
-                if _c[0:5] in ["SZ.00", "SZ.30", "SH.60", "SH.68"]
-            ]
-        if market == "futures":
-            run_codes = [_c for _c in run_codes if _c[-2:] == "L8"]
+        run_codes = []
+        if src_zx_group == "all":
+            # 获取交易所下的股票代码
+            run_codes = [_s["code"] for _s in ex.all_stocks()]
+            if market == "a":
+                run_codes = [
+                    _c
+                    for _c in run_codes
+                    if _c[0:5] in ["SZ.00", "SZ.30", "SH.60", "SH.68"]
+                ]
+            if market == "futures":
+                run_codes = [_c for _c in run_codes if _c[-2:] == "L8"]
+        else:
+            run_codes = zx.zx_stocks(src_zx_group)
+            run_codes = [_s["code"] for _s in run_codes]
 
-        cl_config = query_cl_chart_config(market, "----")
         tqdm.write(f"{market} {task_name} 选股任务开始，选股代码数量 {len(run_codes)}")
-        zx.clear_zx_stocks(to_zx_group)
-        for _c in tqdm(run_codes, desc="选股进度"):
-            try:
-                klines = {_f: ex.klines(_c, _f) for _f in freqs if _f != ""}
-                if len(klines) == 0:
-                    continue
-                if min([len(_k) for _k in klines.values()]) == 0:
-                    continue
-                cds = web_batch_get_cl_datas(market, _c, klines, cl_config)
+        zx.clear_zx_stocks(target_zx_group)
 
-                res = xuangu_task_configs[task_name]["task_fun"](cds, opt_type)
-                if res is not None:
-                    tqdm.write(f"{market} {task_name} 选择 {_c} : {res}")
-                    zx.add_stock(to_zx_group, _c, None)
-            except Exception as e:
-                tqdm.write(f"{market} {task_name} 执行 {_c} 异常 ：{e}")
-        xg_stocks = zx.zx_stocks(to_zx_group)
+        # 多进程版本
+        # with ProcessPoolExecutor(
+        #     max_workers=5,
+        #     mp_context=get_context("spawn"),
+        # ) as executor:
+        #     bar = tqdm(run_codes, desc="选股进度")
+        #     for _xg_res in executor.map(
+        #         process_xuangu_by_code,
+        #         [(_c, market, freqs, task_name, opt_types) for _c in run_codes],
+        #         chunksize=5,
+        #     ):
+        #         bar.update(1)
+        #         if _xg_res is not None:
+        #             tqdm.write(
+        #                 f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
+        #             )
+        #             zx.add_stock(target_zx_group, _xg_res["code"], None)
+
+        # 单进程版本
+        for _code in tqdm(run_codes, desc="选股进度"):
+            _xg_res = process_xuangu_by_code(
+                (_code, market, freqs, task_name, opt_types)
+            )
+            if _xg_res is not None:
+                tqdm.write(
+                    f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
+                )
+                zx.add_stock(target_zx_group, _xg_res["code"], None)
+
+        xg_stocks = zx.zx_stocks(target_zx_group)
         utils.send_fs_msg(
             market,
             f"选股任务：{xuangu_task_configs[task_name]['name']}",
@@ -137,7 +185,8 @@ class XuanguTasks(object):
         xuangu_task_name: str,
         freqs: List[str],
         opt_type: List[str],
-        to_zx_group: str,
+        src_zx_group: str,
+        target_zx_group: str,
     ):
         """
         执行选个股
@@ -152,11 +201,18 @@ class XuanguTasks(object):
         ):
             return False
 
-        task_name = f"{market}:{xuangu_task_configs[xuangu_task_name]['name']} {freqs} -> 【{to_zx_group}】"
+        task_name = f"{market}:{xuangu_task_configs[xuangu_task_name]['name']} {freqs} -> 【{target_zx_group}】"
 
         self.scheduler.add_job(
             func=process_xuangu_task,
-            args=(market, xuangu_task_name, freqs, opt_type, to_zx_group),
+            args=(
+                market,
+                xuangu_task_name,
+                freqs,
+                opt_type,
+                src_zx_group,
+                target_zx_group,
+            ),
             trigger="date",
             next_run_time=datetime.datetime.now(),
             id=task_id,

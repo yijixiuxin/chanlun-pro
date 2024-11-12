@@ -1219,6 +1219,37 @@ export interface AnchoredVWAPIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
+ * Override properties for the Anchoredvp drawing tool.
+ */
+export interface AnchoredvpLineToolOverrides {
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBars2.colors.0": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBars2.colors.1": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBars2.valuesColor": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBarsVA.colors.0": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBarsVA.colors.1": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.hhists.histBarsVA.valuesColor": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.horizlines.pocLines.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.horizlines.vahLines.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.horizlines.valLines.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.graphics.polygons.histBoxBg.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.styles.developingPoc.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.styles.developingVAHigh.color": string;
+	/** Default value: `undefined` */
+	"linetoolanchoredvp.styles.developingVALow.color": string;
+}
+/**
  * Override properties for the Anchoredvwap drawing tool.
  */
 export interface AnchoredvwapLineToolOverrides {
@@ -2347,8 +2378,6 @@ export interface BrushLineToolOverrides {
 	"linetoolbrush.leftEnd": number;
 	/** Default value: `#00bcd4` */
 	"linetoolbrush.linecolor": string;
-	/** Default value: `0` */
-	"linetoolbrush.linestyle": number;
 	/** Default value: `2` */
 	"linetoolbrush.linewidth": number;
 	/** Default value: `0` */
@@ -2781,6 +2810,12 @@ export interface ChartPropertiesOverrides {
 	 * @default true
 	 */
 	"paneProperties.legendProperties.showSeriesOHLC": boolean;
+	/**
+	 * Adds the ability to show daily changes in the chart legend.
+	 *
+	 * @default false
+	 */
+	"paneProperties.legendProperties.showLastDayChange": boolean;
 	/**
 	 * Series legend change value visibility.
 	 *
@@ -5797,7 +5832,7 @@ export interface DatafeedConfiguration {
  * This object contains symbol quote values, where a quote represents a set of data describing the current price.
  * The library uses quote data for various trading functionalities, including the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket), [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend),
  * and widgets, such as [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List), [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details),
- * [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/), and [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market).
+ * [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), and [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market).
  *
  * While all properties in this object are marked as optional, populating most of them is required for supporting trading functionalities.
  * See property descriptions for more information.
@@ -5813,7 +5848,7 @@ export interface DatafeedQuoteValues {
 	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
 	 */
 	chp?: number;
-	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/) widget. */
+	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widgets. You can disable the [`prefer_quote_short_name`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#prefer_quote_short_name) to use the {@link LibrarySymbolInfo.ticker} value instead. */
 	short_name?: string;
 	/** The name of the exchange */
 	exchange?: string;
@@ -6475,13 +6510,13 @@ export interface ExecutionLineToolOverrides {
 	"linetoolexecution.fontItalic": boolean;
 	/** Default value: `10` */
 	"linetoolexecution.fontSize": number;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolexecution.text": string;
 	/** Default value: `#000000` */
 	"linetoolexecution.textColor": string;
 	/** Default value: `0` */
 	"linetoolexecution.textTransparency": number;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolexecution.tooltip": string;
 }
 export interface ExportDataOptions {
@@ -6955,7 +6990,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level1.coeff": number;
 	/** Default value: `#787B86` */
 	"linetoolfibretracement.level1.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level1.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level1.visible": boolean;
@@ -6963,7 +6998,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level10.coeff": number;
 	/** Default value: `#9c27b0` */
 	"linetoolfibretracement.level10.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level10.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level10.visible": boolean;
@@ -6971,7 +7006,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level11.coeff": number;
 	/** Default value: `#e91e63` */
 	"linetoolfibretracement.level11.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level11.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level11.visible": boolean;
@@ -6979,7 +7014,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level12.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetoolfibretracement.level12.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level12.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level12.visible": boolean;
@@ -6987,7 +7022,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level13.coeff": number;
 	/** Default value: `#F23645` */
 	"linetoolfibretracement.level13.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level13.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level13.visible": boolean;
@@ -6995,7 +7030,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level14.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetoolfibretracement.level14.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level14.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level14.visible": boolean;
@@ -7003,7 +7038,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level15.coeff": number;
 	/** Default value: `#4caf50` */
 	"linetoolfibretracement.level15.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level15.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level15.visible": boolean;
@@ -7011,7 +7046,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level16.coeff": number;
 	/** Default value: `#089981` */
 	"linetoolfibretracement.level16.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level16.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level16.visible": boolean;
@@ -7019,7 +7054,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level17.coeff": number;
 	/** Default value: `#00bcd4` */
 	"linetoolfibretracement.level17.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level17.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level17.visible": boolean;
@@ -7027,7 +7062,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level18.coeff": number;
 	/** Default value: `#787B86` */
 	"linetoolfibretracement.level18.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level18.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level18.visible": boolean;
@@ -7035,7 +7070,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level19.coeff": number;
 	/** Default value: `#2962FF` */
 	"linetoolfibretracement.level19.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level19.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level19.visible": boolean;
@@ -7043,7 +7078,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level2.coeff": number;
 	/** Default value: `#F23645` */
 	"linetoolfibretracement.level2.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level2.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level2.visible": boolean;
@@ -7051,7 +7086,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level20.coeff": number;
 	/** Default value: `#F23645` */
 	"linetoolfibretracement.level20.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level20.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level20.visible": boolean;
@@ -7059,7 +7094,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level21.coeff": number;
 	/** Default value: `#9c27b0` */
 	"linetoolfibretracement.level21.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level21.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level21.visible": boolean;
@@ -7067,7 +7102,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level22.coeff": number;
 	/** Default value: `#e91e63` */
 	"linetoolfibretracement.level22.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level22.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level22.visible": boolean;
@@ -7075,7 +7110,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level23.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetoolfibretracement.level23.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level23.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level23.visible": boolean;
@@ -7083,7 +7118,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level24.coeff": number;
 	/** Default value: `#089981` */
 	"linetoolfibretracement.level24.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level24.text": string;
 	/** Default value: `false` */
 	"linetoolfibretracement.level24.visible": boolean;
@@ -7091,7 +7126,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level3.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetoolfibretracement.level3.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level3.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level3.visible": boolean;
@@ -7099,7 +7134,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level4.coeff": number;
 	/** Default value: `#4caf50` */
 	"linetoolfibretracement.level4.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level4.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level4.visible": boolean;
@@ -7107,7 +7142,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level5.coeff": number;
 	/** Default value: `#089981` */
 	"linetoolfibretracement.level5.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level5.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level5.visible": boolean;
@@ -7115,7 +7150,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level6.coeff": number;
 	/** Default value: `#00bcd4` */
 	"linetoolfibretracement.level6.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level6.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level6.visible": boolean;
@@ -7123,7 +7158,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level7.coeff": number;
 	/** Default value: `#787B86` */
 	"linetoolfibretracement.level7.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level7.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level7.visible": boolean;
@@ -7131,7 +7166,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level8.coeff": number;
 	/** Default value: `#2962FF` */
 	"linetoolfibretracement.level8.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level8.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level8.visible": boolean;
@@ -7139,7 +7174,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.level9.coeff": number;
 	/** Default value: `#F23645` */
 	"linetoolfibretracement.level9.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolfibretracement.level9.text": string;
 	/** Default value: `true` */
 	"linetoolfibretracement.level9.visible": boolean;
@@ -7761,7 +7796,7 @@ export interface FivepointspatternLineToolOverrides {
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
 export interface FixedRangeIndicatorOverrides {
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"developing poc.color": string;
 	/** Default value: `0` */
 	"developing poc.linestyle": number;
@@ -7775,7 +7810,7 @@ export interface FixedRangeIndicatorOverrides {
 	"developing poc.transparency": number;
 	/** Default value: `0` */
 	"developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va high.color": string;
 	/** Default value: `0` */
 	"developing va high.linestyle": number;
@@ -7789,7 +7824,7 @@ export interface FixedRangeIndicatorOverrides {
 	"developing va high.transparency": number;
 	/** Default value: `0` */
 	"developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va low.color": string;
 	/** Default value: `0` */
 	"developing va low.linestyle": number;
@@ -8163,7 +8198,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.levels.5.width": number;
 	/** Default value: `false` */
 	"linetoolganncomplex.reverse": boolean;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolganncomplex.scaleRatio": string;
 	/** Default value: `true` */
 	"linetoolganncomplex.showLabels": boolean;
@@ -9015,6 +9050,8 @@ export interface HighlighterLineToolOverrides {
 	"linetoolhighlighter.smooth": number;
 	/** Default value: `80` */
 	"linetoolhighlighter.transparency": number;
+	/** Default value: `20` */
+	"linetoolhighlighter.width": number;
 }
 /**
  * Overrides for the 'Historical Volatility' indicator.
@@ -9118,7 +9155,7 @@ export interface HorzlineLineToolOverrides {
 	"linetoolhorzline.showPrice": boolean;
 	/** Default value: `#2962FF` */
 	"linetoolhorzline.textcolor": string;
-	/** Default value: `top` */
+	/** Default value: `middle` */
 	"linetoolhorzline.vertLabelsAlign": string;
 }
 /**
@@ -15873,64 +15910,18 @@ export interface NetVolumeIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 export interface NewsItem {
-	/** News item title */
+	/** News item title. */
 	title: string;
 	/** Source of the news item */
 	source: string;
 	/** Published date */
 	published: number;
-	/** Link to the news item */
+	/** Link to the news item. This link is opened in a pop-up dialog when a user clicks on the corresponding news item. If `link` is not provided, the information from the {@link fullDescription} property is displayed instead. */
 	link?: string;
 	/** Short description */
 	shortDescription?: string;
 	/** Full description */
 	fullDescription?: string;
-}
-/**
- * Override properties for the Note drawing tool.
- */
-export interface NoteLineToolOverrides {
-	/** Default value: `rgba(41, 98, 255, 0.7)` */
-	"linetoolnote.backgroundColor": string;
-	/** Default value: `0` */
-	"linetoolnote.backgroundTransparency": number;
-	/** Default value: `false` */
-	"linetoolnote.bold": boolean;
-	/** Default value: `#2962FF` */
-	"linetoolnote.borderColor": string;
-	/** Default value: `true` */
-	"linetoolnote.fixedSize": boolean;
-	/** Default value: `14` */
-	"linetoolnote.fontSize": number;
-	/** Default value: `false` */
-	"linetoolnote.italic": boolean;
-	/** Default value: `#2962FF` */
-	"linetoolnote.markerColor": string;
-	/** Default value: `#ffffff` */
-	"linetoolnote.textColor": string;
-}
-/**
- * Override properties for the Noteabsolute drawing tool.
- */
-export interface NoteabsoluteLineToolOverrides {
-	/** Default value: `rgba(41, 98, 255, 0.7)` */
-	"linetoolnoteabsolute.backgroundColor": string;
-	/** Default value: `0` */
-	"linetoolnoteabsolute.backgroundTransparency": number;
-	/** Default value: `false` */
-	"linetoolnoteabsolute.bold": boolean;
-	/** Default value: `#2962FF` */
-	"linetoolnoteabsolute.borderColor": string;
-	/** Default value: `true` */
-	"linetoolnoteabsolute.fixedSize": boolean;
-	/** Default value: `14` */
-	"linetoolnoteabsolute.fontSize": number;
-	/** Default value: `false` */
-	"linetoolnoteabsolute.italic": boolean;
-	/** Default value: `#2962FF` */
-	"linetoolnoteabsolute.markerColor": string;
-	/** Default value: `#ffffff` */
-	"linetoolnoteabsolute.textColor": string;
 }
 /**
  * Formatting options for numbers
@@ -16096,7 +16087,7 @@ export interface OrderLineToolOverrides {
 	"linetoolorder.cancelButtonIconInactiveBuyColor": string;
 	/** Default value: `rgba(231, 86, 86, 0.5)` */
 	"linetoolorder.cancelButtonIconInactiveSellColor": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolorder.cancelTooltip": string;
 	/** Default value: `inherit` */
 	"linetoolorder.extendLeft": string;
@@ -16118,7 +16109,7 @@ export interface OrderLineToolOverrides {
 	"linetoolorder.lineStyle": string;
 	/** Default value: `inherit` */
 	"linetoolorder.lineWidth": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolorder.modifyTooltip": string;
 	/** Default value: `#4094e8` */
 	"linetoolorder.quantityBackgroundActiveBuyColor": string;
@@ -16148,7 +16139,7 @@ export interface OrderLineToolOverrides {
 	"linetoolorder.quantityTextColor": string;
 	/** Default value: `0` */
 	"linetoolorder.quantityTextTransparency": number;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolorder.tooltip": string;
 }
 export interface OrderOrPositionMessage {
@@ -17761,7 +17752,7 @@ export interface PositionLineToolOverrides {
 	"linetoolposition.closeButtonIconBuyColor": string;
 	/** Default value: `#e75656` */
 	"linetoolposition.closeButtonIconSellColor": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolposition.closeTooltip": string;
 	/** Default value: `inherit` */
 	"linetoolposition.extendLeft": string;
@@ -17777,7 +17768,7 @@ export interface PositionLineToolOverrides {
 	"linetoolposition.lineStyle": string;
 	/** Default value: `inherit` */
 	"linetoolposition.lineWidth": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolposition.protectTooltip": string;
 	/** Default value: `#4094e8` */
 	"linetoolposition.quantityBackgroundBuyColor": string;
@@ -17811,9 +17802,9 @@ export interface PositionLineToolOverrides {
 	"linetoolposition.reverseButtonIconBuyColor": string;
 	/** Default value: `#e75656` */
 	"linetoolposition.reverseButtonIconSellColor": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolposition.reverseTooltip": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetoolposition.tooltip": string;
 }
 /**
@@ -18105,6 +18096,38 @@ export interface RangeOptions {
 	res: ResolutionString;
 }
 /**
+ * Overrides for the 'Rank Correlation Index' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface RankCorrelationIndexIndicatorOverrides {
+	/** Default value: `#787B86` */
+	"zero line.color": string;
+	/** Default value: `2` */
+	"zero line.linestyle": number;
+	/** Default value: `1` */
+	"zero line.linewidth": number;
+	/** Default value: `true` */
+	"zero line.visible": boolean;
+	/** Default value: `0` */
+	"zero line.value": number;
+	/** Default value: `15` */
+	"rci.display": number;
+	/** Default value: `0` */
+	"rci.linestyle": number;
+	/** Default value: `1` */
+	"rci.linewidth": number;
+	/** Default value: `line` */
+	"rci.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"rci.trackprice": boolean;
+	/** Default value: `0` */
+	"rci.transparency": number;
+	/** Default value: `#2196F3` */
+	"rci.color": string;
+	[key: string]: StudyOverrideValueType;
+}
+/**
  * Overrides for the 'Rate Of Change' indicator.
  *
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
@@ -18142,13 +18165,13 @@ export interface RateOfChangeIndicatorOverrides {
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
 export interface RatioIndicatorOverrides {
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"negativefill.color": string;
 	/** Default value: `0` */
 	"negativefill.transparency": number;
 	/** Default value: `true` */
 	"negativefill.visible": boolean;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"positivefill.color": string;
 	/** Default value: `0` */
 	"positivefill.transparency": number;
@@ -18323,7 +18346,7 @@ export interface RectangleLineToolOverrides {
 	"linetoolrectangle.fillBackground": boolean;
 	/** Default value: `14` */
 	"linetoolrectangle.fontSize": number;
-	/** Default value: `left` */
+	/** Default value: `center` */
 	"linetoolrectangle.horzLabelsAlign": string;
 	/** Default value: `false` */
 	"linetoolrectangle.italic": boolean;
@@ -18343,7 +18366,7 @@ export interface RectangleLineToolOverrides {
 	"linetoolrectangle.textColor": string;
 	/** Default value: `50` */
 	"linetoolrectangle.transparency": number;
-	/** Default value: `bottom` */
+	/** Default value: `middle` */
 	"linetoolrectangle.vertLabelsAlign": string;
 }
 /**
@@ -19316,13 +19339,13 @@ export interface SortingParameters {
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
 export interface SpreadIndicatorOverrides {
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"negative fill.color": string;
 	/** Default value: `0` */
 	"negative fill.transparency": number;
 	/** Default value: `true` */
 	"negative fill.visible": boolean;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"positive fill.color": string;
 	/** Default value: `0` */
 	"positive fill.transparency": number;
@@ -21108,7 +21131,7 @@ export interface StudyOverrides {
 	 */
 	"compare.source": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - IsHidden: `true`
 	 */
@@ -21221,13 +21244,13 @@ export interface StudyOverrides {
 	/** Default value: `#2196F3` */
 	"correlation - log.plot.color": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Confirm: `true`
 	 */
 	"correlation - log.instrument 1": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Confirm: `true`
 	 */
@@ -21252,7 +21275,7 @@ export interface StudyOverrides {
 	/** Default value: `#2196F3` */
 	"correlation coefficient.plot.color": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 */
 	"correlation coefficient.sym": string;
@@ -21705,7 +21728,7 @@ export interface StudyOverrides {
 	 * - Max: `1000000000000`
 	 */
 	"fisher transform.length": number;
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"fixed range.developing poc.color": string;
 	/** Default value: `0` */
 	"fixed range.developing poc.linestyle": number;
@@ -21719,7 +21742,7 @@ export interface StudyOverrides {
 	"fixed range.developing poc.transparency": number;
 	/** Default value: `0` */
 	"fixed range.developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"fixed range.developing va high.color": string;
 	/** Default value: `0` */
 	"fixed range.developing va high.linestyle": number;
@@ -21733,7 +21756,7 @@ export interface StudyOverrides {
 	"fixed range.developing va high.transparency": number;
 	/** Default value: `0` */
 	"fixed range.developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"fixed range.developing va low.color": string;
 	/** Default value: `0` */
 	"fixed range.developing va low.linestyle": number;
@@ -22620,6 +22643,13 @@ export interface StudyOverrides {
 	/** Default value: `#FF6D00` */
 	"macd.signal.color": string;
 	/**
+	 * - Default value: `undefined`
+	 * - Input type: `symbol`
+	 * - Optional: `true`
+	 * - IsHidden: `false`
+	 */
+	"macd.other symbol": string;
+	/**
 	 * - Default value: `12`
 	 * - Input type: `integer`
 	 * - Min: `1`
@@ -22833,7 +22863,7 @@ export interface StudyOverrides {
 	/** Default value: `0` */
 	"moving average.smoothed ma.transparency": number;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Optional: `true`
 	 * - IsHidden: `false`
@@ -23372,7 +23402,7 @@ export interface StudyOverrides {
 	 */
 	"on balance volume.smoothing length": number;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - IsHidden: `true`
 	 */
@@ -23541,6 +23571,37 @@ export interface StudyOverrides {
 	/** Default value: `#2196F3` */
 	"price volume trend.pvt.color": string;
 	/** Default value: `#787B86` */
+	"rank correlation index.zero line.color": string;
+	/** Default value: `2` */
+	"rank correlation index.zero line.linestyle": number;
+	/** Default value: `1` */
+	"rank correlation index.zero line.linewidth": number;
+	/** Default value: `true` */
+	"rank correlation index.zero line.visible": boolean;
+	/** Default value: `0` */
+	"rank correlation index.zero line.value": number;
+	/** Default value: `15` */
+	"rank correlation index.rci.display": number;
+	/** Default value: `0` */
+	"rank correlation index.rci.linestyle": number;
+	/** Default value: `1` */
+	"rank correlation index.rci.linewidth": number;
+	/** Default value: `line` */
+	"rank correlation index.rci.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"rank correlation index.rci.trackprice": boolean;
+	/** Default value: `0` */
+	"rank correlation index.rci.transparency": number;
+	/** Default value: `#2196F3` */
+	"rank correlation index.rci.color": string;
+	/**
+	 * - Default value: `12`
+	 * - Input type: `integer`
+	 * - Min: `1`
+	 * - Max: `1000000000000`
+	 */
+	"rank correlation index.length": number;
+	/** Default value: `#787B86` */
 	"rate of change.zero line.color": string;
 	/** Default value: `2` */
 	"rate of change.zero line.linestyle": number;
@@ -23571,13 +23632,13 @@ export interface StudyOverrides {
 	 * - Max: `1000000000000`
 	 */
 	"rate of change.length": number;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"ratio.negativefill.color": string;
 	/** Default value: `0` */
 	"ratio.negativefill.transparency": number;
 	/** Default value: `true` */
 	"ratio.negativefill.visible": boolean;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"ratio.positivefill.color": string;
 	/** Default value: `0` */
 	"ratio.positivefill.transparency": number;
@@ -23618,7 +23679,7 @@ export interface StudyOverrides {
 	 */
 	"ratio.source": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Confirm: `true`
 	 */
@@ -23929,13 +23990,13 @@ export interface StudyOverrides {
 	 * - Options: `["open","high","low","close","hl2","hlc3","ohlc4"]`
 	 */
 	"smoothed moving average.source": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"spread.negative fill.color": string;
 	/** Default value: `0` */
 	"spread.negative fill.transparency": number;
 	/** Default value: `true` */
 	"spread.negative fill.visible": boolean;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"spread.positive fill.color": string;
 	/** Default value: `0` */
 	"spread.positive fill.transparency": number;
@@ -23976,7 +24037,7 @@ export interface StudyOverrides {
 	 */
 	"spread.source": string;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Confirm: `true`
 	 */
@@ -24666,19 +24727,19 @@ export interface StudyOverrides {
 	/** Default value: `#000080` */
 	"volume.volume.color": string;
 	/** Default value: `0` */
-	"volume.volume ma.display": number;
+	"volume.volume ma:plot.display": number;
 	/** Default value: `0` */
-	"volume.volume ma.linestyle": number;
+	"volume.volume ma:plot.linestyle": number;
 	/** Default value: `1` */
-	"volume.volume ma.linewidth": number;
+	"volume.volume ma:plot.linewidth": number;
 	/** Default value: `line` */
-	"volume.volume ma.plottype": LineStudyPlotStyleName;
+	"volume.volume ma:plot.plottype": LineStudyPlotStyleName;
 	/** Default value: `false` */
-	"volume.volume ma.trackprice": boolean;
+	"volume.volume ma:plot.trackprice": boolean;
 	/** Default value: `0` */
-	"volume.volume ma.transparency": number;
+	"volume.volume ma:plot.transparency": number;
 	/** Default value: `#2196F3` */
-	"volume.volume ma.color": string;
+	"volume.volume ma:plot.color": string;
 	/** Default value: `0` */
 	"volume.smoothed ma.display": number;
 	/** Default value: `0` */
@@ -24700,6 +24761,12 @@ export interface StudyOverrides {
 	 */
 	"volume.show ma": boolean;
 	/**
+	 * - Default value: `SMA`
+	 * - Input type: `text`
+	 * - Options: `["SMA","EMA","WMA"]`
+	 */
+	"volume.volume ma:input": string;
+	/**
 	 * - Default value: `20`
 	 * - Input type: `integer`
 	 * - Min: `1`
@@ -24712,7 +24779,7 @@ export interface StudyOverrides {
 	 */
 	"volume.color based on previous close": boolean;
 	/**
-	 * - Default value: ``
+	 * - Default value: `undefined`
 	 * - Input type: `symbol`
 	 * - Optional: `true`
 	 * - IsHidden: `false`
@@ -24769,7 +24836,7 @@ export interface StudyOverrides {
 	 * - Max: `4999`
 	 */
 	"volume oscillator.longlen": number;
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"volume profile fixed range.developing poc.color": string;
 	/** Default value: `0` */
 	"volume profile fixed range.developing poc.linestyle": number;
@@ -24783,7 +24850,7 @@ export interface StudyOverrides {
 	"volume profile fixed range.developing poc.transparency": number;
 	/** Default value: `0` */
 	"volume profile fixed range.developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"volume profile fixed range.developing va high.color": string;
 	/** Default value: `0` */
 	"volume profile fixed range.developing va high.linestyle": number;
@@ -24797,7 +24864,7 @@ export interface StudyOverrides {
 	"volume profile fixed range.developing va high.transparency": number;
 	/** Default value: `0` */
 	"volume profile fixed range.developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"volume profile fixed range.developing va low.color": string;
 	/** Default value: `0` */
 	"volume profile fixed range.developing va low.linestyle": number;
@@ -24859,7 +24926,7 @@ export interface StudyOverrides {
 	 * - Options: `["Up/Down","Total","Delta"]`
 	 */
 	"volume profile fixed range.volume": string;
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"volume profile visible range.developing poc.color": string;
 	/** Default value: `0` */
 	"volume profile visible range.developing poc.linestyle": number;
@@ -24873,7 +24940,7 @@ export interface StudyOverrides {
 	"volume profile visible range.developing poc.transparency": number;
 	/** Default value: `0` */
 	"volume profile visible range.developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"volume profile visible range.developing va high.color": string;
 	/** Default value: `0` */
 	"volume profile visible range.developing va high.linestyle": number;
@@ -24887,7 +24954,7 @@ export interface StudyOverrides {
 	"volume profile visible range.developing va high.transparency": number;
 	/** Default value: `0` */
 	"volume profile visible range.developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"volume profile visible range.developing va low.color": string;
 	/** Default value: `0` */
 	"volume profile visible range.developing va low.linestyle": number;
@@ -25871,8 +25938,8 @@ export interface SubscribeEventsMap {
 	 */
 	onMarkClick: (markId: Mark["id"]) => void;
 	/**
-	 * User clicked the "plus" button on the price scale.
-	 * @param  {PlusClickParams} params - coordinates, price and symbol information
+	 * User clicked the _Plus_ button on the [price scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale#quick-trading).
+	 * @param  {PlusClickParams} params - coordinates, price, and symbol information
 	 */
 	onPlusClick: (params: PlusClickParams) => void;
 	/**
@@ -25894,7 +25961,7 @@ export interface SubscribeEventsMap {
 	 */
 	layout_changed: EmptyCallback;
 	/**
-	 * Active chart has changed
+	 * Active chart has changed.
 	 * **Note:** this event is only applicable to Trading Platform.
 	 * @param  {number} chartIndex - index of the active chart
 	 */
@@ -26528,23 +26595,9 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 */
 	widgetbar?: WidgetBarParams;
 	/**
-	 * Use this property to change the RSS feed for news. You can set a different RSS for each symbol type or use a single RSS for all symbols. The object should have the `default` property, other properties are optional. The names of the properties match the symbol types. Each property is an object (or an array of objects) with the following properties:
-	 *
-	 * 1. `url` - is a URL to be requested. It can contain tags in curly brackets that will be replaced by the terminal: `{SYMBOL}`, `{TYPE}`, `{EXCHANGE}`.
-	 * 1. `name` - is a name of the feed to be displayed underneath the news.
-	 *
-	 * @example
-	 * ```javascript
-	 * rss_news_feed: {
-	 *     default: [ {
-	 *         url: "https://articlefeeds.nasdaq.com/nasdaq/symbols?symbol={SYMBOL}",
-	 *         name: "NASDAQ"
-	 *       }, {
-	 *         url: "http://feeds.finance.yahoo.com/rss/2.0/headline?s={SYMBOL}&region=US&lang=en-US",
-	 *         name: "Yahoo Finance"
-	 *       } ]
-	 * },
-	 * ```
+	 * Use this property to connect a RSS feed to the _News_ widget. To do this, specify a {@link RssNewsFeedParams} object that should contain at least the default RSS configuration.
+	 * You can specify a different RSS for each symbol type or use only one for all symbols. For more information, refer to the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news) article.
+	 * Note that if both `rss_news_feed` and {@link news_provider} properties are specified, `rss_news_feed` is ignored.
 	 *
 	 * @example
 	 * ```javascript
@@ -26552,20 +26605,6 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 *     "default": {
 	 *         url: "https://articlefeeds.nasdaq.com/nasdaq/symbols?symbol={SYMBOL}",
 	 *         name: "NASDAQ"
-	 *     }
-	 * }
-	 * ```
-	 *
-	 * @example
-	 * ```javascript
-	 * rss_news_feed: {
-	 *     "default": {
-	 *         url: "https://articlefeeds.nasdaq.com/nasdaq/symbols?symbol={SYMBOL}",
-	 *         name: "NASDAQ"
-	 *      },
-	 *     "stock": {
-	 *         url: "http://feeds.finance.yahoo.com/rss/2.0/headline?s={SYMBOL}&region=US&lang=en-US",
-	 *         name: "Yahoo Finance"
 	 *     }
 	 * }
 	 * ```
@@ -26576,24 +26615,32 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 */
 	rss_news_title?: string;
 	/**
-	 * Use this property to set your own news getter function. Both the `symbol` and `callback` will be passed to the function.
+	 * Use this property to connect any custom news source to the _News_ widget. To do this, you should specify {@link GetNewsFunction} that the library calls to request data for the widget.
+	 * In response, you should pass a {@link GetNewsResponse} object to the callback function.
+	 * In this object, specify an array of {@link NewsItem} objects that contain data for each news item.
+	 * For more information, refer to the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news) article.
+	 * Note that if both {@link rss_news_feed} and `news_provider` properties are specified, `rss_news_feed` is ignored.
 	 *
-	 * The callback function should be called with an object. The object should have two properties: `title` which is a optional string, and `newsItems` which is an array of news objects that have the following structure:
+	 * Consider the following example. An API endpoint returns news items represented in JSON and the format matches the `NewsItem` interface.
+	 * In this case, you implement `GetNewsFunction` as follows:
 	 *
-	 * * `title` (required) - the title of news item.
-	 * * `published` (required) - the time of news item in ms (UTC).
-	 * * `source` (optional) - source of the news item title.
-	 * * `shortDescription` (optional) - Short description of a news item that will be displayed under the title.
-	 * * `link` (optional) - URL to the news story.
-	 * * `fullDescription` (optional) - full description (body) of a news item.
-	 *
-	 * **NOTE:** Only `title` and `published` are the main properties used to compare what has already been published and what's new.
-	 *
-	 * **NOTE 2:** When a user clicks on a news item a new tab with the `link` URL will be opened. If `link` is not specified then a pop-up dialog with `fullDescription` will be shown.
-	 *
-	 * **NOTE 3:** If both `news_provider` and `rss_news_feed` are available then the `rss_news_feed` will be ignored.
-	 *
-	 * See [News API examples](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news/News-Api-Examples) for usage examples.
+	 * ```javascript
+	 * const jsonNewsApiUrl = 'https://www.example.com';
+	 * new TradingView.widget({
+	 *     // ...
+	 *     news_provider: function getNews(symbol, callback) {
+	 *         const requestUrl = new URL('/news/', jsonNewsApiUrl);
+	 *         requestUrl.searchParams.append('symbol', symbol);
+	 *         fetch(requestUrl)
+	 *             .then(res => res.json())
+	 *             .then(json => {
+	 *                 callback({
+	 *                     newsItems: json,
+	 *                 });
+	 *             });
+	 *     }
+	 * });
+	 * ```
 	 */
 	news_provider?: GetNewsFunction;
 	/** Overrides order and position lines created using the [`createOrderLine`](https://www.tradingview.com/charting-library-docs/latest/api/interfaces/Charting_Library.IChartWidgetApi#createorderline) and [`createPositionLine`](https://www.tradingview.com/charting-library-docs/latest/api/interfaces/Charting_Library.IChartWidgetApi#createpositionline) methods. */
@@ -26684,8 +26731,6 @@ export interface TrendangleLineToolOverrides {
 	"linetooltrendangle.showPriceRange": boolean;
 	/** Default value: `2` */
 	"linetooltrendangle.statsPosition": number;
-	/** Default value: `#2962FF` */
-	"linetooltrendangle.textcolor": string;
 }
 /**
  * Override properties for the Trendbasedfibextension drawing tool.
@@ -26711,7 +26756,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level1.coeff": number;
 	/** Default value: `#787B86` */
 	"linetooltrendbasedfibextension.level1.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level1.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level1.visible": boolean;
@@ -26719,7 +26764,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level10.coeff": number;
 	/** Default value: `#9c27b0` */
 	"linetooltrendbasedfibextension.level10.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level10.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level10.visible": boolean;
@@ -26727,7 +26772,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level11.coeff": number;
 	/** Default value: `#e91e63` */
 	"linetooltrendbasedfibextension.level11.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level11.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level11.visible": boolean;
@@ -26735,7 +26780,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level12.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetooltrendbasedfibextension.level12.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level12.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level12.visible": boolean;
@@ -26743,7 +26788,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level13.coeff": number;
 	/** Default value: `#F23645` */
 	"linetooltrendbasedfibextension.level13.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level13.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level13.visible": boolean;
@@ -26751,7 +26796,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level14.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetooltrendbasedfibextension.level14.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level14.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level14.visible": boolean;
@@ -26759,7 +26804,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level15.coeff": number;
 	/** Default value: `#4caf50` */
 	"linetooltrendbasedfibextension.level15.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level15.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level15.visible": boolean;
@@ -26767,7 +26812,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level16.coeff": number;
 	/** Default value: `#089981` */
 	"linetooltrendbasedfibextension.level16.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level16.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level16.visible": boolean;
@@ -26775,7 +26820,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level17.coeff": number;
 	/** Default value: `#00bcd4` */
 	"linetooltrendbasedfibextension.level17.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level17.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level17.visible": boolean;
@@ -26783,7 +26828,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level18.coeff": number;
 	/** Default value: `#787B86` */
 	"linetooltrendbasedfibextension.level18.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level18.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level18.visible": boolean;
@@ -26791,7 +26836,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level19.coeff": number;
 	/** Default value: `#2962FF` */
 	"linetooltrendbasedfibextension.level19.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level19.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level19.visible": boolean;
@@ -26799,7 +26844,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level2.coeff": number;
 	/** Default value: `#F23645` */
 	"linetooltrendbasedfibextension.level2.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level2.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level2.visible": boolean;
@@ -26807,7 +26852,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level20.coeff": number;
 	/** Default value: `#F23645` */
 	"linetooltrendbasedfibextension.level20.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level20.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level20.visible": boolean;
@@ -26815,7 +26860,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level21.coeff": number;
 	/** Default value: `#9c27b0` */
 	"linetooltrendbasedfibextension.level21.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level21.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level21.visible": boolean;
@@ -26823,7 +26868,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level22.coeff": number;
 	/** Default value: `#e91e63` */
 	"linetooltrendbasedfibextension.level22.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level22.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level22.visible": boolean;
@@ -26831,7 +26876,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level23.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetooltrendbasedfibextension.level23.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level23.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level23.visible": boolean;
@@ -26839,7 +26884,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level24.coeff": number;
 	/** Default value: `#089981` */
 	"linetooltrendbasedfibextension.level24.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level24.text": string;
 	/** Default value: `false` */
 	"linetooltrendbasedfibextension.level24.visible": boolean;
@@ -26847,7 +26892,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level3.coeff": number;
 	/** Default value: `#FF9800` */
 	"linetooltrendbasedfibextension.level3.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level3.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level3.visible": boolean;
@@ -26855,7 +26900,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level4.coeff": number;
 	/** Default value: `#4caf50` */
 	"linetooltrendbasedfibextension.level4.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level4.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level4.visible": boolean;
@@ -26863,7 +26908,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level5.coeff": number;
 	/** Default value: `#089981` */
 	"linetooltrendbasedfibextension.level5.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level5.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level5.visible": boolean;
@@ -26871,7 +26916,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level6.coeff": number;
 	/** Default value: `#00bcd4` */
 	"linetooltrendbasedfibextension.level6.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level6.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level6.visible": boolean;
@@ -26879,7 +26924,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level7.coeff": number;
 	/** Default value: `#787B86` */
 	"linetooltrendbasedfibextension.level7.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level7.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level7.visible": boolean;
@@ -26887,7 +26932,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level8.coeff": number;
 	/** Default value: `#2962FF` */
 	"linetooltrendbasedfibextension.level8.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level8.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level8.visible": boolean;
@@ -26895,7 +26940,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.level9.coeff": number;
 	/** Default value: `#F23645` */
 	"linetooltrendbasedfibextension.level9.color": string;
-	/** Default value: `` */
+	/** Default value: `undefined` */
 	"linetooltrendbasedfibextension.level9.text": string;
 	/** Default value: `true` */
 	"linetooltrendbasedfibextension.level9.visible": boolean;
@@ -27382,7 +27427,7 @@ export interface VertlineLineToolOverrides {
 	"linetoolvertline.extendLine": boolean;
 	/** Default value: `14` */
 	"linetoolvertline.fontsize": number;
-	/** Default value: `right` */
+	/** Default value: `center` */
 	"linetoolvertline.horzLabelsAlign": string;
 	/** Default value: `false` */
 	"linetoolvertline.italic": boolean;
@@ -27400,7 +27445,7 @@ export interface VertlineLineToolOverrides {
 	"linetoolvertline.textcolor": string;
 	/** Default value: `vertical` */
 	"linetoolvertline.textOrientation": string;
-	/** Default value: `top` */
+	/** Default value: `middle` */
 	"linetoolvertline.vertLabelsAlign": string;
 }
 /**
@@ -27538,19 +27583,19 @@ export interface VolumeIndicatorOverrides {
 	/** Default value: `#000080` */
 	"volume.color": string;
 	/** Default value: `0` */
-	"volume ma.display": number;
+	"volume ma:plot.display": number;
 	/** Default value: `0` */
-	"volume ma.linestyle": number;
+	"volume ma:plot.linestyle": number;
 	/** Default value: `1` */
-	"volume ma.linewidth": number;
+	"volume ma:plot.linewidth": number;
 	/** Default value: `line` */
-	"volume ma.plottype": LineStudyPlotStyleName;
+	"volume ma:plot.plottype": LineStudyPlotStyleName;
 	/** Default value: `false` */
-	"volume ma.trackprice": boolean;
+	"volume ma:plot.trackprice": boolean;
 	/** Default value: `0` */
-	"volume ma.transparency": number;
+	"volume ma:plot.transparency": number;
 	/** Default value: `#2196F3` */
-	"volume ma.color": string;
+	"volume ma:plot.color": string;
 	/** Default value: `0` */
 	"smoothed ma.display": number;
 	/** Default value: `0` */
@@ -27605,7 +27650,7 @@ export interface VolumeOscillatorIndicatorOverrides {
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
 export interface VolumeProfileFixedRangeIndicatorOverrides {
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"developing poc.color": string;
 	/** Default value: `0` */
 	"developing poc.linestyle": number;
@@ -27619,7 +27664,7 @@ export interface VolumeProfileFixedRangeIndicatorOverrides {
 	"developing poc.transparency": number;
 	/** Default value: `0` */
 	"developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va high.color": string;
 	/** Default value: `0` */
 	"developing va high.linestyle": number;
@@ -27633,7 +27678,7 @@ export interface VolumeProfileFixedRangeIndicatorOverrides {
 	"developing va high.transparency": number;
 	/** Default value: `0` */
 	"developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va low.color": string;
 	/** Default value: `0` */
 	"developing va low.linestyle": number;
@@ -27655,7 +27700,7 @@ export interface VolumeProfileFixedRangeIndicatorOverrides {
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
 export interface VolumeProfileVisibleRangeIndicatorOverrides {
-	/** Default value: `#ff0000` */
+	/** Default value: `undefined` */
 	"developing poc.color": string;
 	/** Default value: `0` */
 	"developing poc.linestyle": number;
@@ -27669,7 +27714,7 @@ export interface VolumeProfileVisibleRangeIndicatorOverrides {
 	"developing poc.transparency": number;
 	/** Default value: `0` */
 	"developing poc.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va high.color": string;
 	/** Default value: `0` */
 	"developing va high.linestyle": number;
@@ -27683,7 +27728,7 @@ export interface VolumeProfileVisibleRangeIndicatorOverrides {
 	"developing va high.transparency": number;
 	/** Default value: `0` */
 	"developing va high.display": number;
-	/** Default value: `#0000ff` */
+	/** Default value: `undefined` */
 	"developing va low.color": string;
 	/** Default value: `0` */
 	"developing va low.linestyle": number;
@@ -28485,7 +28530,7 @@ export type DrawingEventType = "click" | "move" | "remove" | "hide" | "show" | "
  *   - PERCENTAGE = 'percents'
  *   - MONEY = 'money'
  */
-export type DrawingOverrides = FivepointspatternLineToolOverrides | AbcdLineToolOverrides | AnchoredvwapLineToolOverrides | ArcLineToolOverrides | ArrowLineToolOverrides | ArrowmarkdownLineToolOverrides | ArrowmarkerLineToolOverrides | ArrowmarkleftLineToolOverrides | ArrowmarkrightLineToolOverrides | ArrowmarkupLineToolOverrides | BalloonLineToolOverrides | BarspatternLineToolOverrides | BeziercubicLineToolOverrides | BezierquadroLineToolOverrides | BrushLineToolOverrides | CalloutLineToolOverrides | CircleLineToolOverrides | CommentLineToolOverrides | CrosslineLineToolOverrides | CypherpatternLineToolOverrides | DisjointangleLineToolOverrides | ElliottcorrectionLineToolOverrides | ElliottdoublecomboLineToolOverrides | ElliottimpulseLineToolOverrides | ElliotttriangleLineToolOverrides | ElliotttriplecomboLineToolOverrides | EllipseLineToolOverrides | EmojiLineToolOverrides | ExecutionLineToolOverrides | ExtendedLineToolOverrides | FibchannelLineToolOverrides | FibcirclesLineToolOverrides | FibretracementLineToolOverrides | FibspeedresistancearcsLineToolOverrides | FibspeedresistancefanLineToolOverrides | FibtimezoneLineToolOverrides | FibwedgeLineToolOverrides | FlagmarkLineToolOverrides | FlatbottomLineToolOverrides | GanncomplexLineToolOverrides | GannfanLineToolOverrides | GannfixedLineToolOverrides | GannsquareLineToolOverrides | GhostfeedLineToolOverrides | HeadandshouldersLineToolOverrides | HighlighterLineToolOverrides | HorzlineLineToolOverrides | HorzrayLineToolOverrides | IconLineToolOverrides | ImageLineToolOverrides | InfolineLineToolOverrides | InsidepitchforkLineToolOverrides | NoteLineToolOverrides | NoteabsoluteLineToolOverrides | OrderLineToolOverrides | ParallelchannelLineToolOverrides | PathLineToolOverrides | PitchfanLineToolOverrides | PitchforkLineToolOverrides | PolylineLineToolOverrides | PositionLineToolOverrides | PredictionLineToolOverrides | PricelabelLineToolOverrides | ProjectionLineToolOverrides | RayLineToolOverrides | RectangleLineToolOverrides | RegressiontrendLineToolOverrides | RiskrewardlongLineToolOverrides | RiskrewardshortLineToolOverrides | RotatedrectangleLineToolOverrides | SchiffpitchforkLineToolOverrides | Schiffpitchfork2LineToolOverrides | SignpostLineToolOverrides | SinelineLineToolOverrides | StickerLineToolOverrides | TextLineToolOverrides | TextabsoluteLineToolOverrides | ThreedriversLineToolOverrides | TimecyclesLineToolOverrides | TrendangleLineToolOverrides | TrendbasedfibextensionLineToolOverrides | TrendbasedfibtimeLineToolOverrides | TrendlineLineToolOverrides | TriangleLineToolOverrides | TrianglepatternLineToolOverrides | VertlineLineToolOverrides;
+export type DrawingOverrides = FivepointspatternLineToolOverrides | AbcdLineToolOverrides | AnchoredvpLineToolOverrides | AnchoredvwapLineToolOverrides | ArcLineToolOverrides | ArrowLineToolOverrides | ArrowmarkdownLineToolOverrides | ArrowmarkerLineToolOverrides | ArrowmarkleftLineToolOverrides | ArrowmarkrightLineToolOverrides | ArrowmarkupLineToolOverrides | BalloonLineToolOverrides | BarspatternLineToolOverrides | BeziercubicLineToolOverrides | BezierquadroLineToolOverrides | BrushLineToolOverrides | CalloutLineToolOverrides | CircleLineToolOverrides | CommentLineToolOverrides | CrosslineLineToolOverrides | CypherpatternLineToolOverrides | DisjointangleLineToolOverrides | ElliottcorrectionLineToolOverrides | ElliottdoublecomboLineToolOverrides | ElliottimpulseLineToolOverrides | ElliotttriangleLineToolOverrides | ElliotttriplecomboLineToolOverrides | EllipseLineToolOverrides | EmojiLineToolOverrides | ExecutionLineToolOverrides | ExtendedLineToolOverrides | FibchannelLineToolOverrides | FibcirclesLineToolOverrides | FibretracementLineToolOverrides | FibspeedresistancearcsLineToolOverrides | FibspeedresistancefanLineToolOverrides | FibtimezoneLineToolOverrides | FibwedgeLineToolOverrides | FlagmarkLineToolOverrides | FlatbottomLineToolOverrides | GanncomplexLineToolOverrides | GannfanLineToolOverrides | GannfixedLineToolOverrides | GannsquareLineToolOverrides | GhostfeedLineToolOverrides | HeadandshouldersLineToolOverrides | HighlighterLineToolOverrides | HorzlineLineToolOverrides | HorzrayLineToolOverrides | IconLineToolOverrides | ImageLineToolOverrides | InfolineLineToolOverrides | InsidepitchforkLineToolOverrides | OrderLineToolOverrides | ParallelchannelLineToolOverrides | PathLineToolOverrides | PitchfanLineToolOverrides | PitchforkLineToolOverrides | PolylineLineToolOverrides | PositionLineToolOverrides | PredictionLineToolOverrides | PricelabelLineToolOverrides | ProjectionLineToolOverrides | RayLineToolOverrides | RectangleLineToolOverrides | RegressiontrendLineToolOverrides | RiskrewardlongLineToolOverrides | RiskrewardshortLineToolOverrides | RotatedrectangleLineToolOverrides | SchiffpitchforkLineToolOverrides | Schiffpitchfork2LineToolOverrides | SignpostLineToolOverrides | SinelineLineToolOverrides | StickerLineToolOverrides | TextLineToolOverrides | TextabsoluteLineToolOverrides | ThreedriversLineToolOverrides | TimecyclesLineToolOverrides | TrendangleLineToolOverrides | TrendbasedfibextensionLineToolOverrides | TrendbasedfibtimeLineToolOverrides | TrendlineLineToolOverrides | TriangleLineToolOverrides | TrianglepatternLineToolOverrides | VertlineLineToolOverrides;
 export type DrawingToolIdentifier = "arrow" | "cursor" | "dot" | "eraser" | "LineTool5PointsPattern" | "LineToolABCD" | "LineToolArc" | "LineToolArrow" | "LineToolArrowMarkDown" | "LineToolArrowMarker" | "LineToolArrowMarkLeft" | "LineToolArrowMarkRight" | "LineToolArrowMarkUp" | "LineToolBarsPattern" | "LineToolBezierCubic" | "LineToolBezierQuadro" | "LineToolBrush" | "LineToolCallout" | "LineToolCircle" | "LineToolCircleLines" | "LineToolComment" | "LineToolCrossLine" | "LineToolCypherPattern" | "LineToolDateAndPriceRange" | "LineToolDateRange" | "LineToolDisjointAngle" | "LineToolElliottCorrection" | "LineToolElliottDoubleCombo" | "LineToolElliottImpulse" | "LineToolElliottTriangle" | "LineToolElliottTripleCombo" | "LineToolEllipse" | "LineToolExtended" | "LineToolFibChannel" | "LineToolFibCircles" | "LineToolFibRetracement" | "LineToolFibSpeedResistanceArcs" | "LineToolFibSpeedResistanceFan" | "LineToolFibSpiral" | "LineToolFibTimeZone" | "LineToolFibWedge" | "LineToolFixedRangeVolumeProfile" | "LineToolFlagMark" | "LineToolFlatBottom" | "LineToolGannComplex" | "LineToolGannFan" | "LineToolGannFixed" | "LineToolGannSquare" | "LineToolGhostFeed" | "LineToolHeadAndShoulders" | "LineToolHighlighter" | "LineToolHorzLine" | "LineToolHorzRay" | "LineToolInfoLine" | "LineToolInsidePitchfork" | "LineToolNote" | "LineToolNoteAbsolute" | "LineToolParallelChannel" | "LineToolPath" | "LineToolPitchfan" | "LineToolPitchfork" | "LineToolPolyline" | "LineToolPrediction" | "LineToolPriceLabel" | "LineToolPriceNote" | "LineToolPriceRange" | "LineToolProjection" | "LineToolRay" | "LineToolRectangle" | "LineToolRegressionTrend" | "LineToolRiskRewardLong" | "LineToolRiskRewardShort" | "LineToolRotatedRectangle" | "LineToolSchiffPitchfork" | "LineToolSchiffPitchfork2" | "LineToolSignpost" | "LineToolSineLine" | "LineToolText" | "LineToolTextAbsolute" | "LineToolThreeDrivers" | "LineToolTimeCycles" | "LineToolTrendAngle" | "LineToolTrendBasedFibExtension" | "LineToolTrendBasedFibTime" | "LineToolTrendLine" | "LineToolTriangle" | "LineToolTrianglePattern" | "LineToolVertLine";
 /** Dropdown options which can be adjusted on an existing menu. */
 export type DropdownUpdateParams = Partial<Omit<DropdownParams, "align">>;
@@ -28685,7 +28730,7 @@ export type SetVisibleTimeRange = Omit<VisibleTimeRange, "to"> & Partial<Pick<Vi
 export type ShapePoint = StickedPoint | PricedPoint | TimePoint;
 export type ShapesGroupId = Nominal<string, "ShapesGroupId">;
 export type SingleChartLayoutType = "s";
-export type SingleIndicatorOverrides = FiftyTwoWeekHighLowIndicatorOverrides | AcceleratorOscillatorIndicatorOverrides | AccumulationDistributionIndicatorOverrides | AccumulativeSwingIndexIndicatorOverrides | AdvanceDeclineIndicatorOverrides | AnchoredVWAPIndicatorOverrides | ArnaudLegouxMovingAverageIndicatorOverrides | AroonIndicatorOverrides | AverageDirectionalIndexIndicatorOverrides | AveragePriceIndicatorOverrides | AverageTrueRangeIndicatorOverrides | AwesomeOscillatorIndicatorOverrides | BalanceofPowerIndicatorOverrides | BollingerBandsIndicatorOverrides | BollingerBandsBIndicatorOverrides | BollingerBandsWidthIndicatorOverrides | ChaikinMoneyFlowIndicatorOverrides | ChaikinOscillatorIndicatorOverrides | ChaikinVolatilityIndicatorOverrides | ChandeKrollStopIndicatorOverrides | ChandeMomentumOscillatorIndicatorOverrides | ChopZoneIndicatorOverrides | ChoppinessIndexIndicatorOverrides | CommodityChannelIndexIndicatorOverrides | CompareIndicatorOverrides | ConnorsRSIIndicatorOverrides | CoppockCurveIndicatorOverrides | CorrelationLogIndicatorOverrides | CorrelationCoefficientIndicatorOverrides | DetrendedPriceOscillatorIndicatorOverrides | DirectionalMovementIndicatorOverrides | DonchianChannelsIndicatorOverrides | DoubleEMAIndicatorOverrides | EMACrossIndicatorOverrides | EaseOfMovementIndicatorOverrides | EldersForceIndexIndicatorOverrides | EnvelopesIndicatorOverrides | FisherTransformIndicatorOverrides | FixedRangeIndicatorOverrides | GuppyMultipleMovingAverageIndicatorOverrides | HistoricalVolatilityIndicatorOverrides | HullMovingAverageIndicatorOverrides | IchimokuCloudIndicatorOverrides | KeltnerChannelsIndicatorOverrides | KlingerOscillatorIndicatorOverrides | KnowSureThingIndicatorOverrides | LeastSquaresMovingAverageIndicatorOverrides | LinearRegressionCurveIndicatorOverrides | LinearRegressionSlopeIndicatorOverrides | MACrossIndicatorOverrides | MAwithEMACrossIndicatorOverrides | MACDIndicatorOverrides | MajorityRuleIndicatorOverrides | MassIndexIndicatorOverrides | McGinleyDynamicIndicatorOverrides | MedianPriceIndicatorOverrides | MomentumIndicatorOverrides | MoneyFlowIndexIndicatorOverrides | MovingAverageIndicatorOverrides | MovingAverageAdaptiveIndicatorOverrides | MovingAverageChannelIndicatorOverrides | MovingAverageDoubleIndicatorOverrides | MovingAverageExponentialIndicatorOverrides | MovingAverageHammingIndicatorOverrides | MovingAverageMultipleIndicatorOverrides | MovingAverageTripleIndicatorOverrides | MovingAverageWeightedIndicatorOverrides | NetVolumeIndicatorOverrides | OnBalanceVolumeIndicatorOverrides | OverlayIndicatorOverrides | ParabolicSARIndicatorOverrides | PivotPointsStandardIndicatorOverrides | PriceChannelIndicatorOverrides | PriceOscillatorIndicatorOverrides | PriceVolumeTrendIndicatorOverrides | RateOfChangeIndicatorOverrides | RatioIndicatorOverrides | RegressionTrendIndicatorOverrides | RelativeStrengthIndexIndicatorOverrides | RelativeVigorIndexIndicatorOverrides | RelativeVolatilityIndexIndicatorOverrides | SMIErgodicIndicatorOscillatorIndicatorOverrides | SessionsIndicatorOverrides | SmoothedMovingAverageIndicatorOverrides | SpreadIndicatorOverrides | StandardDeviationIndicatorOverrides | StandardErrorIndicatorOverrides | StandardErrorBandsIndicatorOverrides | StochasticIndicatorOverrides | StochasticRSIIndicatorOverrides | SuperTrendIndicatorOverrides | TRIXIndicatorOverrides | TrendStrengthIndexIndicatorOverrides | TripleEMAIndicatorOverrides | TrueStrengthIndexIndicatorOverrides | TypicalPriceIndicatorOverrides | UltimateOscillatorIndicatorOverrides | VWAPIndicatorOverrides | VWMAIndicatorOverrides | VolatilityClosetoCloseIndicatorOverrides | VolatilityIndexIndicatorOverrides | VolatilityOHLCIndicatorOverrides | VolatilityZeroTrendClosetoCloseIndicatorOverrides | VolumeIndicatorOverrides | VolumeOscillatorIndicatorOverrides | VolumeProfileFixedRangeIndicatorOverrides | VolumeProfileVisibleRangeIndicatorOverrides | VortexIndicatorIndicatorOverrides | WilliamsRIndicatorOverrides | WilliamsAlligatorIndicatorOverrides | WilliamsFractalIndicatorOverrides | ZigZagIndicatorOverrides | OverlayIndicatorOverridesAll;
+export type SingleIndicatorOverrides = FiftyTwoWeekHighLowIndicatorOverrides | AcceleratorOscillatorIndicatorOverrides | AccumulationDistributionIndicatorOverrides | AccumulativeSwingIndexIndicatorOverrides | AdvanceDeclineIndicatorOverrides | AnchoredVWAPIndicatorOverrides | ArnaudLegouxMovingAverageIndicatorOverrides | AroonIndicatorOverrides | AverageDirectionalIndexIndicatorOverrides | AveragePriceIndicatorOverrides | AverageTrueRangeIndicatorOverrides | AwesomeOscillatorIndicatorOverrides | BalanceofPowerIndicatorOverrides | BollingerBandsIndicatorOverrides | BollingerBandsBIndicatorOverrides | BollingerBandsWidthIndicatorOverrides | ChaikinMoneyFlowIndicatorOverrides | ChaikinOscillatorIndicatorOverrides | ChaikinVolatilityIndicatorOverrides | ChandeKrollStopIndicatorOverrides | ChandeMomentumOscillatorIndicatorOverrides | ChopZoneIndicatorOverrides | ChoppinessIndexIndicatorOverrides | CommodityChannelIndexIndicatorOverrides | CompareIndicatorOverrides | ConnorsRSIIndicatorOverrides | CoppockCurveIndicatorOverrides | CorrelationLogIndicatorOverrides | CorrelationCoefficientIndicatorOverrides | DetrendedPriceOscillatorIndicatorOverrides | DirectionalMovementIndicatorOverrides | DonchianChannelsIndicatorOverrides | DoubleEMAIndicatorOverrides | EMACrossIndicatorOverrides | EaseOfMovementIndicatorOverrides | EldersForceIndexIndicatorOverrides | EnvelopesIndicatorOverrides | FisherTransformIndicatorOverrides | FixedRangeIndicatorOverrides | GuppyMultipleMovingAverageIndicatorOverrides | HistoricalVolatilityIndicatorOverrides | HullMovingAverageIndicatorOverrides | IchimokuCloudIndicatorOverrides | KeltnerChannelsIndicatorOverrides | KlingerOscillatorIndicatorOverrides | KnowSureThingIndicatorOverrides | LeastSquaresMovingAverageIndicatorOverrides | LinearRegressionCurveIndicatorOverrides | LinearRegressionSlopeIndicatorOverrides | MACrossIndicatorOverrides | MAwithEMACrossIndicatorOverrides | MACDIndicatorOverrides | MajorityRuleIndicatorOverrides | MassIndexIndicatorOverrides | McGinleyDynamicIndicatorOverrides | MedianPriceIndicatorOverrides | MomentumIndicatorOverrides | MoneyFlowIndexIndicatorOverrides | MovingAverageIndicatorOverrides | MovingAverageAdaptiveIndicatorOverrides | MovingAverageChannelIndicatorOverrides | MovingAverageDoubleIndicatorOverrides | MovingAverageExponentialIndicatorOverrides | MovingAverageHammingIndicatorOverrides | MovingAverageMultipleIndicatorOverrides | MovingAverageTripleIndicatorOverrides | MovingAverageWeightedIndicatorOverrides | NetVolumeIndicatorOverrides | OnBalanceVolumeIndicatorOverrides | OverlayIndicatorOverrides | ParabolicSARIndicatorOverrides | PivotPointsStandardIndicatorOverrides | PriceChannelIndicatorOverrides | PriceOscillatorIndicatorOverrides | PriceVolumeTrendIndicatorOverrides | RankCorrelationIndexIndicatorOverrides | RateOfChangeIndicatorOverrides | RatioIndicatorOverrides | RegressionTrendIndicatorOverrides | RelativeStrengthIndexIndicatorOverrides | RelativeVigorIndexIndicatorOverrides | RelativeVolatilityIndexIndicatorOverrides | SMIErgodicIndicatorOscillatorIndicatorOverrides | SessionsIndicatorOverrides | SmoothedMovingAverageIndicatorOverrides | SpreadIndicatorOverrides | StandardDeviationIndicatorOverrides | StandardErrorIndicatorOverrides | StandardErrorBandsIndicatorOverrides | StochasticIndicatorOverrides | StochasticRSIIndicatorOverrides | SuperTrendIndicatorOverrides | TRIXIndicatorOverrides | TrendStrengthIndexIndicatorOverrides | TripleEMAIndicatorOverrides | TrueStrengthIndexIndicatorOverrides | TypicalPriceIndicatorOverrides | UltimateOscillatorIndicatorOverrides | VWAPIndicatorOverrides | VWMAIndicatorOverrides | VolatilityClosetoCloseIndicatorOverrides | VolatilityIndexIndicatorOverrides | VolatilityOHLCIndicatorOverrides | VolatilityZeroTrendClosetoCloseIndicatorOverrides | VolumeIndicatorOverrides | VolumeOscillatorIndicatorOverrides | VolumeProfileFixedRangeIndicatorOverrides | VolumeProfileVisibleRangeIndicatorOverrides | VortexIndicatorIndicatorOverrides | WilliamsRIndicatorOverrides | WilliamsAlligatorIndicatorOverrides | WilliamsFractalIndicatorOverrides | ZigZagIndicatorOverrides | OverlayIndicatorOverridesAll;
 export type StudyAvailableConstSources = "open" | "high" | "low" | "close" | "hl2" | "hlc3" | "ohlc4" | "hlcc4";
 /** An event related to a study. */
 export type StudyEventType = "create" | "remove" | "price_scale_changed" | "paste_study";
@@ -28880,7 +28925,12 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  * Uses the symbol name instead of the `exchange:name` combination throughout the UI.
  * @default true
  */
-"prefer_symbol_name_over_fullname";
+"prefer_symbol_name_over_fullname" | 
+/**
+ * Displays the {@link DatafeedQuoteValues.short_name} value as a symbol name in the [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details). If disabled, the [`ticker`](@api/interfaces/Charting_Library.LibrarySymbolInfo.md#ticker) value will be used instead.
+ * @default true
+ */
+"prefer_quote_short_name";
 export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;

@@ -255,9 +255,10 @@ class Strategy(ABC):
 
     def add_times(self, key: str, use_time: float):
         if key not in self.use_times.keys():
-            self.use_times[key] = use_time
+            self.use_times[key] = {"num": 1, "times": use_time}
         else:
-            self.use_times[key] += use_time
+            self.use_times[key]["num"] += 1
+            self.use_times[key]["times"] += use_time
         return True
 
     def write_log(self, file_name: str, msg: str):
