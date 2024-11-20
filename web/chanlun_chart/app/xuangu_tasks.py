@@ -7,6 +7,7 @@ from chanlun import fun
 from chanlun import utils
 from chanlun.exchange import Market, get_exchange
 from chanlun.xuangu import xuangu
+from chanlun.trader.online_market_datas import OnlineMarketDatas
 from tqdm.auto import tqdm
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from concurrent.futures import ProcessPoolExecutor
@@ -87,10 +88,9 @@ def process_xuangu_by_code(args):
         code, market, frequencys, task_name, opt_types = args
         ex = get_exchange(Market(market))
         cl_config = query_cl_chart_config(market, "----")
-        klines = {_f: ex.klines(code, _f) for _f in frequencys if _f != ""}
         task_fun = xuangu_task_configs[task_name]["task_fun"]
-        cds = web_batch_get_cl_datas(market, code, klines, cl_config)
-        xg_res = task_fun(cds, opt_types)
+        mk_datas = OnlineMarketDatas(market, frequencys, ex, cl_config, use_cache=False)
+        xg_res = task_fun(code, mk_datas, opt_types)
         return xg_res
     except Exception as e:
         tqdm.write(f"{market} {code} {frequencys} 执行选股任务 {task_name} 失败：{e}")

@@ -39,6 +39,10 @@ def get_exchange(market: Market) -> Exchange:
             g_exchange_obj[market.value] = ExchangeBaostock()
         elif config.EXCHANGE_A == "db":
             g_exchange_obj[market.value] = ExchangeDB(Market.A.value)
+        elif config.EXCHANGE_A == "qmt":
+            from chanlun.exchange.exchange_qmt import ExchangeQMT
+
+            g_exchange_obj[market.value] = ExchangeQMT()
         else:
             raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
 

@@ -7,6 +7,7 @@ from chanlun.cl_interface import *
 from chanlun.cl_utils import web_batch_get_cl_datas, query_cl_chart_config
 from chanlun.exchange.exchange_tdx import ExchangeTDX
 from chanlun.xuangu import xuangu
+from chanlun.trader.online_market_datas import OnlineMarketDatas
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
 from tqdm.auto import tqdm
@@ -34,6 +35,13 @@ frequencys = ["d"]
 cl_config = query_cl_chart_config("a", "SH.000001")
 
 """
+获取缠论数据对象
+"""
+mk_datas = OnlineMarketDatas(
+    "a", frequencys, ex, cl_config, use_cache=False
+)  # 选股无需使用缓存，使用缓存会占用大量内存
+
+"""
 直接放入自选组
 这个需要确保在 config.py 中有进行配置
 """
@@ -43,15 +51,10 @@ zx_group = "测试选股"
 
 def xuangu_by_code(code: str):
     try:
-        klines = {}
-        for f in frequencys:
-            k = ex.klines(code, f)
-            klines[f] = k
-        cds: List[ICL] = web_batch_get_cl_datas("a", code, klines, cl_config)
         """
         这里使用自己需要的选股条件方法进行判断 ***
         """
-        xg_res = xuangu.xg_single_find_3buy_by_zhuanzhe(cds)
+        xg_res = xuangu.xg_single_find_3buy_by_zhuanzhe(code, mk_datas)
         if xg_res is not None:
             stocks = ex.stock_info(code)
             tqdm.write(
