@@ -249,32 +249,24 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
                 return str_to_datetime(f"{date_str} {new_time}")
         return None
 
-    new_kline = {}
-    for _, k in klines.iterrows():
-        dt: datetime.datetime = k["date"].to_pydatetime()
-        new_dt = dt_to_new_dt(freq_config_maps[to_f], dt)
-        if new_dt is None:
-            raise Exception(f"转换时间错误：{to_f}, {dt}")
-        if new_dt in new_kline.keys():
-            n_k = new_kline[new_dt]
-            n_k["high"] = max(n_k["high"], k["high"])
-            n_k["low"] = min(n_k["low"], k["low"])
-            n_k["close"] = k["close"]
-            n_k["volume"] += float(k["volume"]) if k["volume"] is not None else 0
-            new_kline[new_dt] = n_k
-        else:
-            new_kline[new_dt] = {
-                "code": k["code"],
-                "date": new_dt,
-                "open": k["open"],
-                "close": k["close"],
-                "high": k["high"],
-                "low": k["low"],
-                "volume": float(k["volume"]) if k["volume"] is not None else 0,
-            }
-    kline_pd = pd.DataFrame(new_kline.values())
-    kline_pd["date"] = pd.to_datetime(kline_pd["date"])
-    return kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
+    # 按照新的日期进行聚合
+    klines["new_dt"] = klines["date"].apply(
+        lambda _d: dt_to_new_dt(freq_config_maps[to_f], _d)
+    )
+    klines_groups = klines.groupby(by=["new_dt"]).agg(
+        {
+            "code": "first",
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
+    )
+    klines_groups["date"] = klines_groups.index
+    klines_groups.reset_index(drop=True, inplace=True)
+
+    return klines_groups[["code", "date", "open", "close", "high", "low", "volume"]]
 
 
 def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
@@ -498,32 +490,24 @@ def convert_futures_kline_frequency(
                 return str_to_datetime(f"{date_str} {new_time}")
         return None
 
-    new_kline = {}
-    for _, k in klines.iterrows():
-        dt: datetime.datetime = k["date"].to_pydatetime()
-        new_dt = dt_to_new_dt(freq_config_maps[to_f], dt)
-        if new_dt is None:
-            raise Exception(f"转换时间错误：{to_f}, {dt}")
-        if new_dt in new_kline.keys():
-            n_k = new_kline[new_dt]
-            n_k["high"] = max(n_k["high"], k["high"])
-            n_k["low"] = min(n_k["low"], k["low"])
-            n_k["close"] = k["close"]
-            n_k["volume"] += float(k["volume"]) if k["volume"] is not None else 0
-            new_kline[new_dt] = n_k
-        else:
-            new_kline[new_dt] = {
-                "code": k["code"],
-                "date": new_dt,
-                "open": k["open"],
-                "close": k["close"],
-                "high": k["high"],
-                "low": k["low"],
-                "volume": float(k["volume"]) if k["volume"] is not None else 0,
-            }
-    kline_pd = pd.DataFrame(new_kline.values())
-    kline_pd["date"] = pd.to_datetime(kline_pd["date"]).dt.tz_convert(__tz)
-    return kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
+    # 按照新的日期进行聚合
+    klines["new_dt"] = klines["date"].apply(
+        lambda _d: dt_to_new_dt(freq_config_maps[to_f], _d)
+    )
+    klines_groups = klines.groupby(by=["new_dt"]).agg(
+        {
+            "code": "first",
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
+    )
+    klines_groups["date"] = klines_groups.index
+    klines_groups.reset_index(drop=True, inplace=True)
+
+    return klines_groups[["code", "date", "open", "close", "high", "low", "volume"]]
 
 
 def convert_us_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
@@ -637,23 +621,19 @@ if __name__ == "__main__":
     import pandas as pd
 
     code = "SH.600519"
-    end_date = "2023-10-03 08:30:00"
+    # end_date = "2023-10-03 08:30:00"
 
     # ex = ExchangeDB("us")
     ex = ExchangeTDX()
-    # klines_h = ex.klines(code, "w", end_date=end_date)
-    klines_l = ex.klines(code, "d", end_date=end_date)
+    klines_h = ex.klines(code, "60m")
+    klines_l = ex.klines(code, "30m")
 
-    # 去除成交量为0的
-    # klines_h = klines_h[klines_h["volume"] > 0]
-    klines_l = klines_l[klines_l["volume"] > 0]
-
-    # print("高周期最后10跟")
-    # print(klines_h.tail(10))
+    print("高周期最后10跟")
+    print(klines_h.tail(10))
     print("多周期最后10根")
     print(klines_l.tail(10))
 
-    convert_ch = convert_stock_kline_frequency(klines_l, "w")
+    convert_ch = convert_stock_kline_frequency(klines_l, "60m")
     print("转换成高周期的最后10根")
     print(convert_ch.tail(10))
     print("Done")

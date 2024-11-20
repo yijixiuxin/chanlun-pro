@@ -1,3 +1,4 @@
+from typing import Union
 import baostock as bs
 from chanlun import fun
 
@@ -209,7 +210,7 @@ class ExchangeBaostock(Exchange):
         """
         raise Exception("交易所不支持 tick 获取")
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         """
         获取股票的基本信息
         :param code:

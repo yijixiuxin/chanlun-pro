@@ -2,6 +2,7 @@ import itertools
 import talib
 from chanlun.cl_utils import *
 from chanlun.cl_interface import Config
+from chanlun.backtesting.base import MarketDatas
 
 """
 根据缠论数据，选择自己所需要的形态方法集合
@@ -24,7 +25,7 @@ def get_opt_types(opt_type: list = []):
     return opt_direction, opt_mmd
 
 
-def xg_single_xd_and_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_xd_and_bi_mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     线段和笔都有出现买点
     周期：单周期
@@ -33,7 +34,7 @@ def xg_single_xd_and_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_xds()) == 0 or len(cd.get_bis()) == 0:
         return None
     xd = cd.get_xds()[-1]
@@ -41,13 +42,13 @@ def xg_single_xd_and_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
 
     if xd.mmd_exists(opt_mmd, "|") and bi.mmd_exists(opt_mmd, "|"):
         return {
-            "code": cd.get_code(),
+            "code": code,
             "msg": f"线段买点 【{xd.line_mmds('|')}】 笔买点【{bi.line_mmds('|')}】",
         }
     return None
 
 
-def xg_multiple_xd_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_multiple_xd_bi_mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     选择 高级别线段，低级别笔 都出现买点，或者 高级别线段和高级别笔 都出现 背驰 的条件
     高级别线段买点或背驰，并且次级别笔买点或背驰
@@ -57,36 +58,38 @@ def xg_multiple_xd_bi_mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    high_data = cl_datas[0]
-    low_data = cl_datas[1]
+    # 先判断高级别的
+    high_data = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(high_data.get_xds()) == 0 or len(high_data.get_bis()) == 0:
         return None
-    if len(low_data.get_xds()) == 0 or len(low_data.get_bis()) == 0:
-        return None
-
     high_xd = high_data.get_xds()[-1]
-    low_bi = low_data.get_bis()[-1]
     if high_xd.type not in opt_direction or low_bi.type not in opt_direction:
         return None
+
+    # 再判断低级别的
+    low_data = mk_datas.get_cl_data(code, mk_datas.frequencys[1])
+    if len(low_data.get_xds()) == 0 or len(low_data.get_bis()) == 0:
+        return None
+    low_bi = low_data.get_bis()[-1]
     if (high_xd.mmd_exists(opt_mmd, "|") or high_xd.bc_exists(["pz", "qs"], "|")) and (
         low_bi.mmd_exists(opt_mmd, "|") or low_bi.bc_exists(["pz", "qs"], "|")
     ):
         return {
-            "code": high_data.get_code,
+            "code": code,
             "msg": f"{high_data.get_frequency()} 线段买点【{high_xd.line_mmds('|')}】背驰【{high_xd.line_bcs('|')}】 {low_data.get_frequency()} 笔买点【{low_bi.line_mmds('|')}】背驰【{low_bi.line_bcs('|')}】",
         }
 
     return None
 
 
-def xg_single_xd_bi_zs_zf_5(cl_datas: List[ICL]):
+def xg_single_xd_bi_zs_zf_5(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     上涨线段的 第一个 笔中枢， 突破 笔中枢， 大涨 5% 以上的股票
     周期：单周期
     适用市场：沪深A股
     作者：Jiang Haoquan
     """
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
 
     if len(cd.get_xds()) == 0 or len(cd.get_bi_zss()) == 0:
         return None
@@ -108,14 +111,16 @@ def xg_single_xd_bi_zs_zf_5(cl_datas: List[ICL]):
     return None
 
 
-def xg_single_xd_bi_23_overlapped(cl_datas: List[ICL]):
+def xg_single_xd_bi_23_overlapped(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
     """
     上涨线段的 第一个 笔中枢， 突破 笔中枢后 23买重叠的股票
     周期：单周期
     适用市场：沪深A股
     作者：Jiang Haoquan
     """
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_xds()) == 0 or len(cd.get_bi_zss()) == 0:
         return None
     xd = cd.get_xds()[-1]
@@ -151,11 +156,13 @@ def xg_single_xd_bi_23_overlapped(cl_datas: List[ICL]):
     return None
 
 
-def xg_single_day_bc_and_up_jincha(cl_datas: List[ICL]):
+def xg_single_day_bc_and_up_jincha(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
     """
     日线级别，倒数第二个向下笔背驰（笔背驰、盘整背驰、趋势背驰），后续macd在水上金叉
     """
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) <= 5 or len(cd.get_xds()) == 0 or len(cd.get_bi_zss()) == 0:
         return None
     xd = cd.get_xds()[-1]
@@ -198,7 +205,7 @@ def xg_single_day_bc_and_up_jincha(cl_datas: List[ICL]):
     return None
 
 
-def xg_multiple_low_level_12mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_multiple_low_level_12mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     选择 高级别出现背驰or买卖点，并且低级别出现一二类买卖点
     周期：三个周期
@@ -207,19 +214,20 @@ def xg_multiple_low_level_12mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    high_data = cl_datas[0]
-    low_data_1 = cl_datas[1]
-    low_data_2 = cl_datas[2]
+    high_data = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+
     if len(high_data.get_bis()) == 0:
         return None
-    if len(low_data_1.get_bis()) == 0 or len(low_data_2.get_bis()) == 0:
-        return None
-
     # 高级别向下，并且有背驰or买卖点
     high_bi = high_data.get_bis()[-1]
     if high_bi.type not in opt_direction:
         return None
     if len(high_bi.line_bcs("|")) == 0 and len(high_bi.line_mmds("|")) == 0:
+        return None
+
+    low_data_1 = mk_datas.get_cl_data(code, mk_datas.frequencys[1])
+    low_data_2 = mk_datas.get_cl_data(code, mk_datas.frequencys[2])
+    if len(low_data_1.get_bis()) == 0 or len(low_data_2.get_bis()) == 0:
         return None
 
     # 获取高级别底分型后的低级别笔
@@ -250,7 +258,7 @@ def xg_multiple_low_level_12mmd(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_bi_1mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_bi_1mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     获取笔的一类买卖点
     周期：单周期
@@ -259,7 +267,7 @@ def xg_single_bi_1mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) == 0:
         return None
     bi = cd.get_bis()[-1]
@@ -276,7 +284,7 @@ def xg_single_bi_1mmd(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_bi_2mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_bi_2mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     获取笔的二类买卖点
     周期：单周期
@@ -284,7 +292,7 @@ def xg_single_bi_2mmd(cl_datas: List[ICL], opt_type: list = []):
     作者：WX
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) == 0:
         return None
     bi = cd.get_bis()[-1]
@@ -301,7 +309,7 @@ def xg_single_bi_2mmd(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_bi_3mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_bi_3mmd(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     获取笔的三类买卖点
     周期：单周期
@@ -309,7 +317,7 @@ def xg_single_bi_3mmd(cl_datas: List[ICL], opt_type: list = []):
     作者：WX
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) == 0:
         return None
     bi = cd.get_bis()[-1]
@@ -326,14 +334,16 @@ def xg_single_bi_3mmd(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_bcmmd_next_di_fx_verif(cl_datas: List[ICL]):
+def xg_single_bcmmd_next_di_fx_verif(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
     """
     笔出现买点或下跌背驰，并且后续出现底分型验证，则提示
     周期：单周期
     适用市场：沪深A股
     作者：WX
     """
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) == 0:
         return None
     bi = last_done_bi(cd)
@@ -364,7 +374,7 @@ def xg_single_bcmmd_next_di_fx_verif(cl_datas: List[ICL]):
     return None
 
 
-def xg_multiple_zs_tupo_low_3buy(cl_datas: List[ICL]):
+def xg_multiple_zs_tupo_low_3buy(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     高级别中枢突破，在低级别有三买
     所谓横有多长竖有多长
@@ -373,7 +383,7 @@ def xg_multiple_zs_tupo_low_3buy(cl_datas: List[ICL]):
     适用市场：沪深A股
     作者：WX
     """
-    high_cd = cl_datas[0]
+    high_cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(high_cd.get_bi_zss()) == 0:
         return None
     high_last_bi_zs = high_cd.get_bi_zss()[-1]
@@ -390,7 +400,7 @@ def xg_multiple_zs_tupo_low_3buy(cl_datas: List[ICL]):
         return None
 
     # 低级别笔三买
-    low_cd = cl_datas[-1]
+    low_cd = mk_datas.get_cl_data(code, frequency=mk_datas.frequencys[1])
     if len(low_cd.get_bis()) == 0:
         return None
 
@@ -404,7 +414,7 @@ def xg_multiple_zs_tupo_low_3buy(cl_datas: List[ICL]):
     return None
 
 
-def xg_single_pre_bi_tk_and_3buy(cl_datas: List[ICL]):
+def xg_single_pre_bi_tk_and_3buy(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     在三买点前一笔，有跳空缺口
     说明突破中枢的力度比较大，可以重点关注
@@ -412,7 +422,7 @@ def xg_single_pre_bi_tk_and_3buy(cl_datas: List[ICL]):
     使用市场：沪深A股
     作者：WX
     """
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) < 5:
         return None
     pre_bi = cd.get_bis()[-2]
@@ -431,7 +441,7 @@ def xg_single_pre_bi_tk_and_3buy(cl_datas: List[ICL]):
     return None
 
 
-def xg_single_find_3buy_by_1buy(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_find_3buy_by_1buy(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     找三买点，前提是前面中枢内有一类买卖点
     （不同的中枢配置，筛选的条件会有差异）
@@ -441,7 +451,7 @@ def xg_single_find_3buy_by_1buy(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) <= 5:
         return None
 
@@ -471,7 +481,9 @@ def xg_single_find_3buy_by_1buy(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_find_3buy_by_zhuanzhe(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
     """
     找三买点，之前段内要有是一个下跌趋势，后续下跌趋势结束，出现转折中枢的三买
     （缠论的笔中枢配置要是段内中枢）
@@ -480,7 +492,7 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
     作者：WX
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if (
         len(cd.get_bis()) <= 5
         or len(cd.get_xds()) < 2
@@ -491,12 +503,7 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
     bi = cd.get_bis()[-1]
     if bi.type not in opt_direction:
         return None
-    if (
-        bi.mmd_exists(
-            ["3buy"] if bi.type == "down" else ["3sell"], "|", Config.ZS_TYPE_DN.value
-        )
-        is False
-    ):
+    if bi.mmd_exists(["3buy"] if bi.type == "down" else ["3sell"], "|") is False:
         return None
     dn_zss = cd.get_bi_zss(Config.ZS_TYPE_DN.value)
     if (
@@ -507,7 +514,7 @@ def xg_single_find_3buy_by_zhuanzhe(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_ma_250(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_ma_250(code: str, mk_datas: MarketDatas, opt_type: list = []):
     """
     找最新价格在 ma 250 线的上下
     周期：单周期
@@ -515,7 +522,7 @@ def xg_single_ma_250(cl_datas: List[ICL], opt_type: list = []):
     作者：WX
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     closes = np.array([_k.c for _k in cd.get_src_klines()])
     ma250 = talib.MA(closes, timeperiod=250)
     close = cd.get_src_klines()[-1].c
@@ -526,7 +533,9 @@ def xg_single_ma_250(cl_datas: List[ICL], opt_type: list = []):
     return None
 
 
-def xg_single_bi_1buy_next_l3buy_mmd(cl_datas: List[ICL], opt_type: list = []):
+def xg_single_bi_1buy_next_l3buy_mmd(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
     """
     笔1buy后的中枢[类三买/类二买]
     周期：单周期
@@ -535,7 +544,7 @@ def xg_single_bi_1buy_next_l3buy_mmd(cl_datas: List[ICL], opt_type: list = []):
     """
     opt_direction, opt_mmd = get_opt_types(opt_type)
 
-    cd = cl_datas[0]
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
     if len(cd.get_bis()) == 0:
         return None
     bi = cd.get_bis()[-1]
