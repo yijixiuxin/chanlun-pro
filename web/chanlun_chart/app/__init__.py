@@ -312,9 +312,12 @@ def create_app(test_config=None):
         sector = ""
         industry = ""
         if market == "a":
-            gnbk = ex.stock_owner_plate(code)
-            sector = " / ".join([_g["name"] for _g in gnbk["GN"]])
-            industry = " / ".join([_h["name"] for _h in gnbk["HY"]])
+            try:
+                gnbk = ex.stock_owner_plate(code)
+                sector = " / ".join([_g["name"] for _g in gnbk["GN"]])
+                industry = " / ".join([_h["name"] for _h in gnbk["HY"]])
+            except:
+                pass
 
         info = {
             "name": stocks["code"],
