@@ -657,7 +657,7 @@ class Strategy(ABC):
         return None
 
     @staticmethod
-    def last_bi(cd: ICL, _type: str = "up"):
+    def last_bi(cd: ICL, _type: str = "up") -> BI:
         """
         获取最后一个给定类型的笔
         """
