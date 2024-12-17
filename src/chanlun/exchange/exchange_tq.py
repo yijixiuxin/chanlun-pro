@@ -1,5 +1,6 @@
 import math, time
 import threading
+from typing import Union
 
 import tqsdk
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
@@ -230,7 +231,7 @@ class ExchangeTq(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         获取 Kline 线
         :param code:

@@ -615,25 +615,79 @@ def convert_us_tdx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFr
     return period_klines[["code", "date", "open", "high", "low", "close", "volume"]]
 
 
+def convert_kline_frequency(
+    klines: pd.DataFrame, to_f: str, dt_align_type: str = "eob"
+) -> pd.DataFrame:
+    """
+    通用的k线转换方法
+    可通过 dt_align_type 参数，选择对齐方式，默认为 eob，即对齐结束时间，可选值：
+    eob: 对齐结束时间，如 9:29:00 对齐到 9:30:00
+    bob: 对齐结束时间，如 9:31:00 对齐到 9:30:00
+
+    dt_align_type 对其方式的选择，根据你原始K线的方式来；
+    原始K线是 eob，则转换K线也是 eob
+    原始K线是 bob，则转换K线也是 bob
+    """
+    period_maps = {
+        "2m": "2min",
+        "3m": "3min",
+        "5m": "5min",
+        "10m": "10min",
+        "15m": "15min",
+        "30m": "30min",
+        "60m": "1H",
+        "120m": "2H",
+        "d": "D",
+        "w": "W",
+    }
+    if len(klines) == 0:
+        return None
+    klines.insert(0, column="date_index", value=klines["date"])
+    klines.set_index("date_index", inplace=True)
+    period_type = period_maps[to_f]
+    if dt_align_type == "bob":
+        label = "right"
+        closed = "left"
+        period_klines = klines.resample(period_type, label=label, closed=closed).first()
+    else:
+        label = "left"
+        closed = "right"
+        period_klines = klines.resample(period_type, label=label, closed=closed).last()
+    period_klines["open"] = (
+        klines["open"].resample(period_type, label=label, closed=closed).first()
+    )
+    period_klines["close"] = (
+        klines["close"].resample(period_type, label=label, closed=closed).last()
+    )
+    period_klines["high"] = (
+        klines["high"].resample(period_type, label=label, closed=closed).max()
+    )
+    period_klines["low"] = (
+        klines["low"].resample(period_type, label=label, closed=closed).min()
+    )
+    period_klines["volume"] = (
+        klines["volume"].resample(period_type, label=label, closed=closed).sum()
+    )
+    period_klines.dropna(inplace=True)
+    period_klines.reset_index(inplace=True)
+    period_klines.drop("date_index", axis=1, inplace=True)
+
+    return period_klines
+
+
 if __name__ == "__main__":
     from chanlun.exchange.exchange_db import ExchangeDB
     from chanlun.exchange.exchange_tdx import ExchangeTDX
     import pandas as pd
 
-    code = "SH.600519"
-    # end_date = "2023-10-03 08:30:00"
+    code = "SHFE.RB"
 
-    # ex = ExchangeDB("us")
-    ex = ExchangeTDX()
-    klines_h = ex.klines(code, "60m")
-    klines_l = ex.klines(code, "30m")
+    ex = ExchangeDB("futures")
+    klines_l = ex.klines(code, "1m")
 
-    print("高周期最后10跟")
-    print(klines_h.tail(10))
-    print("多周期最后10根")
     print(klines_l.tail(10))
 
-    convert_ch = convert_stock_kline_frequency(klines_l, "60m")
+    convert_ch = convert_kline_frequency(klines_l, "3m", dt_align_type="bob")
     print("转换成高周期的最后10根")
     print(convert_ch.tail(10))
     print("Done")

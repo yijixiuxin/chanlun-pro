@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+import sqlalchemy
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -246,6 +247,7 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
+            p = Column(Float, default=0, comment="期货持仓(期货专有)")
             # 添加配置设置编码
             __table_args__ = {"mysql_charset": "utf8"}
 
@@ -342,6 +344,8 @@ class DB(object):
                         "l": _k["low"],
                         "v": _k["volume"],
                     }
+                    if market == "futures":  # 期货才有持仓
+                        _in_k["p"] = _k["position"] if "position" in _k.keys() else 0
                     db_k = (
                         session.query(table)
                         .filter(
@@ -370,20 +374,23 @@ class DB(object):
             for g_klines in groups:
                 insert_klines = []
                 for _, _k in g_klines.iterrows():
-                    insert_klines.append(
-                        {
-                            "code": code,
-                            "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
-                            "f": frequency,
-                            "o": _k["open"],
-                            "c": _k["close"],
-                            "h": _k["high"],
-                            "l": _k["low"],
-                            "v": _k["volume"],
-                        }
-                    )
+                    __k = {
+                        "code": code,
+                        "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                        "f": frequency,
+                        "o": _k["open"],
+                        "c": _k["close"],
+                        "h": _k["high"],
+                        "l": _k["low"],
+                        "v": _k["volume"],
+                    }
+                    if market == "futures":  # 期货才有持仓
+                        __k["p"] = _k["position"] if "position" in _k.keys() else 0
+                    insert_klines.append(__k)
                 insert_stmt = insert(table).values(insert_klines)
                 update_keys = ["o", "c", "h", "l", "v"]
+                if market == "futures":
+                    update_keys.append("p")
                 update_columns = {
                     x.name: x for x in insert_stmt.inserted if x.name in update_keys
                 }
@@ -1237,13 +1244,11 @@ if __name__ == "__main__":
 
     # db.delete_klines("a", "SH.000001", "d")
 
-    # insp = sqlalchemy.inspect(db.engine)
+    insp = sqlalchemy.inspect(db.engine)
     # codes = ['SHFE.ao', 'DCE.jm', 'DCE.rr', 'DCE.j', 'DCE.v', 'DCE.fb', 'DCE.l', 'CZCE.PM', 'DCE.bb', 'CFFEX.TF', 'SHFE.ss', 'CZCE.RS', 'SHFE.au', 'CZCE.TC', 'DCE.c', 'SHFE.fu', 'CZCE.PF', 'SHFE.al', 'CFFEX.TS', 'DCE.cs', 'SHFE.wr', 'DCE.y', 'INE.sc', 'CZCE.WH', 'CZCE.WS', 'CZCE.PK', 'CZCE.WT', 'CZCE.OI', 'SHFE.ru', 'DCE.eg', 'SHFE.ag', 'INE.bc', 'SHFE.zn', 'CZCE.RI', 'CZCE.ME', 'SHFE.br', 'CZCE.UR', 'INE.lu', 'CZCE.JR', 'CZCE.RM', 'CZCE.SA', 'DCE.lh', 'INE.nr', 'CZCE.SR', 'CZCE.MA', 'SHFE.hc', 'DCE.b', 'CFFEX.TL', 'CFFEX.IH', 'CZCE.ZC', 'CZCE.PX', 'DCE.jd', 'GFEX.si', 'SHFE.sn', 'CZCE.AP', 'CZCE.ER', 'CZCE.RO', 'CFFEX.IM', 'CZCE.FG', 'SHFE.bu', 'CFFEX.IF', 'INE.ec', 'DCE.m', 'CZCE.LR', 'SHFE.cu', 'DCE.a', 'CZCE.TA', 'DCE.pp', 'CZCE.CY', 'SHFE.ni', 'DCE.i', 'SHFE.sp', 'CZCE.SM', 'DCE.pg', 'CZCE.CJ', 'SHFE.pb', 'CFFEX.T', 'CZCE.SH', 'CZCE.SF', 'CFFEX.IC', 'CZCE.CF', 'DCE.eb', 'GFEX.lc', 'DCE.p', 'SHFE.rb']
-    # for table in insp.get_table_names():
-    #     if table.startswith("futures_"):
-    #         for code in codes:
-    #             if table.replace('_', '.').lower().endswith(code.lower()):
-    #                 print(f"UPDATE `{table}` SET `code`='{code}';")
+    for table in insp.get_table_names():
+        if table.startswith("futures_"):
+            print(f"DROP TABLE `{table}`;")
 
     # record = db.alert_record_query_by_code(
     #     "a", "SZ.300014", "5m", "bi", fun.str_to_datetime("2023-12-25 13:55:00")

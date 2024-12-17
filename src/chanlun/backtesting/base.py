@@ -454,6 +454,24 @@ class Strategy(ABC):
         return {"k": k, "d": d, "j": j}
 
     @staticmethod
+    def idx_macd(cd: ICL, fast=12, slow=26, signal=9, end_datetime=None):
+        # 指标说明：
+        # MACD
+        close_prices = np.array(
+            [
+                k.c
+                for k in cd.get_klines()[-(slow + 500) :]
+                if end_datetime is None or k.date <= end_datetime
+            ]
+        )
+        macd_dif, macd_dea, macd_hist = talib.MACD(
+            close_prices, fastperiod=fast, slowperiod=slow, signalperiod=signal
+        )
+        macd_hist *= 2
+
+        return {"dif": macd_dif, "dea": macd_dea, "hist": macd_hist}
+
+    @staticmethod
     def idx_mtm(cd: ICL, N=12, M=6):
         # 参数：N 间隔天数，也是求移动平均的天数，一般为6
         # MTM向上突破零，买入信号
