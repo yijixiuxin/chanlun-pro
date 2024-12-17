@@ -409,6 +409,7 @@ class BackTestKlines(MarketDatas):
                 "10m": 240,
                 "6m": 300,
                 "5m": 300,
+                "3m": 150,
                 "1m": 60,
             },
         }
@@ -426,6 +427,7 @@ class BackTestKlines(MarketDatas):
             "8m",
             "6m",
             "5m",
+            "3m",
             "1m",
         ]:
             if _freq == frequency:
