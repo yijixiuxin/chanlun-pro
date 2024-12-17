@@ -36,52 +36,72 @@ class KlinesGenerator:
         if len(from_klines) == 0:
             return self.to_cl_data
 
-        # 获取k线数据的时区
-        tz = from_klines.iloc[-1]["date"].tz
-
         convert_klines = (
             from_klines
             if self.to_klines is None or len(self.to_klines) < 10
-            else from_klines[from_klines["date"] >= self.to_klines["date"].iloc[-2]]
+            else from_klines[from_klines["date"] >= self.to_klines["date"].iloc[-4]]
         )
 
-        new_klines = {}
-        for _, _k in convert_klines.iterrows():
-            dt_timestamp = _k["date"].to_pydatetime().timestamp()
-            if self.dt_align_type == "bob":
-                new_dt_timestamp = dt_timestamp - (dt_timestamp % (self.minute * 60))
-            else:
-                dt_timestamp -= 1
-                new_dt_timestamp = (
-                    dt_timestamp
-                    - (dt_timestamp % (self.minute * 60))
-                    + (self.minute * 60)
-                )
+        convert_klines.insert(0, column="date_index", value=convert_klines["date"])
+        convert_klines.set_index("date_index", inplace=True)
+        period_type = f"{self.minute}min"
+        # 前对其
 
-            new_dt = fun.timeint_to_datetime(new_dt_timestamp, tz=tz)
-            if new_dt not in new_klines.keys():
-                new_klines[new_dt] = {
-                    "code": _k["code"],
-                    "date": new_dt,
-                    "open": _k["open"],
-                    "close": _k["close"],
-                    "high": _k["high"],
-                    "low": _k["low"],
-                    "volume": float(_k["volume"]),
-                }
-            else:
-                new_klines[new_dt]["high"] = max(new_klines[new_dt]["high"], _k["high"])
-                new_klines[new_dt]["low"] = min(new_klines[new_dt]["low"], _k["low"])
-                new_klines[new_dt]["close"] = _k["close"]
-                new_klines[new_dt]["volume"] += float(_k["volume"])
-        kline_pd = pd.DataFrame(new_klines.values())
-        if self.to_klines is None:
-            self.to_klines = kline_pd
+        if self.dt_align_type == "bob":
+            label = "right"
+            closed = "left"
+            period_klines = convert_klines.resample(
+                period_type, label=label, closed=closed
+            ).first()
         else:
-            self.to_klines = pd.concat([self.to_klines, kline_pd], ignore_index=True)
+            label = "left"
+            closed = "right"
+            period_klines = convert_klines.resample(
+                period_type, label=label, closed=closed
+            ).last()
+        period_klines["open"] = (
+            convert_klines["open"]
+            .resample(period_type, label=label, closed=closed)
+            .first()
+        )
+        period_klines["close"] = (
+            convert_klines["close"]
+            .resample(period_type, label=label, closed=closed)
+            .last()
+        )
+        period_klines["high"] = (
+            convert_klines["high"]
+            .resample(period_type, label=label, closed=closed)
+            .max()
+        )
+        period_klines["low"] = (
+            convert_klines["low"]
+            .resample(period_type, label=label, closed=closed)
+            .min()
+        )
+        period_klines["volume"] = (
+            convert_klines["volume"]
+            .resample(period_type, label=label, closed=closed)
+            .sum()
+        )
+        period_klines.dropna(inplace=True)
+        period_klines.reset_index(inplace=True)
+        period_klines.drop("date_index", axis=1, inplace=True)
+
+        if self.to_klines is None:
+            self.to_klines = period_klines
+        else:
+            self.to_klines = pd.concat(
+                [self.to_klines.iloc[:-1:], period_klines.iloc[1::]], ignore_index=True
+            )
             self.to_klines = self.to_klines.drop_duplicates(
                 ["date"], keep="last"
             ).sort_values("date")
+
+        # 控制一下大小
+        if len(self.to_klines) > 20000:
+            self.to_klines = self.to_klines.iloc[-10000::]
+            self.to_cl_data = None
 
         if self.to_cl_data is None:
             self.to_cl_data = cl.CL(
@@ -94,19 +114,23 @@ class KlinesGenerator:
 
 if __name__ == "__main__":
     from chanlun.exchange.exchange_db import ExchangeDB
+    from chanlun.exchange.exchange import convert_futures_kline_frequency
     from chanlun.cl_utils import query_cl_chart_config
 
-    market = "us"
-    code = "AAPL"
-    freq = "10m"
+    market = "futures"
+    code = "SHFE.RB"
+    freq = "1m"
     cl_config = query_cl_chart_config(market, code)
     ex = ExchangeDB(market)
 
     klines = ex.klines(code, freq)
     # 合成前的K线
-    print(klines[["date", "open", "close", "high", "low", "volume"]].tail())
+    print(klines[["date", "open", "close", "high", "low", "volume"]].tail(10))
 
-    kg = KlinesGenerator(20, cl_config, "bob")
+    kg = KlinesGenerator(30, cl_config, "eob")
     cd = kg.update_klines(klines)
     # 合成后的K线
     print(kg.to_klines[["date", "open", "close", "high", "low", "volume"]].tail())
+
+    klines_day = convert_futures_kline_frequency(kg.to_klines, "d")
+    print(klines_day.tail())

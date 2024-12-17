@@ -35,13 +35,13 @@
 *没有以上目录和文件，执行下 `run_app.py`，在窗口进行配置并保存，也可以完成配置文件的变更*
 
     ### 数据源配置
-    ### https://www.vnpy.com/docs/cn/datafeed.html
+    ### https://www.vnpy.com/docs/cn/community/info/datafeed.html
     "datafeed.name": "tqsdk",
     "datafeed.username": "******",
     "datafeed.password": "******",
 
     ### 数据库配置
-    ###　https://www.vnpy.com/docs/cn/database.html
+    ###　https://www.vnpy.com/docs/cn/community/info/database.html
     "database.name": "mysql",
     "database.database": "vnpy",
     "database.host": "127.0.0.1",
