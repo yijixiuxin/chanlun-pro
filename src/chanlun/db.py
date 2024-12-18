@@ -247,7 +247,6 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
-            p = Column(Float, default=0, comment="期货持仓(期货专有)")
             # 添加配置设置编码
             __table_args__ = {"mysql_charset": "utf8"}
 
@@ -344,8 +343,6 @@ class DB(object):
                         "l": _k["low"],
                         "v": _k["volume"],
                     }
-                    if market == "futures":  # 期货才有持仓
-                        _in_k["p"] = _k["position"] if "position" in _k.keys() else 0
                     db_k = (
                         session.query(table)
                         .filter(
@@ -374,23 +371,20 @@ class DB(object):
             for g_klines in groups:
                 insert_klines = []
                 for _, _k in g_klines.iterrows():
-                    __k = {
-                        "code": code,
-                        "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if market == "futures":  # 期货才有持仓
-                        __k["p"] = _k["position"] if "position" in _k.keys() else 0
-                    insert_klines.append(__k)
+                    insert_klines.append(
+                        {
+                            "code": code,
+                            "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                            "f": frequency,
+                            "o": _k["open"],
+                            "c": _k["close"],
+                            "h": _k["high"],
+                            "l": _k["low"],
+                            "v": _k["volume"],
+                        }
+                    )
                 insert_stmt = insert(table).values(insert_klines)
                 update_keys = ["o", "c", "h", "l", "v"]
-                if market == "futures":
-                    update_keys.append("p")
                 update_columns = {
                     x.name: x for x in insert_stmt.inserted if x.name in update_keys
                 }
