@@ -20,187 +20,7 @@ from chanlun import fun
 class VNPYTrader(BackTestTrader):
 
     def __init__(self, name, cta):
-        super().__init__(name, 'trade', False, True)
-        self.cta = cta
-
-        # 固定交易手数
-        self.fixed_amount = 1
-
-    def open_buy(self, code, opt: Operation, amount: float = None):
-        """
-        买入开仓
-        """
-        price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-        self.cta.write_log('买入开仓做多，价格 %s 数量 %s 交易信号 %s' % (price, self.fixed_amount, opt.msg))
-        self.cta.buy(price, self.fixed_amount)
-        return {'price': price, 'amount': self.fixed_amount}
-
-    def open_sell(self, code, opt: Operation, amount: float = None):
-        """
-        卖出开仓
-        """
-        price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-
-        self.cta.write_log('卖出开仓做空，价格 %s 数量 %s 交易信号 %s' % (price, self.fixed_amount, opt.msg))
-        self.cta.short(price, self.fixed_amount)
-        return {'price': price, 'amount': self.fixed_amount}
-
-    def close_buy(self, code, pos: POSITION, opt: Operation):
-        """
-        平多仓
-        """
-        price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-
-        self.cta.write_log('卖出平仓做多，价格 %s 数量 %s 交易信号 %s' % (price, pos.amount, opt.msg))
-        self.cta.sell(price, pos.amount)
-        return {'price': price, 'amount': pos.amount}
-
-    def close_sell(self, code, pos: POSITION, opt: Operation):
-        """
-        平空仓
-        """
-        price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-        self.cta.write_log('买入平仓做空，价格 %s 数量 %s 交易信号 %s' % (price, pos.amount, opt.msg))
-        self.cta.cover(price, pos.amount)
-        return {'price': price, 'amount': pos.amount}
-
-
-class VNPYDatas(MarketDatas):
-    """
-    VNPY 的数据类，只有单个行情的，所以这里的 code 没太大用处
-    """
-
-    def __init__(self, symbol, frequencys: List[str], cl_config: dict):
-        super().__init__('futures', frequencys, cl_config)
-
-        self.symbol = symbol
-        self.frequencys = frequencys
-        self.now_date = None
-        # 用来保存k线数据
-        self.cache_klines: Dict[str, pd.DataFrame] = {}
-        for f in self.frequencys:
-            self.cache_klines[f] = pd.DataFrame([], columns=['code', 'date', 'open', 'close', 'high', 'low', 'volume'])
-
-    def on_30m_bar(self, bar: BarData):
-        """
-        30M 周期 bar 生成后的回调
-        """
-        key = '30_1m'
-        k = {
-            'code': self.symbol,
-            'date': fun.str_to_datetime(fun.datetime_to_str(bar.datetime)),
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
-        }
-        self.now_date = bar.datetime
-        self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
-        return True
-
-    def on_15m_bar(self, bar: BarData):
-        """
-        15m 周期 bar 生成后的回调
-        """
-        key = '15_1m'
-        k = {
-            'code': self.symbol,
-            'date': fun.str_to_datetime(fun.datetime_to_str(bar.datetime)),
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
-        }
-        self.now_date = bar.datetime
-        self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
-        return True
-
-    def on_10m_bar(self, bar: BarData):
-        """
-        10m 周期 bar 生成后的回调
-        """
-        key = '10_1m'
-        k = {
-            'code': self.symbol,
-            'date': fun.str_to_datetime(fun.datetime_to_str(bar.datetime)),
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
-        }
-        self.now_date = bar.datetime
-        self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
-        return True
-
-    def on_5m_bar(self, bar: BarData):
-        """
-        5m 周期 bar 生成后的回调
-        """
-        key = '5_1m'
-        k = {
-            'code': self.symbol,
-            'date': fun.str_to_datetime(fun.datetime_to_str(bar.datetime)),
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
-        }
-        self.now_date = bar.datetime
-        self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
-        return True
-
-    def on_1m_bar(self, bar: BarData):
-        """
-        1m 周期 bar 生成后的回调
-        """
-        key = '1_1m'
-        k = {
-            'code': self.symbol,
-            'date': fun.str_to_datetime(fun.datetime_to_str(bar.datetime)),
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
-        }
-        self.now_date = bar.datetime
-        self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
-        return True
-
-    def klines(self, code, frequency) -> pd.DataFrame:
-        return self.cache_klines[frequency]
-
-    def last_k_info(self, code) -> dict:
-        f = self.frequencys[-1]
-        return {
-            'date': self.cache_klines[f].iloc[-1]['date'],
-            'open': float(self.cache_klines[f].iloc[-1]['open']),
-            'close': float(self.cache_klines[f].iloc[-1]['close']),
-            'high': float(self.cache_klines[f].iloc[-1]['high']),
-            'low': float(self.cache_klines[f].iloc[-1]['low']),
-        }
-
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
-        klines = self.klines(code, frequency)
-        if frequency not in self.cl_datas.keys():
-            self.cl_datas[frequency] = cl.CL(code, frequency, self.cl_config).process_klines(klines)
-        else:
-            self.cl_datas[frequency].process_klines(klines)
-        return self.cl_datas[frequency]
-
-
-class VNPYTrader(BackTestTrader):
-
-    def __init__(self, name, cta):
-        super().__init__(name, 'trade', False, True)
+        super().__init__(name, "trade", market="futures")
         self.cta = cta
 
         # 固定交易手数
@@ -211,42 +31,52 @@ class VNPYTrader(BackTestTrader):
         买入开仓
         """
         price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-        self.cta.write_log('买入开仓做多，价格 %s 数量 %s 交易信号 %s' % (price, self.fixed_amount, opt.msg))
+        price = price_info["close"]
+        self.cta.write_log(
+            "买入开仓做多，价格 %s 数量 %s 交易信号 %s"
+            % (price, self.fixed_amount, opt.msg)
+        )
         self.cta.buy(price, self.fixed_amount)
-        return {'price': price, 'amount': self.fixed_amount}
+        return {"price": price, "amount": self.fixed_amount}
 
     def open_sell(self, code, opt: Operation):
         """
         卖出开仓
         """
         price_info = self.datas.last_k_info(code)
-        price = price_info['close']
+        price = price_info["close"]
 
-        self.cta.write_log('卖出开仓做空，价格 %s 数量 %s 交易信号 %s' % (price, self.fixed_amount, opt.msg))
+        self.cta.write_log(
+            "卖出开仓做空，价格 %s 数量 %s 交易信号 %s"
+            % (price, self.fixed_amount, opt.msg)
+        )
         self.cta.short(price, self.fixed_amount)
-        return {'price': price, 'amount': self.fixed_amount}
+        return {"price": price, "amount": self.fixed_amount}
 
     def close_buy(self, code, pos: POSITION, opt: Operation):
         """
         平多仓
         """
         price_info = self.datas.last_k_info(code)
-        price = price_info['close']
+        price = price_info["close"]
 
-        self.cta.write_log('卖出平仓做多，价格 %s 数量 %s 交易信号 %s' % (price, pos.amount, opt.msg))
+        self.cta.write_log(
+            "卖出平仓做多，价格 %s 数量 %s 交易信号 %s" % (price, pos.amount, opt.msg)
+        )
         self.cta.sell(price, pos.amount)
-        return {'price': price, 'amount': pos.amount}
+        return {"price": price, "amount": pos.amount}
 
     def close_sell(self, code, pos: POSITION, opt: Operation):
         """
         平空仓
         """
         price_info = self.datas.last_k_info(code)
-        price = price_info['close']
-        self.cta.write_log('买入平仓做空，价格 %s 数量 %s 交易信号 %s' % (price, pos.amount, opt.msg))
+        price = price_info["close"]
+        self.cta.write_log(
+            "买入平仓做空，价格 %s 数量 %s 交易信号 %s" % (price, pos.amount, opt.msg)
+        )
         self.cta.cover(price, pos.amount)
-        return {'price': price, 'amount': pos.amount}
+        return {"price": price, "amount": pos.amount}
 
 
 class VNPYDatas(MarketDatas):
@@ -255,7 +85,7 @@ class VNPYDatas(MarketDatas):
     """
 
     def __init__(self, symbol, frequencys: List[str], cl_config: dict):
-        super().__init__('futures', frequencys, cl_config)
+        super().__init__("futures", frequencys, cl_config)
 
         self.symbol = symbol
         self.frequencys = frequencys
@@ -263,21 +93,23 @@ class VNPYDatas(MarketDatas):
         # 用来保存k线数据
         self.cache_klines: Dict[str, pd.DataFrame] = {}
         for f in self.frequencys:
-            self.cache_klines[f] = pd.DataFrame([], columns=['code', 'date', 'open', 'close', 'high', 'low', 'volume'])
+            self.cache_klines[f] = pd.DataFrame(
+                [], columns=["code", "date", "open", "close", "high", "low", "volume"]
+            )
 
     def on_30m_bar(self, bar: BarData):
         """
         30M 周期 bar 生成后的回调
         """
-        key = '30_1m'
+        key = "30_1m"
         k = {
-            'code': self.symbol,
-            'date': bar.datetime,
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
+            "code": self.symbol,
+            "date": bar.datetime,
+            "open": bar.open_price,
+            "close": bar.close_price,
+            "high": bar.high_price,
+            "low": bar.low_price,
+            "volume": bar.volume,
         }
         self.now_date = bar.datetime
         self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
@@ -287,15 +119,15 @@ class VNPYDatas(MarketDatas):
         """
         15m 周期 bar 生成后的回调
         """
-        key = '15_1m'
+        key = "15_1m"
         k = {
-            'code': self.symbol,
-            'date': bar.datetime,
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
+            "code": self.symbol,
+            "date": bar.datetime,
+            "open": bar.open_price,
+            "close": bar.close_price,
+            "high": bar.high_price,
+            "low": bar.low_price,
+            "volume": bar.volume,
         }
         self.now_date = bar.datetime
         self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
@@ -305,15 +137,15 @@ class VNPYDatas(MarketDatas):
         """
         10m 周期 bar 生成后的回调
         """
-        key = '10_1m'
+        key = "10_1m"
         k = {
-            'code': self.symbol,
-            'date': bar.datetime,
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
+            "code": self.symbol,
+            "date": bar.datetime,
+            "open": bar.open_price,
+            "close": bar.close_price,
+            "high": bar.high_price,
+            "low": bar.low_price,
+            "volume": bar.volume,
         }
         self.now_date = bar.datetime
         self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
@@ -323,15 +155,15 @@ class VNPYDatas(MarketDatas):
         """
         5m 周期 bar 生成后的回调
         """
-        key = '5_1m'
+        key = "5_1m"
         k = {
-            'code': self.symbol,
-            'date': bar.datetime,
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
+            "code": self.symbol,
+            "date": bar.datetime,
+            "open": bar.open_price,
+            "close": bar.close_price,
+            "high": bar.high_price,
+            "low": bar.low_price,
+            "volume": bar.volume,
         }
         self.now_date = bar.datetime
         self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
@@ -341,15 +173,15 @@ class VNPYDatas(MarketDatas):
         """
         1m 周期 bar 生成后的回调
         """
-        key = '1_1m'
+        key = "1_1m"
         k = {
-            'code': self.symbol,
-            'date': bar.datetime,
-            'open': bar.open_price,
-            'close': bar.close_price,
-            'high': bar.high_price,
-            'low': bar.low_price,
-            'volume': bar.volume
+            "code": self.symbol,
+            "date": bar.datetime,
+            "open": bar.open_price,
+            "close": bar.close_price,
+            "high": bar.high_price,
+            "low": bar.low_price,
+            "volume": bar.volume,
         }
         self.now_date = bar.datetime
         self.cache_klines[key] = self.cache_klines[key].append(k, ignore_index=True)
@@ -361,17 +193,19 @@ class VNPYDatas(MarketDatas):
     def last_k_info(self, code) -> dict:
         f = self.frequencys[-1]
         return {
-            'date': self.cache_klines[f].iloc[-1]['date'],
-            'open': float(self.cache_klines[f].iloc[-1]['open']),
-            'close': float(self.cache_klines[f].iloc[-1]['close']),
-            'high': float(self.cache_klines[f].iloc[-1]['high']),
-            'low': float(self.cache_klines[f].iloc[-1]['low']),
+            "date": self.cache_klines[f].iloc[-1]["date"],
+            "open": float(self.cache_klines[f].iloc[-1]["open"]),
+            "close": float(self.cache_klines[f].iloc[-1]["close"]),
+            "high": float(self.cache_klines[f].iloc[-1]["high"]),
+            "low": float(self.cache_klines[f].iloc[-1]["low"]),
         }
 
     def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
         klines = self.klines(code, frequency)
         if frequency not in self.cl_datas.keys():
-            self.cl_datas[frequency] = cl.CL(code, frequency, self.cl_config).process_klines(klines)
+            self.cl_datas[frequency] = cl.CL(
+                code, frequency, self.cl_config
+            ).process_klines(klines)
         else:
             self.cl_datas[frequency].process_klines(klines)
         return self.cl_datas[frequency]
@@ -390,11 +224,11 @@ class BaseStrategy(CtaTemplate):
         """"""
         super().__init__(cta_engine, strategy_name, vt_symbol, setting)
         # 缠论计算配置
-        self.cl_config = {'xd_bzh': 'xd_bzh_no'}
-        self.frequencys = ['5_1m', '1_1m']
+        self.cl_config = {"xd_bzh": "xd_bzh_no"}
+        self.frequencys = ["5_1m", "1_1m"]
 
         # 交易对象
-        self.TR = VNPYTrader('backtest', self)
+        self.TR = VNPYTrader("backtest", self)
         # 数据对象
         self.Data = VNPYDatas(self.vt_symbol, self.frequencys, self.cl_config)
 
@@ -408,17 +242,25 @@ class BaseStrategy(CtaTemplate):
 
         # 要运行的周期，以及回调的方法（大周期的在前面）
         self.intervals = [
-            {'windows': 5, 'interval': Interval.MINUTE, 'callback': self.Data.on_5m_bar},
-            {'windows': 1, 'interval': Interval.MINUTE, 'callback': self.Data.on_1m_bar},
+            {
+                "windows": 5,
+                "interval": Interval.MINUTE,
+                "callback": self.Data.on_5m_bar,
+            },
+            {
+                "windows": 1,
+                "interval": Interval.MINUTE,
+                "callback": self.Data.on_1m_bar,
+            },
         ]
 
         for interval in self.intervals:
-            _key = '%s_%s' % (interval['windows'], interval['interval'].value)
+            _key = "%s_%s" % (interval["windows"], interval["interval"].value)
             self.bgs[_key] = BarGenerator(
                 self.on_bar,
-                window=interval['windows'],
-                on_window_bar=interval['callback'],
-                interval=interval['interval']
+                window=interval["windows"],
+                on_window_bar=interval["callback"],
+                interval=interval["interval"],
             )
 
     def on_init(self):
