@@ -18,9 +18,7 @@ class TraderFutures(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(
-            name=name, mode="real", is_stock=False, is_futures=True, log=log
-        )
+        super().__init__(name=name, mode="real", market="futures", log=log)
         self.ex = ExchangeTq(use_account=True)
 
         self.zx = zixuan.ZiXuan("futures")
@@ -37,7 +35,9 @@ class TraderFutures(BackTestTrader):
 
             res = self.ex.order(code, "open_long", self.unit_volume)
             if res is False or res["price"] is None:
-                utils.send_fs_msg("futures", "期货交易提醒", f"{code} open long 下单失败")
+                utils.send_fs_msg(
+                    "futures", "期货交易提醒", f"{code} open long 下单失败"
+                )
                 return False
 
             stock_info = self.ex.stock_info(code)
@@ -61,7 +61,9 @@ class TraderFutures(BackTestTrader):
 
             return {"price": res["price"], "amount": res["amount"]}
         except Exception as e:
-            utils.send_fs_msg("futures", "期货交易提醒", f"{code} open long 异常: {str(e)}")
+            utils.send_fs_msg(
+                "futures", "期货交易提醒", f"{code} open long 异常: {str(e)}"
+            )
             return False
 
     # 做空卖出
@@ -73,7 +75,9 @@ class TraderFutures(BackTestTrader):
 
             res = self.ex.order(code, "open_short", self.unit_volume)
             if res is False or res["price"] is None:
-                utils.send_fs_msg("futures", "期货交易提醒", f"{code} open short 下单失败")
+                utils.send_fs_msg(
+                    "futures", "期货交易提醒", f"{code} open short 下单失败"
+                )
                 return False
 
             stock_info = self.ex.stock_info(code)
@@ -97,7 +101,9 @@ class TraderFutures(BackTestTrader):
 
             return {"price": res["price"], "amount": res["amount"]}
         except Exception as e:
-            utils.send_fs_msg("futures", "期货交易提醒", f"{code} open short 异常: {str(e)}")
+            utils.send_fs_msg(
+                "futures", "期货交易提醒", f"{code} open short 异常: {str(e)}"
+            )
             return False
 
     # 做多平仓
@@ -133,7 +139,9 @@ class TraderFutures(BackTestTrader):
 
             return {"price": res["price"], "amount": res["amount"]}
         except Exception as e:
-            utils.send_fs_msg("futures", "期货交易提醒", f"{code} close buy 异常: {str(e)}")
+            utils.send_fs_msg(
+                "futures", "期货交易提醒", f"{code} close buy 异常: {str(e)}"
+            )
             return False
 
     # 做空平仓
@@ -169,5 +177,7 @@ class TraderFutures(BackTestTrader):
 
             return {"price": res["price"], "amount": res["amount"]}
         except Exception as e:
-            utils.send_fs_msg("futures", "期货交易提醒", f"{code} close sell 异常: {str(e)}")
+            utils.send_fs_msg(
+                "futures", "期货交易提醒", f"{code} close sell 异常: {str(e)}"
+            )
             return False

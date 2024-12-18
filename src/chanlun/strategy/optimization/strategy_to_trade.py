@@ -33,7 +33,7 @@ def run_bt(ags: tuple):
     print(f"Save File {save_to_file}")
     tqdm.write(f"Filter Key {_f_k} Filter Reverse {_f_r} Max Pos {_n}")
 
-    s_to_t = SignalToTrade("trade", mode="trade", is_stock=True, is_futures=False)
+    s_to_t = SignalToTrade("trade", mode="trade", market="a")
     s_to_t.close_uids = close_uid
     s_to_t.trade_strategy = StrategyADMMDTest(
         "test", filter_key=_f_k, filter_reverse=_f_r

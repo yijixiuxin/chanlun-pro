@@ -32,16 +32,13 @@ class SignalToTrade(BackTestTrader):
         self,
         name,
         mode="signal",
-        is_stock=True,
-        is_futures=False,
+        market="a",
         init_balance=100000,
         fee_rate=0.0005,
         max_pos=10,
         log=None,
     ):
-        super().__init__(
-            name, mode, is_stock, is_futures, init_balance, fee_rate, max_pos, log
-        )
+        super().__init__(name, mode, market, init_balance, fee_rate, max_pos, log)
 
         self.log = tqdm.write
 

@@ -18,9 +18,7 @@ class TraderHKStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(
-            name=name, mode="real", is_stock=False, is_futures=False, log=log
-        )
+        super().__init__(name=name, mode="real", market="hk", log=log)
 
         self.ex = ExchangeFutu()
 
@@ -46,7 +44,9 @@ class TraderHKStock(BackTestTrader):
             return False
         order = self.ex.order(code, "buy", max_amount)
         if order is False:
-            utils.send_fs_msg("hk", "港股交易提醒", f"{code} 下单失败 买入数量 {max_amount}")
+            utils.send_fs_msg(
+                "hk", "港股交易提醒", f"{code} 下单失败 买入数量 {max_amount}"
+            )
             return False
         msg = f"股票买入 {code}-{stock_info['name']} 价格 {order['dealt_avg_price']} 数量 {order['dealt_amount']} 原因 {opt.msg}"
 
@@ -85,7 +85,9 @@ class TraderHKStock(BackTestTrader):
             return False
         order = self.ex.order(code, "sell", max_amount)
         if order is False:
-            utils.send_fs_msg("hk", "港股交易提醒", f"{code} 下单失败 卖出数量 {max_amount}")
+            utils.send_fs_msg(
+                "hk", "港股交易提醒", f"{code} 下单失败 卖出数量 {max_amount}"
+            )
             return False
         msg = f"股票卖空 {code}-{stock_info['name']} 价格 {order['dealt_avg_price']} 数量 {order['dealt_amount']} 原因 {opt.msg}"
 
@@ -119,7 +121,9 @@ class TraderHKStock(BackTestTrader):
 
         order = self.ex.order(code, "sell", pos.amount)
         if order is False:
-            utils.send_fs_msg("hk", "港股交易提醒", f"{code} 下单失败 平仓卖出 {pos.amount}")
+            utils.send_fs_msg(
+                "hk", "港股交易提醒", f"{code} 下单失败 平仓卖出 {pos.amount}"
+            )
             return False
         msg = "股票卖出 %s-%s 价格 %s 数量 %s 盈亏 %s (%.2f%%) 原因 %s" % (
             code,
@@ -160,7 +164,9 @@ class TraderHKStock(BackTestTrader):
 
         order = self.ex.order(code, "buy", pos.amount)
         if order is False:
-            utils.send_fs_msg("hk", "港股交易提醒", f"{code} 下单失败 平仓买入 {pos.amount}")
+            utils.send_fs_msg(
+                "hk", "港股交易提醒", f"{code} 下单失败 平仓买入 {pos.amount}"
+            )
             return False
         msg = "股票平空 %s-%s 价格 %s 数量 %s 盈亏 %s (%.2f%%) 原因 %s" % (
             code,
