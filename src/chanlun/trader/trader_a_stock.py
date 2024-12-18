@@ -21,9 +21,8 @@ class TraderAStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(
-            name=name, mode="real", is_stock=True, is_futures=False, log=log
-        )
+        super().__init__(name=name, mode="real", market="a", log=log)
+
         self.ex = ExchangeTDX()
 
         self.zx = zixuan.ZiXuan("a")
@@ -43,7 +42,9 @@ class TraderAStock(BackTestTrader):
         amount = balance / price
         amount = amount - amount % 100
 
-        msg = f"股票买入 {code}-{stock['name']} 价格 {price} 数量 {amount} 原因 {opt.msg}"
+        msg = (
+            f"股票买入 {code}-{stock['name']} 价格 {price} 数量 {amount} 原因 {opt.msg}"
+        )
         utils.send_fs_msg("a", "沪深交易提醒", [msg])
 
         self.zx.add_stock("我的持仓", stock["code"], stock["name"])

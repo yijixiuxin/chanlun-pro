@@ -82,9 +82,7 @@ class TraderQMTStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(
-            name=name, mode="real", is_stock=True, is_futures=False, log=log
-        )
+        super().__init__(name=name, mode="real", market="a", log=log)
         self.ex = ExchangeQMT()
 
         self.zx = zixuan.ZiXuan("a")

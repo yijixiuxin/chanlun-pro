@@ -25,8 +25,7 @@ class BackTestTrader(Trader):
         self,
         name,
         mode="signal",
-        is_stock=True,
-        is_futures=False,
+        market="a",
         init_balance=100000,
         fee_rate=0.0005,
         max_pos=10,
@@ -36,8 +35,7 @@ class BackTestTrader(Trader):
         交易者初始化
         :param name: 交易者名称
         :param mode: 执行模式 signal 测试信号模式，固定金额开仓；trade 实际买卖模式；real 线上实盘交易
-        :param is_stock: 是否是股票交易（决定当日是否可以卖出）
-        :param is_futures: 是否是期货交易（决定是否可以做空）
+        :param market: 市场 (a 沪深 us 美股  hk 香港  currency 数字货币 futures 期货)
         :param init_balance: 初始资金
         :param fee_rate: 手续费比例
         """
@@ -45,8 +43,27 @@ class BackTestTrader(Trader):
         # 策略基本信息
         self.name = name
         self.mode = mode
-        self.is_stock = is_stock
-        self.is_futures = is_futures
+        self.market = market
+
+        self.can_close_today: bool = False  # 是否可以平今
+        self.can_short: bool = False  # 是否可以做空
+
+        if self.market == "a":
+            self.can_close_today = False
+            self.can_short = False
+        if self.market == "us":
+            self.can_close_today = True
+            self.can_short = False
+        if self.market == "hk":
+            self.can_close_today = True
+            self.can_short = False
+        if self.market == "currency":
+            self.can_close_today = True
+            self.can_short = True
+        if self.market == "futures":
+            self.can_close_today = True
+            self.can_short = True
+
         self.allow_mmds = None
 
         # 资金情况
@@ -201,8 +218,9 @@ class BackTestTrader(Trader):
         save_infos = {
             "name": self.name,
             "mode": self.mode,
-            "is_stock": self.is_stock,
-            "is_futures": self.is_futures,
+            "market": self.market,
+            "can_close_today": self.can_close_today,
+            "can_short": self.can_short,
             "allow_mmds": self.allow_mmds,
             "balance": self.balance,
             "fee_rate": self.fee_rate,
@@ -230,8 +248,15 @@ class BackTestTrader(Trader):
                 return False
         self.name = save_infos["name"]
         self.mode = save_infos["mode"]
-        self.is_stock = save_infos["is_stock"]
-        self.is_futures = save_infos["is_futures"]
+        self.market = save_infos["market"] if "market" in save_infos.keys() else None
+        self.can_close_today = (
+            save_infos["can_close_today"]
+            if "can_close_today" in save_infos.keys()
+            else False
+        )
+        self.can_short = (
+            save_infos["can_short"] if "can_short" in save_infos.keys() else False
+        )
         self.allow_mmds = save_infos["allow_mmds"]
         self.balance = save_infos["balance"]
         self.fee_rate = save_infos["fee_rate"]
@@ -519,7 +544,7 @@ class BackTestTrader(Trader):
             use_balance = 100000 * min(1.0, opt.pos_rate)
             price = self.get_price(code)["close"]
             amount = round((use_balance / price) * 0.99, 4)
-            if self.is_futures:
+            if self.market == "futures":
                 # 如果是期货，按照期货的规则，计算可买的最大手数
                 contract_config = self.feature_contracts[code]
                 amount = int(
@@ -540,7 +565,7 @@ class BackTestTrader(Trader):
                 ) * 0.99
                 use_balance *= min(1.0, opt.pos_rate)
                 amount = use_balance / price
-                if self.is_futures:
+                if self.market == "futures":
                     contract_config = self.feature_contracts[code]
                     amount = int(
                         use_balance
@@ -569,7 +594,7 @@ class BackTestTrader(Trader):
             use_balance = 100000 * min(1.0, opt.pos_rate)
             price = self.get_price(code)["close"]
             amount = round((use_balance / price) * 0.99, 4)
-            if self.is_futures:
+            if self.market == "futures":
                 # 如果是期货，按照期货的规则，计算可买的最大手数
                 contract_config = self.feature_contracts[code]
                 amount = int(
@@ -590,7 +615,7 @@ class BackTestTrader(Trader):
                 ) * 0.99
                 use_balance *= min(1.0, opt.pos_rate)
                 amount = use_balance / price
-                if self.is_futures:
+                if self.market == "futures":
                     contract_config = self.feature_contracts[code]
                     amount = int(
                         use_balance
@@ -628,7 +653,7 @@ class BackTestTrader(Trader):
             return {"price": price, "amount": amount}
         else:
             hold_balance = price * amount
-            if self.is_futures:
+            if self.market == "futures":
                 contract_config = self.feature_contracts[code]
                 hold_balance = (
                     amount
@@ -660,7 +685,7 @@ class BackTestTrader(Trader):
         if self.mode == "signal":
             return {"price": price, "amount": amount}
         else:
-            if self.is_futures:
+            if self.market == "futures":
                 contract_config = self.feature_contracts[code]
                 hold_balance = (
                     amount
@@ -688,7 +713,7 @@ class BackTestTrader(Trader):
         fee = balance * self.fee_rate
 
         # 如果是期货，按照期货的规则，计算手续费
-        if self.is_futures:
+        if self.market == "futures":
             contract_config = self.feature_contracts[code]
             fee_rate = contract_config["fee_rate_open"]
             if "close" in other_info.keys() and other_info["close"]:
@@ -757,7 +782,7 @@ class BackTestTrader(Trader):
                 pos.type = "做多"
                 pos.price = res["price"]
                 pos.amount += res["amount"]
-                if self.is_futures:  # 期货计算占用保证金
+                if self.market == "futures":  # 期货计算占用保证金
                     contract_config = self.feature_contracts[code]
                     pos.balance += (
                         res["price"]
@@ -803,7 +828,7 @@ class BackTestTrader(Trader):
                 )
 
             # 卖点，买入，开仓做空（期货）
-            if self.is_futures and "sell" in opt_mmd and opt.opt == "buy":
+            if self.can_short and "sell" in opt_mmd and opt.opt == "buy":
                 # 唯一key判断
                 if opt.key in pos.open_keys.keys():
                     return False
@@ -816,7 +841,7 @@ class BackTestTrader(Trader):
                 pos.type = "做空"
                 pos.price = res["price"]
                 pos.amount += res["amount"]
-                if self.is_futures:  # 期货计算占用保证金
+                if self.market == "futures":  # 期货计算占用保证金
                     contract_config = self.feature_contracts[code]
                     pos.balance += (
                         res["price"]
@@ -862,7 +887,7 @@ class BackTestTrader(Trader):
                 )
 
             # 卖点，卖出，平仓做空（期货）
-            if self.is_futures and "sell" in opt_mmd and opt.opt == "sell":
+            if self.can_short and "sell" in opt_mmd and opt.opt == "sell":
                 # 判断当前是否有仓位
                 if pos.now_pos_rate <= 0:
                     return False
@@ -878,8 +903,9 @@ class BackTestTrader(Trader):
                     else opt.pos_rate
                 )
 
-                if self.is_stock and pos.open_date == self.get_now_datetime().strftime(
-                    "%Y-%m-%d"
+                if (
+                    self.can_close_today is False
+                    and pos.open_date == self.get_now_datetime().strftime("%Y-%m-%d")
                 ):
                     # 股票交易，当日不能卖出
                     return False
@@ -888,7 +914,7 @@ class BackTestTrader(Trader):
                 if res is False:
                     return False
 
-                if self.is_futures:  # 计算期货做空收益
+                if self.market == "futures":  # 计算期货做空收益
                     # 空单：（开仓价格-平仓价格）*合约乘数*手数
                     contract_config = self.feature_contracts[code]
                     sell_balance = (
@@ -995,8 +1021,9 @@ class BackTestTrader(Trader):
                     else opt.pos_rate
                 )
 
-                if self.is_stock and pos.open_date == self.get_now_datetime().strftime(
-                    "%Y-%m-%d"
+                if (
+                    self.can_close_today is False
+                    and pos.open_date == self.get_now_datetime().strftime("%Y-%m-%d")
                 ):
                     # 股票交易，当日不能卖出
                     return False
@@ -1005,7 +1032,7 @@ class BackTestTrader(Trader):
                 if res is False:
                     return False
 
-                if self.is_futures:
+                if self.market == "futures":
                     # 多单：（平仓价格-开仓价格）*合约乘数*手数
                     contract_config = self.feature_contracts[code]
                     sell_balance = (
