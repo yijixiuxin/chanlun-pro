@@ -516,10 +516,6 @@ if __name__ == "__main__":
         "start_datetime": "2020-01-01 00:00:00",
         # 回测的结束时间
         "end_datetime": "2024-06-01 00:00:00",
-        # 是否是股票，True 当日开仓不可平仓，False 当日开当日可平
-        "is_stock": True,
-        # 是否是期货，True 可做空，False 不可做空
-        "is_futures": False,
         # mode 为 trade 生效，初始账户资金
         "init_balance": 1000000,
         # mode 为 trade 生效，交易手续费率
