@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 信号回测结果转交易回测结果
 
 # Demo
-s_to_t = SignalToTrade("trade", mode="trade", is_stock=True, is_futures=False)
+s_to_t = SignalToTrade("trade", mode="trade", market="a")
 bt = s_to_t.run_bt("backtest/strategy_signal.pkl")
 bt.result()
 bt.result_by_pyfolio()
@@ -128,8 +128,6 @@ class SignalToTrade(BackTestTrader):
 
         # 设置交易数据
         self.market = BT.market
-        self.is_stock = BT.is_stock
-        self.is_futures = BT.is_futures
         self.balance = BT.init_balance
         self.fee_rate = BT.fee_rate
         self.max_pos = BT.max_pos

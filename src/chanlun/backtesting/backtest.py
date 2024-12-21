@@ -56,8 +56,6 @@ class BackTest:
             "fee_rate",
             "max_pos",
             "cl_config",
-            "is_stock",
-            "is_futures",
             "strategy",
         ]
         for _k in check_keys:
@@ -77,8 +75,6 @@ class BackTest:
         self.max_pos: int = config["max_pos"]
 
         self.cl_config: dict = config["cl_config"]
-        self.is_stock: bool = config["is_stock"]
-        self.is_futures: bool = config["is_futures"]
 
         # 执行策略
         self.strategy: Strategy = config["strategy"]
@@ -89,8 +85,7 @@ class BackTest:
         self.trader = BackTestTrader(
             "回测",
             self.mode,
-            is_stock=self.is_stock,
-            is_futures=self.is_futures,
+            market=self.market,
             init_balance=self.init_balance,
             fee_rate=self.fee_rate,
             max_pos=self.max_pos,
@@ -139,8 +134,6 @@ class BackTest:
             "fee_rate": self.fee_rate,
             "max_pos": self.max_pos,
             "cl_config": self.cl_config,
-            "is_stock": self.is_stock,
-            "is_futures": self.is_futures,
             "strategy": self.strategy,
             "trader": self.trader,
             "next_frequency": self.next_frequency,
@@ -168,8 +161,6 @@ class BackTest:
         self.fee_rate = config_dict["fee_rate"]
         self.max_pos = config_dict["max_pos"]
         self.cl_config = config_dict["cl_config"]
-        self.is_stock = config_dict["is_stock"]
-        self.is_futures = config_dict["is_futures"]
         self.strategy = config_dict["strategy"]
         self.trader = config_dict["trader"]
         self.next_frequency = config_dict["next_frequency"]
@@ -190,10 +181,7 @@ class BackTest:
         self.log.info(fun.now_dt())
         self.log.info(f"保存地址 : {self.save_file}")
         self.log.info(
-            f"回测模式 【{self.mode}】 初始资金 【{self.init_balance}】 手续费率 【{self.fee_rate}】"
-        )
-        self.log.info(
-            f"股票 【{self.is_stock}】 期货 【{self.is_futures}】 (股票限制当日卖出，期货限制是否做空)"
+            f"回测模式 【{self.mode}】市场 【{self.market}】初始资金 【{self.init_balance}】 手续费率 【{self.fee_rate}】"
         )
         self.log.info(f"策略 : {self.strategy}")
         self.log.info(f"基准代码 : {self.base_code}")
@@ -396,10 +384,6 @@ class BackTest:
                 "start_datetime": self.start_datetime,
                 # 回测的结束时间
                 "end_datetime": self.end_datetime,
-                # 是否是股票，True 当日开仓不可平仓，False 当日开当日可平
-                "is_stock": self.is_stock,
-                # 是否是期货，True 可做空，False 不可做空
-                "is_futures": self.is_futures,
                 # mode 为 trade 生效，初始账户资金
                 "init_balance": self.init_balance,
                 # mode 为 trade 生效，交易手续费率
