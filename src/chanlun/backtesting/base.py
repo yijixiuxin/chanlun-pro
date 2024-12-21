@@ -212,8 +212,7 @@ class Trader(ABC):
         self,
         name,
         mode="signal",
-        is_stock=True,
-        is_futures=False,
+        market="a",
         init_balance=100000,
         fee_rate=0.0005,
         max_pos=10,
@@ -222,8 +221,7 @@ class Trader(ABC):
         # 策略基本信息
         self.name = name
         self.mode = mode
-        self.is_stock = is_stock
-        self.is_futures = is_futures
+        self.market = market
         self.max_pos = max_pos
 
     @abstractmethod
