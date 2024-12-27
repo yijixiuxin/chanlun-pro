@@ -495,6 +495,28 @@ class Strategy(ABC):
         return {"psy": psy, "psya": psya}
 
     @staticmethod
+    def idx_dmi(cd: ICL, M1=14, M2=6):
+        """
+        指示投资人避免在盘整的市场中交易，一旦市场变得有利润时，DMI立刻引导投资人进场，并且在适当时机退场。
+        买卖原则：
+            1、+DI上交叉-DI时，可参考做买。
+            2、+DI下交叉-DI时，可参考做卖。
+            3、ADX于50以上向下转折时，对表市场趋势终了。
+            4、当ADX滑落至+DI之下时，不宜进场交易。
+            5、当ADXR介于20-25时，宜采用TBP及CDP中之反应秘诀为交易参考。
+        """
+        close_prices = np.array([k.c for k in cd.get_klines()[-(500):]])
+        high_prices = np.array([k.h for k in cd.get_klines()[-(500):]])
+        low_prices = np.array([k.l for k in cd.get_klines()[-(500):]])
+        pdi, mdi, adx, adxr = MyTT.DMI(close_prices, high_prices, low_prices, M1, M2)
+        return {
+            "pdi": pdi,
+            "mdi": mdi,
+            "adx": adx,
+            "adxr": adxr,
+        }
+
+    @staticmethod
     def idx_atr_by_sma(CLOSE, HIGH, LOW, N: int = 20):
         TR = MyTT.MAX(
             MyTT.MAX((HIGH - LOW), MyTT.ABS(MyTT.REF(CLOSE, 1) - HIGH)),

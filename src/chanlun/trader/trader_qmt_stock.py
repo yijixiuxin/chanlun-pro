@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 import time
 from typing import List
 from chanlun import utils, zixuan
@@ -74,11 +74,9 @@ class MyXtQuantTraderCallback(XtQuantTraderCallback):
         print(status.account_id, status.account_type, status.status)
 
 
-class TraderQMTStock(BackTestTrader):
+class QMTTraderStock(BackTestTrader):
     """
-    A股票交易对象
-
-    没有实际的交易接口，只用来记录添加到持仓自选，并发送消息，实盘需要根据消息自行决定是否进行买卖操作
+    QMT A股票交易对象
     """
 
     def __init__(self, name, log=None):
@@ -86,19 +84,18 @@ class TraderQMTStock(BackTestTrader):
         self.ex = ExchangeQMT()
 
         self.zx = zixuan.ZiXuan("a")
+        self.zx_group = "QMT交易"
 
         # 最大持仓数量，当前持仓大于这个数量，则不进行实际交易
         self.max_pos = 3
 
         # path为mini qmt客户端安装目录下userdata_mini路径
-        self.qmt_path = (
-            r"C:\Users\wangxu\Documents\Program\国金证券QMT交易端\userdata_mini"
-        )
+        self.qmt_path = r"C:\trade\国金证券QMT交易端\userdata_mini"
         # session_id为会话编号，策略使用方对于不同的Python策略需要使用不同的会话编号
         self.session_id = int(time.time())
         self.xt_trader = XtQuantTrader(self.qmt_path, self.session_id)
         # 创建资金账号为******的证券账号对象
-        self.acc = StockAccount("1111111111")  # TODO 替换自己的资金账号
+        self.acc = StockAccount("11111111")  # TODO 替换自己的资金账号
         # 创建交易回调类对象，并声明接收回调
         self.trader_callback = MyXtQuantTraderCallback()
         self.xt_trader.register_callback(self.trader_callback)
@@ -137,10 +134,7 @@ class TraderQMTStock(BackTestTrader):
         if is_real_trade:
             # 计算开仓金额
             account: XtAsset = self.xt_trader.query_stock_asset(self.acc)
-            balance = round(
-                (account.available * 0.98) / (self.max_pos - hold_pos_num), 0
-            )
-            price = round(tick[code].sell1 * 1.02, 2)
+            balance = round((account.cash * 0.98) / (self.max_pos - hold_pos_num), 0)
             amount = int(balance / price / 100) * 100
             if amount < 100:
                 is_real_trade = False
@@ -150,11 +144,25 @@ class TraderQMTStock(BackTestTrader):
                     stock_code=self.ex.code_to_qmt(code),
                     order_type=xtconstant.STOCK_BUY,
                     order_volume=amount,
-                    price_type=xtconstant.FIX_PRICE,
-                    price=price,
+                    price_type=(
+                        xtconstant.MARKET_SH_CONVERT_5_LIMIT
+                        if "SH" in code
+                        else xtconstant.MARKET_SZ_CONVERT_5_CANCEL
+                    ),
+                    price=0,
                     strategy_name="cl",
                     order_remark=opt.msg,
                 )
+
+                time.sleep(5)
+
+                order_list: List[XtOrder] = self.xt_trader.query_stock_orders(
+                    self.acc, cancelable_only=False
+                )
+                for order in order_list:
+                    if order.order_id == order_id:
+                        price = order.traded_price
+                        amount = order.traded_volume
 
         if is_real_trade is False:
             balance = 50000
@@ -162,7 +170,7 @@ class TraderQMTStock(BackTestTrader):
             amount = int(balance / price / 100) * 100
 
         msg = f"[{'实盘' if is_real_trade else '模拟'}] 股票买入 {code}-{stock['name']} 价格 {price} 数量 {amount} 原因 {opt.msg}"
-        utils.send_fs_msg("a", "沪深交易提醒", [msg])
+        utils.send_fs_msg("a_trader", "沪深交易提醒", [msg])
 
         self.zx.add_stock("我的持仓", stock["code"], stock["name"])
 
@@ -206,17 +214,29 @@ class TraderQMTStock(BackTestTrader):
 
         if is_real_trade:
             amount = min(pos.amount, hold_pos.can_use_volume)
-            price = round(tick[code].buy1 * 0.98, 2)
             order_id = self.xt_trader.order_stock(
                 account=self.acc,
                 stock_code=self.ex.code_to_qmt(code),
                 order_type=xtconstant.STOCK_SELL,
                 order_volume=amount,
-                price_type=xtconstant.FIX_PRICE,
-                price=price,
+                price_type=(
+                    xtconstant.MARKET_SH_CONVERT_5_LIMIT
+                    if "SH" in code
+                    else xtconstant.MARKET_SZ_CONVERT_5_CANCEL
+                ),
+                price=0,
                 strategy_name="cl",
                 order_remark=opt.msg,
             )
+            time.sleep(5)
+            order_list: List[XtOrder] = self.xt_trader.query_stock_orders(
+                self.acc, cancelable_only=False
+            )
+            for order in order_list:
+                if order.order_id == order_id:
+                    price = order.traded_price
+                    amount = order.traded_volume
+
         if is_real_trade is False:
             price = tick[code].last
             amount = pos.amount
@@ -224,7 +244,7 @@ class TraderQMTStock(BackTestTrader):
         msg = (
             f"股票卖出 {code}-{stock['name']} 价格 {price} 数量 {amount} 原因 {opt.msg}"
         )
-        utils.send_fs_msg("a", "沪深交易提醒", [msg])
+        utils.send_fs_msg("a_trader", "沪深交易提醒", [msg])
 
         self.zx.del_stock("我的持仓", stock["code"])
 
@@ -248,9 +268,14 @@ class TraderQMTStock(BackTestTrader):
 
 
 if __name__ == "__main__":
-    qmt_trader = TraderQMTStock("qmt_trader")
+    qmt_trader = QMTTraderStock("qmt_trader")
 
     account = qmt_trader.xt_trader.query_stock_asset(qmt_trader.acc)
     print(account)
+
+    code = "SH.603755"
+    opt = Operation(code, "buy", "3buy", 0, {}, "测试买入")
+    trade_res = qmt_trader.open_buy(code, opt)
+    print(trade_res)
 
     qmt_trader.close()
