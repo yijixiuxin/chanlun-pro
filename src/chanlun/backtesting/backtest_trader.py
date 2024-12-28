@@ -284,10 +284,10 @@ class BackTestTrader(Trader):
         """
         获取当前时间
         """
-        if self.mode != "signal":
-            return datetime.datetime.now()
-        # 回测时用回测的当前时间
-        return self.datas.now_date
+        if self.mode in ["signal", "trade"]:
+            # 回测时用回测的当前时间
+            return self.datas.now_date
+        return datetime.datetime.now()
 
     # 运行的唯一入口
     def run(self, code, is_filter=False):
