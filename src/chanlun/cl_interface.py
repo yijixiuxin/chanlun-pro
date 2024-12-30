@@ -522,18 +522,24 @@ class BI(LINE):
         return self.end.index - self.start.index
 
     def get_mmds(self, zs_type: str = None) -> List[MMD]:
+        # 返回买卖点，需要检查买点的中枢是否有效
         if zs_type is None:
-            return self.mmds
+            return [_m for _m in self.mmds if _m.zs.real]
         if zs_type not in self.zs_type_mmds.keys():
             return []
-        return self.zs_type_mmds[zs_type]
+        return [_m for _m in self.zs_type_mmds[zs_type] if _m.zs.real]
 
     def get_bcs(self, zs_type: str = None) -> List[BC]:
+        # 需要检查买点的中枢是否有效
         if zs_type is None:
-            return self.bcs
+            return [_b for _b in self.bcs if _b.bc and (_b.zs is None or _b.zs.real)]
         if zs_type not in self.zs_type_bcs.keys():
             return []
-        return self.zs_type_bcs[zs_type]
+        return [
+            _b
+            for _b in self.zs_type_bcs[zs_type]
+            if _b.bc and (_b.zs is None or _b.zs.real)
+        ]
 
     def add_mmd(self, name: str, zs: ZS, zs_type: str, msg: str = "") -> bool:
         """
@@ -579,7 +585,7 @@ class BI(LINE):
 
         """
         if zs_type is None:
-            return [m.name for m in self.mmds]
+            return [m.name for m in self.mmds if m.zs.real]
 
         if zs_type == "|":
             mmds = []
@@ -594,7 +600,7 @@ class BI(LINE):
 
         if zs_type not in self.zs_type_mmds.keys():
             return []
-        return [m.name for m in self.zs_type_mmds[zs_type]]
+        return [m.name for m in self.zs_type_mmds[zs_type] if m.zs.real]
 
     def line_bcs(self, zs_type: Union[str, None] = None) -> list:
         """
@@ -604,7 +610,11 @@ class BI(LINE):
         zs_type 如果等于  & ，获取当前笔所有中枢的买卖点 交集
         """
         if zs_type is None:
-            return [_bc.type for _bc in self.bcs if _bc.bc]
+            return [
+                _bc.type
+                for _bc in self.bcs
+                if _bc.bc and (_bc.zs is None or _bc.zs.real)
+            ]
 
         if zs_type == "|":
             bcs = []
@@ -619,7 +629,11 @@ class BI(LINE):
 
         if zs_type not in self.zs_type_bcs.keys():
             return []
-        return [_bc.type for _bc in self.zs_type_bcs[zs_type] if _bc.bc]
+        return [
+            _bc.type
+            for _bc in self.zs_type_bcs[zs_type]
+            if _bc.bc and (_bc.zs is None or _bc.zs.real)
+        ]
 
     def mmd_exists(self, check_mmds: list, zs_type: Union[str, None] = None) -> bool:
         """
@@ -789,18 +803,24 @@ class XD(LINE):
         return self.done
 
     def get_mmds(self, zs_type: str = None) -> List[MMD]:
+        # 需要检查买点的中枢是否有效
         if zs_type is None:
-            return self.mmds
+            return [_m for _m in self.mmds if _m.zs.real]
         if zs_type not in self.zs_type_mmds.keys():
             return []
-        return self.zs_type_mmds[zs_type]
+        return [_m for _m in self.zs_type_mmds[zs_type] if _m.zs.real]
 
     def get_bcs(self, zs_type: str = None) -> List[BC]:
+        # 需要检查买点的中枢是否有效
         if zs_type is None:
-            return [bc for bc in self.bcs if bc.bc]
+            return [bc for bc in self.bcs if bc.bc and (bc.zs is None or bc.zs.real)]
         if zs_type not in self.zs_type_bcs.keys():
             return []
-        return [bc for bc in self.zs_type_bcs[zs_type] if bc.bc]
+        return [
+            bc
+            for bc in self.zs_type_bcs[zs_type]
+            if bc.bc and (bc.zs is None or bc.zs.real)
+        ]
 
     def add_mmd(self, name: str, zs: ZS, zs_type: str, msg: str = "") -> bool:
         """
@@ -844,7 +864,7 @@ class XD(LINE):
 
         """
         if zs_type is None:
-            return [m.name for m in self.mmds]
+            return [m.name for m in self.mmds if m.zs.real]
 
         if zs_type == "|":
             mmds = []
@@ -859,7 +879,7 @@ class XD(LINE):
 
         if zs_type not in self.zs_type_mmds.keys():
             return []
-        return [m.name for m in self.zs_type_mmds[zs_type]]
+        return [m.name for m in self.zs_type_mmds[zs_type] if m.zs.real]
 
     def line_bcs(self, zs_type: Union[str, None] = None) -> list:
         """
@@ -869,7 +889,11 @@ class XD(LINE):
         zs_type 如果等于  & ，获取当前笔所有中枢的买卖点 交集
         """
         if zs_type is None:
-            return [_bc.type for _bc in self.bcs if _bc.bc]
+            return [
+                _bc.type
+                for _bc in self.bcs
+                if _bc.bc and (_bc.zs is None or _bc.zs.real)
+            ]
 
         if zs_type == "|":
             bcs = []
@@ -884,7 +908,11 @@ class XD(LINE):
 
         if zs_type not in self.zs_type_bcs.keys():
             return []
-        return [_bc.type for _bc in self.zs_type_bcs[zs_type] if _bc.bc]
+        return [
+            _bc.type
+            for _bc in self.zs_type_bcs[zs_type]
+            if _bc.bc and (_bc.zs is None or _bc.zs.real)
+        ]
 
     def mmd_exists(self, check_mmds: list, zs_type: Union[str, None] = None) -> bool:
         """
