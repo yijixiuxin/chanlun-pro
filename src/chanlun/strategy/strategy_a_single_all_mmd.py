@@ -1,5 +1,6 @@
 from chanlun.backtesting.base import *
 from chanlun.cl_utils import cal_zs_macd_infos
+from chanlun.config import get_data_path
 
 
 class StrategyASingleAllMmd(Strategy):
@@ -401,3 +402,65 @@ class StrategyASingleAllMmd(Strategy):
             return Operation(code, "sell", mmd, msg="小转大验证分型")
 
         return False
+
+
+if __name__ == "__main__":
+    from chanlun.backtesting import backtest
+    from chanlun.cl_utils import query_cl_chart_config
+    import pandas as pd
+
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
+
+    # 获取所有股票代码
+    # ex = ExchangeTDX()
+    # stocks = ex.all_stocks()
+    # run_codes = [
+    #     _s["code"] for _s in stocks if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"]
+    # ]
+    # # 将通达信的代码转换成掘金的格式
+    # run_codes = [_c.replace("SH.", "SHSE.").replace("SZ.", "SZSE.") for _c in run_codes]
+    # print(f"回测代码数量：{len(run_codes)}")
+
+    cl_config = query_cl_chart_config("a", "SH.000001")
+    # 量化配置
+    bt_config = {
+        # 策略结果保存的文件
+        "save_file": str(get_data_path() / "backtest" / "a_d_mmd_single_v0_signal.pkl"),
+        # 设置策略对象
+        "strategy": StrategyASingleAllMmd(),
+        # 回测模式：signal 信号模式，固定金额开仓； trade 交易模式，按照实际金额开仓
+        "mode": "trade",
+        # 市场配置，currency 数字货币  a 沪深  hk  港股  futures  期货
+        "market": "a",
+        # 基准代码，用于获取回测的时间列表
+        "base_code": "SH.000001",
+        # 回测的标的代码
+        "codes": ["SH.601009"],
+        # "codes": run_codes,
+        # 回测的周期，这里设置里，在策略中才能取到对应周期的数据
+        "frequencys": ["d"],
+        # 回测开始的时间
+        "start_datetime": "2018-01-01 00:00:00",
+        # 回测的结束时间
+        "end_datetime": "2022-04-20 00:00:00",
+        # mode 为 trade 生效，初始账户资金
+        "init_balance": 1000000,
+        # mode 为 trade 生效，交易手续费率
+        "fee_rate": 0.0006,
+        # mode 为 trade 生效，最大持仓数量（分仓）
+        "max_pos": 8,
+        # 缠论计算的配置，详见缠论配置说明
+        "cl_config": cl_config,
+    }
+
+    BT = backtest.BackTest(bt_config)
+    # BT.datas.del_volume_zero = True
+
+    # 运行回测
+    BT.run()
+    # BT.run_process(max_workers=5)
+    # BT.load(BT.save_file)
+    # 保存回测结果到文件中
+    BT.save()
+    BT.result()
+    print("Done")
