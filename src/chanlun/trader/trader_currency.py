@@ -18,7 +18,7 @@ class TraderCurrency(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(name=name, mode="real", market="currency", log=log)
+        super().__init__(name=name, mode="online", market="currency", log=log)
 
         self.ex = ExchangeBinance()
 

@@ -155,14 +155,18 @@ class ExchangeTq(Exchange):
         if self.g_api is None:
             account = self.get_account()
             if use_account and account is None:
-                raise Exception("使用实盘账户操作，但是并没有配置实盘账户，请检查实盘配置")
+                raise Exception(
+                    "使用实盘账户操作，但是并没有配置实盘账户，请检查实盘配置"
+                )
             try:
                 self.g_api = tqsdk.TqApi(
                     account=account, auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
                 )
                 self.g_account_enable = True
             except Exception as e:
-                print("初始化默认的天勤 API 报错，重新尝试初始化无账户的 API：", {str(e)})
+                print(
+                    "初始化默认的天勤 API 报错，重新尝试初始化无账户的 API：", {str(e)}
+                )
                 self.g_api = tqsdk.TqApi(
                     auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
                 )
@@ -320,13 +324,15 @@ class ExchangeTq(Exchange):
                     low=0 if math.isnan(tick["lowest"]) else tick["lowest"],
                     open=0 if math.isnan(tick["open"]) else tick["open"],
                     volume=0 if math.isnan(tick["volume"]) else tick["volume"],
-                    rate=0
-                    if math.isnan(tick["pre_settlement"])
-                    else round(
-                        (tick["last_price"] - tick["pre_settlement"])
-                        / tick["pre_settlement"]
-                        * 100,
-                        2,
+                    rate=(
+                        0
+                        if math.isnan(tick["pre_settlement"])
+                        else round(
+                            (tick["last_price"] - tick["pre_settlement"])
+                            / tick["pre_settlement"]
+                            * 100,
+                            2,
+                        )
                     ),
                 )
                 break
@@ -547,9 +553,9 @@ class ExchangeTq(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeTq()
+    ex = ExchangeTq(use_simulate_account=True)
 
-    print("all_stocks", len(ex.all_stocks()))
+    # print("all_stocks", len(ex.all_stocks()))
     # for c in ['FUTURE', 'CONT']:
     #     res = ex.get_api().query_quotes(ins_class=c)
     #     print(c, len(res))
@@ -566,6 +572,9 @@ if __name__ == "__main__":
 
     # tick = ex.ticks(['DCE.l2401'])
     # print(tick)
+
+    # balance = ex.balance()
+    # print(balance)
 
     # ex.close_task_thread()
     # ex.restart_task_thread()

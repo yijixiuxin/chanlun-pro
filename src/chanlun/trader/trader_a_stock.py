@@ -21,7 +21,7 @@ class TraderAStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(name=name, mode="real", market="a", log=log)
+        super().__init__(name=name, mode="online", market="a", log=log)
 
         self.ex = ExchangeTDX()
 
