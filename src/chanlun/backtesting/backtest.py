@@ -17,6 +17,7 @@ import pyfolio as pf
 
 from chanlun import cl
 from chanlun import kcharts, fun
+from chanlun.backtesting import futures_contracts
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.base import POSITION, Strategy
@@ -71,6 +72,13 @@ class BackTest:
         self.end_datetime = config["end_datetime"]
 
         self.init_balance: int = config["init_balance"]
+
+        # 手续费的设置
+        """
+        # 沪深A股的手续费，在 backtest_trader.py cal_fee 方法中计算，有设置 过户费/印花税等 费率，这里只设置券商佣金，cal_fee 里计算的最少 5 元（不免5），如不满要求可自行修改
+        # 期货手续费率，这个不生效，在 futures_contracts.py 中，为每个期货品种单独配置（如果没有配置回测的品种，则会报错）
+        # 其他市场，默认手续费计算方式就是 成交额 * 手续费率
+        """
         self.fee_rate: float = config["fee_rate"]
         self.max_pos: int = config["max_pos"]
 
@@ -1072,44 +1080,84 @@ class BackTest:
             return chart.dump_options()
 
     def __get_close_profit(self, pos: POSITION, uids: List[str] = None):
+        # 记录开仓的占用保证金与手续费
+        hold_balance = 0
+        hold_amount = 0
+        pos_amount = 0
+        fee = 0
+        for _or in pos.open_records:
+            hold_balance += _or["hold_balance"]
+            hold_amount += _or["amount"]
+            pos_amount += _or["amount"]
+            fee += _or["fee"]
+
         if uids is None:
-            return {
-                "close_datetime": pos.close_datetime,
-                "profit": pos.profit,
-                "profit_rate": pos.profit_rate,
-                "max_profit_rate": pos.max_profit_rate,
-                "max_loss_rate": pos.max_loss_rate,
-                "close_msg": pos.close_msg,
-            }
+            uids = ["clear"]
 
-        pos_type = "buy" if "buy" in pos.mmd else "sell"
-
-        if isinstance(uids, dict) and pos.mmd in uids.keys():
-            query_uids = uids[pos.mmd]
-        elif isinstance(uids, dict) and pos_type in uids.keys():
-            query_uids = uids[pos_type]
-        else:
-            query_uids = uids
-
+        # 查询平仓 uids
+        query_uids = self.trader.get_opt_close_uids(pos.code, pos.mmd, uids)
         if "clear" not in query_uids:
             query_uids.append("clear")
+
         # 按照时间从早到晚排序
-        close_profit = sorted(
-            pos.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
-        )
-        for _r in close_profit:
-            if _r[0] in query_uids:
-                return {
-                    "close_datetime": _r[1]["close_datetime"],
-                    "profit": _r[1]["profit"],
-                    "profit_rate": _r[1]["profit_rate"],
-                    "max_profit_rate": _r[1]["max_profit_rate"],
-                    "max_loss_rate": _r[1]["max_loss_rate"],
-                    "close_msg": _r[1]["close_msg"],
-                }
-        raise Exception(
-            f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {query_uids}"
-        )
+        close_records = sorted(pos.close_records, key=lambda _r: _r["datetime"])
+
+        # 记录平仓释放的保证金与手续费
+        release_balance = 0
+        close_price = 0
+        close_datetime = None
+        close_msg = ""
+        max_profit_rate = 0
+        max_loss_rate = 0
+        for _r in close_records:
+            if _r["close_uid"] in query_uids:
+                release_balance += _r["release_balance"]
+                fee += _r["fee"]
+                close_price = _r["price"]
+                pos_amount -= _r["amount"]
+                close_datetime = _r["datetime"]
+                close_msg = _r["close_msg"]
+                max_profit_rate = _r["max_profit_rate"]
+                max_loss_rate = _r["max_loss_rate"]
+                if pos_amount == 0:
+                    break
+
+        if release_balance == 0:
+            raise Exception(
+                f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {query_uids}"
+            )
+
+        # 计算盈亏比例
+        if pos.type == "做多":
+            profit = release_balance - hold_balance - fee
+            profit_rate = profit / hold_balance * 100
+            if self.market == "futures":
+                contract_config = futures_contracts.futures_contracts[pos.code]
+                profit = (release_balance - hold_balance) / contract_config[
+                    "margin_rate_long"
+                ] - pos.fee
+                profit_rate = profit / pos.balance * 100
+        else:
+            profit = hold_balance - release_balance - fee
+            profit_rate = profit / hold_balance * 100
+            if self.market == "futures":
+                contract_config = futures_contracts.futures_contracts[pos.code]
+                profit = (hold_balance - release_balance) / contract_config[
+                    "margin_rate_short"
+                ] - pos.fee
+                profit_rate = profit / pos.balance * 100
+
+        return {
+            "close_datetime": close_datetime,
+            "hold_amount": hold_amount,
+            "close_price": close_price,
+            "profit": profit,
+            "profit_rate": profit_rate,
+            "max_profit_rate": max_profit_rate,
+            "max_loss_rate": max_loss_rate,
+            "close_msg": close_msg,
+            "fee": fee,
+        }
 
     def positions(
         self,
@@ -1134,8 +1182,11 @@ class BackTest:
                     "close_datetime": p_profit["close_datetime"],
                     "type": p.type,
                     "price": p.price,
-                    "amount": p.amount,
+                    "close_price": p_profit["close_price"],
+                    "amount": p_profit["hold_amount"],
+                    "fee": p_profit["fee"],
                     "loss_price": p.loss_price,
+                    "profit": p_profit["profit"],
                     "profit_rate": p_profit["profit_rate"],
                     "max_profit_rate": p_profit["max_profit_rate"],
                     "max_loss_rate": p_profit["max_loss_rate"],

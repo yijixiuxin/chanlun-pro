@@ -429,7 +429,7 @@ if __name__ == "__main__":
         # 设置策略对象
         "strategy": StrategyASingleAllMmd(),
         # 回测模式：signal 信号模式，固定金额开仓； trade 交易模式，按照实际金额开仓
-        "mode": "trade",
+        "mode": "signal",
         # 市场配置，currency 数字货币  a 沪深  hk  港股  futures  期货
         "market": "a",
         # 基准代码，用于获取回测的时间列表

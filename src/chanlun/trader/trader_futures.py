@@ -18,7 +18,7 @@ class TraderFutures(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(name=name, mode="real", market="futures", log=log)
+        super().__init__(name=name, mode="online", market="futures", log=log)
         self.ex = ExchangeTq(use_account=True)
 
         self.zx = zixuan.ZiXuan("futures")

@@ -110,7 +110,7 @@ class MyQuantTrader(BackTestTrader):
 
     def __init__(self, name, context: Context):
 
-        super().__init__(name, mode="trade", market="a")
+        super().__init__(name, mode="online", market="a")
 
         self.context = context
 
