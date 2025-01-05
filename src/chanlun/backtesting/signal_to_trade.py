@@ -128,11 +128,12 @@ class SignalToTrade(BackTestTrader):
 
         # 设置交易数据
         self.market = BT.market
-        self.balance = BT.init_balance
         self.fee_rate = BT.fee_rate
         self.max_pos = BT.max_pos
         self.frequencys = BT.frequencys
         self.datas = BT.datas
+
+        BT.init_balance = self.balance
 
         if self.base_code is not None:
             BT.base_code = self.base_code

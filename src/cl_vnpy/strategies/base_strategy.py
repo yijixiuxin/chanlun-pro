@@ -20,7 +20,7 @@ from chanlun import fun
 class VNPYTrader(BackTestTrader):
 
     def __init__(self, name, cta):
-        super().__init__(name, "trade", market="futures")
+        super().__init__(name, "online", market="futures")
         self.cta = cta
 
         # 固定交易手数

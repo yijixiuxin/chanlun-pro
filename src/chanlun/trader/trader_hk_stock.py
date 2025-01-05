@@ -18,7 +18,7 @@ class TraderHKStock(BackTestTrader):
     """
 
     def __init__(self, name, log=None):
-        super().__init__(name=name, mode="real", market="hk", log=log)
+        super().__init__(name=name, mode="online", market="hk", log=log)
 
         self.ex = ExchangeFutu()
 

@@ -36,13 +36,15 @@ class POSITION:
         self.code: str = code
         self.mmd: str = mmd
         self.type: str = type
-        self.balance: float = balance
+        self.balance: float = balance  # 持仓占用的金额
+        self.release_balance: float = 0  # 平仓释放的金额
         self.price: float = price
-        self.amount: float = amount
+        self.amount: float = amount  # 持仓数量，为 0 则表示没有持仓
         self.loss_price: float = loss_price
         self.open_date: str = open_date
         self.open_datetime: datetime = open_datetime
         self.close_datetime: datetime = close_datetime
+        self.fee: float = 0  # 记录总过的手续费之和（开仓+平仓）
         self.profit: float = 0  # 收益金额
         self.profit_rate: float = profit_rate  # 收益率
         self.max_profit_rate: float = max_profit_rate  # 仅供参考，不太精确
@@ -63,16 +65,6 @@ class POSITION:
         self.open_records: List[dict] = []
         # 平仓记录信息
         self.close_records: List[dict] = []
-
-        # 各种平仓标记发出后的盈亏情况记录
-        # dict 包括
-        #   close_datetime: 平仓时间
-        #   profit_rate: 盈亏率
-        #   price: 平仓价格
-        #   max_profit_rate: 最大盈亏比率
-        #   max_loss_rate:  最大亏损比率
-        #   close_msg:  平仓信息
-        self.close_uid_profit: Dict[str, dict] = {}
 
     def __close_records_by_uids(self, uids: List[str] = None):
         """
@@ -247,7 +239,7 @@ class Strategy(ABC):
         # 有两种格式
         #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
         #       字典格式：{'buy': ['a', 'b'0], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
-        self.allow_close_uid = None
+        self.allow_close_uids = None
         self.use_times = {}
         pass
 
