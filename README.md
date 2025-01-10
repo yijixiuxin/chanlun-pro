@@ -6,6 +6,8 @@
 
 基于缠论的市场行情分析工具
 
+[Demo 网址](http://www.chanlun-trader.com)
+
 [Github 地址](https://github.com/yijixiuxin/chanlun-pro)
 
 [Gitee 地址](https://gitee.com/wang-student/chanlun-pro)

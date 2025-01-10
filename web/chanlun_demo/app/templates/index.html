@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <title>缠论解盘 Demo - TradingView Chart</title>
+
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+
+  <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='jquery.cookie.min.js') }}"></script>
+
+  <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='xm-select.js') }}"></script>
+  <script type="text/javascript"
+    src="{{ url_for('static', filename='charting_library/charting_library.standalone.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='datafeeds/udf/dist/bundle.js') }}"></script>
+  {% include 'dark.html' %}
+</head>
+
+<body>
+  <div class="layui-fluid" style="padding: 0">
+    <div class="layui-row">
+      <div class="layui-col-xs10 layui-col-sm10 layui-col-md10"
+        style="display: flex; flex-direction: column; height: 100vh">
+        {# 图表内容 #}
+        <div id="tv_chart_container_1" style="flex: 0.5"></div>
+        <div id="tv_chart_container_2" style="flex: 0.5"></div>
+      </div>
+      <div class="layui-col-xs2 layui-col-sm2 layui-col-md2" style="
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            overflow: scroll;
+            padding: 0;
+            margin: 0;
+          ">
+        <div style="padding: 10px">
+          <div class="layui-inline" style="width: 100%">
+            <h2 style="float: left; margin-top: 9px">缠论解盘 Demo</h2>
+            <div id="toggle-menu" style="float: right; margin-top: 10px; cursor: pointer">
+              <div>
+                <i class="layui-icon layui-icon-shrink-right"></i>
+              </div>
+            </div>
+          </div>
+          <hr class="layui-border-red" />
+          <form class="layui-form layui-form-pane" lay-filter="select_market_form">
+            <div class="layui-form-item">
+              <div class="layui-input-block" style="margin: 0; padding: 0">
+                <label>
+                  <select name="market" lay-filter="select_market">
+                    <option value="a">沪深A股</option>
+                    <option value="hk">港股</option>
+                    <option value="futures">期货</option>
+                    <option value="us">美股</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="layui-collapse lay-accordion" lay-filter="collapse-opts">
+          <div class="layui-colla-item">
+            {# 自选内容 #}
+            <div class="layui-colla-title" data-ca-title="自选组">自选组</div>
+            <div class="layui-colla-content layui-show" style="padding: 0">
+              <form class="layui-form" style="width: 100%">
+                <div class="layui-form-item">
+                  <div class="layui-inline">
+                    <div class="layui-input-inline layui-input-wrap" style="width: 80%; float: left">
+                      <label for="zixuan_groups">
+                        <select id="zixuan_groups" name="zixuan_groups" lay-filter="select_zx_group"></select>
+                      </label>
+                    </div>
+                    <div class="layui-form-mid" style="padding: 4px 0 !important; float: left">
+                      <button type="button" id="refresh_zixuan"
+                        class="layui-btn layui-btn-primary layui-border-red layui-btn-sm">
+                        <i class="layui-icon layui-icon-refresh"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+              <table class="layui-hide" id="table_zixuan_list"></table>
+              <hr class="layui-border-red" />
+            </div>
+          </div>
+          <div class="layui-colla-item">
+            <div class="layui-colla-title" data-ca-title="关于">关于</div>
+            <div class="layui-colla-content  layui-show" style="padding: 0">
+              <div class="layui-text" style="padding: 16px">
+                <h3>Chanlun-Pro</h3>
+                <p>基于缠论的市场行情量化分析工具</p>
+                <p>
+                  <a href="https://github.com/yijixiuxin/chanlun-pro" target="_blank">Github 地址</a>
+                  <a href="https://gitee.com/wang-student/chanlun-pro" target="_blank">Gitee 地址</a>
+                </p>
+                <p>
+                  项目文档：<a href="https://chanlun-pro.readthedocs.io/" target="_blank">链接</a>
+                </p>
+                <p>
+                  视频教程：<a href="https://space.bilibili.com/384267873" target="_blank">链接</a>
+                </p>
+                <p>
+                  项目作者<br />
+                  <img src="{{ url_for('static', filename='imgs/wx.jpg') }}" width="200px" height="260px" alt="" />
+                </p>
+
+                <p>
+                  若想体验更多功能，可按照文档进行本地部署，申请试用授权，进行体验。
+                </p>
+              </div>
+
+              <hr class="layui-border-red" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% include 'sub_temp.html' %}
+</body>
+<script>
+  // 定时更新tick涨跌幅的对象
+  var interval_update_rates;
+  var interval_get_alert_records;
+
+  // 从 cookie 中读取 web_user_id，如果没有则随机生成并保存
+  var web_user_id = $.cookie("web_user_id");
+  if (!web_user_id) {
+    web_user_id = Math.floor(Math.random() * 10000000);
+    $.cookie("web_user_id", web_user_id, { expires: 365 });
+  }
+  console.log('web user id: ' + web_user_id)
+
+
+  $(function () {
+    // 获取本地存储的数据
+    function get_local_data(key) {
+      let default_vals = {
+        theme: "Light",
+        market: "a",
+        a_interval_1: "1D",
+        a_interval_2: "1D",
+        hk_interval_1: "1D",
+        hk_interval_2: "1D",
+        us_interval_1: "1D",
+        us_interval_2: "1D",
+        futures_interval_1: "1D",
+        futures_interval_2: "1D",
+        chart_num: "1",
+        a_code: "{{ market_default_codes.a }}",
+        hk_code: "{{ market_default_codes.hk }}",
+        us_code: "{{ market_default_codes.us }}",
+        futures_code: "{{ market_default_codes.futures }}",
+      };
+
+      if (layui.data("tv_chart")) {
+        let val = layui.data("tv_chart")[key];
+        if (val === undefined) {
+          return default_vals[key];
+        }
+        return val;
+      }
+      return default_vals[key];
+    }
+
+    // 设置本地存储 数据
+    function set_local_data(key, val) {
+      layui.data("tv_chart", { key: key, value: val });
+      return true;
+    }
+
+    var market = get_local_data("market");
+    var zx_group = "我的关注";
+    var code = get_local_data(market + "_code");
+
+    var chart_widgets = [];
+
+    // 图表展示
+    function show_tv_chart(id) {
+      var widget, udf_datafeed;
+      var obj_charts = {};
+
+      // 手机版禁用的功能
+      // let device = layui.device()
+      let disabled_features = ["go_to_date"];
+      // if (device.mobile) {
+      //     disabled_features = [
+      //         'use_localstorage_for_settings',
+      //         'left_toolbar', 'header_widget', 'timeframes_toolbar', 'edit_buttons_in_legend',
+      //         'context_menus', 'control_bar', 'border_around_the_chart'
+      //     ];
+      // }
+
+      udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 60000);
+      widget = window.tvWidget = new TradingView.widget({
+        // debug: true, // uncomment this line to see Library errors and warnings in the console
+        autosize: true,
+
+        symbol: market + ":" + code,
+        interval: get_local_data(market + "_interval_" + id),
+        container: "tv_chart_container_" + id,
+        debug: false,
+
+        //	BEWARE: no trailing slash is expected in feed URL
+        datafeed: udf_datafeed,
+        library_path: "static/charting_library/",
+        locale: "zh",
+
+        disabled_features: disabled_features,
+        enabled_features: ["study_templates", "seconds_resolution"],
+
+        theme: get_local_data("theme"),
+        numeric_formatting: { decimal_sign: "." },
+        time_frames: [],
+        timezone: "Asia/Shanghai",
+
+        symbol_search_request_delay: 100,
+        auto_save_delay: 5,
+        study_count_limit: 100,
+
+        saved_data_meta_info: {
+          uid: 1,
+          name: "default",
+          description: "default",
+        },
+
+        charts_storage_url: "/tv",
+        charts_storage_api_version: "1.1",
+        client_id: "chanlun_pro_" + id,
+        user_id: web_user_id,
+        load_last_chart: true,
+
+        custom_indicators_getter: function (PineJS) {
+          return Promise.resolve([
+            {
+              name: 'Custom Indicators DEMO',
+              metainfo: {
+                _metainfoVersion: 53,
+                id: 'CustomIndicatorsDemo@tv-basicstudies-1',
+                description: '自定义指标示例',
+                shortDescription: '自定义指标示例',
+                is_price_study: true,
+                isCustomIndicator: true,
+                plots: [
+                  {
+                    'id': 'plot_0',
+                    'type': 'line',
+                  },
+                ],
+                palettes: {
+                  paletteId1: {
+                    colors: {
+                      0: {
+                        name: 'First color',
+                      },
+                    },
+                  },
+                },
+                defaults: {
+                  palettes: {
+                    paletteId1: {
+                      colors: {
+                        0: {
+                          color: 'red',
+                          width: 1,
+                          style: 0,
+                        },
+                      },
+                    },
+                  },
+                  styles: {},
+                  precision: 4,
+                  inputs: {},
+                },
+                styles: {
+                  plot_0: {
+                    title: 'Equity value',
+                    histogramBase: 0,
+                  },
+                },
+                inputs: [],
+                format: {
+                  type: 'price',
+                  precision: 4,
+                },
+              },
+              constructor: function () {
+                this.init = function () {
+                  this._highs = [];
+                };
+                this.main = function (context, inputCallback) {
+                  this._context = context;
+                  this._input = inputCallback;
+
+                  const h = this._context.new_var(PineJS.Std.high(this._context));
+                  const high_val = PineJS.Std.highest(h, 20, this._context);
+                  console.log(high_val);
+
+                  return [high_val];
+                };
+              }
+            },
+            // kdj的自定义指标
+            {
+              name: 'Custom KDJ',
+              metainfo: {
+                _metainfoVersion: 53,
+                id: 'CustomIndicatorsKDJ@tv-basicstudies-1',
+                description: 'KDJ',
+                shortDescription: 'KDJ 随机指标',
+                is_price_study: false,
+                isCustomIndicator: true,
+                plots: [
+                  {
+                    'id': 'plot_k',
+                    'type': 'line',
+                  },
+                  {
+                    'id': 'plot_d',
+                    'type': 'line',
+                  },
+                  {
+                    'id': 'plot_j',
+                    'type': 'line',
+                  },
+                ],
+                defaults: {
+                  palettes: {
+                  },
+                  styles: {
+                    plot_k: {
+                      linestyle: 0,
+                      linewidth: 1,
+                      plottype: 0,
+                      trackPrice: false,
+                      transparency: 0,
+                      visible: true,
+                      color: '#FFCC33',
+                    },
+                    plot_d: {
+                      linestyle: 0,
+                      linewidth: 1,
+                      plottype: 0,
+                      trackPrice: false,
+                      transparency: 0,
+                      visible: true,
+                      color: '#33CCFF',
+                    },
+                    plot_j: {
+                      linestyle: 0,
+                      linewidth: 1,
+                      plottype: 0,
+                      trackPrice: false,
+                      transparency: 0,
+                      visible: true,
+                      color: '#FF3366',
+                    },
+                  },
+                  inputs: {
+                    N: 9,
+                    M1: 3,
+                    M2: 3,
+                  },
+                },
+                palettes: {},
+                styles: {
+                  plot_k: {
+                    title: 'K',
+                    histogramBase: 0,
+                  },
+                  plot_d: {
+                    title: 'D',
+                    histogramBase: 0,
+                  },
+                  plot_j: {
+                    title: 'J',
+                    histogramBase: 0,
+                  },
+                },
+                inputs: [
+                  {
+                    id: 'N',
+                    name: 'N',
+                    type: 'integer',
+                    defval: 9,
+                    min: 1,
+                    max: 100,
+                  },
+                  {
+                    id: 'M1',
+                    name: 'M1',
+                    type: 'integer',
+                    defval: 3,
+                    min: 1,
+                    max: 100,
+                  },
+                  {
+                    id: 'M2',
+                    name: 'M2',
+                    type: 'integer',
+                    defval: 3,
+                    min: 1,
+                    max: 100,
+                  },
+                ],
+                format: {},
+              },
+              constructor: function () {
+                this.init = function (context, inputCallback) {
+                };
+                this.main = function (context, inputCallback) {
+                  this._context = context;
+                  this._input = inputCallback;
+
+                  var N = this._input(0);
+                  var M1 = this._input(1);
+                  var M2 = this._input(2);
+
+                  const h = this._context.new_var(PineJS.Std.high(this._context));
+                  const l = this._context.new_var(PineJS.Std.low(this._context));
+                  const c = this._context.new_var(PineJS.Std.close(this._context));
+
+                  const hh = PineJS.Std.highest(h, N, this._context);
+                  const ll = PineJS.Std.lowest(l, N, this._context);
+                  const rsv = this._context.new_var((c - ll) / (hh - ll) * 100);
+
+                  const k = this._context.new_var(PineJS.Std.sma(rsv, M1, this._context));
+                  const d = this._context.new_var(PineJS.Std.sma(k, M2, this._context));
+                  const j = this._context.new_var(3 * k - 2 * d);
+
+                  return [k.get(0), d.get(0), j.get(0)];
+                };
+              }
+            }
+          ]);
+        },
+      });
+
+      widget.onChartReady(function () {
+        let chart = widget.activeChart();
+        chart.onSymbolChanged().subscribe(null, function (symbol) {
+          let ticker = symbol["ticker"];
+          set_local_data("market", ticker.split(":")[0]);
+          set_local_data(
+            ticker.split(":")[0] + "_code",
+            ticker.split(":")[1]
+          );
+
+          if (market !== ticker.split(":")[0]) {
+            location.reload();
+          }
+          market = ticker.split(":")[0];
+          code = ticker.split(":")[1];
+          console.log(id + " 标的变化：" + symbol["ticker"]);
+          clear_draw_chanlun();
+          setTimeout(draw_chanlun, 1500);
+        });
+        chart.onIntervalChanged().subscribe(null, function (interval) {
+          set_local_data(market + "_interval_" + id, interval);
+          clear_draw_chanlun();
+          console.log(id + "周期变化 : " + interval);
+          setTimeout(draw_chanlun, 1500);
+        });
+        chart.onDataLoaded().subscribe(
+          null,
+          function (d) {
+            console.log("数据重新加载");
+            clear_draw_chanlun();
+            draw_chanlun();
+          },
+          true
+        );
+        chart.dataReady(function () {
+          console.log("数据准备");
+          clear_draw_chanlun();
+          draw_chanlun();
+        });
+        widget.subscribe("onTick", function (d) {
+          // Bar 更新，图表也进行更新
+          console.log("数据更新");
+          draw_chanlun();
+        });
+
+        chart
+          .onVisibleRangeChanged()
+          .subscribe(null, function (visible_range) {
+            draw_chanlun();
+          });
+
+        // 清除已经画的图
+        function clear_draw_chanlun() {
+          for (const symbol_key in obj_charts) {
+            for (const c_key in obj_charts[symbol_key]) {
+              for (const i in obj_charts[symbol_key][c_key]) {
+                var o = obj_charts[symbol_key][c_key][i];
+                chart.removeEntity(o["id"]);
+              }
+              obj_charts[symbol_key][c_key] = [];
+            }
+          }
+        }
+
+        // 画图
+        function draw_chanlun() {
+          const code_start = performance.now();
+
+          let symbolInterval = widget.symbolInterval();
+          let bars_result = udf_datafeed._historyProvider.bars_result.get(
+            symbolInterval["symbol"].toString().toLowerCase()
+          );
+          if (bars_result === undefined) {
+            return true;
+          }
+          bars_result = bars_result.get(
+            symbolInterval["interval"].toString().toLowerCase()
+          );
+          // console.log(symbolInterval);
+          // console.log(bars_result);
+
+          // 画缠论图表
+          let visible_range = chart.getVisibleRange();
+          let from = visible_range["from"];
+          let to = visible_range["to"];
+
+          let symbol_key =
+            symbolInterval["symbol"].toString() +
+            "_" +
+            symbolInterval["interval"].toString();
+          let key_all = [];
+          if (obj_charts[symbol_key] === undefined) {
+            obj_charts[symbol_key] = {};
+          }
+          // 删除时间最大的几个画图对象
+          for (const c_key of [
+            "fxs",
+            "bis",
+            "xds",
+            "zsds",
+            "bi_zss",
+            "xd_zss",
+            "bcs",
+            "mmds",
+          ]) {
+            if (obj_charts[symbol_key][c_key] != undefined) {
+              obj_charts[symbol_key][c_key].sort(function (a, b) {
+                return a["time"] - b["time"];
+              });
+              if (obj_charts[symbol_key][c_key].length >= 1) {
+                var o = obj_charts[symbol_key][c_key].pop();
+                chart.removeEntity(o["id"]);
+              }
+              if (obj_charts[symbol_key][c_key].length >= 1) {
+                var o = obj_charts[symbol_key][c_key].pop();
+                chart.removeEntity(o["id"]);
+              }
+              for (const c_val of obj_charts[symbol_key][c_key]) {
+                key_all.push(c_val["key"]);
+              }
+            } else {
+              obj_charts[symbol_key][c_key] = [];
+            }
+          }
+
+          //** 画分型
+          bars_result.fxs.forEach(function (fx) {
+            if (fx["points"][0].time >= from) {
+              var key = JSON.stringify(fx);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              if (fx["text"] === "ding") {
+                obj_charts[symbol_key]["fxs"].push({
+                  time: fx["points"][0].time,
+                  key: key,
+                  id: chart.createMultipointShape(fx["points"], {
+                    shape: "circle",
+                    lock: true,
+                    disableSelection: true,
+                    disableSave: true,
+                    disableUndo: true,
+                    showInObjectsTree: false,
+                    overrides: {
+                      backgroundColor: "#FA8072",
+                      color: "#FA8072",
+                      linewidth: 4,
+                    },
+                  }),
+                });
+              } else {
+                obj_charts[symbol_key]["fxs"].push({
+                  time: fx["points"][0].time,
+                  key: key,
+                  id: chart.createMultipointShape(fx["points"], {
+                    shape: "circle",
+                    lock: true,
+                    disableSelection: true,
+                    disableSave: true,
+                    disableUndo: true,
+                    showInObjectsTree: false,
+                    overrides: {
+                      backgroundColor: "#1E90FF",
+                      color: "#1E90FF",
+                      linewidth: 4,
+                    },
+                  }),
+                });
+              }
+            }
+          }); //**/
+          // 画笔
+          bars_result.bis.forEach(function (bi) {
+            if (bi["points"][0].time >= from) {
+              var key = JSON.stringify(bi);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["bis"].push({
+                time: bi["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(bi["points"], {
+                  shape: "trend_line",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    linestyle: parseInt(bi["linestyle"]),
+                    linewidth: 1,
+                    linecolor: "#708090",
+                  },
+                }),
+              });
+            }
+          });
+          // 画线段
+          bars_result.xds.forEach(function (xd) {
+            if (xd["points"][0].time >= from) {
+              var key = JSON.stringify(xd);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["xds"].push({
+                time: xd["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(xd["points"], {
+                  shape: "trend_line",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    linestyle: parseInt(xd["linestyle"]),
+                    linewidth: 2,
+                    linecolor: "#00BFFF",
+                  },
+                }),
+              });
+            }
+          });
+          // 画走势段
+          bars_result.zsds.forEach(function (zsd) {
+            if (zsd["points"][0].time >= from) {
+              var key = JSON.stringify(zsd);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["zsds"].push({
+                time: zsd["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(zsd["points"], {
+                  shape: "trend_line",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    linestyle: parseInt(zsd["linestyle"]),
+                    linewidth: 3,
+                    linecolor: "#FFA710",
+                  },
+                }),
+              });
+            }
+          });
+          // 画笔中枢
+          bars_result.bi_zss.forEach(function (bi_zs) {
+            if (bi_zs["points"][0].time >= from) {
+              var key = JSON.stringify(bi_zs);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["bi_zss"].push({
+                time: bi_zs["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(bi_zs["points"], {
+                  shape: "rectangle",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    linestyle: parseInt(bi_zs["linestyle"]),
+                    linewidth: 1,
+                    linecolor: "#708090",
+                    backgroundColor: "#708090",
+                    transparency: 95,
+                    color: "#708090",
+                    "trendline.linecolor": "#708090",
+                    fillBackground: true,
+                    filled: true,
+                  },
+                }),
+              });
+            }
+          });
+          // 画线段中枢
+          bars_result.xd_zss.forEach(function (xd_zs) {
+            if (xd_zs["points"][0].time >= from) {
+              var key = JSON.stringify(xd_zs);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["xd_zss"].push({
+                time: xd_zs["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(xd_zs["points"], {
+                  shape: "rectangle",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  filled: false,
+                  overrides: {
+                    linestyle: parseInt(xd_zs["linestyle"]),
+                    linewidth: 2,
+                    color: "#00BFFF",
+                    "trendline.linecolor": "#00BFFF",
+                    linecolor: "#00BFFF",
+                    backgroundColor: "#00BFFF",
+                    transparency: 90,
+                    fillBackground: true,
+                    filled: true,
+                  },
+                }),
+              });
+            }
+          });
+          // 画走势段中枢
+          bars_result.zsd_zss.forEach(function (zsd_zs) {
+            if (zsd_zs["points"][0].time >= from) {
+              var key = JSON.stringify(zsd_zs);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["zsd_zss"].push({
+                time: zsd_zs["points"][0].time,
+                key: key,
+                id: chart.createMultipointShape(zsd_zs["points"], {
+                  shape: "rectangle",
+                  lock: true,
+                  disableSelection: true,
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    linestyle: parseInt(zsd_zs["linestyle"]),
+                    linewidth: 3,
+                    linecolor: "#FFA710",
+                    backgroundColor: "#FFA710",
+                    transparency: 90,
+                    color: "#FFA710",
+                    "trendline.linecolor": "#FFA710",
+                    fillBackground: true,
+                    filled: true,
+                  },
+                }),
+              });
+            }
+          });
+          // 画背驰
+          bars_result.bcs.forEach(function (bc) {
+            if (bc["points"].time >= from) {
+              var key = JSON.stringify(bc);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              obj_charts[symbol_key]["bcs"].push({
+                time: bc["points"].time,
+                key: key,
+                id: chart.createShape(bc["points"], {
+                  shape: "balloon",
+                  lock: true,
+                  text: bc["text"],
+                  disableSave: true,
+                  disableUndo: true,
+                  showInObjectsTree: false,
+                  overrides: {
+                    markerColor: "#D1D4DC",
+                    backgroundColor: "#D1D4DC",
+                    textColor: "#fccbcd",
+                    transparency: 70,
+                    backgroundTransparency: 70,
+                    fontsize: 12,
+                  },
+                }),
+              });
+            }
+          });
+          // 画买卖点
+          bars_result.mmds.forEach(function (mmd) {
+            if (mmd["points"].time >= from) {
+              var key = JSON.stringify(mmd);
+              if (key_all.includes(key)) {
+                return true;
+              }
+              if (mmd["text"].search("B") > 0) {
+                obj_charts[symbol_key]["mmds"].push({
+                  time: mmd["points"].time,
+                  key: key,
+                  id: chart.createShape(mmd["points"], {
+                    shape: "arrow_up",
+                    lock: true,
+                    text: mmd["text"],
+                    disableSelection: true,
+                    disableSave: true,
+                    disableUndo: true,
+                    showInObjectsTree: false,
+                    overrides: {
+                      markerColor: "#FA8072",
+                      backgroundColor: "#FA8072",
+                      color: "#FA8072",
+                      fontsize: 12,
+                      transparency: 80,
+                    },
+                  }),
+                });
+              } else {
+                obj_charts[symbol_key]["mmds"].push({
+                  time: mmd["points"].time,
+                  key: key,
+                  id: chart.createShape(mmd["points"], {
+                    shape: "arrow_down",
+                    lock: true,
+                    text: mmd["text"],
+                    disableSelection: true,
+                    disableSave: true,
+                    disableUndo: true,
+                    showInObjectsTree: false,
+                    overrides: {
+                      markerColor: "#1E90FF",
+                      backgroundColor: "#1E90FF",
+                      color: "#1E90FF",
+                      fontsize: 12,
+                      transparency: 80,
+                    },
+                  }),
+                });
+              }
+            }
+          });
+          const code_end = performance.now();
+          console.log(`${symbol_key} 运行时间:${code_end - code_start} 毫秒`);
+        }
+      });
+
+      return widget;
+    }
+
+    // 变更图表展示的标的
+    function change_chart_ticker(_market, _code) {
+      market = _market;
+      code = _code;
+      set_local_data("market", market);
+      set_local_data(market + "_code", code);
+      layui.each(chart_widgets, function (i, w) {
+        w.activeChart().setSymbol(market + ":" + code);
+      });
+    }
+
+    // 更新展示的股票列表涨跌幅
+    function stocks_update_rate() {
+      // 获取自选列表中的代码
+      let codes = [];
+      $(".code_rate").each(function () {
+        codes.push($(this).data("code"));
+      });
+      if (codes.length === 0) {
+        return true;
+      }
+      $.ajax({
+        type: "POST",
+        url: "/ticks",
+        data: { market: market, codes: JSON.stringify(codes) },
+        dataType: "json",
+        success: function (ticks) {
+          for (let i = 0; i < ticks["ticks"].length; i++) {
+            let tick = ticks["ticks"][i];
+            let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
+            let obj_span_rate = $(
+              '.code_rate[data-code="' + tick["code"] + '"]'
+            );
+            obj_span_rate.html(tick["rate"] + "%");
+            obj_span_rate.css("color", color);
+          }
+          let now_trading = ticks["now_trading"];
+          if (now_trading !== true) {
+            clearInterval(interval_update_rates);
+          }
+        },
+      });
+    }
+
+    function render_zixuan_stocks() {
+      layui.use(["table", "dropdown", "util"], function () {
+        let table = layui.table;
+        let dropdown = layui.dropdown;
+        // 创建自选列表渲染实例
+        table.render({
+          elem: "#table_zixuan_list",
+          defaultContextmenu: false,
+          url: "/get_zixuan_stocks/" + market + "/" + zx_group,
+          page: false,
+          className: "layui-font-12",
+          size: "sm",
+          cols: [
+            [
+              {
+                field: "code",
+                title: "代码",
+                sort: false,
+                templet: function (d) {
+                  if (d.color !== undefined && d.color !== "") {
+                    return (
+                      '<span style="color: ' +
+                      d.color +
+                      '">' +
+                      d.code +
+                      "</span>"
+                    );
+                  }
+                  return d.code;
+                },
+              },
+              {
+                field: "name",
+                title: "名称",
+                sort: false,
+                templet: function (d) {
+                  if (d.color !== undefined && d.color !== "") {
+                    return (
+                      '<span style="color: ' +
+                      d.color +
+                      '">' +
+                      d.name +
+                      "</span>"
+                    );
+                  }
+                  return d.name;
+                },
+              },
+              {
+                field: "zf",
+                title: "涨跌幅",
+                sort: false,
+                width: 70,
+                templet: function (d) {
+                  return (
+                    '<span class="code_rate" data-code="' +
+                    d.code +
+                    '">--</span>'
+                  );
+                },
+              },
+            ],
+          ],
+          done: function () {
+            stocks_update_rate();
+          },
+        });
+        // 行单击事件( 双击事件为: rowDouble )
+        table.on("row(table_zixuan_list)", function (obj) {
+          let data = obj.data; // 获取当前行数据
+          code = data.code;
+          change_chart_ticker(market, code);
+          table.setRowChecked("table_zixuan_list", {
+            index: "all", // 所有行
+            checked: false,
+          });
+          table.setRowChecked("table_zixuan_list", {
+            index: obj.index, // 选中行的下标。 0 表示第一行
+          });
+        });
+        // 右键菜单
+        table.on("rowContextmenu(table_zixuan_list)", function (obj) {
+          let data = obj.data; // 获取当前行数据
+          // 右键操作
+          let menu_data = [
+            { title: "删除", id: "del" },
+            { title: "置顶", id: "sort_1", direction: "top" },
+            { title: "置底", id: "sort_2", direction: "bottom" },
+            {
+              title: "色彩",
+              id: "color_1",
+              color: "#ff5722",
+              templet: function () {
+                return '<div class="layui-bg-red">红色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_2",
+              color: "#ffb800",
+              templet: function () {
+                return '<div class="layui-bg-orange">橙色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_3",
+              color: "#16baaa",
+              templet: function () {
+                return '<div class="layui-bg-green">绿色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_4",
+              color: "#1e9fff",
+              templet: function () {
+                return '<div class="layui-bg-blue">蓝色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_5",
+              color: "#a233c6",
+              templet: function () {
+                return '<div class="layui-bg-purple">紫色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_6",
+              color: "",
+              templet: function () {
+                return '<div class="layui-bg-gray">清除颜色</div>';
+              },
+            },
+          ];
+          if (market === "a") {
+            menu_data.splice(3, 0, { title: "操盘必读", id: "dfcf" });
+          }
+          dropdown.render({
+            trigger: "contextmenu",
+            show: true,
+            data: menu_data,
+            click: function (menuData, othis) {
+              if (menuData["id"] === "del") {
+                layer.msg("Demo版本，不允许该操作");
+              } else if (menuData["title"] === "色彩") {
+                layer.msg("Demo版本，不允许该操作");
+              } else if (
+                menuData["id"] === "sort_1" ||
+                menuData["id"] === "sort_2"
+              ) {
+                layer.msg("Demo版本，不允许该操作");
+              } else if (menuData["id"] === "dfcf") {
+                window.open(
+                  "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=" +
+                  data.code.replace(".", "")
+                );
+              }
+            },
+          });
+        });
+      });
+    }
+
+    // 缠论配置项更改
+    layui.use(function () {
+      var layer = layui.layer;
+      var element = layui.element;
+      var form = layui.form;
+      var util = layui.util;
+      var dropdown = layui.dropdown;
+
+      // 初始赋值
+      form.val("select_market_form", {
+        market: market,
+      });
+      // 表单变动
+      form.on("select(select_market)", function (data) {
+        market = data.value;
+        set_local_data("market", market);
+        location.reload();
+      });
+      // 自选组变化
+      form.on("select(select_zx_group)", function (data) {
+        zx_group = data.value;
+        render_zixuan_stocks();
+      });
+
+      // 下拉菜单事件
+      dropdown.render({
+        elem: "#toggle-menu",
+        data: [
+          {
+            title: "缠论配置项",
+            templet:
+              '<div><i class="layui-icon layui-icon-set"></i> <span>缠论配置项</span></div>',
+            id: 1,
+          }, {
+            title: "自选组管理",
+            templet:
+              '<div><i class="layui-icon layui-icon-templeate-1 layui-font-gray"></i> <span>自选组管理</span></div>',
+            id: 2,
+          }, {
+            title: "监控列表",
+            templet:
+              '<div><i class="layui-icon layui-icon-list layui-font-gray"></i> <span>监控列表</span></div>',
+            id: 3,
+          }, {
+            title: "新增监控",
+            templet:
+              '<div><i class="layui-icon layui-icon-speaker layui-font-gray"></i> <span>新增监控</span></div>',
+            id: 4,
+          }, {
+            title: "运行选股",
+            templet:
+              '<div><i class="layui-icon layui-icon-test layui-font-gray"></i> <span>运行选股</span></div>',
+            id: 5,
+          }, {
+            title: "当前任务",
+            templet:
+              '<div><i class="layui-icon layui-icon-senior layui-font-gray"></i> <span>当前任务</span></div>',
+            id: 6,
+          }, {
+            title: "切换单/双图",
+            templet:
+              '<div><i class="layui-icon layui-icon-carousel"></i> <span>切换单/双图</span></div>',
+            id: 7,
+          }, {
+            title: "切换主题",
+            templet:
+              '<div><i class="layui-icon layui-icon-engine"></i> <span>切换主题</span></div>',
+            id: 8,
+          },
+        ],
+        click: function (item) {
+          if (item.title === "缠论配置项") {
+            layer.open({
+              type: 2,
+              title: "缠论配置项变更",
+              area: ["1000px", "90vh"],
+              content:
+                "/get_cl_config/" + market + "/" + code.replace("/", "__"),
+              anim: 1,
+              fixed: true, // 不固定
+              shadeClose: true,
+            });
+          } else if (item.title === "自选组管理") {
+            layer.msg("Demo版本，不允许该操作");
+          } else if (item.title === "监控列表") {
+            layer.msg("Demo版本，不允许该操作");
+          } else if (item.title === "新增监控") {
+            layer.msg("Demo版本，不允许该操作");
+          } else if (item.title === "运行选股") {
+            layer.msg("Demo版本，不允许该操作");
+          } else if (item.title === "当前任务") {
+            layer.msg("Demo版本，不允许该操作");
+          } else if (item.title === "切换单/双图") {
+            let chart_num = get_local_data("chart_num");
+            if (chart_num === "1") {
+              set_local_data("chart_num", "2");
+            } else {
+              set_local_data("chart_num", "1");
+            }
+            location.reload();
+          } else if (item.title === "切换主题") {
+            let theme = get_local_data("theme");
+            if (theme === "Light") {
+              set_local_data("theme", "dark");
+            } else {
+              set_local_data("theme", "Light");
+            }
+            location.reload();
+          } else if (item.title === "系统设置") {
+            layer.msg("Demo版本，不允许该操作");
+          }
+        },
+      });
+
+      // 折叠面板事件
+      element.on("collapse(collapse-opts)", function (data) {
+        let is_open = data.show; // 得到当前面板的展开状态，true or false
+        let ca_title = $(data.title).attr("data-ca-title"); // 得到当前点击面板的标题区域对象
+
+        if (ca_title === "自选组") {
+          if (is_open) {
+            interval_update_rates = setInterval(stocks_update_rate, 30000);
+          } else {
+            clearInterval(interval_update_rates);
+          }
+        }
+      });
+
+      $("#refresh_zixuan").click(function () {
+        render_zixuan_stocks();
+      });
+
+      // 初始化展示页面
+      function init_web() {
+        // 获取自选组
+        $.ajax({
+          type: "GET",
+          url: "/get_zixuan_groups/" + market,
+          dataType: "json",
+          success: function (res) {
+            let zixuan_groups = $("#zixuan_groups");
+            $(zixuan_groups).html();
+            layui.each(res, function (i, r) {
+              $(zixuan_groups).append(
+                "<option value='" + r.name + "'>" + r.name + "</option>"
+              );
+            });
+            layui.form.render($(zixuan_groups));
+            $(zixuan_groups)
+              .siblings("div.layui-form-select")
+              .find("dl")
+              .find("dd")[0]
+              .click();
+          },
+        });
+
+        let chart_num = get_local_data("chart_num");
+        let tv_chart_container_1 = $("#tv_chart_container_1");
+        let tv_chart_container_2 = $("#tv_chart_container_2");
+        let win_height = window.innerHeight;
+        if (chart_num === "1") {
+          tv_chart_container_1.css("flex", "1");
+          tv_chart_container_2.css("flex", "0");
+          chart_widgets.push(show_tv_chart("1", win_height));
+        } else {
+          chart_widgets.push(show_tv_chart("1", win_height / 2));
+          chart_widgets.push(show_tv_chart("2", win_height / 2));
+        }
+
+        render_zixuan_stocks();
+      }
+
+      init_web();
+      interval_update_rates = setInterval(stocks_update_rate, 60000);
+    });
+  });
+
+</script>
+
+</html>
