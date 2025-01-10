@@ -274,7 +274,9 @@ def cal_zs_macd_infos(zs: ZS, cd: ICL) -> MACD_INFOS:
     return infos
 
 
-def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
+def query_cl_chart_config(
+    market: str, code: str, suffix: str = ""
+) -> Dict[str, object]:
     """
     查询指定市场和标的下的缠论和画图配置
     """
@@ -283,9 +285,9 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
         code = code.upper().replace("KQ.M@", "")
         code = "".join([i for i in code if not i.isdigit()])
 
-    config: dict = db.cache_get(f"cl_config_{market}_{code}")
+    config: dict = db.cache_get(f"cl_config_{market}_{code}{suffix}")
     if config is None:
-        config: dict = db.cache_get(f"cl_config_{market}_common")
+        config: dict = db.cache_get(f"cl_config_{market}_common{suffix}")
     # 默认配置设置，用于在前台展示设置值
     default_config = {
         "config_use_type": "common",
@@ -393,7 +395,9 @@ def query_cl_chart_config(market: str, code: str) -> Dict[str, object]:
     return config
 
 
-def set_cl_chart_config(market: str, code: str, config: Dict[str, object]) -> bool:
+def set_cl_chart_config(
+    market: str, code: str, config: Dict[str, object], suffix: str = ""
+) -> bool:
     """
     设置指定市场和标的下的缠论和画图配置
     """
@@ -403,11 +407,11 @@ def set_cl_chart_config(market: str, code: str, config: Dict[str, object]) -> bo
         code = "".join([i for i in code if not i.isdigit()])
 
     # 读取原来的配置，使用新的配置项进行覆盖，并保存
-    old_config = query_cl_chart_config(market, code)
+    old_config = query_cl_chart_config(market, code, suffix)
     if config["config_use_type"] == "custom" and code is None:
         return False
     elif config["config_use_type"] == "common":
-        db.cache_del(f"cl_config_{market}_{code}")
+        db.cache_del(f"cl_config_{market}_{code}{suffix}")
 
     for new_key, new_val in config.items():
         if new_key in old_config.keys():
@@ -416,13 +420,13 @@ def set_cl_chart_config(market: str, code: str, config: Dict[str, object]) -> bo
             old_config[new_key] = new_val
 
     db.cache_set(
-        f"cl_config_{market}_{code if config['config_use_type'] == 'custom' else 'common'}",
+        f"cl_config_{market}_{code if config['config_use_type'] == 'custom' else 'common'}{suffix}",
         old_config,
     )
     return True
 
 
-def del_cl_chart_config(market: str, code: str) -> bool:
+def del_cl_chart_config(market: str, code: str, suffix: str = "") -> bool:
     """
     删除指定市场标的的独立配置项
     """
@@ -431,7 +435,7 @@ def del_cl_chart_config(market: str, code: str) -> bool:
         code = code.upper().replace("KQ.M@", "")
         code = "".join([i for i in code if not i.isdigit()])
 
-    db.cache_del(f"cl_config_{market}_{code}")
+    db.cache_del(f"cl_config_{market}_{code}{suffix}")
     return True
 
 
