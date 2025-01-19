@@ -35,7 +35,7 @@ class HistoryXuangu(object):
         # 选股市场
         self.market = "a"
         # 选股日期范围
-        self.xg_start_date = "2016-01-01 00:00:00"
+        self.xg_start_date = "2022-01-01 00:00:00"
         self.xg_end_date = "2025-01-01 00:00:00"
         # 选股周期
         self.freqencys = ["30m"]
@@ -64,8 +64,8 @@ class HistoryXuangu(object):
         """
 
         # 如果文件存在，之前执行过，跳过
-        if pathlib.Path(self.xg_result_path / f"xg_{code}.pkl").exists():
-            return True
+        # if pathlib.Path(self.xg_result_path / f"xg_{code}.pkl").exists():
+        #     return True
 
         # 初始化代码的回放类
         bk = BackTestKlines(
@@ -127,36 +127,50 @@ class HistoryXuangu(object):
                 cal_bi_start_i = cd.get_src_klines()[-1].index - bi.start.k.k_index
 
                 # 进行选股逻辑判断
-                # 计算 KDJ，判断一笔内的 kdj 背离，有背离的情况下，在 macd 死叉时记录选股点
+                # 计算 KDJ，判断一笔内的 kdj 背离，有背离的情况下，在 macd 金叉或 kdj 金叉 时记录选股点
                 idx_kdj = Strategy.idx_kdj(cd, 9, 3, 3)
                 idx_kdj_ks = idx_kdj["k"][-cal_bi_start_i:]
                 idx_kdj_ds = idx_kdj["d"][-cal_bi_start_i:]
-                idx_kdj_kd_up_croos_is = up_cross(idx_kdj_ks, idx_kdj_ds)
-                if len(idx_kdj_kd_up_croos_is) < 2:  # 必须有大于两次下穿才可以
+                idx_kdj_js = idx_kdj["j"][-cal_bi_start_i:]
+
+                # 获取 kdj j 线向上转折的点，前后两点至少间隔 5根k线
+                idx_kdj_zz_ji = []
+                for i in range(1, len(idx_kdj_js)):
+                    if idx_kdj_js[i] > idx_kdj_js[i - 1] and (
+                        len(idx_kdj_zz_ji) == 0 or i - idx_kdj_zz_ji[-1] > 5
+                    ):
+                        idx_kdj_zz_ji.append(i - 1)
+                # 少于两次向上转折，跳过
+                if len(idx_kdj_zz_ji) < 2:
                     continue
-                # 下穿的点都要在 50 以下
-                idx_kdj_k_cross_max = max(
-                    [idx_kdj_ks[_i] for _i in idx_kdj_kd_up_croos_is]
-                )
-                if idx_kdj_k_cross_max > 50:  # 必须小于 50
+                # 最后两次转折，要背驰，后一次要比前一次高
+                if idx_kdj_js[idx_kdj_zz_ji[-1]] <= idx_kdj_js[idx_kdj_zz_ji[-2]]:
+                    continue
+                # 最小 d 值要小于 20，超卖
+                if min([idx_kdj_ds[_i] for _i in idx_kdj_zz_ji]) > 20:
                     continue
 
-                # 下穿的两点要背驰
-                if (
-                    idx_kdj_ks[idx_kdj_kd_up_croos_is[-1]]
-                    < idx_kdj_ks[idx_kdj_kd_up_croos_is[-2]]
-                ):
-                    continue
+                # KDJ 金叉
+                judge_kdj_gold = False
+                if idx_kdj_ks[-1] > idx_kdj_ds[-1] and idx_kdj_ks[-2] < idx_kdj_ds[-2]:
+                    judge_kdj_gold = True
 
-                # 计算 MACD，并判断 macd 死叉
+                # 计算 MACD，并判断 macd 金叉
                 idx_macd = Strategy.idx_macd(cd, 6, 13, 5)
+                judge_macd_gold = False
                 if (
                     idx_macd["dif"][-1] > idx_macd["dea"][-1]
                     and idx_macd["dif"][-2] < idx_macd["dea"][-2]
                 ):
-                    pass
-                else:
+                    judge_macd_gold = True
+
+                # 至少有一个金叉
+                if judge_kdj_gold is False and judge_macd_gold is False:
                     continue
+
+                # TODO 记录一些其他信息
+                idx_ma_20 = Strategy.idx_ma(cd, 20)
+                idx_ma_20_close = k.c < idx_ma_20[-1]
 
                 # TODO 检查选股的这个时间点，笔的是否真正的结束了
                 bi_end_success = False
@@ -167,23 +181,57 @@ class HistoryXuangu(object):
                         bi_next_bi = all_cd.get_bis()[_bi.index + 1]
                         break
 
-                # TODO 如果笔结束，下一笔是否能够涨幅超过 zd
+                # TODO 如果笔结束，下一笔是否能够涨幅超过 zd (包括不断创新高的情况)
                 up_zd_success = False
-                if bi_end_success and bi_next_bi.end.val > last_zs.zd:
-                    up_zd_success = True
+                if bi_end_success:
+                    all_bis = all_cd.get_bis()
+                    while True:
+                        if bi_next_bi.index + 2 >= len(all_bis):
+                            break
+                        if (
+                            all_bis[bi_next_bi.index + 2].high > bi_next_bi.high
+                            and all_bis[bi_next_bi.index + 2].low > bi_next_bi.low
+                        ):
+                            bi_next_bi = all_bis[bi_next_bi.index + 2]
+                        else:
+                            break
+                    xg_next_bi_high = bi_next_bi.high
+                    if xg_next_bi_high > last_zs.zd:
+                        up_zd_success = True
 
                 # 记录选股信息
                 xg_res.append(
                     {
                         "code": code,
                         "xg_date": cd.get_src_klines()[-1].date,
-                        "up_cross_num": len(idx_kdj_kd_up_croos_is),
+                        # 记录指标数据
+                        "kdj_j_zz_num": len(idx_kdj_zz_ji),
+                        "kdj_j_zz_vals": [
+                            {"i": _i, "v": idx_kdj_js[_i]} for _i in idx_kdj_zz_ji
+                        ],
+                        "kdj_k_zz_vals": [
+                            {"i": _i, "v": idx_kdj_ks[_i]} for _i in idx_kdj_zz_ji
+                        ],
+                        "kdj_d_zz_vals": [
+                            {"i": _i, "v": idx_kdj_ds[_i]} for _i in idx_kdj_zz_ji
+                        ],
                         "macd_dif": idx_macd["dif"][-1],
                         "macd_dea": idx_macd["dea"][-1],
                         "kdj_k": idx_kdj_ks[-1],
                         "kdj_d": idx_kdj_ds[-1],
+                        # 记录金叉判断条件
+                        "judge_kdj_gold": judge_kdj_gold,
+                        "judge_macd_gold": judge_macd_gold,
+                        # 记录其他信息
+                        "idx_ma_20_close": idx_ma_20_close,
+                        "pre_bi_mmds": "/".join(cd.get_bis()[-2].line_mmds("|")),
+                        "last_zs_line_nums": last_zs.line_num,
+                        "last_zs_type": last_zs.type,
+                        "last_zs_direction": last_zs.lines[0].type,
+                        # 记录结果
                         "bi_end_success": bi_end_success,
                         "up_zd_success": up_zd_success,
+                        "xg_next_high": bi_next_bi.high if bi_next_bi else 0,
                     }
                 )
                 # 添加到自选，在图表中添加记录
@@ -195,11 +243,13 @@ class HistoryXuangu(object):
                     "",
                     fun.datetime_to_int(cd.get_src_klines()[-1].date),
                     "XG",
-                    f"KDJ背离，MACD死叉，预示笔的结束 [k:{idx_kdj_ks[-1]} d:{idx_kdj_ds[-1]} macd dif:{idx_macd['dif'][-1]} macd dea: {idx_macd['dea'][-1]}]",
+                    f"KDJ背离，MACD死叉，预示笔的结束 [k:{idx_kdj_ks[-1]:.4f} d:{idx_kdj_ds[-1]:.4f} macd dif:{idx_macd['dif'][-1]:.4f} macd dea: {idx_macd['dea'][-1]:.4f}]",
                     "earningUp",
                     "red",
                 )
-                tqdm.write(f"{code} - {cd.get_src_klines()[-1].date} 符合选股")
+                tqdm.write(
+                    f"{code} - {cd.get_src_klines()[-1].date} 符合选股 笔结束 {bi_end_success} 笔后涨幅超过zd {up_zd_success}"
+                )
 
             except Exception as e:
                 print(f"{code} 选股异常")
@@ -214,34 +264,46 @@ class HistoryXuangu(object):
 
 if __name__ == "__main__":
 
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
+
     # 要执行历史选股的股票列表
-    run_codes = ["SZ.000001", "SZ.000002", "SZ.000004", "SZ.000006", "SZ.000007"]
+    run_codes = ["SZ.000019"]
+
+    # ex = ExchangeTDX()
+    # stocks = ex.all_stocks()
+    # run_codes = [
+    #     _s["code"]
+    #     for _s in stocks
+    #     if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
+    # ]
+    # # run_codes = run_codes[0:100]
+    # print(f"选股股票数量 {len(run_codes)}")
 
     # 实例化
     hxg = HistoryXuangu()
 
     # 清除自选与标记
-    # hxg.clear_zx_mark()
+    hxg.clear_zx_mark()
 
     print("开始选股")
     print(f"{hxg.xg_start_date} ~ {hxg.xg_end_date}")
 
     # TODO 测试单个选股
-    # hxg.xuangu_by_code("SZ.000042")
+    hxg.xuangu_by_code("SZ.000019")
 
     # TODO 单进程执行选股
     # for code in run_codes:
     #     hxg.xuangu_by_code(code)
 
     # TODO 多进程执行选股，根据自己 cpu 核数来调整
-    with ProcessPoolExecutor(
-        max_workers=18, mp_context=get_context("spawn")
-    ) as executor:
-        bar = tqdm(total=len(run_codes))
-        for _ in executor.map(
-            hxg.xuangu_by_code,
-            run_codes,
-        ):
-            bar.update(1)
+    # with ProcessPoolExecutor(
+    #     max_workers=18, mp_context=get_context("spawn")
+    # ) as executor:
+    #     bar = tqdm(total=len(run_codes))
+    #     for _ in executor.map(
+    #         hxg.xuangu_by_code,
+    #         run_codes,
+    #     ):
+    #         bar.update(1)
 
     print("Done")
