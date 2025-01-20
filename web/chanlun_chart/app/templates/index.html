@@ -20,13 +20,13 @@
 <body>
   <div class="layui-fluid" style="padding: 0">
     <div class="layui-row">
-      <div class="layui-col-xs10 layui-col-sm10 layui-col-md10"
+      <div class="layui-col-xs10 layui-col-sm10 layui-col-md10" id="chart_container"
         style="display: flex; flex-direction: column; height: 100vh">
         {# 图表内容 #}
         <div id="tv_chart_container_1" style="flex: 0.5"></div>
         <div id="tv_chart_container_2" style="flex: 0.5"></div>
       </div>
-      <div class="layui-col-xs2 layui-col-sm2 layui-col-md2" style="
+      <div class="layui-col-xs2 layui-col-sm2 layui-col-md2" id="chart_menu" style="
             position: fixed;
             top: 0;
             bottom: 0;
@@ -1611,6 +1611,33 @@
         zx_group = data.value;
         render_zixuan_stocks();
       });
+
+      // 固定条，显示与隐藏菜单栏
+      util.fixbar({
+        bars: [{ // 定义可显示的 bar 列表信息 -- v2.8.0 新增
+          type: 'hide_menu',
+          icon: 'layui-icon-spread-left' // layui-icon-shrink-right
+        }],
+        default: false,
+        on: { // 任意事件 --  v2.8.0 新增
+
+        },
+        // 点击事件
+        click: function (type) {
+          if (type === "hide_menu") {
+            var fixed_li = $('.layui-fixbar  li:first-child')
+            if (fixed_li.attr('class').includes('layui-icon-spread-left')) {
+              fixed_li.removeClass('layui-icon-spread-left').addClass('layui-icon-shrink-right');
+              $('#chart_menu').hide();
+              $('#chart_container').removeClass('layui-col-xs10 layui-col-sm10 layui-col-md10').addClass('layui-col-xs12 layui-col-sm12 layui-col-md12');
+            } else {
+              fixed_li.removeClass('layui-icon-shrink-right').addClass('layui-icon-spread-left');
+              $('#chart_menu').show();
+              $('#chart_container').removeClass('layui-col-xs12 layui-col-sm12 layui-col-md12').addClass('layui-col-xs10 layui-col-sm10 layui-col-md10');
+            }
+          }
+        },
+      });
     });
 
     $("#refresh_zixuan").click(function () {
@@ -1741,6 +1768,8 @@
 
     init_web();
     interval_update_rates = setInterval(stocks_update_rate, 30000);
+
+
   });
 </script>
 
