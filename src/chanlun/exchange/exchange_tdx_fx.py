@@ -16,7 +16,7 @@ from chanlun.file_db import FileCacheDB
 @fun.singleton
 class ExchangeTDXFX(Exchange):
     """
-    通达信外汇行情接口
+    通达信期货行情接口
     """
 
     g_all_stocks = []
@@ -36,6 +36,24 @@ class ExchangeTDXFX(Exchange):
         # 文件缓存
         self.fdb = FileCacheDB()
 
+        # 初始化，映射交易所代码
+        self.market_maps = {}
+        while True:
+            try:
+                client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
+                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+                    all_markets = client.get_markets()
+                    for _m in all_markets:
+                        if _m["category"] == 4:
+                            self.market_maps[_m["short_name"]] = {
+                                "market": _m["market"],
+                                "category": _m["category"],
+                                "name": _m["name"],
+                            }
+                break
+            except TdxConnectionError:
+                self.reset_tdx_ip()
+
     def reset_tdx_ip(self):
         """
         重新选择tdx最优服务器
@@ -47,7 +65,7 @@ class ExchangeTDXFX(Exchange):
         return connect_info
 
     def default_code(self):
-        return "AUDUSD"
+        return "FX.USDEUR"
 
     def support_frequencys(self):
         return {
@@ -59,38 +77,48 @@ class ExchangeTDXFX(Exchange):
             "60m": "60m",
             "30m": "30m",
             "15m": "15m",
+            "10m": "10m",
             "5m": "5m",
             "1m": "1m",
         }
 
     def all_stocks(self):
         """
-        使用 通达信的方式获取所有股票代码
+        使用 通达信的方式获取所有外汇代码
         """
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
         __all_stocks = []
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             start_i = 0
             count = 1000
+            market_map_short_names = {
+                _m_i["market"]: _m_s
+                for _m_s, _m_i in self.market_maps.items()
+            }
             while True:
                 instruments = client.get_instrument_info(start_i, count)
                 for _i in instruments:
-                    if _i["category"] == 4 and _i["market"] in [10, 11]:
-                        __all_stocks.append(
-                            {
-                                "code": f"{_i['market']}.{_i['code']}",
-                                "name": _i["name"],
-                            }
-                        )
+                    if (
+                        _i["category"] != 4
+                        or _i["market"] not in market_map_short_names.keys()
+                    ):
+                        continue
+
+                    __all_stocks.append(
+                        {
+                            "code": f"{market_map_short_names[_i['market']]}.{_i['code']}",
+                            "name": _i["name"],
+                        }
+                    )
                 start_i += count
                 if len(instruments) < count:
                     break
 
         self.g_all_stocks = __all_stocks
-        # print(f"期货获取数量：{len(self.g_all_stocks)}")
+        # print(f"获取数量：{len(self.g_all_stocks)}")
 
         return self.g_all_stocks
 
@@ -98,8 +126,10 @@ class ExchangeTDXFX(Exchange):
         """
         转换为 tdx 对应的代码
         """
-        code_infos = code.split(".")
-        return code_infos[0], code_infos[1]
+        code_str = str(code)
+        code_infos =code_str.split(".")
+        market_info = self.market_maps[code_infos[0]]
+        return market_info["market"], code_infos[1]
 
     @retry(
         stop=stop_after_attempt(3),
@@ -120,7 +150,7 @@ class ExchangeTDXFX(Exchange):
         if args is None:
             args = {}
         if "pages" not in args.keys():
-            args["pages"] = 8
+            args["pages"] = 10
         else:
             args["pages"] = int(args["pages"])
 
@@ -133,6 +163,7 @@ class ExchangeTDXFX(Exchange):
             "60m": 3,
             "30m": 2,
             "15m": 1,
+            "10m": 0,
             "5m": 0,
             "1m": 8,
         }
@@ -141,13 +172,13 @@ class ExchangeTDXFX(Exchange):
             print("不支持的调用参数")
             return None
 
-        # _time_s = time.time()
+        _s_time = time.time()
         try:
-            client = TdxExHq_API(raise_exception=True, auto_retry=True)
+            client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines is None:
-                    # 获取 8*800 = 6400 条数据
+                    # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
                         [
                             client.to_df(
@@ -166,7 +197,6 @@ class ExchangeTDXFX(Exchange):
                     )
                     if len(klines) == 0:
                         return pd.DataFrame([])
-                    klines["datetime"] = klines["datetime"].apply(self.fix_yp_date)
                     klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
                     klines.sort_values("date", inplace=True)
                 else:
@@ -181,7 +211,6 @@ class ExchangeTDXFX(Exchange):
                                 800,
                             )
                         )
-                        _ks["datetime"] = _ks["datetime"].apply(self.fix_yp_date)
                         _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
@@ -217,7 +246,7 @@ class ExchangeTDXFX(Exchange):
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         """
-        获取股票名称
+        获取标的名称
         """
         all_stock = self.all_stocks()
         stock = [_s for _s in all_stock if _s["code"] == code]
@@ -232,20 +261,13 @@ class ExchangeTDXFX(Exchange):
         获取日线的k线，并返回最后一根k线的数据
         """
         ticks = {}
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = TdxExHq_API(multithread=True,raise_exception=True, auto_retry=True)
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)
                 if _market is None:
                     continue
                 _quote = client.get_instrument_quote(_market, _tdx_code)
-                # [OrderedDict([('market', 1), ('code', 'FG2305'), ('pre_close', 1546.0), ('open', 1548.0),
-                # ('high', 1558.0), ('low', 1536.0), ('price', 1543.0), ('kaicang', 341886), ('zongliang', 367292),
-                # ('xianliang', 1), ('neipan', 192905), ('waipan', 174387), ('chicang', 993096), ('bid1', 1543.0),
-                # ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0), ('bid5', 0.0), ('bid_vol1', 903), ('bid_vol2', 0),
-                # ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0), ('ask1', 1544.0), ('ask2', 0.0), ('ask3', 0.0),
-                # ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 512), ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0),
-                # ('ask_vol5', 0)])]
                 if len(_quote) > 0:
                     _quote = _quote[0]
                     ticks[_code] = Tick(
@@ -294,14 +316,11 @@ class ExchangeTDXFX(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXFX()
-    # stocks = ex.all_stocks()
+    stocks = ex.all_stocks()
     # print(len(stocks))
-    # for s in stocks:
-    #     if '原油' in s["name"]:
-    #         print(s)
-
-    # print(ex.to_tdx_code('QS.ZN2306'))
-    #
-    klines = ex.klines("10.AUDUSD", "d")
+    # print(stocks)
+    # print(ex.market_maps)
+  
+    klines = ex.klines("FX.GBPEUR", "1m", args={"pages": 10})
     print(len(klines))
-    print(klines.tail(60))
+    print(klines)

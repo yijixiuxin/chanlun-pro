@@ -12,3 +12,4 @@ class Market(Enum):
     CURRENCY = "currency"
     CURRENCY_SPOT = "currency_spot"
     US = "us"
+    FX = "fx"
