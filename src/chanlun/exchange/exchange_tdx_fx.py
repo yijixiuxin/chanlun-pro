@@ -16,7 +16,7 @@ from chanlun.file_db import FileCacheDB
 @fun.singleton
 class ExchangeTDXFX(Exchange):
     """
-    通达信期货行情接口
+    通达信外汇行情接口
     """
 
     g_all_stocks = []
