@@ -40,7 +40,9 @@ class ExchangeTDXFX(Exchange):
         self.market_maps = {}
         while True:
             try:
-                client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
+                client = TdxExHq_API(
+                    multithread=True, raise_exception=True, auto_retry=True
+                )
                 with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                     all_markets = client.get_markets()
                     for _m in all_markets:
@@ -95,8 +97,7 @@ class ExchangeTDXFX(Exchange):
             start_i = 0
             count = 1000
             market_map_short_names = {
-                _m_i["market"]: _m_s
-                for _m_s, _m_i in self.market_maps.items()
+                _m_i["market"]: _m_s for _m_s, _m_i in self.market_maps.items()
             }
             while True:
                 instruments = client.get_instrument_info(start_i, count)
@@ -127,7 +128,7 @@ class ExchangeTDXFX(Exchange):
         转换为 tdx 对应的代码
         """
         code_str = str(code)
-        code_infos =code_str.split(".")
+        code_infos = code_str.split(".")
         market_info = self.market_maps[code_infos[0]]
         return market_info["market"], code_infos[1]
 
@@ -174,7 +175,9 @@ class ExchangeTDXFX(Exchange):
 
         _s_time = time.time()
         try:
-            client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
+            client = TdxExHq_API(
+                multithread=True, raise_exception=True, auto_retry=True
+            )
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
                 if klines is None:
@@ -261,7 +264,7 @@ class ExchangeTDXFX(Exchange):
         获取日线的k线，并返回最后一根k线的数据
         """
         ticks = {}
-        client = TdxExHq_API(multithread=True,raise_exception=True, auto_retry=True)
+        client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)
@@ -317,10 +320,10 @@ class ExchangeTDXFX(Exchange):
 if __name__ == "__main__":
     ex = ExchangeTDXFX()
     stocks = ex.all_stocks()
-    # print(len(stocks))
-    # print(stocks)
+    print(len(stocks))
+    print(stocks)
     # print(ex.market_maps)
-  
+
     klines = ex.klines("FX.GBPEUR", "1m", args={"pages": 10})
     print(len(klines))
     print(klines)

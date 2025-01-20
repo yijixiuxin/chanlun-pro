@@ -79,7 +79,7 @@ def get_exchange(market: Market) -> Exchange:
         elif config.EXCHANGE_FX == "db":
             g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
         else:
-            raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FX}")
+            raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
 
     elif market == Market.CURRENCY:
         # 数字货币 交易所
