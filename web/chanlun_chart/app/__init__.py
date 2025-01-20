@@ -125,6 +125,7 @@ def create_app(test_config=None):
     market_frequencys = {
         "a": list(get_exchange(Market.A).support_frequencys().keys()),
         "hk": list(get_exchange(Market.HK).support_frequencys().keys()),
+        "fx": list(get_exchange(Market.FX).support_frequencys().keys()),
         "us": list(get_exchange(Market.US).support_frequencys().keys()),
         "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
         "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
@@ -137,6 +138,7 @@ def create_app(test_config=None):
     market_default_codes = {
         "a": get_exchange(Market.A).default_code(),
         "hk": get_exchange(Market.HK).default_code(),
+        "fx": get_exchange(Market.FX).default_code(),
         "us": get_exchange(Market.US).default_code(),
         "futures": get_exchange(Market.FUTURES).default_code(),
         "currency": get_exchange(Market.CURRENCY).default_code(),
@@ -147,6 +149,7 @@ def create_app(test_config=None):
     market_session = {
         "a": "24x7",
         "hk": "0930-1201,1330-1601",
+        "fx": "24x7",
         "us": "0400-0931,0930-1631,1600-2001",
         "futures": "24x7",
         "currency": "24x7",
@@ -157,6 +160,7 @@ def create_app(test_config=None):
     market_timezone = {
         "a": "Asia/Shanghai",
         "hk": "Asia/Shanghai",
+        "fx": "Asia/Shanghai",
         "us": "America/New_York",
         "futures": "Asia/Shanghai",
         "currency": "Asia/Shanghai",
@@ -166,6 +170,7 @@ def create_app(test_config=None):
     market_types = {
         "a": "stock",
         "hk": "stock",
+        "fx": "stock",
         "us": "stock",
         "futures": "futures",
         "currency": "crypto",
@@ -245,6 +250,7 @@ def create_app(test_config=None):
         frequencys = list(
             set(market_frequencys["a"])
             | set(market_frequencys["hk"])
+            | set(market_frequencys["fx"])
             | set(market_frequencys["us"])
             | set(market_frequencys["futures"])
             | set(market_frequencys["currency"])
@@ -261,6 +267,7 @@ def create_app(test_config=None):
             "exchanges": [
                 {"value": "a", "name": "沪深", "desc": "沪深A股"},
                 {"value": "hk", "name": "港股", "desc": "港股"},
+                {"value": "fx", "name": "外汇", "desc": "外汇"},
                 {"value": "us", "name": "美股", "desc": "美股"},
                 {"value": "futures", "name": "期货", "desc": "期货"},
                 {
@@ -328,7 +335,7 @@ def create_app(test_config=None):
             "type": market_types[market],
             "session": market_session[market],
             "timezone": market_timezone[market],
-            "pricescale": 1000 if market in ["a", "hk", "us", "futures"] else 100000000,
+            "pricescale": 1000 if market in ["a", "hk", "fx","us", "futures"] else 100000000,
             "visible_plots_set": "ohlcv",
             "supported_resolutions": [
                 v for k, v in frequency_maps.items() if k in market_frequencys[market]
