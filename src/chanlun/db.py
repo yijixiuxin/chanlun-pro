@@ -220,6 +220,8 @@ class DB(object):
             table_name = f"{market}_klines_{stock_code[:7]}"
         elif market == Market.US.value:
             table_name = f"{market}_klines_{stock_code[0]}"
+        elif market == Market.FX.value:
+            table_name = f"{market}_klines_{stock_code}"
         elif market == Market.CURRENCY.value:
             table_name = f"{market}_klines_{stock_code}"
         elif market == Market.CURRENCY_SPOT.value:

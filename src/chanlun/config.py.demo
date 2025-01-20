@@ -30,9 +30,10 @@ REDIS_HOST = ''  # 127.0.0.1
 REDIS_PORT = 6379
 
 # 各个市场的交易所设置（只适用于WEB页面的行情展示）
-# A股市场支持：tdx / baostock / qmt
+# A股市场支持：tdx / baostock
 # 港股市场支持：tdx_hk / futu
 # 期货市场支持：tq / tdx_futures
+# 外汇市场支持 tdx_fx
 # 数字货币支持： binance / zb
 # 美股市场支持： alpaca / polygon / ib / tdx_us
 EXCHANGE_A = 'tdx'
@@ -40,6 +41,8 @@ EXCHANGE_HK = 'tdx_hk'
 EXCHANGE_FUTURES = 'tdx_futures'
 EXCHANGE_CURRENCY = 'binance'
 EXCHANGE_US = 'tdx_us'
+EXCHANGE_FX = 'tdx_fx'
+
 
 # 通达信目录（例如 C:/new_tdx），用于获取行业与概念信息，留空则使用 exchange/stocks_bkgn.json 进行获取
 TDX_PATH = ''

@@ -13,6 +13,7 @@ from chanlun.exchange.exchange_zb import ExchangeZB
 
 from chanlun.exchange.exchange_ib import ExchangeIB
 from chanlun.exchange.exchange_tdx_us import ExchangeTDXUS
+from chanlun.exchange.exchange_tdx_fx import ExchangeTDXFX
 
 
 # 全局保存交易所对象，避免创建多个交易所对象
@@ -71,6 +72,14 @@ def get_exchange(market: Market) -> Exchange:
             g_exchange_obj[market.value] = ExchangeDB(Market.FUTURES.value)
         else:
             raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")
+    elif market == Market.FX:
+        # 外汇市场行情
+        if config.EXCHANGE_FX == "tdx_fx":
+            g_exchange_obj[market.value] = ExchangeTDXFX()
+        elif config.EXCHANGE_FX == "db":
+            g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
+        else:
+            raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FX}")
 
     elif market == Market.CURRENCY:
         # 数字货币 交易所
