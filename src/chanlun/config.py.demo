@@ -30,7 +30,7 @@ REDIS_HOST = ''  # 127.0.0.1
 REDIS_PORT = 6379
 
 # 各个市场的交易所设置（只适用于WEB页面的行情展示）
-# A股市场支持：tdx / baostock
+# A股市场支持：tdx / baostock /qmt
 # 港股市场支持：tdx_hk / futu
 # 期货市场支持：tq / tdx_futures
 # 外汇市场支持 tdx_fx
