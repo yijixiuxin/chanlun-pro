@@ -45,7 +45,7 @@ class TableByCache(Base):
         Integer, default=0, comment="过期时间戳，0为永不过期"
     )  # 过期时间戳，0为永不过期
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByZxGroup(Base):
@@ -58,7 +58,7 @@ class TableByZxGroup(Base):
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByZixuan(Base):
@@ -74,7 +74,7 @@ class TableByZixuan(Base):
     stock_color = Column(String(20), comment="自选颜色")  # 自选颜色
     stock_memo = Column(String(100), comment="附加信息")  # 附加信息
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByAlertTask(Base):
@@ -99,7 +99,7 @@ class TableByAlertTask(Base):
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByAlertRecord(Base):
@@ -118,7 +118,7 @@ class TableByAlertRecord(Base):
     line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByTVMarks(Base):
@@ -136,7 +136,7 @@ class TableByTVMarks(Base):
     mark_color = Column(String(20), comment="颜色")  # 颜色
     dt = Column(DateTime, comment="添加时间")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByOrder(Base):
@@ -152,7 +152,7 @@ class TableByOrder(Base):
     order_memo = Column(String(200), comment="订单备注")  # 订单备注
     dt = Column(DateTime, comment="添加时间")  # 添加时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByTVCharts(Base):
@@ -168,7 +168,7 @@ class TableByTVCharts(Base):
     timestamp = Column(Integer, comment="时间戳")
     name = Column(String(50), comment="布局名称")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 @fun.singleton
@@ -190,7 +190,7 @@ class DB(object):
             )
         elif config.DB_TYPE == "mysql":
             self.engine = create_engine(
-                f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8",
+                f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
                 echo=False,
                 poolclass=QueuePool,
                 pool_size=10,
@@ -250,7 +250,7 @@ class DB(object):
             l = Column(Float)
             v = Column(Float)
             # 添加配置设置编码
-            __table_args__ = {"mysql_charset": "utf8"}
+            __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
         self.__cache_tables[table_name] = TableByKlines
         Base.metadata.create_all(self.engine)
