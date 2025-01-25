@@ -45,7 +45,7 @@ class TableByCache(Base):
         Integer, default=0, comment="过期时间戳，0为永不过期"
     )  # 过期时间戳，0为永不过期
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByZxGroup(Base):
@@ -58,7 +58,7 @@ class TableByZxGroup(Base):
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByZixuan(Base):
@@ -74,7 +74,7 @@ class TableByZixuan(Base):
     stock_color = Column(String(20), comment="自选颜色")  # 自选颜色
     stock_memo = Column(String(100), comment="附加信息")  # 附加信息
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByAlertTask(Base):
@@ -99,7 +99,7 @@ class TableByAlertTask(Base):
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByAlertRecord(Base):
@@ -118,7 +118,7 @@ class TableByAlertRecord(Base):
     line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByTVMarks(Base):
@@ -136,7 +136,7 @@ class TableByTVMarks(Base):
     mark_color = Column(String(20), comment="颜色")  # 颜色
     dt = Column(DateTime, comment="添加时间")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByOrder(Base):
@@ -152,7 +152,7 @@ class TableByOrder(Base):
     order_memo = Column(String(200), comment="订单备注")  # 订单备注
     dt = Column(DateTime, comment="添加时间")  # 添加时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByTVCharts(Base):
@@ -168,7 +168,7 @@ class TableByTVCharts(Base):
     timestamp = Column(Integer, comment="时间戳")
     name = Column(String(50), comment="布局名称")
     # 添加配置设置编码
-    __table_args__ = {"mysql_charset": "utf8", "mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 @fun.singleton
@@ -251,7 +251,6 @@ class DB(object):
             v = Column(Float)
             # 添加配置设置编码
             __table_args__ = {
-                "mysql_charset": "utf8",
                 "mysql_collate": "utf8mb4_general_ci",
             }
 
@@ -1109,6 +1108,9 @@ db: DB = DB()
 if __name__ == "__main__":
     db = DB()
 
+    db.klines_tables("a", "SH.111111")
+    print("Done")
+
     # # 增加自选股票
     # db.zx_add_group_stock("a", "我的持仓", "SH.000001", "上证指数", "", "red", location="top")
     # db.zx_add_group_stock("a", "我的持仓", "SH.600519", "贵州茅台", "", "green", location="top")
@@ -1243,11 +1245,11 @@ if __name__ == "__main__":
 
     # db.delete_klines("a", "SH.000001", "d")
 
-    insp = sqlalchemy.inspect(db.engine)
+    # insp = sqlalchemy.inspect(db.engine)
     # codes = ['SHFE.ao', 'DCE.jm', 'DCE.rr', 'DCE.j', 'DCE.v', 'DCE.fb', 'DCE.l', 'CZCE.PM', 'DCE.bb', 'CFFEX.TF', 'SHFE.ss', 'CZCE.RS', 'SHFE.au', 'CZCE.TC', 'DCE.c', 'SHFE.fu', 'CZCE.PF', 'SHFE.al', 'CFFEX.TS', 'DCE.cs', 'SHFE.wr', 'DCE.y', 'INE.sc', 'CZCE.WH', 'CZCE.WS', 'CZCE.PK', 'CZCE.WT', 'CZCE.OI', 'SHFE.ru', 'DCE.eg', 'SHFE.ag', 'INE.bc', 'SHFE.zn', 'CZCE.RI', 'CZCE.ME', 'SHFE.br', 'CZCE.UR', 'INE.lu', 'CZCE.JR', 'CZCE.RM', 'CZCE.SA', 'DCE.lh', 'INE.nr', 'CZCE.SR', 'CZCE.MA', 'SHFE.hc', 'DCE.b', 'CFFEX.TL', 'CFFEX.IH', 'CZCE.ZC', 'CZCE.PX', 'DCE.jd', 'GFEX.si', 'SHFE.sn', 'CZCE.AP', 'CZCE.ER', 'CZCE.RO', 'CFFEX.IM', 'CZCE.FG', 'SHFE.bu', 'CFFEX.IF', 'INE.ec', 'DCE.m', 'CZCE.LR', 'SHFE.cu', 'DCE.a', 'CZCE.TA', 'DCE.pp', 'CZCE.CY', 'SHFE.ni', 'DCE.i', 'SHFE.sp', 'CZCE.SM', 'DCE.pg', 'CZCE.CJ', 'SHFE.pb', 'CFFEX.T', 'CZCE.SH', 'CZCE.SF', 'CFFEX.IC', 'CZCE.CF', 'DCE.eb', 'GFEX.lc', 'DCE.p', 'SHFE.rb']
-    for table in insp.get_table_names():
-        if table.startswith("futures_"):
-            print(f"DROP TABLE `{table}`;")
+    # for table in insp.get_table_names():
+    #     if table.startswith("futures_"):
+    #         print(f"DROP TABLE `{table}`;")
 
     # record = db.alert_record_query_by_code(
     #     "a", "SZ.300014", "5m", "bi", fun.str_to_datetime("2023-12-25 13:55:00")
