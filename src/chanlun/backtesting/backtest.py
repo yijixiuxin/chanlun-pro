@@ -42,6 +42,12 @@ class BackTest:
     def __init__(self, config: dict = None):
         # 日志记录
         self.log = fun.get_logger("my_backtest.log")
+        # 资源管理
+        self._resources = set()
+        # 性能监控
+        self._perf_stats = {}
+        # 内存管理阈值
+        self.memory_threshold = 0.8  # 80% 内存使用率阈值
 
         if config is None:
             return
@@ -342,14 +348,29 @@ class BackTest:
                 self.trader.fee_total += BT.trader.fee_total
 
                 # 释放内存
+                BT.trader = None
+                BT.strategy = None
+                BT.datas = None
                 del BT
                 gc.collect()
 
-            # 整理并汇总资金变动历史
-            bh_df = pd.DataFrame(balance_history.values())
-            bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
-            self.trader.balance_history = bh_df.sum(axis=1)
-            self.log.info("合并回测结果完成，可调用 save 方法进行保存")
+                # 整理并汇总资金变动历史
+            try:
+                bh_df = pd.DataFrame(balance_history.values())
+                bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
+                self.trader.balance_history = bh_df.sum(axis=1)
+            except Exception as e:
+                self.log.error("合并资金历史记录异常")
+                self.log.error(traceback.format_exc())
+
+                self.log.info("合并回测结果完成，可调用 save 方法进行保存")
+            except Exception as e:
+                self.log.error("多进程回测执行异常")
+                self.log.error(traceback.format_exc())
+                raise e
+            finally:
+                 # 确保资源被释放
+                gc.collect()
         return True
 
     def run_params(self, new_cl_setting: dict):
@@ -472,16 +493,39 @@ class BackTest:
             end = time.perf_counter()
             cost: int = int((end - start))
             self.log.info(f"穷举算法优化完成，耗时{cost}秒")
+            try:
+                for r in results:
+                    try:
+                        BT = BackTest()
+                        BT.load(r["save_file"])
+                        print("* * " * 10)
+                        print(f'参数：{r["params"]}')
+                        print(f'落地文件：{r["save_file"]}')
+                        BT.result(True)
+                    except Exception as e:
+                        self.log.error(f"处理优化结果异常：{r['save_file']}")
+                        self.log.error(traceback.format_exc())
+                        continue
+                    finally:
+                         # 确保每次循环后释放资源
+                        if 'BT' in locals():
+                            BT.trader = None
+                            BT.strategy = None
+                            BT.datas = None
+                            del BT
+                            gc.collect()
+            except Exception as e:
+                    self.log.error("处理优化结果集异常")
+                    self.log.error(traceback.format_exc())
 
-            for r in results:
-                BT = BackTest()
-                BT.load(r["save_file"])
-                print("* * " * 10)
-                print(f'参数：{r["params"]}')
-                print(f'落地文件：{r["save_file"]}')
-                BT.result(True)
-
-        return results
+                    return results
+            except Exception as e:
+                self.log.error("参数优化执行异常")
+                self.log.error(traceback.format_exc())
+                raise e
+            finally:
+            # 确保资源被释放
+                gc.collect()
 
     def show_charts(
         self,
