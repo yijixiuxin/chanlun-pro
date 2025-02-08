@@ -84,6 +84,12 @@ IB_PORT = 7497
 IB_CLIENT_ID = 1
 IB_ACCOUNT = 'DU6941075'
 
+# AI 分析配置
+# 使用硅基流动的API调用模型，并返回数据
+# 邀请链接：https://cloud.siliconflow.cn/i/HwLeeOjK   （注册送 14 元）
+AI_TOKEN = ""
+AI_MODEL = "deepseek-ai/DeepSeek-R1"
+
 # 飞书消息配置 (项目中新的消息推送使用飞书，user_id 是唯一的，不同的市场可以配置不同的机器人，没有设置则使用 default 的机器人)
 # 配置获取方法，在 web 页面的系统设置中有教程
 FEISHU_KEYS = {

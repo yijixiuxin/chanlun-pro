@@ -42,6 +42,7 @@ from chanlun.cl_utils import (
 from chanlun.db import db
 from chanlun.exchange import get_exchange
 from chanlun.config import get_data_path
+from chanlun.tools.ai_analyse import AIAnalyse
 from chanlun.zixuan import ZiXuan
 from .alert_tasks import AlertTasks
 from .xuangu_tasks import XuanguTasks
@@ -239,7 +240,11 @@ def create_app(test_config=None):
         首页
         """
 
-        return render_template("index.html", market_default_codes=market_default_codes)
+        return render_template(
+            "index.html",
+            market_default_codes=market_default_codes,
+            market_frequencys=market_frequencys,
+        )
 
     @app.route("/tv/config")
     @login_required
@@ -335,7 +340,9 @@ def create_app(test_config=None):
             "type": market_types[market],
             "session": market_session[market],
             "timezone": market_timezone[market],
-            "pricescale": 1000 if market in ["a", "hk", "fx","us", "futures"] else 100000000,
+            "pricescale": (
+                1000 if market in ["a", "hk", "fx", "us", "futures"] else 100000000
+            ),
             "visible_plots_set": "ohlcv",
             "supported_resolutions": [
                 v for k, v in frequency_maps.items() if k in market_frequencys[market]
@@ -1238,5 +1245,29 @@ def create_app(test_config=None):
         db.cache_set("fs_keys", fs_keys)
 
         return {"ok": True}
+
+    @app.route("/ai/analyse", methods=["POST"])
+    @login_required
+    def ai_analyse():
+
+        market = request.form["market"]
+        code = request.form["code"]
+        frequency = request.form["frequency"]
+
+        ai_analyse_obj = AIAnalyse(market)
+        ai_res = ai_analyse_obj.analyse(code, frequency)
+
+        return ai_res
+
+    @app.route("/ai/analyse_records/<market>", methods=["GET"])
+    @login_required
+    def ai_analyse_records(market: str = "a"):
+        ai_analyse_records = AIAnalyse(market=market).analyse_records(30)
+        return {
+            "code": 0,
+            "msg": "",
+            "count": len(ai_analyse_records),
+            "data": ai_analyse_records,
+        }
 
     return app
