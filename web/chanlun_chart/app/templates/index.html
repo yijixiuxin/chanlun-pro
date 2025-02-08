@@ -109,6 +109,41 @@
             </div>
           </div>
           <div class="layui-colla-item">
+            <div class="layui-colla-title" data-ca-title="AI分析助手">
+              AI分析助手
+            </div>
+            <div class="layui-colla-content" style="padding: 0">
+              <form class="layui-form" style="width: 100%">
+                <div class="layui-form-item">
+                  <div class="layui-inline">
+                    <div class="layui-input-inline layui-input-wrap" style="width: 40%; float: left">
+                      <label for="ai_code">
+                        <input type="text" name="ai_code" id="ai_code" autocomplete="off" readonly="readonly"
+                          class="layui-input" />
+                      </label>
+                    </div>
+                    <div class="layui-form-mid" style="width: 30%;padding: 0 !important; float: left">
+                      <label>
+                        <select name="ai_frequencys" id="ai_frequencys">
+
+                        </select>
+                      </label>
+                    </div>
+                    <div class="layui-form-mid" style="padding: 4px 0 !important; float: left">
+                      <button type="button" id="ai_analyse_btn"
+                        class="layui-btn layui-btn-primary layui-border-red layui-btn-sm">
+                        分析
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+              <table class="layui-hide" id="table_ai_analysis" lay-filter="table_ai_analysis"></table>
+
+              <hr class="layui-border-red" />
+            </div>
+          </div>
+          <div class="layui-colla-item">
             <div class="layui-colla-title" data-ca-title="关于">关于</div>
             <div class="layui-colla-content" style="padding: 0">
               <div class="layui-text" style="padding: 16px">
@@ -140,6 +175,8 @@
   // 定时更新tick涨跌幅的对象
   var interval_update_rates;
   var interval_get_alert_records;
+
+  var market_frequencys = {{ market_frequencys| tojson }};
 
   $(function () {
     // 获取本地存储的数据
@@ -188,6 +225,7 @@
     }
 
     var market = get_local_data("market");
+    var frequencys = market_frequencys[market];
     var zx_group = "我的关注";
     var code = get_local_data(market + "_code");
 
@@ -442,8 +480,8 @@
                   const ll = PineJS.Std.lowest(l, N, this._context);
                   const rsv = this._context.new_var((c - ll) / (hh - ll) * 100);
 
-                  const k = this._context.new_var(PineJS.Std.sma(rsv, M1, this._context));
-                  const d = this._context.new_var(PineJS.Std.sma(k, M2, this._context));
+                  const k = this._context.new_var(PineJS.Std.ema(rsv, (M1 * 2 - 1), this._context));
+                  const d = this._context.new_var(PineJS.Std.ema(k, (M2 * 2 - 1), this._context));
                   const j = this._context.new_var(3 * k - 2 * d);
 
                   return [k.get(0), d.get(0), j.get(0)];
@@ -969,6 +1007,7 @@
       });
     }
 
+    // 自选列表渲染与操作
     function render_zixuan_stocks() {
       layui.use(["table", "dropdown", "util"], function () {
         let table = layui.table;
@@ -1041,6 +1080,7 @@
           let data = obj.data; // 获取当前行数据
           code = data.code;
           change_chart_ticker(market, code);
+          $('#ai_code').val(code);
           table.setRowChecked("table_zixuan_list", {
             index: "all", // 所有行
             checked: false,
@@ -1232,6 +1272,58 @@
         table.on("row(table_alert_reocrds)", function (obj) {
           let data = obj.data; // 获取当前行数据
           change_chart_ticker(market, data.code);
+        });
+      });
+    }
+
+    // 获取AI分析记录
+    function get_ai_analyse_records() {
+      function formatStringWithWhitespace(str) {
+        // 将 \n 替换为 <br>
+        str = str.replace(/\n/g, '<br>');
+        // 将 \t 替换为 &nbsp;&nbsp;&nbsp;&nbsp;（4 个空格）
+        str = str.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        return str;
+      }
+      layui.use(["table"], function () {
+        let table = layui.table;
+
+        // 创建自选列表渲染实例
+        table.render({
+          elem: "#table_ai_analysis",
+          defaultContextmenu: false,
+          url: "/ai/analyse_records/" + market,
+          page: false,
+          className: "layui-font-12",
+          size: "sm",
+          maxHeight: 750,
+          cols: [
+            [
+              { field: "stock_name", title: "名称", sort: false, width: 100 },
+              { field: "stock_code", title: "代码", sort: false, width: 80 },
+              { field: "frequency", title: "周期", sort: false, width: 60 },
+              { field: "dt", title: "时间", sort: false, width: 160 },
+            ],
+          ],
+        });
+        // 单击警报内容列表
+        table.on("row(table_ai_analysis)", function (obj) {
+          let data = obj.data; // 获取当前行数据
+          var title = "AI分析 " + data.stock_code + " " + data.stock_name + " " + data.frequency + data.dt + " 模型 " + data.model;
+          var show_html = "<ul class='layui-padding-2 layui-text layui-font-black'><li><h3>缠论状态:</h3></li><li><p>" + formatStringWithWhitespace(data.prompt) + "</p></li><li><h3>AI分析：</h3></li><li><p>" + formatStringWithWhitespace(data.msg) + "</p></li></ul>";
+          layer.open({
+            type: 1,
+            title: title,
+            content: show_html,
+            area: ['720px', '950px'],
+            // maxHeight: 950,
+            anim: 'slideLeft',
+            shade: 0,
+          });
+
+          // 切换到该股票
+          change_chart_ticker(market, data.stock_code);
+          $('#ai_code').val(data.stock_code);
         });
       });
     }
@@ -1638,6 +1730,52 @@
           }
         },
       });
+
+      // AI 分析助手
+      let ai_frequencys = $("#ai_frequencys");
+      $(ai_frequencys).html();
+      layui.each(market_frequencys[market], function (i, f) {
+        $(ai_frequencys).append(
+          "<option value='" + f + "'>" + f + "</option>"
+        );
+      });
+      layui.form.render($(ai_frequencys));
+      $(ai_frequencys)
+        .siblings("div.layui-form-select")
+        .find("dl")
+        .find("dd[lay-value=d]")
+        .click();
+
+      $('#ai_code').val(code);
+
+      get_ai_analyse_records();
+
+      $('#ai_analyse_btn').click(function () {
+        // 将 btn 置灰
+        $('#ai_analyse_btn').addClass('layui-btn-disabled').attr('disabled', true);
+        $('#ai_analyse_btn').html('分析中...');
+        $.ajax({
+          type: "POST",
+          url: "/ai/analyse",
+          data: {
+            market: market,
+            code: $('#ai_code').val(),
+            frequency: $('#ai_frequencys').val(),
+          },
+          dataType: "json",
+          success: function (res) {
+            if (res["ok"] === true) {
+              layer.msg("分析成功");
+              get_ai_analyse_records();
+            } else {
+              layer.msg(res["msg"]);
+            }
+            $('#ai_analyse_btn').removeClass('layui-btn-disabled').attr('disabled', false);
+            $('#ai_analyse_btn').html('分析');
+          }
+        })
+      });
+
     });
 
     $("#refresh_zixuan").click(function () {
