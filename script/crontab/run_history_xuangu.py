@@ -134,10 +134,13 @@ class HistoryXuangu(object):
                 idx_kdj_js = idx_kdj["j"][-cal_bi_start_i:]
 
                 # 获取 kdj j 线向上转折的点，前后两点至少间隔 5根k线
+                # FIX BUG 要判断三个点之间的关系，才能判断转折
                 idx_kdj_zz_ji = []
-                for i in range(1, len(idx_kdj_js)):
-                    if idx_kdj_js[i] > idx_kdj_js[i - 1] and (
-                        len(idx_kdj_zz_ji) == 0 or i - idx_kdj_zz_ji[-1] > 5
+                for i in range(2, len(idx_kdj_js)):
+                    if (
+                        idx_kdj_js[i] > idx_kdj_js[i - 1]
+                        and idx_kdj_js[i - 1] < idx_kdj_js[i - 2]
+                        and (len(idx_kdj_zz_ji) == 0 or i - idx_kdj_zz_ji[-1] > 5)
                     ):
                         idx_kdj_zz_ji.append(i - 1)
                 # 少于两次向上转折，跳过
@@ -169,6 +172,10 @@ class HistoryXuangu(object):
                     continue
 
                 # TODO 记录一些其他信息
+                idx_ma_5 = Strategy.idx_ma(cd, 5)
+                idx_ma_5_close = k.c < idx_ma_5[-1]
+                idx_ma_10 = Strategy.idx_ma(cd, 10)
+                idx_ma_10_close = k.c < idx_ma_10[-1]
                 idx_ma_20 = Strategy.idx_ma(cd, 20)
                 idx_ma_20_close = k.c < idx_ma_20[-1]
 
@@ -223,6 +230,8 @@ class HistoryXuangu(object):
                         "judge_kdj_gold": judge_kdj_gold,
                         "judge_macd_gold": judge_macd_gold,
                         # 记录其他信息
+                        "idx_ma_5_close": idx_ma_5_close,
+                        "idx_ma_10_close": idx_ma_10_close,
                         "idx_ma_20_close": idx_ma_20_close,
                         "pre_bi_mmds": "/".join(cd.get_bis()[-2].line_mmds("|")),
                         "last_zs_line_nums": last_zs.line_num,
@@ -267,43 +276,43 @@ if __name__ == "__main__":
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     # 要执行历史选股的股票列表
-    run_codes = ["SZ.000019"]
+    # run_codes = ["SZ.000019"]
 
-    # ex = ExchangeTDX()
-    # stocks = ex.all_stocks()
-    # run_codes = [
-    #     _s["code"]
-    #     for _s in stocks
-    #     if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
-    # ]
-    # # run_codes = run_codes[0:100]
-    # print(f"选股股票数量 {len(run_codes)}")
+    ex = ExchangeTDX()
+    stocks = ex.all_stocks()
+    run_codes = [
+        _s["code"]
+        for _s in stocks
+        if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
+    ]
+    # run_codes = run_codes[0:100]
+    print(f"选股股票数量 {len(run_codes)}")
 
     # 实例化
     hxg = HistoryXuangu()
 
     # 清除自选与标记
-    hxg.clear_zx_mark()
+    # hxg.clear_zx_mark()
 
     print("开始选股")
     print(f"{hxg.xg_start_date} ~ {hxg.xg_end_date}")
 
     # TODO 测试单个选股
-    hxg.xuangu_by_code("SZ.000019")
+    # hxg.xuangu_by_code("SZ.000019")
 
     # TODO 单进程执行选股
     # for code in run_codes:
     #     hxg.xuangu_by_code(code)
 
     # TODO 多进程执行选股，根据自己 cpu 核数来调整
-    # with ProcessPoolExecutor(
-    #     max_workers=18, mp_context=get_context("spawn")
-    # ) as executor:
-    #     bar = tqdm(total=len(run_codes))
-    #     for _ in executor.map(
-    #         hxg.xuangu_by_code,
-    #         run_codes,
-    #     ):
-    #         bar.update(1)
+    with ProcessPoolExecutor(
+        max_workers=24, mp_context=get_context("spawn")
+    ) as executor:
+        bar = tqdm(total=len(run_codes))
+        for _ in executor.map(
+            hxg.xuangu_by_code,
+            run_codes,
+        ):
+            bar.update(1)
 
     print("Done")

@@ -126,7 +126,7 @@ class ExchangeDB(Exchange):
                 "2m": "2m",
                 "1m": "1m",
             }
-        return ["d", "30m", "5m"]
+        return {"d": "D", "30m": "30m"}
 
     def query_last_datetime(self, code, frequency) -> Union[None, str]:
         """

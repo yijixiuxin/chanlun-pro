@@ -2,6 +2,13 @@
 
 ---
 
+### 2025-02-08
+
+> `config.py`  配置文件中新增 `AI_TOKEN` `AI_MODEL` 变量设置
+
+* 新增AI缠论分析助手
+* 其他BUG修改
+
 ### 2025-01-20
 
 > `config.py`  配置文件中新增 `EXCHANGE_FX = 'tdx_fx'` 变量设置
