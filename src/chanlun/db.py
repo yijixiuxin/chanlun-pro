@@ -357,7 +357,7 @@ class DB(object):
                     _in_k = {
                         "code": code,
                         "f": frequency,
-                        "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
                         "o": _k["open"],
                         "c": _k["close"],
                         "h": _k["high"],
@@ -395,7 +395,7 @@ class DB(object):
                     insert_klines.append(
                         {
                             "code": code,
-                            "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                            "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
                             "f": frequency,
                             "o": _k["open"],
                             "c": _k["close"],
@@ -846,7 +846,7 @@ class DB(object):
                 bi_is_done=bi_is_done,
                 bi_is_td=bi_is_td,
                 line_type=line_type,
-                line_dt=fun.str_to_datetime(fun.datetime_to_str(line_dt)),
+                line_dt=line_dt.replace(tzinfo=None),
                 alert_dt=datetime.datetime.now(),
             )
             session.add(recored)

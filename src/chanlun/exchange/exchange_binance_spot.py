@@ -3,6 +3,7 @@ from typing import Union
 import ccxt
 import pytz
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tzlocal import get_localzone
 
 
 from chanlun import config, fun
@@ -45,7 +46,8 @@ class ExchangeBinanceSpot(Exchange):
         self.db_exchange = ExchangeDB(Market.CURRENCY_SPOT.value)
 
         # 设置时区
-        self.tz = pytz.timezone("Asia/Shanghai")
+        # self.tz = pytz.timezone("Asia/Shanghai")
+        self.tz = pytz.timezone(str(get_localzone()))
 
     def default_code(self):
         return "BTC/USDT"

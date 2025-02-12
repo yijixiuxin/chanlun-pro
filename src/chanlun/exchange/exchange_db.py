@@ -3,6 +3,7 @@ from typing import List, Dict, Union
 
 import pandas as pd
 import pytz
+from tzlocal import get_localzone
 from chanlun import fun
 from chanlun.db import db
 
@@ -34,6 +35,8 @@ class ExchangeDB(Exchange):
         self.tz = pytz.timezone("Asia/Shanghai")
         if self.market == "us":
             self.tz = pytz.timezone("US/Eastern")
+        if self.market in ["currency", "currency_spot"]:
+            self.tz = pytz.timezone(str(get_localzone()))
 
     def default_code(self):
         if self.market == Market.A.value:

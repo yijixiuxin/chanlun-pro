@@ -4,6 +4,7 @@ from typing import Union
 import ccxt
 import pymysql.err
 import pytz
+from tzlocal import get_localzone
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
 from chanlun import config, fun
@@ -43,7 +44,8 @@ class ExchangeBinance(Exchange):
         self.db_exchange = ExchangeDB("currency")
 
         # 设置时区
-        self.tz = pytz.timezone("Asia/Shanghai")
+        # self.tz = pytz.timezone("Asia/Shanghai")
+        self.tz = pytz.timezone(str(get_localzone()))
 
     def default_code(self):
         return "BTC/USDT"
@@ -367,7 +369,7 @@ if __name__ == "__main__":
 
     ex = ExchangeBinance()
 
-    klines = ex.klines("BTC/USDT", "60m")
+    klines = ex.klines("DOGE/USDT", "1m")
     print(klines)
 
     # zx = zixuan.ZiXuan("currency")

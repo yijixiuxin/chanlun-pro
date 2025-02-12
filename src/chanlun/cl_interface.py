@@ -75,6 +75,8 @@ class Config(Enum):
     ZS_QJ_DD = "zs_qj_dd"  # 中枢区间，使用线段的顶底点作为区间
     ZS_QJ_CK = "zs_qj_ck"  # 中枢区间，使用线段中缠论K线的最高最低作为区间
     ZS_QJ_K = "zs_qj_k"  # 中枢区间，使用线段中原始K线的最高最低作为区间
+    ZS_CD_THREE = "zs_cd_three"  # 中枢重叠区间依据：中枢重叠区间取前三段的重叠区域
+    ZS_CD_MORE = "zs_cd_more"  # 中枢重叠区间依据：中枢重叠区间取中枢所有线段的重叠区域
     ZS_WZGX_ZGD = "zs_wzgx_zgd"  # 判断两个中枢的位置关系，比较方式，zg与zd 宽松比较
     # 判断两个中枢的位置关系，比较方式，zg与dd zd与gg 较为宽松比较
     ZS_WZGX_ZGGDD = "zs_wzgx_zggdd"
