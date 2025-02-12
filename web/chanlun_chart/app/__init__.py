@@ -28,6 +28,7 @@ from apscheduler.schedulers.tornado import TornadoScheduler
 from flask import Flask, redirect, send_file
 from flask import render_template
 from flask import request
+from tzlocal import get_localzone
 
 from chanlun.base import Market
 from chanlun import fun, config
@@ -164,8 +165,8 @@ def create_app(test_config=None):
         "fx": "Asia/Shanghai",
         "us": "America/New_York",
         "futures": "Asia/Shanghai",
-        "currency": "Asia/Shanghai",
-        "currency_spot": "Asia/Shanghai",
+        "currency": str(get_localzone()),
+        "currency_spot": str(get_localzone()),
     }
 
     market_types = {
@@ -798,6 +799,7 @@ def create_app(test_config=None):
             "zs_bi_type",
             "zs_xd_type",
             "zs_qj",
+            "zs_cd",
             "zs_wzgx",
             # MACD 配置（计算力度背驰）
             "idx_macd_fast",

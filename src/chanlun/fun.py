@@ -5,11 +5,13 @@ import pathlib
 import pytz
 from functools import wraps
 
+from tzlocal import get_localzone
+
 from chanlun.cl_interface import *
 from chanlun.config import get_data_path
 
 # 统一时区
-__tz = pytz.timezone("Asia/Shanghai")
+__tz = pytz.timezone(str(get_localzone()))
 
 
 def get_logger(filename=None, level=logging.INFO) -> logging.Logger:
