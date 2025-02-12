@@ -71,6 +71,7 @@ class FileCacheDB(object):
             "zs_bi_type",
             "zs_xd_type",
             "zs_qj",
+            "zs_cd",
             "zs_wzgx",
             "zs_optimize",
             "cl_mmd_cal_qs_1mmd",
@@ -89,7 +90,7 @@ class FileCacheDB(object):
         ]
 
         # 缠论的更新时间，如果与当前保存不一致，需要清空缓存的计算结果，重新计算
-        self.cl_update_date = "2024-10-18"
+        self.cl_update_date = "2025-02-12"
         cache_cl_update_date = db.cache_get("__cl_update_date")
         if cache_cl_update_date != self.cl_update_date:
             db.cache_set("__cl_update_date", self.cl_update_date)

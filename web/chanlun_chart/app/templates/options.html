@@ -413,6 +413,19 @@
                     </label>
                 </div>
             </div>
+            <div class="layui-inline" title="中枢重叠，用来计算中枢重叠区间的依据">
+                <label class="layui-form-label">中枢重叠</label>
+                <div class="layui-input-inline">
+                    <label for="zs_cd">
+                        <select type="select" class="form-control" name="zs_cd" lay-filter="cl_config">
+                            <option value="zs_cd_three" {% if zs_cd=='zs_cd_three' %} selected {% endif %}>前三段
+                            </option>
+                            <option value="zs_cd_more" {% if zs_cd=='zs_cd_more' %} selected {% endif %}>所有段
+                            </option>
+                        </select>
+                    </label>
+                </div>
+            </div>
             <div class="layui-inline" title="计算两个中枢的位置关系，来判断是上涨还是下跌趋势">
                 <label class="layui-form-label">中枢位置</label>
                 <div class="layui-input-inline">
