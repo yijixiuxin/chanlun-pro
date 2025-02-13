@@ -34,7 +34,7 @@ set "conda_path=!conda_path:\condabin=!"
 echo 检测到 Anaconda 安装路径为: %conda_path%
 
 rem 设置创建的环境名称
-set conda_env_name=chanlun_test
+set conda_env_name=chanlun
 rem 设置 conda.exe 可执行文件的路径
 set conda_exe=%conda_path%\Scripts\conda.exe
 rem 创建环境后的 pip 地址
@@ -43,19 +43,18 @@ set conda_pip=%conda_path%\envs\%conda_env_name%\Scripts\pip.exe
 echo Anaconda 安装路径：%conda_path%
 echo 创建环境名称：%conda_env_name%
 
+%conda_exe% init
+
 rem 删除环境
 %conda_exe% remove -n %conda_env_name% -y --all
-    
+
 echo 创建 %conda_env_name% 环境并安装依赖
-%conda_exe% create -y -n %conda_env_name% python=3.10
+%conda_exe% create -y -n %conda_env_name% python=3.11
 %conda_exe% activate %conda_env_name%
-rem  %conda_exe% install -y -c conda-forge ta-lib
 %conda_pip% config set global.index-url https://mirrors.aliyun.com/pypi/simple/
-%conda_pip% install package/TA_Lib-0.4.28-cp310-cp310-win_amd64.whl
+%conda_pip% install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
 %conda_pip% install package/pytdx-1.72r2-py3-none-any.whl
 %conda_pip% install -r requirements.txt
-%conda_pip% install wheel
-   
 
 echo 脚本执行完成,按 Enter 键退出...
 set /p dummy=
