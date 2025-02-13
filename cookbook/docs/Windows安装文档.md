@@ -7,10 +7,10 @@
 ### Chanlun-PRO Windows 启动器 下载与教程
 > 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
 > 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
-> 百度网盘下载：    
->     链接: https://pan.baidu.com/s/1U0F8GCC6emruMiV6xJ6Tfg    
->     提取码: dfv8    
-> QQ 群文件下载： 723118857    
+> 网盘下载：    
+>     链接: https://pan.quark.cn/s/c7daa27079ad     
+ 
+ 
 
 ---
 
