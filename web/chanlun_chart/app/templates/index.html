@@ -503,14 +503,34 @@
                     'id': 'plot_ama',
                     'type': 'line',
                   },
+                  {
+                    'id': 'plot_1',
+                    'type': 'colorer',
+                    'target': 'plot_ama',
+                    'palette': 'paletteId1',
+                  },
                 ],
                 defaults: {
                   palettes: {
+                    paletteId1: {
+                      colors: {
+                        0: {
+                          color: 'red',
+                          width: 2,
+                          style: 0,
+                        },
+                        1: {
+                          color: 'blue',
+                          width: 2,
+                          style: 0,
+                        },
+                      },
+                    },
                   },
                   styles: {
                     plot_ama: {
                       linestyle: 0,
-                      linewidth: 1,
+                      linewidth: 2,
                       plottype: 0,
                       trackPrice: false,
                       transparency: 0,
@@ -525,7 +545,18 @@
                     cal_type: 0,
                   },
                 },
-                palettes: {},
+                palettes: {
+                  paletteId1: {
+                    colors: {
+                      0: {
+                        name: 'First color',
+                      },
+                      1: {
+                        name: 'Second color',
+                      },
+                    },
+                  },
+                },
                 styles: {
                   plot_ama: {
                     title: 'AMA',
@@ -616,8 +647,11 @@
                     this._context.amas.push(this._context.amas[this._context.amas.length - 1] + sc * (c.get(0) - this._context.amas[this._context.amas.length - 1]));
                   }
 
+                  // 颜色设置
+                  const colorIndex = (this._context.amas.length >= 2 && this._context.amas[this._context.amas.length - 1] > this._context.amas[this._context.amas.length - 2]) ? 0 : 1;
+
                   // 返回 this._context.amas 数组最后一个
-                  return [this._context.amas[this._context.amas.length - 1]];
+                  return [this._context.amas[this._context.amas.length - 1], colorIndex];
                 };
               }
             },
@@ -1494,11 +1528,11 @@
             templet:
               '<div><i class="layui-icon layui-icon-speaker"></i> <span>新增监控</span></div>',
             id: 4,
-          }, {
-            title: "运行选股",
-            templet:
-              '<div><i class="layui-icon layui-icon-test"></i> <span>运行选股</span></div>',
-            id: 5,
+            // }, {
+            //   title: "运行选股",
+            //   templet:
+            //     '<div><i class="layui-icon layui-icon-test"></i> <span>运行选股</span></div>',
+            //   id: 5,
           }, {
             title: "当前任务",
             templet:
