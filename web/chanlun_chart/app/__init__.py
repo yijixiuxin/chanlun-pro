@@ -150,7 +150,7 @@ def create_app(test_config=None):
     # 各个市场的交易时间
     market_session = {
         "a": "24x7",
-        "hk": "0930-1201,1330-1601",
+        "hk": "24x7",
         "fx": "24x7",
         "us": "0400-0931,0930-1631,1600-2001",
         "futures": "24x7",

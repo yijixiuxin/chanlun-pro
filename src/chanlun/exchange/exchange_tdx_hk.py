@@ -381,8 +381,8 @@ if __name__ == "__main__":
     #
     # print(ex.to_tdx_code('KH.00700'))
     #
-    klines = ex.klines("KH.00006", "d", args={"pages": 1})
-    print(klines)
+    klines = ex.klines("KH.00006", "60m", args={"pages": 1})
+    print(klines.tail(20))
 
     # ticks = ex.ticks(['KH.00700'])
     # print(ticks)
