@@ -509,6 +509,29 @@ class Strategy(ABC):
         }
 
     @staticmethod
+    def idx_ama(cd: ICL, N=10, fast_N=2, slow_N=30) -> np.array:
+        CLOSE = np.array([k.c for k in cd.get_klines()])
+
+        DIR = MyTT.ABS(CLOSE - MyTT.REF(CLOSE, N))
+
+        VIR = MyTT.SUM(MyTT.ABS(CLOSE - MyTT.REF(CLOSE, 1)), N)
+
+        ER = DIR / VIR
+
+        CS = ER * (2 / (fast_N + 1) - 2 / (slow_N + 1)) + 2 / (slow_N + 1)
+
+        CQ = CS * CS
+        AMA = np.zeros(len(CLOSE))
+        for _i in range(len(CQ)):
+            _cq = CQ[_i]
+            if _cq != _cq:
+                AMA[_i] = CLOSE[_i]
+            else:
+                AMA[_i] = AMA[_i - 1] + _cq * (CLOSE[_i] - AMA[_i - 1])
+
+        return AMA
+
+    @staticmethod
     def idx_atr_by_sma(CLOSE, HIGH, LOW, N: int = 20):
         TR = MyTT.MAX(
             MyTT.MAX((HIGH - LOW), MyTT.ABS(MyTT.REF(CLOSE, 1) - HIGH)),
@@ -1037,6 +1060,12 @@ def fee_us(opt: str, price: float, amlunt: float):
 
 
 if __name__ == "__main__":
-    # A 股手续费计算
-    fee_total = fee_a("sell", 100, 100)
-    print(fee_total)
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
+    from chanlun import cl
+
+    ex = ExchangeTDX()
+    klines = ex.klines("SH.000001", "d")
+    print(klines.tail(10))
+    cd = cl.CL("SH.000001", "d", {}).process_klines(klines)
+    ama = Strategy.idx_ama(cd, 10, 2, 30)
+    print(ama)
