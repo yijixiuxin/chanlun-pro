@@ -278,3 +278,5 @@ if __name__ == "__main__":
 
     image_key = kchart_to_png("a", "缠论数据", cd, cl_config)
     print(image_key)
+
+    send_fs_msg("a", "测试", ["测试消息", image_key])
