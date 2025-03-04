@@ -374,37 +374,37 @@ class ExchangeTDXUS(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXUS()
-    stocks = ex.all_stocks()
-    print(len(stocks))
-    not_stocks = []
-    for s in stocks:
-        if "做多" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "ETF" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "指数" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "期货" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "基金" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "组合" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-    print(not_stocks)
-    print(len(not_stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
+    # not_stocks = []
+    # for s in stocks:
+    #     if "做多" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "ETF" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "指数" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "期货" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "基金" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "组合" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    # print(not_stocks)
+    # print(len(not_stocks))
     # print(stocks)
     #
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    # klines = ex.klines("ABCS", "d")
-    # print(klines)
+    klines = ex.klines("SPXC", "60m")
+    print(klines.tail(20))
 
     # ticks = ex.ticks([ex.default_code()])
     # print(ticks)
