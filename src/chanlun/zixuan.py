@@ -69,6 +69,7 @@ class ZiXuan(object):
                 "name": _stock.stock_name,
                 "color": _stock.stock_color,
                 "memo": _stock.stock_memo,
+                "add_datetime": _stock.add_datetime,
             }
             for _stock in stocks
         ]

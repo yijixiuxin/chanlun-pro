@@ -68,7 +68,7 @@ class ExchangeQMT(Exchange):
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        ticks = xtdata.get_full_tick(["SH", "SZ"])
+        ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
         tick_codes = list(ticks.keys())
 
         self.g_all_stocks = []
@@ -251,7 +251,8 @@ if __name__ == "__main__":
     ex = ExchangeQMT()
 
     # stocks = ex.all_stocks()
+    # stocks = [_s for _s in stocks if "BJ" in _s["code"]]
     # print(stocks[0:10])
 
-    klines = ex.klines("SZ.000002", "5m")
+    klines = ex.klines("BJ.839493", "5m")
     print(klines)
