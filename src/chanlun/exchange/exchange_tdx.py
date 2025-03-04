@@ -680,8 +680,8 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.600498", "5m")
-    print(klines)
+    klines = ex.klines("SH.600498", "60m")
+    print(klines.tail(20))
 
     # ticks = ex.ticks(['SZ.300474'])
     # print(ticks)
