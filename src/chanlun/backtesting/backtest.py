@@ -14,6 +14,7 @@ from pyecharts import options as opts
 from pyecharts.charts import Line, Bar, Grid
 
 import pyfolio as pf
+import empyrical as ep
 
 from chanlun import cl
 from chanlun import kcharts, fun
@@ -369,7 +370,7 @@ class BackTest:
                 self.log.error(traceback.format_exc())
                 raise e
             finally:
-                 # 确保资源被释放
+                # 确保资源被释放
                 gc.collect()
         return True
 
@@ -507,24 +508,24 @@ class BackTest:
                         self.log.error(traceback.format_exc())
                         continue
                     finally:
-                         # 确保每次循环后释放资源
-                        if 'BT' in locals():
+                        # 确保每次循环后释放资源
+                        if "BT" in locals():
                             BT.trader = None
                             BT.strategy = None
                             BT.datas = None
                             del BT
                             gc.collect()
             except Exception as e:
-                    self.log.error("处理优化结果集异常")
-                    self.log.error(traceback.format_exc())
+                self.log.error("处理优化结果集异常")
+                self.log.error(traceback.format_exc())
 
-                    return results
+                return results
             except Exception as e:
                 self.log.error("参数优化执行异常")
                 self.log.error(traceback.format_exc())
                 raise e
             finally:
-            # 确保资源被释放
+                # 确保资源被释放
                 gc.collect()
 
     def show_charts(
@@ -882,7 +883,7 @@ class BackTest:
         print(res["mmd_infos"])
         return
 
-    def result_by_pyfolio(self, live_start_date=None):
+    def result_by_pyfolio(self, live_start_date=None, is_return=False):
         """
         使用 pyfolio 计算回测结果
         """
@@ -901,6 +902,32 @@ class BackTest:
         df.index.name = "date"
         df = df.sort_index()
         df["return"] = df["balance"].pct_change()
+
+        if is_return:
+            # 夏普比率（默认无风险利率=0，年化周期=252天）
+            sharpe = ep.sharpe_ratio(df["return"])
+
+            # 卡玛比率（需计算年化收益和最大回撤）
+            calmar = ep.calmar_ratio(df["return"])
+
+            # 索提诺比率（仅考虑下行波动率）
+            sortino = ep.sortino_ratio(df["return"])
+
+            # 欧米茄比率（阈值默认为0）
+            omega = ep.omega_ratio(df["return"])
+
+            # 稳定性：年化波动率的倒数（需调整符号确保数值有意义）
+            annual_volatility = ep.annual_volatility(df["return"])
+            stability = 1 / annual_volatility if annual_volatility != 0 else np.nan
+
+            return {
+                "Sharpe Ratio": sharpe,
+                "Calmar Ratio": calmar,
+                "Sortino Ratio": sortino,
+                "Omega Ratio": omega,
+                "Stability (1/Annual Vol)": stability,
+                "Stability": ep.stability_of_timeseries(df["return"]),
+            }
 
         # 持仓记录
         positions = {}

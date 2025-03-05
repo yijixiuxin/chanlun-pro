@@ -5,43 +5,49 @@
 ### [B站安装教程](https://www.bilibili.com/video/BV1XH4y1K7VM/)
 
 ### Chanlun-PRO Windows 启动器 下载与教程
+
+#### 建议下载项目，用双击 bat 文件进行安装
+
 > 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
 > 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
 > 网盘下载：    
 >     链接: https://pan.quark.cn/s/c7daa27079ad     
  
  
-
 ---
 
 > Python 版本支持 3.8、3.9、3.10、3.11 ，不然运行会报 RuntimeError 错误  
-> 前置条件  
-> 已经安装 GitHub Desktop、 Anaconda、MySQL、Redis  
-> ### pytdx 必须使用项目目录 package 下提供的包进行安装
-> ### pytdx 必须使用项目目录 package 下提供的包进行安装
-> ### pytdx 必须使用项目目录 package 下提供的包进行安装
 
-### 1. 通过 GitHub Desktop 克隆项目到本地
+> ### pytdx 必须使用项目目录 package 下提供的包进行安装
+> ### 如果提示 “Tushare内置的pytdx版本和最新的pytdx 版本不同...” 无需理睬，等待即可
+
+
+## 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
+
+
+### 1. 通过 GitHub Desktop 克隆项目到本地 或者 直接打包下载到本地 
+
+> 两个地址项目是同步的，国内的可选 Gitee 国外的可选 GitHub （请帮忙给一个 Star）
 
       # GitHub 地址
-      https://github.com/yijixiuxin/chanlun-pro.git
+      https://github.com/yijixiuxin/chanlun-pro
       # Gitee 地址
       https://gitee.com/wang-student/chanlun-pro
 
-### 2. 在 `chanlun-pro` 目录，双击 `install_windows.bat` 文件进行安装
+### 2. 在 `chanlun-pro` 目录，双击 `windows_install.bat` 文件进行安装
 
-      # 如果 Anaconda 没有安装到默认目录，可修改 install_windows.bat 中的 conda_path 目录（GBK编码打开和保存）
-      # 或者 搜索 Anaconda Prompt 程序，并打开，手动执行以下命令，进行安装
-      
-      cd \你的项目代码路径\chanlun-pro
-      conda create -y -n chanlun python=3.11
-      conda activate chanlun
-      pip install package/pytdx-1.72r2-py3-none-any.whl
-      pip install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
-      pip install -r requirements.txt
+### 3. 在 `chanlun-pro` 目录，双击 `windows_run.bat` 运行项目
 
 
-### 3. 设置 PYTHONPATH 环境变量
+---
+---
+---
+
+### 通过以上方式可以正常运行，就不用看下面了
+### 以下是手动安装的命令
+
+
+### 设置 PYTHONPATH 环境变量
 
          # 我的电脑 -> 右键菜单选“属性” -> 高级系统设置 -> 高级 -> 环境变量 -> 系统变量 -> 新建
          # 系统变量信息，project_path 需要替换成项目所在目录
@@ -50,20 +56,46 @@
          
          设置完成后，重启终端 ，输入命令 $env:PYTHONPATH  查看是否设置成功
 
-### 4. 在 `src/chanlun` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
+### 在 `src/chanlun` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
 
-### 5. 运行项目根目录中的 `check_env.py` 文件，检查环境是否OK，如果输出 “环境OK”，则可以继续进行，如果有错误，则安装提示进行修复
+UV 和 Conda 任选一个自己喜欢的就行
 
-         conda activate chanlun
-         python check_env.py
+### UV 安装命令
 
-### 6. 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
+      # 安装 uv
+      powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+      
+      # 进入 chanlun-pro 目录，创建虚拟环境，安装依赖包
+      cd \你的项目代码路径\chanlun-pro
+      
+      uv venv --python=3.11 .venv
+      .venv\Scripts\activate
+      uv pip install package/pytdx-1.72r2-py3-none-any.whl
+      uv pip install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
+      uv pip install -r requirements.txt
 
-### 7. 在 `web/chanlun_chart` 目录，双击  `run.bat` 启动
+      # 检查环境
+      uv run check_env.py
 
-      # 如果报错，找不到 conda 命令等信息，可以使用 python 直接执行 app.py 进行启动
-      # 搜索 Anaconda Prompt 程序，并打开，手动执行以下命令，进行启动
+      # 运行 Web 服务
+      uv run web/chanlun_chart/app.py
 
+### Conda 安装命令
+
+      # 创建项目运行 Python 环境
+      conda create -y -n chanlun python=3.11
+      # 切换到新创建的 chanlun 环境  
       conda activate chanlun
-      cd \你的项目代码路径\chanlun-pro\web\chanlun_chart
-      python app.py
+
+      # PIP 安装项目依赖包
+      pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+      pip3 install package/pytdx-1.72r2-py3-none-any.whl
+      pip3 install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
+      pip3 install -r requirements.txt
+
+      # 检查环境
+      python check_env.py
+
+      # 运行 Web 服务
+      python web/chanlun_chart/app.py
+      
