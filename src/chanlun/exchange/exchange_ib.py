@@ -285,11 +285,12 @@ if __name__ == "__main__":
     # stock_info = ex.stock_info('DOCU')
     # print(stock_info)
     #
-    klines = ex.klines("NVDA", "60m")
-    print(klines.tail(20))
+    # klines = ex.klines("NVDA", "60m")
+    # print(klines.tail(20))
 
     # balance = ex.balance()
     # print(balance)
+
     # #
     # position = ex.positions()
     # print(position)
@@ -298,8 +299,8 @@ if __name__ == "__main__":
     # order = ex.order('MSFT', 'buy', 1)
     # print(order)
 
-    # stock_info = ex.stock_info('ETH_CRYPTO_PAXOS')
-    # print(stock_info)
+    stock_info = ex.stock_info('META')
+    print(stock_info)
 
     # res = ex.ib.reqSmartComponents('NASDAQ')
     # print(res)

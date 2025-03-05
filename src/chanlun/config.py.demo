@@ -25,7 +25,7 @@ DB_USER = 'root'
 DB_PWD = '123456'
 DB_DATABASE = 'chanlun_klines'
 
-# Redis 配置，不使用可将 REDIS_HOST 设置为空字符串
+# Redis 配置，不使用可将 REDIS_HOST 设置为空字符串（基本不用）
 REDIS_HOST = ''  # 127.0.0.1
 REDIS_PORT = 6379
 
