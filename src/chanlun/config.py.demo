@@ -30,12 +30,14 @@ REDIS_HOST = ''  # 127.0.0.1
 REDIS_PORT = 6379
 
 # 各个市场的交易所设置（只适用于WEB页面的行情展示）
-# A股市场支持：tdx / baostock /qmt
-# 港股市场支持：tdx_hk / futu
-# 期货市场支持：tq / tdx_futures
-# 外汇市场支持 tdx_fx
-# 数字货币支持： binance / zb
-# 美股市场支持： alpaca / polygon / ib / tdx_us
+# db 表示读取数据库中的行情，适用于在国外或其他原因，tdx 无法正常使用的情况
+
+# A股市场支持：tdx / baostock /qmt / db
+# 港股市场支持：tdx_hk / futu / db
+# 期货市场支持：tq / tdx_futures / db
+# 外汇市场支持 tdx_fx / db
+# 数字货币支持： binance / zb / db
+# 美股市场支持： alpaca / polygon / ib / tdx_us / db
 EXCHANGE_A = 'tdx'
 EXCHANGE_HK = 'tdx_hk'
 EXCHANGE_FUTURES = 'tdx_futures'

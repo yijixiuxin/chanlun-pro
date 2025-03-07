@@ -210,6 +210,8 @@ class DB(object):
                 f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
                 echo=False,
                 poolclass=QueuePool,
+                pool_recycle=3600,
+                pool_pre_ping=True,
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,

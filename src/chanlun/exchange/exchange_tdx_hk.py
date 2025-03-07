@@ -199,11 +199,11 @@ class ExchangeTDXHK(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
                         old_end_dt = klines_df.iloc[-1]["date"]
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     #
     # print(ex.to_tdx_code('KH.00700'))
     #
-    klines = ex.klines("KH.00006", "60m", args={"pages": 1})
+    klines = ex.klines("KH.09618", "d")
     print(klines.tail(20))
 
     # ticks = ex.ticks(['KH.00700'])
