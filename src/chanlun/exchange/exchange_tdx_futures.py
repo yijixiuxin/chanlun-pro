@@ -206,8 +206,8 @@ class ExchangeTDXFutures(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         _ks["datetime"] = _ks["datetime"].apply(self.fix_yp_date)
