@@ -599,6 +599,43 @@ def xg_single_bi_1buy_next_l3buy_mmd(
     return None
 
 
+def xg_single_xdzs_bimmdbc(code: str, mk_datas: MarketDatas, opt_type: list = []):
+    deviation_rate = 0.08
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+    if len(cd.get_xd_zss()) == 0:
+        return None
+    xd_zs = cd.get_xd_zss()[-1]
+    xd = cd.get_xds()[-1]
+    # 线段的进入段要是向上的
+    if xd_zs.lines[0].type != "up":
+        return None
+    if xd_zs.lines[-1].type == "up":
+        return None
+    if xd_zs.lines[-1].index != xd.index:
+        return None
+    if xd_zs.line_num >= 9:
+        return None
+    # 进入线段的起始要是最低的
+    if xd_zs.lines[0].low != min([_l.low for _l in xd_zs.lines]):
+        return None
+    if "1sell" in xd_zs.zs_mmds() or "2sell" in xd_zs.zs_mmds():
+        return None
+
+    # 判断笔条件（获取最后一个下跌笔）
+    bi = cd.get_bis()[-1]
+    if bi.type != "down":
+        bi = cd.get_bis()[-2]
+    if len(bi.line_mmds()) == 0 and len(bi.line_bcs()) == 0:
+        return None
+
+    # 判断笔的结束价格，是否再 xd_zs.zd 的 deviation_rate 范围内
+    if xd_zs.zd * (1 - deviation_rate) <= bi.end.val <= xd_zs.zd * (1 + deviation_rate):
+        return {
+            "code": code,
+            "msg": f"向上线段中枢，笔回调到线段zd附近，有买卖点背驰信号",
+        }
+
+
 if __name__ == "__main__":
     from chanlun.exchange.exchange_tdx import ExchangeTDX
     from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas

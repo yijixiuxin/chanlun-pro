@@ -228,8 +228,8 @@ class ExchangeTDX(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         if len(_ks) == 0:

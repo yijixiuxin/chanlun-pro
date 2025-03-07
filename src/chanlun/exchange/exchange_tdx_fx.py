@@ -189,8 +189,8 @@ class ExchangeTDXFX(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -210,8 +210,8 @@ class ExchangeTDXFX(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])

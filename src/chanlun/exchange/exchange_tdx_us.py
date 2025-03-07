@@ -181,11 +181,11 @@ class ExchangeTDXUS(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
                         old_end_dt = klines_df.iloc[-1]["date"]
