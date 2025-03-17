@@ -5,7 +5,7 @@ from typing import Union
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
 from chanlun.db import db
@@ -24,35 +24,41 @@ class ExchangeTDXFutures(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"TDXEX 最优服务器：{self.connect_info}")
-
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-        # 初始化，映射交易所代码
-        self.market_maps = {}
-        while True:
-            try:
-                client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                    all_markets = client.get_markets()
-                    for _m in all_markets:
-                        if _m["category"] == 3:
-                            self.market_maps[_m["short_name"]] = {
-                                "market": _m["market"],
-                                "category": _m["category"],
-                                "name": _m["name"],
-                            }
-                break
-            except TdxConnectionError:
-                self.reset_tdx_ip()
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"TDXEX 最优服务器：{self.connect_info}")
+
+            # 初始化，映射交易所代码
+            self.market_maps = {}
+            while True:
+                try:
+                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
+                    with client.connect(
+                        self.connect_info["ip"], self.connect_info["port"]
+                    ):
+                        all_markets = client.get_markets()
+                        for _m in all_markets:
+                            if _m["category"] == 3:
+                                self.market_maps[_m["short_name"]] = {
+                                    "market": _m["market"],
+                                    "category": _m["category"],
+                                    "name": _m["name"],
+                                }
+                    break
+                except TdxConnectionError:
+                    self.reset_tdx_ip()
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 期货行情接口初始化失败，期货行情不可用")
 
     def reset_tdx_ip(self):
         """

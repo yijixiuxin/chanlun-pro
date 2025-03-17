@@ -25,16 +25,18 @@ try:
         sys.stdout = filter(sys.stdout)
         sys.stderr = filter(sys.stderr)
 
-except Exception as e:
+except Exception:
     pass
 
-from tornado.wsgi import WSGIContainer
-from tornado.httpserver import HTTPServer
-from tornado.ioloop import IOLoop
 import pathlib
 import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
+
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
+from tornado.wsgi import WSGIContainer
+
 from chanlun import config
 
 cmd_path = pathlib.Path.cwd()
@@ -69,5 +71,7 @@ if __name__ == "__main__":
         print(e)
         traceback.print_exc()
 
+        if is_wpf_launcher is False:
+            input("出现异常，按回车键退出")
         if is_wpf_launcher is False:
             input("出现异常，按回车键退出")
