@@ -1,13 +1,15 @@
+import datetime
 import json
 import random
-import time, datetime
+import time
 from typing import Tuple
 
 import akshare as ak
+import pandas as pd
 from pytdx.hq import TdxHq_API
 from pytdx.params import TDXParams
 from tqdm.auto import tqdm
-import pandas as pd
+
 from chanlun.config import get_data_path
 
 """
@@ -18,7 +20,7 @@ from chanlun.config import get_data_path
 class StocksBKGN(object):
     def __init__(self):
         self.file_path = get_data_path() / "json"
-        if self.file_path.is_dir() == False:
+        if self.file_path.is_dir() is False:
             self.file_path.mkdir(parents=True)
 
         self.file_name = self.file_path / "stocks_bkgn.json"
@@ -351,4 +353,5 @@ if __name__ == "__main__":
 
     # 根据概念获取其中的代码
     # codes = bkgn.get_codes_by_gn('电子竞技')
+    # print(codes)
     # print(codes)

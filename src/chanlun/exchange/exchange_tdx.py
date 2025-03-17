@@ -1,22 +1,20 @@
 import copy
-import pathlib
-import time
 import traceback
-from typing import Union
 import warnings
+from typing import Union
 
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
 from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.config import get_data_path
+from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
-from chanlun.db import db
-from chanlun.config import get_data_path
 
 
 @fun.singleton
@@ -30,12 +28,16 @@ class ExchangeTDX(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdx_connect_ip")
-        # connect_info = None # 手动重新选择最优服务器
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"最优服务器：{self.connect_info}")
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdx_connect_ip")
+            # connect_info = None # 手动重新选择最优服务器
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"最优服务器：{self.connect_info}")
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 沪深行情接口初始化失败，沪深行情不可用")
 
         # 板块概念信息
         self.stock_bkgn = StocksBKGN()

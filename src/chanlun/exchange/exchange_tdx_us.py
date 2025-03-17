@@ -1,17 +1,17 @@
 import traceback
 from typing import Union
-import akshare as ak
 
+import akshare as ak
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
-from chanlun import fun
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
+from chanlun import fun
+from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.file_db import FileCacheDB
-from chanlun.config import get_data_path
 
 
 @fun.singleton
@@ -25,11 +25,15 @@ class ExchangeTDXUS(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"最优服务器：{self.connect_info}")
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"最优服务器：{self.connect_info}")
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 美股行情接口初始化失败，美股行情不可用")
 
         # 设置时区
         self.tz = pytz.timezone("US/Eastern")
