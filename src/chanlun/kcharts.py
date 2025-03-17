@@ -2,11 +2,12 @@ import os
 
 import MyTT
 import talib
-import MyTT
 
 # 画图配置
 from pyecharts import options as opts
-from pyecharts.charts import Kline as cKline, Line, Bar, Grid, Scatter
+from pyecharts.charts import Bar, Grid
+from pyecharts.charts import Kline as cKline
+from pyecharts.charts import Line, Scatter
 from pyecharts.commons.utils import JsCode
 
 from chanlun.backtesting.base import Strategy
@@ -14,7 +15,7 @@ from chanlun.cl_analyse import LinesFormAnalyse
 from chanlun.cl_interface import *
 from chanlun.cl_utils import cl_qstd, klines_to_heikin_ashi_klines
 from chanlun.exchange import exchange
-from chanlun.fun import str_to_datetime, datetime_to_str
+from chanlun.fun import str_to_datetime
 
 if "JPY_PARENT_PID" in os.environ:
     from pyecharts.globals import CurrentConfig, NotebookType
@@ -113,7 +114,7 @@ def render_charts(
                     config[_k] = bool(int(config[_k]))
                 elif "chart_idx_" in _k or "chart_kline_nums" in _k:
                     config[_k] = int(config[_k])
-            except Exception as e:
+            except Exception:
                 print(f"{_k} val error {config[_k]}")
                 config[_k] = _v
 
@@ -935,7 +936,7 @@ def render_charts(
                 Line()
                 .add_xaxis(xaxis_data=klines_xaxis)
                 .add_yaxis(
-                    series_name=f"AMA",
+                    series_name="AMA",
                     is_symbol_show=False,
                     y_axis=ama,
                     linestyle_opts=opts.LineStyleOpts(
@@ -970,14 +971,14 @@ def render_charts(
                 Line()
                 .add_xaxis(xaxis_data=klines_xaxis)
                 .add_yaxis(
-                    series_name=f"Atr Stop Loss",
+                    series_name="Atr Stop Loss",
                     is_symbol_show=False,
                     y_axis=up_stop_loss_vals,
                     linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(255,82,82)"),
                     label_opts=opts.LabelOpts(is_show=False),
                 )
                 .add_yaxis(
-                    series_name=f"Atr Stop Loss",
+                    series_name="Atr Stop Loss",
                     is_symbol_show=False,
                     y_axis=down_stop_loss_vals,
                     linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(0,137,123)"),
@@ -1637,4 +1638,5 @@ def datetime_convert_frequency(src_dates, target_dates):
             res_dates.append(_dt)
         else:
             res_dates.append(_dts.iloc[-1])
+    return res_dates
     return res_dates
