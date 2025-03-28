@@ -1,32 +1,28 @@
 import datetime
 import json
 import time
+import warnings
 from typing import List, Union
+
 import numpy as np
 import pandas as pd
-import warnings
-
 from sqlalchemy import (
-    UniqueConstraint,
-    create_engine,
     Column,
+    DateTime,
+    Float,
     Integer,
     String,
-    Float,
-    DateTime,
-    Date,
     Text,
+    UniqueConstraint,
+    create_engine,
     func,
 )
-import sqlalchemy
 from sqlalchemy.dialects.mysql import insert
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
 
+from chanlun import config, fun
 from chanlun.base import Market
-from chanlun import fun
-from chanlun import config
 from chanlun.config import get_data_path
 
 warnings.filterwarnings("ignore")
@@ -273,6 +269,10 @@ class DB(object):
                 "mysql_collate": "utf8mb4_general_ci",
             }
 
+        if market == Market.FUTURES.value:
+            # 期货市场，添加持仓列
+            TableByKlines.p = Column(Float, comment="持仓量")
+
         self.__cache_tables[table_name] = TableByKlines
         Base.metadata.create_all(self.engine)
         return TableByKlines
@@ -366,6 +366,8 @@ class DB(object):
                         "l": _k["low"],
                         "v": _k["volume"],
                     }
+                    if "position" in _k.keys():
+                        _in_k["p"] = _k["position"]
                     db_k = (
                         session.query(table)
                         .filter(
@@ -391,23 +393,27 @@ class DB(object):
             groups = [
                 group.reset_index(drop=True) for _, group in klines.groupby(group)
             ]
+            in_position = "position" in klines.columns
             for g_klines in groups:
                 insert_klines = []
                 for _, _k in g_klines.iterrows():
-                    insert_klines.append(
-                        {
-                            "code": code,
-                            "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                            "f": frequency,
-                            "o": _k["open"],
-                            "c": _k["close"],
-                            "h": _k["high"],
-                            "l": _k["low"],
-                            "v": _k["volume"],
-                        }
-                    )
+                    _insert_k = {
+                        "code": code,
+                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
+                        "f": frequency,
+                        "o": _k["open"],
+                        "c": _k["close"],
+                        "h": _k["high"],
+                        "l": _k["low"],
+                        "v": _k["volume"],
+                    }
+                    if in_position:
+                        _insert_k["p"] = _k["position"]
+                    insert_klines.append(_insert_k)
                 insert_stmt = insert(table).values(insert_klines)
                 update_keys = ["o", "c", "h", "l", "v"]
+                if in_position:
+                    update_keys.append("p")
                 update_columns = {
                     x.name: x for x in insert_stmt.inserted if x.name in update_keys
                 }

@@ -1,18 +1,20 @@
 import os
+from typing import List
 
 import MyTT
+import numpy as np
+import pandas as pd
 import talib
 
 # 画图配置
 from pyecharts import options as opts
-from pyecharts.charts import Bar, Grid
+from pyecharts.charts import Bar, Grid, Line, Scatter
 from pyecharts.charts import Kline as cKline
-from pyecharts.charts import Line, Scatter
 from pyecharts.commons.utils import JsCode
 
 from chanlun.backtesting.base import Strategy
 from chanlun.cl_analyse import LinesFormAnalyse
-from chanlun.cl_interface import *
+from chanlun.cl_interface import ICL, LINE, ZS
 from chanlun.cl_utils import cl_qstd, klines_to_heikin_ashi_klines
 from chanlun.exchange import exchange
 from chanlun.fun import str_to_datetime
@@ -1591,15 +1593,15 @@ def lines_to_charts(lines: List[LINE]):
     if len(dones) > 0:
         line_dones["index"].append(dones[0].start.k.date)
         line_dones["val"].append(dones[0].start.val)
-    for l in dones:
-        line_dones["index"].append(l.end.k.date)
-        line_dones["val"].append(l.end.val)
+    for _l in dones:
+        line_dones["index"].append(_l.end.k.date)
+        line_dones["val"].append(_l.end.val)
     if len(no_dones) > 0:
         line_no_dones["index"].append(no_dones[0].start.k.date)
         line_no_dones["val"].append(no_dones[0].start.val)
-    for l in no_dones:
-        line_no_dones["index"].append(l.end.k.date)
-        line_no_dones["val"].append(l.end.val)
+    for _l in no_dones:
+        line_no_dones["index"].append(_l.end.k.date)
+        line_no_dones["val"].append(_l.end.val)
     return line_dones, line_no_dones
 
 
