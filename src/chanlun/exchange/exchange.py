@@ -1,16 +1,16 @@
 import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import Dict, List
 
 import pandas as pd
 import pytz
 
 from chanlun.fun import (
-    datetime_to_str,
-    str_to_timeint,
     datetime_to_int,
+    datetime_to_str,
     str_to_datetime,
+    str_to_timeint,
     timeint_to_datetime,
 )
 
@@ -380,6 +380,12 @@ def convert_futures_kline_frequency(
         period_klines["volume"] = (
             klines["volume"].resample(period_type, label="right", closed="left").sum()
         )
+        if "position" in klines.columns:
+            period_klines["position"] = (
+                klines["position"]
+                .resample(period_type, label="right", closed="left")
+                .last()
+            )
         period_klines.dropna(inplace=True)
         period_klines.reset_index(inplace=True)
         period_klines.drop("date_index", axis=1, inplace=True)
@@ -393,7 +399,7 @@ def convert_futures_kline_frequency(
                 return timeint_to_datetime(dt_int - (dt_int % seconds))
 
             period_klines["date"] = period_klines["date"].map(bts_time)
-        return period_klines[["code", "date", "open", "close", "high", "low", "volume"]]
+        return period_klines
 
     # 因为 10:15 10:30 休息 15分钟， 这一部分 掘金和天勤上的处理逻辑是不一样的，在合成 30m，60m 数据时时有差异的
     if process_exchange_type == "gm":
@@ -494,20 +500,21 @@ def convert_futures_kline_frequency(
     klines["new_dt"] = klines["date"].apply(
         lambda _d: dt_to_new_dt(freq_config_maps[to_f], _d)
     )
-    klines_groups = klines.groupby(by=["new_dt"]).agg(
-        {
-            "code": "first",
-            "open": "first",
-            "high": "max",
-            "low": "min",
-            "close": "last",
-            "volume": "sum",
-        }
-    )
+    agg_config = {
+        "code": "first",
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }
+    if "position" in klines.columns:
+        agg_config["position"] = "last"
+    klines_groups = klines.groupby(by=["new_dt"]).agg(agg_config)
     klines_groups["date"] = klines_groups.index
     klines_groups.reset_index(drop=True, inplace=True)
 
-    return klines_groups[["code", "date", "open", "close", "high", "low", "volume"]]
+    return klines_groups
 
 
 def convert_us_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
@@ -668,6 +675,10 @@ def convert_kline_frequency(
     period_klines["volume"] = (
         klines["volume"].resample(period_type, label=label, closed=closed).sum()
     )
+    if "position" in klines.columns:
+        period_klines["position"] = (
+            klines["position"].resample(period_type, label=label, closed=closed).last()
+        )
     period_klines.dropna(inplace=True)
     period_klines.reset_index(inplace=True)
     period_klines.drop("date_index", axis=1, inplace=True)
@@ -676,9 +687,9 @@ def convert_kline_frequency(
 
 
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_db import ExchangeDB
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
     import pandas as pd
+
+    from chanlun.exchange.exchange_db import ExchangeDB
 
     code = "SHFE.RB"
 
@@ -705,4 +716,5 @@ if __name__ == "__main__":
     # print(convert_klines_60m.tail())
 
     # print('klines_30m')
+    # print(klines_30m.tail(30))
     # print(klines_30m.tail(30))

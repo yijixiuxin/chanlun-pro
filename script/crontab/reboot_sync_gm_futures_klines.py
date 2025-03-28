@@ -159,10 +159,12 @@ for code in run_codes:
             )
             klines.loc[:, "code"] = klines["symbol"]
             klines.loc[:, "date"] = pd.to_datetime(klines["bob"])
-            klines = klines[["code", "date", "open", "close", "high", "low", "volume"]]
+            klines = klines[
+                ["code", "date", "open", "close", "high", "low", "volume", "position"]
+            ]
             print("Run code %s frequency %s klines len %s" % (code, f, len(klines)))
             db_ex.insert_klines(code, f, klines)
-        except Exception as e:
+        except Exception:
             print("执行 %s 同步K线异常" % code)
             print(traceback.format_exc())
             time.sleep(10)

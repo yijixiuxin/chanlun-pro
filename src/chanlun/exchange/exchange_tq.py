@@ -1,14 +1,17 @@
-import math, time
+import datetime
+import math
 import threading
-from typing import Union
+import time
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 import tqsdk
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from tqsdk.objs import Account, Position, Quote
 
-from chanlun import config
-from chanlun.exchange.exchange import *
-from chanlun import fun
+from chanlun import config, fun
+from chanlun.exchange.exchange import Exchange, Tick
 
 
 @fun.singleton
@@ -338,7 +341,7 @@ class ExchangeTq(Exchange):
                 break
         return res_ticks
 
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         """
         获取股票的基本信息
         :param code:
@@ -553,7 +556,7 @@ class ExchangeTq(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeTq(use_simulate_account=True)
+    ex = ExchangeTq(use_simulate_account=False)
 
     # print("all_stocks", len(ex.all_stocks()))
     # for c in ['FUTURE', 'CONT']:
@@ -563,8 +566,8 @@ if __name__ == "__main__":
     # main_codes = ex.get_api().query_cont_quotes()
     # print(main_codes)
 
-    klines = ex.klines("KQ.m@SHFE.ss", "10m")
-    print(klines.tail())
+    # klines = ex.klines("KQ.m@SHFE.ss", "10m")
+    # print(klines.tail())
 
     # klines = klines[klines['date'] <= '2023-10-16 15:00:00']
 
@@ -573,8 +576,8 @@ if __name__ == "__main__":
     # tick = ex.ticks(['DCE.l2401'])
     # print(tick)
 
-    # balance = ex.balance()
-    # print(balance)
+    balance = ex.balance()
+    print(balance)
 
     # ex.close_task_thread()
     # ex.restart_task_thread()

@@ -4,7 +4,7 @@ import math
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import *
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -692,16 +692,16 @@ class TZXL:
 
     def get_start_fx(self):
         if self.bh_direction == "up":
-            sort_lines = sorted(self.lines, key=lambda l: l.high, reverse=True)
+            sort_lines = sorted(self.lines, key=lambda _l: _l.high, reverse=True)
         else:
-            sort_lines = sorted(self.lines, key=lambda l: l.low, reverse=False)
+            sort_lines = sorted(self.lines, key=lambda _l: _l.low, reverse=False)
         return sort_lines[0].start
 
     def get_end_fx(self):
         if self.bh_direction == "up":
-            sort_lines = sorted(self.lines, key=lambda l: l.low, reverse=True)
+            sort_lines = sorted(self.lines, key=lambda _l: _l.low, reverse=True)
         else:
-            sort_lines = sorted(self.lines, key=lambda l: l.high, reverse=False)
+            sort_lines = sorted(self.lines, key=lambda _l: _l.high, reverse=False)
         return sort_lines[0].end
 
 

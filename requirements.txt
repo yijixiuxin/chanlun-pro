@@ -6,7 +6,7 @@ prettytable
 pymysql
 chardet
 
-pyecharts==2.0.5
+pyecharts==2.0.8
 django==3.2.12
 dbutils
 apscheduler

@@ -1,19 +1,13 @@
 import copy
-import pickle
+import datetime
 import time
+from typing import Dict, List, Tuple
 
 from chanlun import fun
 from chanlun.backtesting import futures_contracts
-from chanlun.backtesting.base import (
-    Strategy,
-    Operation,
-    POSITION,
-    MarketDatas,
-    Trader,
-)
-from chanlun.cl_interface import *
-from chanlun.file_db import fdb
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
 from chanlun.db import db
+from chanlun.file_db import fdb
 
 
 class BackTestTrader(Trader):

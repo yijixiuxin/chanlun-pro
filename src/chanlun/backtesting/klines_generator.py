@@ -1,6 +1,7 @@
-from chanlun import fun
-from chanlun.cl_interface import *
+import pandas as pd
+
 from chanlun import cl
+from chanlun.cl_interface import ICL
 
 
 class KlinesGenerator:
@@ -84,6 +85,12 @@ class KlinesGenerator:
             .resample(period_type, label=label, closed=closed)
             .sum()
         )
+        if "position" in convert_klines.columns:
+            period_klines["position"] = (
+                convert_klines["position"]
+                .resample(period_type, label=label, closed=closed)
+                .last()
+            )
         period_klines.dropna(inplace=True)
         period_klines.reset_index(inplace=True)
         period_klines.drop("date_index", axis=1, inplace=True)
@@ -113,9 +120,9 @@ class KlinesGenerator:
 
 
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_db import ExchangeDB
-    from chanlun.exchange.exchange import convert_futures_kline_frequency
     from chanlun.cl_utils import query_cl_chart_config
+    from chanlun.exchange.exchange import convert_futures_kline_frequency
+    from chanlun.exchange.exchange_db import ExchangeDB
 
     market = "futures"
     code = "SHFE.RB"
@@ -133,4 +140,5 @@ if __name__ == "__main__":
     print(kg.to_klines[["date", "open", "close", "high", "low", "volume"]].tail())
 
     klines_day = convert_futures_kline_frequency(kg.to_klines, "d")
+    print(klines_day.tail())
     print(klines_day.tail())
