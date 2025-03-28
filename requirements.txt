@@ -34,7 +34,7 @@ baostock
 polygon-api-client
 alpaca-py
 ib_insync
-akshare
+akshare==1.16.59
 tqsdk
 
 pyfolio-reloaded
