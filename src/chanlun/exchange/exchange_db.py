@@ -1,20 +1,20 @@
 import datetime
-from typing import List, Dict, Union
+from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
 from tzlocal import get_localzone
-from chanlun import fun
-from chanlun.db import db
 
+from chanlun import fun
 from chanlun.base import Market
+from chanlun.db import db
 from chanlun.exchange.exchange import (
     Exchange,
+    Tick,
+    convert_currency_kline_frequency,
     convert_futures_kline_frequency,
     convert_stock_kline_frequency,
     convert_us_kline_frequency,
-    convert_currency_kline_frequency,
-    Tick,
 )
 
 
@@ -195,17 +195,18 @@ class ExchangeDB(Exchange):
         )
         kline_pd = []
         for _k in klines:
-            kline_pd.append(
-                {
-                    "code": _k.code,
-                    "date": _k.dt,
-                    "open": _k.o,
-                    "high": _k.h,
-                    "low": _k.l,
-                    "close": _k.c,
-                    "volume": _k.v,
-                }
-            )
+            _kline = {
+                "code": _k.code,
+                "date": _k.dt,
+                "open": _k.o,
+                "high": _k.h,
+                "low": _k.l,
+                "close": _k.c,
+                "volume": _k.v,
+            }
+            if self.market == Market.FUTURES.value:
+                _kline["position"] = _k.p
+            kline_pd.append(_kline)
         if len(kline_pd) == 0:
             kline_pd = pd.DataFrame(
                 [], columns=["date", "code", "high", "low", "open", "close", "volume"]

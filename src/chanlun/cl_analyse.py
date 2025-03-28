@@ -1,4 +1,17 @@
-from chanlun.cl_interface import *
+from typing import Dict, List, Union
+
+from chanlun.cl_interface import (
+    BI,
+    BW_LINE_QS_INFOS,
+    ICL,
+    LINE,
+    LINE_FORM_INFOS,
+    LOW_LEVEL_QS,
+    XD,
+    ZS,
+    compare_ld_beichi,
+    query_macd_ld,
+)
 
 
 class MultiLevelAnalyse:
@@ -192,8 +205,8 @@ class LinesFormAnalyse:
             return None
         line_direction = lines[0].type
         # 起始结束必须是最高和最低 TODO 这样一些复杂的形态就不能分析了
-        lines_max_high = max([l.high for l in lines])
-        lines_min_low = min([l.low for l in lines])
+        lines_max_high = max([_l.high for _l in lines])
+        lines_min_low = min([_l.low for _l in lines])
         if (
             line_direction == "up"
             and (lines[0].low != lines_min_low or lines[-1].high != lines_max_high)
@@ -297,7 +310,7 @@ class LinesFormAnalyse:
                     zs_qs = False
                     break
 
-        if zs_qs:
+        if zs_qs and len(zss) >= 2:
             # 如果是趋势，比较最后一个中枢前后两段
             line_1_ld = {"macd": query_macd_ld(self.cd, zss[-2].end, zss[-1].start)}
             line_2_ld = {"macd": query_macd_ld(self.cd, zss[-1].end, lines[-1].end)}
@@ -529,13 +542,17 @@ class LinesFormAnalyse:
 
 # 使用示例
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_db import ExchangeDB
-    from chanlun.cl_utils import query_cl_chart_config
     from chanlun import cl
+    from chanlun.cl_utils import query_cl_chart_config
+    from chanlun.exchange.exchange_db import ExchangeDB
 
-    cl_config = query_cl_chart_config("a", "SH.000001")
+    cl_config = query_cl_chart_config("futures", "SH.000001")
 
-    ex = ExchangeDB("a")
-    klines = ex.klines("SH.000001", "d")
+    ex = ExchangeDB("futures")
+    klines = ex.klines("SHFE.RB", "5m", end_date="2025-02-25 15:00:00")
 
-    cd: ICL = cl.CL("SH.000001", "d", cl_config).process_klines(klines)
+    cd: ICL = cl.CL("SHFE.RB", "5m", cl_config).process_klines(klines)
+
+    lfa = LinesFormAnalyse(cd)
+    b = lfa.lines_analyse(5, cd.get_bis()[-5:])
+    print(b)
