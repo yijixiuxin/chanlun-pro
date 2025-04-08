@@ -581,8 +581,8 @@ if __name__ == "__main__":
 
     # ex.close_task_thread()
     # ex.restart_task_thread()
-    ex.close_task_thread()
-    ex.close_api()
+    # ex.close_task_thread()
+    # ex.close_api()
     print("Done")
 
     # ex.close_api()

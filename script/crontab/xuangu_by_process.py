@@ -1,16 +1,16 @@
 #:  -*- coding: utf-8 -*-
-import json
 import time
-
-from chanlun import zixuan
-from chanlun.cl_interface import *
-from chanlun.cl_utils import web_batch_get_cl_datas, query_cl_chart_config
-from chanlun.exchange.exchange_tdx import ExchangeTDX
-from chanlun.xuangu import xuangu
-from chanlun.trader.online_market_datas import OnlineMarketDatas
+import traceback
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+
 from tqdm.auto import tqdm
+
+from chanlun import zixuan
+from chanlun.cl_utils import query_cl_chart_config
+from chanlun.exchange.exchange_tdx import ExchangeTDX
+from chanlun.trader.online_market_datas import OnlineMarketDatas
+from chanlun.xuangu import xuangu
 
 """
 沪深A股 选股程序
@@ -43,7 +43,6 @@ mk_datas = OnlineMarketDatas(
 
 """
 直接放入自选组
-这个需要确保在 config.py 中有进行配置
 """
 zx = zixuan.ZiXuan("a")
 zx_group = "测试选股"
@@ -69,6 +68,7 @@ def xuangu_by_code(code: str):
         # ...
     except Exception as e:
         print("Code : %s Run Exception : %s" % (code, e))
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

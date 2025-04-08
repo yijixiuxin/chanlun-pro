@@ -7,7 +7,6 @@ pymysql
 chardet
 
 pyecharts==2.0.8
-django==3.2.12
 dbutils
 apscheduler
 tenacity
@@ -29,12 +28,12 @@ pyarmor
 setuptools
 
 futu-api
-ccxt==4.3.59
+ccxt
 baostock
 polygon-api-client
 alpaca-py
 ib_insync
-akshare==1.16.59
+akshare
 tqsdk
 
 pyfolio-reloaded
