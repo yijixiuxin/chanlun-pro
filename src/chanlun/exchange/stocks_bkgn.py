@@ -1,6 +1,8 @@
+import asyncio
 import datetime
 import json
 import random
+import sys
 import time
 from typing import Tuple
 
@@ -99,6 +101,9 @@ class StocksBKGN(object):
         下载更新保存新的板块概念信息
         通过 东方财富 接口获取板块概念
         """
+        if sys.platform == "win32":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
         error_msgs = []
         stock_industrys = {}
         ak_industry = ak.stock_board_industry_name_em()
@@ -314,17 +319,17 @@ if __name__ == "__main__":
     bkgn.reload_dfcf_bkgn()
 
     # 所有行业概念
-    # hys, gns = bkgn.file_bkgns()
-    # all_hy_names = []
-    # all_gn_names = []
-    # for _c, _v in hys.items():
-    #     all_hy_names += _v
-    #     all_hy_names = list(set(all_hy_names))
-    # for _c, _v in gns.items():
-    #     all_gn_names += _v
-    #     all_gn_names = list(set(all_gn_names))
-    # print(len(all_hy_names))
-    # print(len(all_gn_names))
+    hys, gns = bkgn.file_bkgns()
+    all_hy_names = []
+    all_gn_names = []
+    for _c, _v in hys.items():
+        all_hy_names += _v
+        all_hy_names = list(set(all_hy_names))
+    for _c, _v in gns.items():
+        all_gn_names += _v
+        all_gn_names = list(set(all_gn_names))
+    print("行业数量：", len(all_hy_names))
+    print("概念数量：", len(all_gn_names))
 
     # # 同步所有行业指数到数据库
     # from chanlun.exchange.exchange_db import ExchangeDB
@@ -344,12 +349,12 @@ if __name__ == "__main__":
     # print(all_gn_names)
 
     # 获取代码的板块概念信息
-    code_bkgn = bkgn.get_code_bkgn("SH.600143")
-    print(code_bkgn)
+    # code_bkgn = bkgn.get_code_bkgn("SH.600143")
+    # print(code_bkgn)
 
     # 根据行业获取其中的代码
-    codes = bkgn.get_codes_by_hy("塑料制品")
-    print(codes)
+    # codes = bkgn.get_codes_by_hy("塑料制品")
+    # print(codes)
 
     # 根据概念获取其中的代码
     # codes = bkgn.get_codes_by_gn('电子竞技')
