@@ -1,8 +1,11 @@
+import datetime
 import time
 import traceback
-from typing import Union
+from typing import Dict, List, Union
 
 import akshare as ak
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from pytdx.util import best_ip
@@ -11,7 +14,7 @@ from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from chanlun import fun
 from chanlun.config import get_data_path
 from chanlun.db import db
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 
 
@@ -300,15 +303,10 @@ class ExchangeTDXHK(Exchange):
     def now_trading(self):
         """
         返回当前是否是交易时间
-        TODO 简单判断 ：9-12 , 13:30-15:00 21:00-02:30
+        TODO 简单判断 ：9:00-16:00
         """
         hour = int(time.strftime("%H"))
-        minute = int(time.strftime("%M"))
-        if (
-            hour in {9, 10, 11, 14, 21, 22, 23, 0, 1}
-            or (hour == 13 and minute >= 30)
-            or (hour == 2 and minute <= 30)
-        ):
+        if hour in {9, 10, 11, 12, 13, 14, 15}:
             return True
         return False
 
