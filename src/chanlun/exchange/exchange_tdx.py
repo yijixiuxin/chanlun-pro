@@ -1,8 +1,11 @@
 import copy
+import datetime
 import traceback
 import warnings
-from typing import Union
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
 from pytdx.util import best_ip
@@ -11,7 +14,7 @@ from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from chanlun import fun
 from chanlun.config import get_data_path
 from chanlun.db import db
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
@@ -358,7 +361,15 @@ class ExchangeTDX(Exchange):
                 if _q["code"] == "999999":
                     _code = "SH.000001"
                 else:
-                    _code = [_c for _c in codes if _c[-6:] == _q["code"]]
+                    _code = [
+                        _c
+                        for _c in codes
+                        if _c[-6:] == _q["code"]
+                        and (
+                            (_c[:2] == "SZ" and _q["market"] == 0)
+                            or (_c[:2] == "SH" and _q["market"] == 1)
+                        )
+                    ]
                     if len(_code) == 0:
                         continue
                     _code = _code[0]
@@ -682,11 +693,11 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.600498", "60m")
-    print(klines.tail(20))
+    # klines = ex.klines("SH.600498", "60m")
+    # print(klines.tail(20))
 
-    # ticks = ex.ticks(['SZ.300474'])
-    # print(ticks)
+    ticks = ex.ticks(["SH.000001", "SZ.000001"])
+    print(ticks)
 
     # 获取复权相关信息
     # code = "SZ.002165"
