@@ -5,22 +5,24 @@
 import os
 import pathlib
 import time
+import traceback
 from typing import List
 
+import lark_oapi as lark
+from lark_oapi.api.im.v1 import (
+    CreateImageRequest,
+    CreateImageRequestBody,
+    CreateImageResponse,
+)
 from pyecharts.render import make_snapshot
 from snapshot_selenium import snapshot
 
-import lark_oapi as lark
-from lark_oapi.api.im.v1 import *
-
-from chanlun import kcharts
+from chanlun import config, kcharts
 from chanlun.cl_interface import ICL
-from chanlun.cl_utils import web_batch_get_cl_datas, bi_td
-from chanlun.exchange import get_exchange, Market
-from chanlun.utils import send_fs_msg
-from chanlun import config
+from chanlun.cl_utils import bi_td, web_batch_get_cl_datas
 from chanlun.db import db
-import traceback
+from chanlun.exchange import Market, get_exchange
+from chanlun.utils import send_fs_msg
 
 
 def monitoring_code(
@@ -204,7 +206,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     缠论数据保存图表并上传网络，返回访问地址
     """
     # 没有启用图片则不生产图片
-    if config.FEISHU_KEYS["enable_img"] == False:
+    if config.FEISHU_KEYS["enable_img"] is False:
         return ""
 
     fs_keys = (
@@ -267,9 +269,9 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
 
 
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
-    from chanlun.cl_utils import query_cl_chart_config
     from chanlun import cl
+    from chanlun.cl_utils import query_cl_chart_config
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     ex = ExchangeTDX()
     cl_config = query_cl_chart_config("a", "SH.000001")

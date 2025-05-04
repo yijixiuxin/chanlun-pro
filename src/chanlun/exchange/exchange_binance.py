@@ -1,16 +1,16 @@
-import traceback
-from typing import Union
+import datetime
+from typing import Dict, List, Union
 
 import ccxt
-import pymysql.err
+import pandas as pd
 import pytz
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from tzlocal import get_localzone
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
 from chanlun import config, fun
-from chanlun.utils import config_get_proxy
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick, convert_currency_kline_frequency
 from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.utils import config_get_proxy
 
 
 @fun.singleton
@@ -88,14 +88,15 @@ class ExchangeBinance(Exchange):
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        markets = self.exchange.load_markets()
+        markets = self.exchange.load_markets(reload=True)
         __all_stocks = []
         for _, s in markets.items():
-            if s["quote"] == "USDT":
+            if s["active"] and s["quote"] == "USDT":
                 __all_stocks.append(
                     {
                         "code": s["base"] + "/" + s["quote"],
                         "name": s["base"] + "/" + s["quote"],
+                        "precision": s["precision"]["price"],
                     }
                 )
         self.g_all_stocks = __all_stocks
@@ -254,22 +255,20 @@ class ExchangeBinance(Exchange):
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         res_ticks = {}
-        for code in codes:
-            try:
-                _t = self.exchange.fetch_ticker(code)
-                res_ticks[code] = Tick(
-                    code=code,
-                    last=_t["last"],
-                    buy1=_t["last"],
-                    sell1=_t["last"],
-                    high=_t["high"],
-                    low=_t["low"],
-                    open=_t["open"],
-                    volume=_t["quoteVolume"],
-                    rate=_t["percentage"],
-                )
-            except Exception as e:
-                print(f"{code} 获取 tick 异常 {e}")
+        _ts = self.exchange.fetch_tickers(codes)
+        for _s, _t in _ts.items():
+            res_ticks[_s] = Tick(
+                code=_s,
+                last=_t["last"],
+                buy1=_t["last"],
+                sell1=_t["last"],
+                high=_t["high"],
+                low=_t["low"],
+                open=_t["open"],
+                volume=_t["quoteVolume"],
+                rate=_t["percentage"],
+            )
+
         return res_ticks
 
     def ticker24HrRank(self, num=20):
@@ -365,12 +364,19 @@ class ExchangeBinance(Exchange):
 
 
 if __name__ == "__main__":
-    from chanlun import zixuan
-
     ex = ExchangeBinance()
 
-    klines = ex.klines("DOGE/USDT", "1m")
-    print(klines)
+    stocks = ex.all_stocks()
+    print(len(stocks))
+
+    # klines = ex.klines("DOGE/USDT", "1m")
+    # print(klines)
+
+    # ticks = ex.ticks(["BTC/USDT", "ETH/USDT"])
+    # for _c, _t in ticks.items():
+    #     print(
+    #         _c, _t.last, _t.buy1, _t.sell1, _t.high, _t.low, _t.open, _t.volume, _t.rate
+    #     )
 
     # zx = zixuan.ZiXuan("currency")
     # zx_group = "选股"

@@ -1,16 +1,17 @@
-from typing import Union
+import datetime
+from typing import Dict, List, Union
 
 import ccxt
+import pandas as pd
 import pytz
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from tzlocal import get_localzone
 
-
 from chanlun import config, fun
-from chanlun.utils import config_get_proxy
 from chanlun.base import Market
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick, convert_currency_kline_frequency
 from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.utils import config_get_proxy
 
 
 @fun.singleton
@@ -28,7 +29,7 @@ class ExchangeBinanceSpot(Exchange):
         # print(proxy)
 
         # 设置是否使用代理
-        if proxy != None and proxy["host"] != "":
+        if proxy["host"] != "":
             params["proxies"] = {
                 "https": f"http://{proxy['host']}:{proxy['port']}",
                 "http": f"http://{proxy['host']}:{proxy['port']}",
@@ -57,17 +58,12 @@ class ExchangeBinanceSpot(Exchange):
             "w": "Week",
             "d": "Day",
             "12h": "12H",
-            "8h": "8H",
-            "6h": "6H",
             "4h": "4H",
-            "3h": "3H",
             "60m": "1H",
             "30m": "30m",
             "15m": "15m",
             "10m": "10m",
             "5m": "5m",
-            "3m": "3m",
-            "2m": "2m",
             "1m": "1m",
         }
 
@@ -90,14 +86,15 @@ class ExchangeBinanceSpot(Exchange):
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        markets = self.exchange.load_markets()
+        markets = self.exchange.load_markets(reload=True)
         __all_stocks = []
         for _, s in markets.items():
-            if s["quote"] == "USDT":
+            if s["active"] and s["quote"] == "USDT":
                 __all_stocks.append(
                     {
                         "code": s["base"] + "/" + s["quote"],
                         "name": s["base"] + "/" + s["quote"],
+                        "precision": s["precision"]["price"],
                     }
                 )
         self.g_all_stocks = __all_stocks
@@ -256,40 +253,23 @@ class ExchangeBinanceSpot(Exchange):
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         res_ticks = {}
-        for code in codes:
-            try:
-                _t = self.exchange.fetch_ticker(code)
-                res_ticks[code] = Tick(
-                    code=code,
-                    last=_t["last"],
-                    buy1=_t["last"],
-                    sell1=_t["last"],
-                    high=_t["high"],
-                    low=_t["low"],
-                    open=_t["open"],
-                    volume=_t["quoteVolume"],
-                    rate=_t["percentage"],
-                )
-            except Exception as e:
-                print(f"{code} 获取 tick 异常 {e}")
-        return res_ticks
+        _ts = self.exchange.fetch_tickers(codes)
+        for _s, _t in _ts.items():
+            if _t["last"] is None or _t["bid"] is None or _t["ask"] is None:
+                continue
+            res_ticks[_s] = Tick(
+                code=_s,
+                last=_t["last"],
+                buy1=_t["bid"],
+                sell1=_t["ask"],
+                high=_t["high"],
+                low=_t["low"],
+                open=_t["open"],
+                volume=_t["quoteVolume"],
+                rate=_t["percentage"],
+            )
 
-    def ticker24HrRank(self, num=20):
-        """
-        获取24小时交易量排行前的交易对儿
-        TODO 废弃了，不用了
-        :param num:
-        :return:
-        """
-        tickers = self.exchange.fapiPublicGetTicker24hr()
-        tickers = sorted(tickers, key=lambda d: float(d["quoteVolume"]), reverse=True)
-        codes = []
-        for t in tickers:
-            if t["symbol"][-4:] == "USDT":
-                codes.append(t["symbol"][:-4] + "/" + t["symbol"][-4:])
-            if len(codes) >= num:
-                break
-        return codes
+        return res_ticks
 
     def balance(self):
         raise RuntimeWarning("交易接口未实现")
@@ -312,8 +292,16 @@ class ExchangeBinanceSpot(Exchange):
 
 
 if __name__ == "__main__":
-
     ex = ExchangeBinanceSpot()
 
-    klines = ex.klines("BTC/USDT", "d")
-    print(klines)
+    stocks = ex.all_stocks()
+    print(len(stocks))
+
+    # klines = ex.klines("BTC/USDT", "d")
+    # print(klines)
+
+    # ticks = ex.ticks(None)
+    # for _c, _t in ticks.items():
+    #     print(
+    #         _c, _t.last, _t.buy1, _t.sell1, _t.high, _t.low, _t.open, _t.volume, _t.rate
+    #     )

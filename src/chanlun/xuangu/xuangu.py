@@ -703,23 +703,17 @@ def xg_single_week_k_overlap(code: str, mk_datas: MarketDatas, opt_type: list = 
 
 
 if __name__ == "__main__":
-    from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
+    from chanlun.cl_utils import query_cl_chart_config
     from chanlun.exchange.exchange_tdx import ExchangeTDX
+    from chanlun.trader.online_market_datas import OnlineMarketDatas
 
     market = "a"
     code = "SZ.000551"
-    freq = "d"
+    freqs = ["d"]
 
     ex = ExchangeTDX()
     cl_config = query_cl_chart_config(market, code)
+    mkd = OnlineMarketDatas(market, freqs, ex, cl_config)
 
-    klines = ex.klines(code, freq)
-    cds = web_batch_get_cl_datas(market, code, {freq: klines}, cl_config)
-
-    res = xg_single_bi_1buy_next_l3buy_mmd(cds)
-    print(res)
-    klines = ex.klines(code, freq)
-    cds = web_batch_get_cl_datas(market, code, {freq: klines}, cl_config)
-
-    res = xg_single_bi_1buy_next_l3buy_mmd(cds)
+    res = xg_single_bi_1buy_next_l3buy_mmd(code, mkd)
     print(res)
