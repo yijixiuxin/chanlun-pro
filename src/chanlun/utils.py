@@ -1,18 +1,21 @@
 import base64
 import hashlib
 import hmac
+import json
 import time
 import urllib.parse
+from typing import Union
 
-import requests
-
-import json
 import lark_oapi as lark
-from lark_oapi.api.im.v1 import *
+import requests
+from lark_oapi.api.im.v1 import (
+    CreateMessageRequest,
+    CreateMessageRequestBody,
+    CreateMessageResponse,
+)
 
-from chanlun.cl_interface import *
-from chanlun.db import db
 from chanlun import config
+from chanlun.db import db
 
 
 def config_get_proxy():
@@ -94,7 +97,7 @@ def send_dd_msg(market: str, msg: Union[str, dict]):
     t, s = sign()
     url = url % (dd_info["token"], t, s)
     if isinstance(msg, str):
-        res = requests.post(
+        requests.post(
             url,
             json={
                 "msgtype": "text",
@@ -102,7 +105,7 @@ def send_dd_msg(market: str, msg: Union[str, dict]):
             },
         )
     else:
-        res = requests.post(url, json={"msgtype": "markdown", "markdown": msg})
+        requests.post(url, json={"msgtype": "markdown", "markdown": msg})
 
     # print(res.text)
     return True

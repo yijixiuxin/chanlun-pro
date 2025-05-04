@@ -1,13 +1,11 @@
+import datetime
 import logging
 import time
-import pathlib
-
-import pytz
 from functools import wraps
 
+import pytz
 from tzlocal import get_localzone
 
-from chanlun.cl_interface import *
 from chanlun.config import get_data_path
 
 # 统一时区
@@ -141,11 +139,11 @@ if __name__ == "__main__":
     nowdt = now_dt()
     print(nowdt)
 
-    print(str_to_datetime(nowdt))
+    # print(str_to_datetime(nowdt))
 
-    dtint = str_to_timeint(nowdt)
-    print(dtint)
+    # dtint = str_to_timeint(nowdt)
+    # print(dtint)
 
-    print(timeint_to_datetime(dtint))
+    print(timeint_to_datetime(int(1745550739000 / 1000)))
 
-    print(timeint_to_str(dtint))
+    # print(timeint_to_str(dtint))

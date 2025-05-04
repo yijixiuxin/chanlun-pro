@@ -1029,5 +1029,5 @@ def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    pass
-    pass
+    cl_config = query_cl_chart_config("a", "SH.000001")
+    print(cl_config)
