@@ -1,7 +1,7 @@
 import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -73,7 +73,7 @@ class Exchange(ABC):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         获取 Kline 线
         :param code:
@@ -93,7 +93,7 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def stock_info(self, code: str) -> [Dict, None]:
+    def stock_info(self, code: str) -> Union[Dict, None]:
         """
         获取股票的基本信息
         :param code:

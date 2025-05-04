@@ -1,7 +1,10 @@
+import datetime
 import time
 import traceback
-from typing import Union
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from pytdx.util import best_ip
@@ -9,7 +12,7 @@ from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
 from chanlun.db import db
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 
 
@@ -47,7 +50,16 @@ class ExchangeTDXFutures(Exchange):
                     ):
                         all_markets = client.get_markets()
                         for _m in all_markets:
-                            if _m["category"] == 3:
+                            if _m["category"] == 3 and _m["market"] in [
+                                23,
+                                28,
+                                29,
+                                30,
+                                42,
+                                47,
+                                60,
+                                66,
+                            ]:
                                 self.market_maps[_m["short_name"]] = {
                                     "market": _m["market"],
                                     "category": _m["category"],
@@ -324,6 +336,52 @@ class ExchangeTDXFutures(Exchange):
                     )
         return ticks
 
+    def all_ticks(self) -> Dict[str, Tick]:
+        ticks = {}
+        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+            for _name, _mc in self.market_maps.items():
+                _quotes = []
+                _req_start = 0
+                while True:
+                    _qs = client.get_instrument_quote_list(
+                        _mc["market"],
+                        _mc["category"],
+                        start=_req_start,
+                        count=_req_start + 80,
+                    )
+                    _quotes.extend(_qs)
+                    _req_start += 80
+                    if len(_qs) < 80:
+                        break
+                for _quote in _quotes:
+                    # OrderedDict([('market', 28), ('code', 'MA2509'),
+                    # ('BiShu', 10569), ('ZuoJie', 2262.0), ('JinKai', 2260.0), ('ZuiGao', 2266.0), ('ZuiDi', 2242.0), ('MaiChu', 2258.0), ('KaiCang', 262905),
+                    # ('ZongLiang', 254179), ('XianLiang', 2), ('ZongJinE', 5730089472.0), ('NeiPan', 128701), ('WaiPan', 125478),
+                    # ('ChiCangLiang', 674677), ('MaiRuJia', 2257.0), ('MaiRuLiang', 72), ('MaiChuJia', 2258.0), ('MaiChuLiang', 25)])
+
+                    ticks[f"{_name}.{_quote['code']}"] = Tick(
+                        code=f"{_name}.{_quote['code']}",
+                        last=_quote["MaiChu"],
+                        buy1=_quote["MaiRuJia"],
+                        sell1=_quote["MaiChuJia"],
+                        low=_quote["ZuiDi"],
+                        high=_quote["ZuiGao"],
+                        volume=_quote["ZongLiang"],
+                        open=_quote["JinKai"],
+                        rate=(
+                            round(
+                                (_quote["MaiChu"] - _quote["ZuoJie"])
+                                / _quote["MaiChu"]
+                                * 100,
+                                2,
+                            )
+                            if _quote["MaiChu"] > 0
+                            else 0
+                        ),
+                    )
+        return ticks
+
     def now_trading(self):
         """
         返回当前是否是交易时间
@@ -364,6 +422,9 @@ if __name__ == "__main__":
     ex = ExchangeTDXFutures()
     # print(ex.market_maps)
     # stocks = ex.all_stocks()
+    # for s in stocks:
+    #     if "黄金" in s["name"]:
+    #         print(s)
     # print(len(stocks))
     # for s in stocks:
     #     if '原油' in s["name"]:
@@ -371,6 +432,9 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("QZ.SA2501", "30m", args={"pages": 1})
+    klines = ex.klines("CO.GC00W", "15m")
     print(len(klines))
     print(klines)
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))

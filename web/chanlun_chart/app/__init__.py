@@ -4,7 +4,6 @@ import os
 import pathlib
 import time
 import traceback
-from flask_login import LoginManager, UserMixin, login_required, login_user
 
 import pinyin
 import pytz
@@ -12,42 +11,42 @@ from apscheduler.events import (
     EVENT_ALL,
     EVENT_EXECUTOR_ADDED,
     EVENT_EXECUTOR_REMOVED,
+    EVENT_JOB_ADDED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MAX_INSTANCES,
+    EVENT_JOB_MISSED,
+    EVENT_JOB_MODIFIED,
+    EVENT_JOB_REMOVED,
+    EVENT_JOB_SUBMITTED,
     EVENT_JOBSTORE_ADDED,
     EVENT_JOBSTORE_REMOVED,
-    EVENT_JOB_ADDED,
-    EVENT_JOB_REMOVED,
-    EVENT_JOB_MODIFIED,
-    EVENT_JOB_SUBMITTED,
-    EVENT_JOB_MAX_INSTANCES,
-    EVENT_JOB_EXECUTED,
-    EVENT_JOB_ERROR,
-    EVENT_JOB_MISSED,
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, redirect, send_file
-from flask import render_template
-from flask import request
+from flask import Flask, redirect, render_template, request, send_file
+from flask_login import LoginManager, UserMixin, login_required, login_user
 from tzlocal import get_localzone
 
+from chanlun import config, fun
 from chanlun.base import Market
-from chanlun import fun, config
 from chanlun.cl_utils import (
+    cl_data_to_tv_chart,
+    del_cl_chart_config,
     kcharts_frequency_h_l_map,
     query_cl_chart_config,
-    web_batch_get_cl_datas,
-    cl_data_to_tv_chart,
     set_cl_chart_config,
-    del_cl_chart_config,
+    web_batch_get_cl_datas,
 )
+from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import get_exchange
-from chanlun.config import get_data_path
 from chanlun.tools.ai_analyse import AIAnalyse
 from chanlun.zixuan import ZiXuan
+
 from .alert_tasks import AlertTasks
-from .xuangu_tasks import XuanguTasks
 from .other_tasks import OtherTasks
+from .xuangu_tasks import XuanguTasks
 
 
 def create_app(test_config=None):
@@ -334,8 +333,8 @@ def create_app(test_config=None):
 
         info = {
             "name": stocks["code"],
-            "ticker": f'{market}:{stocks["code"]}',
-            "full_name": f'{market}:{stocks["code"]}',
+            "ticker": f"{market}:{stocks['code']}",
+            "full_name": f"{market}:{stocks['code']}",
             "description": stocks["name"],
             "exchange": market,
             "type": market_types[market],
@@ -401,7 +400,7 @@ def create_app(test_config=None):
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
 
-        if exchange in ["us", "currency", "currency_spot"]:
+        if exchange in ["currency", "currency_spot"]:
             res_stocks = [
                 stock for stock in all_stocks if query.lower() in stock["code"].lower()
             ]
@@ -422,10 +421,10 @@ def create_app(test_config=None):
                 {
                     "symbol": stock["code"],
                     "name": stock["code"],
-                    "full_name": f'{exchange}:{stock["code"]}',
+                    "full_name": f"{exchange}:{stock['code']}",
                     "description": stock["name"],
                     "exchange": exchange,
-                    "ticker": f'{exchange}:{stock["code"]}',
+                    "ticker": f"{exchange}:{stock['code']}",
                     "type": type,
                     "session": market_session[exchange],
                     "timezone": market_timezone[exchange],
@@ -746,6 +745,31 @@ def create_app(test_config=None):
             db.tv_chart_save("template", client_id, user_id, name, content, "", "")
             return {"status": "ok"}
 
+    @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
+    @login_required
+    def tv_drawings(version):
+        """
+        图表绘图保存与加载 TODO TV 库报错，暂时不用
+        """
+        client_id = str(request.args.get("client"))
+        user_id = str(request.args.get("user"))
+        chart_id = request.args.get("chart")
+        layout_id = request.args.get("layout")
+
+        print(
+            f"{request.method} client_id={client_id}, user_id={user_id}, chart_id={chart_id}, layout_id={layout_id}"
+        )
+
+        if request.method == "GET":
+            symbol = request.args.get("symbol")
+            return {
+                "status": "ok",
+                "data": {},
+            }
+        else:
+            # 更新与保存操作
+            return {"status": "ok"}
+
     # 查询配置项
     @app.route("/get_cl_config/<market>/<code>")
     @login_required
@@ -864,7 +888,7 @@ def create_app(test_config=None):
                 for _c, _t in stock_ticks.items()
             ]
             return {"now_trading": now_trading, "ticks": res_ticks}
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
         return {"now_trading": False, "ticks": []}
 
@@ -935,7 +959,7 @@ def create_app(test_config=None):
         finally:
             try:
                 os.remove(down_file)
-            except Exception as e:
+            except Exception:
                 pass
 
     @app.route("/zixuan_opt_import", methods=["POST"])
@@ -982,7 +1006,7 @@ def create_app(test_config=None):
 
         try:
             os.remove(import_file)
-        except Exception as e:
+        except Exception:
             pass
 
         return {"ok": True, "msg": f"成功导入 {import_nums} 条记录"}
@@ -1251,7 +1275,6 @@ def create_app(test_config=None):
     @app.route("/ai/analyse", methods=["POST"])
     @login_required
     def ai_analyse():
-
         market = request.form["market"]
         code = request.form["code"]
         frequency = request.form["frequency"]
