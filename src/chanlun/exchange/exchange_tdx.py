@@ -8,7 +8,6 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
-from pytdx.util import best_ip
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
@@ -18,6 +17,7 @@ from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_freque
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -34,7 +34,7 @@ class ExchangeTDX(Exchange):
         try:
             # 选择最优的服务器，并保存到 cache 中
             self.connect_info = db.cache_get("tdx_connect_ip")
-            # connect_info = None # 手动重新选择最优服务器
+            # self.connect_info = None  # 手动重新选择最优服务器
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
                 # print(f"最优服务器：{self.connect_info}")
@@ -971,19 +971,19 @@ class ExchangeTDX(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDX()
-    all_stocks = ex.all_stocks()
-    print(len(all_stocks))
-    codes = [
-        [_s["code"], _s["name"]]
-        for _s in all_stocks
-        if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
-    ]
-    df = pd.DataFrame(codes, columns=["code", "name"])
-    df.to_csv("stock_list.csv", index=False)
+    # all_stocks = ex.all_stocks()
+    # print(len(all_stocks))
+    # codes = [
+    #     [_s["code"], _s["name"]]
+    #     for _s in all_stocks
+    #     if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
+    # ]
+    # df = pd.DataFrame(codes, columns=["code", "name"])
+    # df.to_csv("stock_list.csv", index=False)
 
-    # klines = ex.klines("BJ.832145", "d")
-    # print(klines.head(5))
-    # print(klines.tail(10))
+    klines = ex.klines("BJ.832145", "d")
+    print(klines.head(5))
+    print(klines.tail(10))
     # print(len(klines))
 
     # print("use time : ", time.time() - s_time)

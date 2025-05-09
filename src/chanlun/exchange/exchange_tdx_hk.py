@@ -8,7 +8,6 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
@@ -16,6 +15,7 @@ from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
