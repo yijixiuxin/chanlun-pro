@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 
 from chanlun import fun
-from chanlun.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
+from chanlun.cl_interface import (BI, FX, ICL, LINE, MACD_INFOS, ZS, Config,
+                                  Kline)
 from chanlun.db import db
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
@@ -666,6 +667,7 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
             klines = exchange.convert_currency_kline_frequency(klines, frequency)
         else:
             raise Exception(f"图表周期数据转换，不支持的市场 {market}")
+
     # K 线数据
     kline_ts = klines["date"].map(fun.datetime_to_int).tolist()
     kline_cs = klines["close"].tolist()
@@ -887,6 +889,16 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
                     "text": mmd_text,
                 }
             )
+
+    fx_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    bi_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    xd_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    zsd_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    bi_zs_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    xd_zs_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    zsd_zs_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
+    bc_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
+    mmd_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
 
     return {
         "t": kline_ts,

@@ -55,6 +55,12 @@ export declare const enum BottomWidgetBarMode {
 	Normal = "normal",
 	Maximized = "maximized"
 }
+export declare const enum PaneSize {
+	Tiny = "tiny",
+	Small = "small",
+	Medium = "medium",
+	Large = "large"
+}
 export declare const widget: ChartingLibraryWidgetConstructor;
 export declare enum ActionId {
 	ChartAddIndicatorToAllCharts = "Chart.AddIndicatorToAllCharts",
@@ -2083,15 +2089,14 @@ export interface BrokerConfigFlags {
 	 */
 	supportPositionNetting?: boolean;
 	/**
-	 * Enables position closing.
-	 * This flag requires the {@link IBrokerWithoutRealtime.closePosition} method to be implemented.
-	 * If `supportClosePosition` is set to `true`, the library displays a close button and calls the `closePosition` method.
-	 * If `supportClosePosition` is set to `false`, the library displays a close button but calls the {@link IBrokerWithoutRealtime.placeOrder} method with the `isClose` property set to `true`.
+	 * Enables [position closing](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#close-positions).
+	 * - If `supportClosePosition` is set to `false`, positions are closed using [market orders](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/orders#order-types) of the opposite side. The library calls the {@link IBrokerWithoutRealtime.placeOrder} method, passing the `isClose` property set to `true` in the `PreOrder` object.
+	 * - If `supportClosePosition` is set to `true`, the library calls the {@link IBrokerWithoutRealtime.closePosition} method.
 	 * @default false
 	 */
 	supportClosePosition?: boolean;
 	/**
-	 * Enables individual position closing.
+	 * Enables individual [position closing](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#close-positions).
 	 * This flag requires the {@link IBrokerWithoutRealtime.closeIndividualPosition} method to be implemented.
 	 * @default false
 	 */
@@ -2125,7 +2130,7 @@ export interface BrokerConfigFlags {
 	 * Enables [multiple positions](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#multiposition) for one instrument at the same time.
 	 *
 	 * Note that if the flag is set to `true`:
-	 * - The {@link BrokerConfigFlags.supportNativeReversePosition} flag will not work.
+	 * - The [default reversal](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#default-reversal) in the library does not work. You need to implement the [native reversal](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#native-reversal) on your backend side.
 	 * - The _Flatten_ button in the [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/depth-of-market) widget will be disabled.
 	 * @default false
 	 */
@@ -2138,15 +2143,16 @@ export interface BrokerConfigFlags {
 	 */
 	supportPLUpdate?: boolean;
 	/**
-	 * Enables position reversing.
+	 * Enables [position reversing](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#reverse-positions).
 	 * If `supportReversePosition` is set to `false`, the _Reverse Position_ button will be hidden from the UI.
 	 * @default false
 	 */
 	supportReversePosition?: boolean;
 	/**
-	 * Enables native position reversing.
-	 * This flag requires the {@link IBrokerWithoutRealtime.reversePosition} method to be implemented.
-	 * If `supportNativeReversePosition` is set to `false`, the library expects you to place a reversing order via the {@link IBrokerWithoutRealtime.placeOrder} method.
+	 * Enables [native](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#native-reversal) position reversing. You should implement the {@link IBrokerWithoutRealtime.reversePosition} method to process reversing on your backend side.
+	 * Note that the {@link supportReversePosition} flag should be set to `true` to enable the reverse option in the UI.
+	 *
+	 * If `supportNativeReversePosition` is set to `false`, the library handles reversing using the built-in mechanism. For more information, refer to the [Default reversal](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#default-reversal) section.
 	 * @default false
 	 */
 	supportNativeReversePosition?: boolean;
@@ -2277,13 +2283,13 @@ export interface BrokerConfigFlags {
 	 */
 	positionPLInInstrumentCurrency?: boolean;
 	/**
-	 * Enables partial position closing.
+	 * Enables [partial position closing](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#partial-closing).
 	 * This flag requires the {@link IBrokerWithoutRealtime.closePosition} method to be implemented.
 	 * @default false
 	 */
 	supportPartialClosePosition?: boolean;
 	/**
-	 * Enables partial individual position closing.
+	 * Enables [partial individual position closing](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#partial-closing).
 	 * This flag requires the {@link IBrokerWithoutRealtime.closeIndividualPosition} method to be implemented.
 	 * @default false
 	 */
@@ -4009,6 +4015,18 @@ export interface ChartPropertiesOverrides {
 	 * Trading Platform only
 	 */
 	"tradingProperties.lineWidth": number;
+	/**
+	 * Style of line for position and order lines.
+	 *
+	 * Trading Platform only
+	 */
+	/**
+	 * Size of the volume panel.
+	 * Only works when `volume_force_overlay` featureset is disabled.
+	 *
+	 * @default PaneSize.Large
+	 */
+	"volumePaneSize": PaneSize;
 }
 /**
  * A chart template.
@@ -4713,6 +4731,12 @@ export interface ChartingLibraryWidgetOptions {
 	 * Custom theme colors to override the default light and dark themes. For more information on custom themes, refer to the [Custom themes API](https://www.tradingview.com/charting-library-docs/latest/customization/styles/custom-themes) article.
 	 */
 	custom_themes?: CustomThemes;
+	/**
+	 * EXPERIMENTAL. Customise the storage of image data for the image drawing tool.
+	 *
+	 * By default images have no size limit and are saved in the chart layout which may not be suitable, depending on your chart storage implementation.
+	 */
+	image_storage_adapter?: IImageStorageAdapter;
 }
 export interface CheckboxFieldMetaInfo extends CustomFieldMetaInfoBase {
 	/** @inheritDoc */
@@ -4840,6 +4864,8 @@ export interface ColumnStylePreferences {
 	downColor: string;
 	/** Color column based on previous close */
 	barColorsOnPrevClose: boolean;
+	/** Column baseline position */
+	baselinePosition: ColumnStyleBaselinePosition;
 }
 /**
  * Override properties for the Comment drawing tool.
@@ -5839,13 +5865,20 @@ export interface DatafeedConfiguration {
  */
 export interface DatafeedQuoteValues {
 	/**
-	 * Price change (usually counts as an open price on a particular day).
-	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
+	 * Price change. It is usually calculated as a difference between the current price and close price of the previous day (regular session).
+	 * In the UI, `ch` and {@link chp} are represented as the last day change parameter in *Data Window*.
+	 * You can also display these values in the [legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
+	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
+	 *
+	 * Note that `ch` and `chp` are **required** for mobile apps. Otherwise, [`NaN` values](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#nan-values-in-legend) will appear in the legend.
 	 */
 	ch?: number;
 	/**
-	 * Price change percentage.
-	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
+	 * Price change percentage. In the UI, `chp` and {@link ch} are represented as the last day change parameter in *Data Window*.
+	 * You can also display these values in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
+	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
+	 *
+	 * Note that `ch` and `chp` are **required** for mobile apps. Otherwise, [`NaN` values](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#nan-values-in-legend) will appear in the Legend.
 	 */
 	chp?: number;
 	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widgets. You can disable the [`prefer_quote_short_name`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#prefer_quote_short_name) to use the {@link LibrarySymbolInfo.ticker} value instead. */
@@ -6151,6 +6184,31 @@ export interface DoubleEMAIndicatorOverrides {
 	/** Default value: `#43A047` */
 	"plot.color": string;
 	[key: string]: StudyOverrideValueType;
+}
+/**
+ * Drag start parameters
+ */
+export interface DragStartParams {
+	/**
+	 * Prevent default drag event
+	 */
+	preventDefault: () => void;
+	/**
+	 * Hovered source ID
+	 */
+	hoveredSourceId: EntityId | null;
+	/**
+	 * Export data function
+	 */
+	exportData: (exportOptions: Partial<ExportDataOptions>) => void;
+	/**
+	 * Set data function
+	 */
+	setData: (format: string, data: string) => void;
+	/**
+	 * Set drag image
+	 */
+	setDragImage: (image: HTMLElement, xOffset: number, yOffset: number) => void;
 }
 /** Item within a dropdown menu */
 export interface DropdownItem {
@@ -6562,6 +6620,10 @@ export interface ExportDataOptions {
 	 * Include study data that has a positive offset from the main series data. That is study data that is "to the right of" the last main series data point.
 	 */
 	includeOffsetStudyValues?: boolean;
+	/**
+	 * Include open, high, low, and close values for plots that only display a single value on the chart. For example line series or symbols with visible_plot_set = 'c'.
+	 */
+	includeOHLCValuesForSingleValuePlots?: boolean;
 }
 /**
  * Export data from the chart
@@ -9248,7 +9310,7 @@ export interface IBrokerAccountInfo {
 	 */
 	accountsMetainfo(): Promise<AccountMetainfo[]>;
 	/**
-	 * The library calls `currentAccount` to get the current account ID.
+	 * The library calls `currentAccount` to get the current account's ID.
 	 */
 	currentAccount(): AccountId;
 	/**
@@ -9257,6 +9319,7 @@ export interface IBrokerAccountInfo {
 	 *
 	 * Note that `setCurrentAccount` is required if {@link accountsMetainfo} returns an array containing more than one element.
 	 * Refer to [Multiple accounts](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/multiple-accounts) for more information.
+	 * @param  {AccountId} id - The ID of the selected account.
 	 */
 	setCurrentAccount?(id: AccountId): void;
 }
@@ -9266,18 +9329,18 @@ export interface IBrokerCommon {
 	 * This method also renders the *Trade* button in the context menu.
 	 *
 	 * This method should return an array of {@link ActionMetaInfo} elements, each of them representing one context menu item.
-	 * @param  {TradeContext} context - context object passed by a browser
-	 * @param  {DefaultContextMenuActionsParams} [options] - default options for the context menu action parameters
+	 * @param  {TradeContext} context - A context object passed by the library.
+	 * @param  {DefaultContextMenuActionsParams} [options] - Default options for the context menu action parameters.
 	 * @returns A promise that resolves to an array of {@link ActionMetaInfo}, which may be empty. In that case, the *Trade* button will
 	 * be removed from the context menu.
 	 */
 	chartContextMenuActions(context: TradeContext, options?: DefaultContextMenuActionsParams): Promise<ActionMetaInfo[]>;
 	/**
-	 * The library calls this method to check if a symbol can be traded.
+	 * The library calls `isTradable` to check if a symbol can be traded.
 	 * If the method returns `false`, users will see the *Non-tradable symbol* message in the UI when creating orders.
-	 * You can also show a custom message with the reason why the symbol cannot be traded and the possible solution to resolve the issue.
+	 * You can also display a custom message with the reason why the symbol cannot be traded and the possible solution to resolve the issue.
 	 * To do this, return an `IsTradableResult` object.
-	 * @param  {string} symbol - symbol identifier
+	 * @param  {string} symbol - The symbol identifier.
 	 */
 	isTradable(symbol: string): Promise<boolean | IsTradableResult>;
 	/**
@@ -9290,11 +9353,11 @@ export interface IBrokerCommon {
 	 */
 	connectionStatus(): ConnectionStatus;
 	/**
-	 * Called by Trading Platform to request user's active orders.
+	 * The library calls `orders` to request data on the user's active orders. This data is displayed on the _Orders and Positions_ pages of the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/#orders-and-positions).
 	 */
 	orders(): Promise<Order[]>;
 	/**
-	 * The library calls the `ordersHistory` method to request orders history.
+	 * The library calls `ordersHistory` to request orders history.
 	 * It is expected that returned orders will have a final status (`rejected`, `filled`, `cancelled`).
 	 *
 	 * This method is only required when you set the {@link BrokerConfigFlags.supportOrdersHistory} flag to `true`.
@@ -9313,18 +9376,18 @@ export interface IBrokerCommon {
 	 */
 	individualPositions?(): Promise<IndividualPosition[]>;
 	/**
-	 * Called by Trading Platform to request executions for the specified symbol.
+	 * The library calls `executions` to request executions for the specified symbol.
 	 * If you want executions to be displayed on the chart, set the {@link BrokerConfigFlags.supportExecutions} to `true`.
-	 * @param  {string} symbol - symbol identifier
+	 * @param  {string} symbol - The symbol identifier.
 	 */
 	executions(symbol: string): Promise<Execution[]>;
 	/**
-	 * Called by the Order Ticket and DOM panel to get symbol information.
-	 * @param  {string} symbol - symbol identifier
+	 * The library calls `symbolInfo` to request symbol information for the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) and [Depth of Market widget](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/depth-of-market).
+	 * @param  {string} symbol - The symbol identifier.
 	 */
 	symbolInfo(symbol: string): Promise<InstrumentInfo>;
 	/**
-	 * This function should return the information that will be used to build the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/).
+	 * The library calls `accountManagerInfo` to get information required for building the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/).
 	 */
 	accountManagerInfo(): AccountManagerInfo;
 	/**
@@ -9706,47 +9769,49 @@ export interface IBrokerWithoutRealtime extends IBrokerCommon, IBrokerAccountInf
 	 */
 	unsubscribeDOM?(symbol: string): void;
 	/**
-	 * Method is called when a user wants to place an order.
-	 * Order is pre-filled with partial or complete information.
-	 * This function returns an object with the order ID.
-	 * To enable order preview before placing it, set {@link BrokerConfigFlags.supportPlaceOrderPreview} to `true`.
-	 * @param  {PreOrder} order - order information
-	 * @param  {string} [confirmId] - is passed if the `supportPlaceOrderPreview` configuration flag is on.
-	 * @returns {PlaceOrderResult}
+	 * The library calls `placeOrder` to request placing an order pre-filled with partial or complete information.
+	 * You should handle this request on your backend side. For more information, refer to [Order creation](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/#1-order-creation).
+	 *
+	 * To display an order preview before placing it, set {@link BrokerConfigFlags.supportPlaceOrderPreview} to `true`.
+	 * Refer to [Enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#enable-order-preview) for more information.
+	 * @param  {PreOrder} order - Order information.
+	 * @param  {string} [confirmId] - The ID of the confirmed order. This parameter is passed if [`supportPlaceOrderPreview`](https://www.tradingview.com/charting-library-docs/latest/api/interfaces/Charting_Library.BrokerConfigFlags#supportplaceorderpreview) is `true`.
+	 * @returns {PlaceOrderResult}  An object with the order ID.
 	 */
 	placeOrder(order: PreOrder, confirmId?: string): Promise<PlaceOrderResult>;
 	/**
-	 * Returns estimated commission, fees, margin, and other information for the order without it actually being placed.
-	 * The method is called if the {@link BrokerConfigFlags.supportPlaceOrderPreview} or {@link BrokerConfigFlags.supportModifyOrderPreview} configuration flag is on.
-	 * @param  {PreOrder} order - order information
+	 * The library calls `previewOrder` to show an order preview when a user clicks _Buy order_ or _Modify order_ in the Order Ticket.
+	 * To [enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#enable-order-preview), set the {@link BrokerConfigFlags.supportPlaceOrderPreview} or {@link BrokerConfigFlags.supportModifyOrderPreview} configuration flag to `true`.
+	 *
+	 * This method returns estimated commission, fees, margin, and other information for the order without it actually being placed.
+	 * @param  {PreOrder} order - Order information.
 	 */
 	previewOrder?(order: PreOrder): Promise<OrderPreviewResult>;
 	/**
-	 * Method is called when a user wants to modify an existing order.
-	 *
-	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
+	 * The library calls `modifyOrder` to request modifying an existing order.
+	 * You should handle this request on your backend side and provide the library with a new order state. To do this, call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
 	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#timeout-issue).
 	 *
-	 * To enable order preview before modifying it, set {@link BrokerConfigFlags.supportModifyOrderPreview} to `true`.
-	 * @param  {Order} order - order information
-	 * @param  {string} [confirmId] - is passed if `supportModifyOrderPreview` configuration flag is on.
+	 * To enable an order preview before modification, set the {@link BrokerConfigFlags.supportModifyOrderPreview} configuration flag to `true`.
+	 * Refer to [Enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#enable-order-preview) for more information.
+	 * @param  {Order} order - Order information.
+	 * @param  {string} [confirmId] - The ID of the confirmed order. This parameter is passed if [`supportModifyOrderPreview`](https://www.tradingview.com/charting-library-docs/latest/api/interfaces/Charting_Library.BrokerConfigFlags#supportmodifyorderpreview) is `true`.
 	 */
 	modifyOrder(order: Order, confirmId?: string): Promise<void>;
 	/**
-	 * This method is called to cancel a single order with the given `id`.
-	 *
-	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
-	 * @param  {string} orderId - ID for the order to cancel
+	 * The library calls `cancelOrder` to request canceling an order.
+	 * You should handle this request on your backend side and provide the library with a new order state. To do this, call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
+	 * @param  {string} orderId - The ID of the order to cancel.
 	 */
 	cancelOrder(orderId: string): Promise<void>;
 	/**
-	 * The library calls `cancelOrders` when users click the *CXL all* button in the [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/depth-of-market) widget.
-	 * This method cancels multiple orders for a `symbol` and `side`.
+	 * The library calls `cancelOrders` to request canceling multiple orders for a symbol.
+	 * You should handle this request on your backend side and provide the library with a new order states. To do this, call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
 	 *
-	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
-	 * @param  {string} symbol - symbol identifier
-	 * @param  {Side|undefined} side - order side
-	 * @param  {string[]} ordersIds - a list of order IDs to be canceled, which have already been collected based on the specified `symbol` and `side`
+	 * `cancelOrders` is only called when users click the *CXL all* button in the [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/depth-of-market) widget.
+	 * @param  {string} symbol - The symbol identifier.
+	 * @param  {Side|undefined} side - An order side.
+	 * @param  {string[]} ordersIds - IDs of the orders to cancel. The orders are selected based on the specified `symbol` and `side`.
 	 */
 	cancelOrders?(symbol: string, side: Side | undefined, ordersIds: string[]): Promise<void>;
 	/**
@@ -9759,33 +9824,33 @@ export interface IBrokerWithoutRealtime extends IBrokerCommon, IBrokerAccountInf
 	 */
 	reversePosition?(positionId: string): Promise<void>;
 	/**
-	 * This method is called if the {@link BrokerConfigFlags.supportClosePosition} or {@link BrokerConfigFlags.supportPartialClosePosition} configuration flag is on.
-	 * It allows closing the position by ID.
-	 *
-	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
+	 * The library calls `closePosition` to request [closing a position](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#close-positions) by ID.
+	 * You should handle this request on your backend side and provide the library with a new position state. To do this, call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
 	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#timeout-issue).
-	 * @param  {string} positionId - Position ID.
-	 * @param  {number} [amount] - The amount is specified if `supportPartialClosePosition` is `true` and the user wants to close only part of the position.
+	 *
+	 * `closePosition` is only called if the {@link BrokerConfigFlags.supportClosePosition} or {@link BrokerConfigFlags.supportPartialClosePosition} configuration flag is `true`.
+	 * @param  {string} positionId - The position ID.
+	 * @param  {number} [amount] - The amount is specified if [`supportPartialClosePosition`](https://www.tradingview.com/charting-library-docs/latest/api/interfaces/Charting_Library.BrokerConfigFlags#supportpartialcloseposition) is `true` and the user wants to close only [part of the position](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#partial-closing).
 	 */
 	closePosition?(positionId: string, amount?: number): Promise<void>;
 	/**
-	 * This method is called if the {@link BrokerConfigFlags.supportCloseIndividualPosition} or {@link BrokerConfigFlags.supportPartialCloseIndividualPosition} configuration flag is on.
-	 * It allows closing the individual position by ID.
+	 * The library calls `closeIndividualPosition` if the {@link BrokerConfigFlags.supportCloseIndividualPosition} or {@link BrokerConfigFlags.supportPartialCloseIndividualPosition} configuration flag is `true`.
+	 * `closeIndividualPosition` allows [closing an individual position](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#close-positions) by ID.
 	 *
 	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
 	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#timeout-issue).
-	 * @param  {string} individualPositionId - Individual position ID.
-	 * @param  {number} [amount] - The amount is specified if `supportPartialCloseIndividualPosition` is `true` and the user wants to close only part of the individual position.
+	 * @param  {string} individualPositionId - The individual position ID.
+	 * @param  {number} [amount] - The amount is specified if `supportPartialCloseIndividualPosition` is `true` and the user wants to close only [part of the individual position](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/positions#partial-closing).
 	 */
 	closeIndividualPosition?(individualPositionId: string, amount?: number): Promise<void>;
 	/**
-	 * This method is called if the {@link BrokerConfigFlags.supportPositionBrackets} configuration flag is on.
+	 * The library calls `editPositionBrackets` if the {@link BrokerConfigFlags.supportPositionBrackets} configuration flag is `true`.
 	 * It shows a dialog that enables take-profit and stop-loss editing.
 	 *
 	 * Note that the library expects you to call the {@link IBrokerConnectionAdapterHost.positionUpdate} method right afterwards.
-	 * @param  {string} positionId - is an ID of an existing position to be modified
-	 * @param  {Brackets} brackets - new Brackets to be set for the position
-	 * @param  {CustomInputFieldsValues} [customFields] - custom fields to display in the dialog
+	 * @param  {string} positionId - The ID of the existing position to be modified.
+	 * @param  {Brackets} brackets - New brackets to be set for the position.
+	 * @param  {CustomInputFieldsValues} [customFields] - Custom fields to display in the dialog.
 	 */
 	editPositionBrackets?(positionId: string, brackets: Brackets, customFields?: CustomInputFieldsValues): Promise<void>;
 	/**
@@ -10630,6 +10695,28 @@ export interface IChartWidgetApi {
 	 * @returns A promise that resolves with the exported data.
 	 */
 	exportData(options?: Partial<ExportDataOptions>): Promise<ExportedData>;
+	/**
+	 * Enable or disable drag-to-export feature.
+	 *
+	 * **Example**
+	 * ```javascript
+	 * // Enable drag-to-export, disable default chart drag to scroll
+	 * widget.activeChart().setDragExportEnabled(true);
+	 * widget.subscribe('dragstart', (params) => {
+	 * 		// create a HTML element for drag image
+	 * 		const dragImage = createDragImage();
+	 * 		// set drag image
+	 *      params.setDragImage(dragImage, 0, 0);
+	 *      const exportData = widget.activeChart().exportData();
+	 *  	// transform export data to csv
+	 * 		const csvData = transformExportDataToCsv(exportData);
+	 *      params.setData('text/plain', csvData);
+	 *  });
+	 * ```
+	 * To implement drag-to-export, you need to handle the `dragstart` event in your application and set the data to the `dataTransfer` object.
+	 * @param enabled `true` to enable drag-to-export, `false` to disable.
+	 */
+	setDragExportEnabled(enabled: boolean): void;
 	/**
 	 * Check if the chart can be zoomed out using the {@link zoomOut} method.
 	 *
@@ -12133,6 +12220,12 @@ export interface IFormatter<T> {
 	format(value?: T, options?: FormatterFormatOptions): string;
 	/** Check if the input value satisfies the logic and return either an error or the result of the parsing  */
 	parse?(value: string, options?: FormatterParseOptions): ErrorFormatterParseResult | SuccessFormatterParseResult<T>;
+}
+export interface IImageStorageAdapter {
+	/**
+	 * Return the maximum allowed image size in bytes that will be allowed by the image drawing tool.
+	 */
+	getMaxImageSizeInBytes(): number;
 }
 /**
  * Drawing API
@@ -14731,14 +14824,10 @@ export interface LibrarySymbolInfo {
 	 */
 	variable_tick_size?: string;
 	/**
-	 * Boolean value showing whether the symbol includes intraday (minutes) historical data.
+	 * A flag indicating whether your datafeed contains intraday (minutes) data for this symbol.
+	 * If `true`, the library requests this data when an intraday resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for intraday resolutions will be disabled for this particular symbol.
-	 * If it is set to `true`, all intradays resolutions that are supplied directly by the datafeed must be provided in `intraday_multipliers` array.
-	 *
-	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions.
-	 *
-	 * `false` if DWM only
+	 * This property is required to enable intraday resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-minutes-intraday) article for more information.
 	 * @default false
 	 */
 	has_intraday?: boolean;
@@ -14766,37 +14855,41 @@ export interface LibrarySymbolInfo {
 	 */
 	supported_resolutions?: ResolutionString[];
 	/**
-	 * Array of resolutions (in minutes) supported directly by the data feed. Each such resolution may be passed to, and should be implemented by, `getBars`. The default of [] means that the data feed supports aggregating by any number of minutes.
+	 * An array of intraday (minutes) resolutions that your datafeed supports. Items in the array should be listed in ascending order, for example: `["1", "2"]`.
 	 *
-	 * If the data feed only supports certain minute resolutions but not the requested resolution, `getBars` will be called (repeatedly if needed) with a higher resolution as a parameter, in order to build the requested resolution.
+	 * This property is required to enable intraday resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-minutes-intraday) article for more information.
+	 * Note that each resolution in `intraday_multipliers` should be handled in the {@link IDatafeedChartApi.getBars} implementation.
+	 * Consider the [example](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#example).
 	 *
-	 * For example, if the data feed only supports minute resolution, set `intraday_multipliers` to `['1']`.
+	 * The library also uses resolutions listed in `intraday_multipliers` to display higher resolution that your datafeed does not explicitly support. If `intraday_multipliers` is not specified, the library cannot build additional resolutions.
 	 *
-	 * When the user wants to see 5-minute data, `getBars` will be called with the resolution set to 1 until the library builds all the 5-minute resolution by itself.
-	 * @example (for ex.: "1,5,60") - only these resolutions will be requested, all others will be built using them if possible
-	 * @default []
+	 * Note that the library **cannot** build daily, weekly, or monthly resolutions using intraday data.
+	 * @default [] — specifies that the datafeed can provide data for any requested resolution.
 	 */
 	intraday_multipliers?: string[];
 	/**
-	 * Boolean value showing whether the symbol includes seconds in the historical data.
+	 * A flag indicating whether your datafeed contains seconds data for this symbol.
+	 * If `true`, the library requests this data when a seconds resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for resolutions that include seconds will be disabled for this particular symbol.
-	 *
-	 * If it is set to `true`, all resolutions that are supplied directly by the data feed must be provided in `seconds_multipliers` array.
+	 * You should set `has_seconds` to `true` to enable seconds resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-seconds) article for more information.
 	 * @default false
 	 */
 	has_seconds?: boolean;
 	/**
-	 * Boolean value showing whether the symbol includes ticks in the historical data.
+	 * A flag indicating whether your datafeed contains ticks data for this symbol.
+	 * If `true`, the library requests this data when a resolution in ticks is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for resolutions that include ticks will be disabled for this particular symbol.
+	 * You should set `has_ticks` to `true` to enable ticks resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-ticks) article for more information.
 	 * @default false
 	 */
 	has_ticks?: boolean;
 	/**
-	 * It is an array containing resolutions that include seconds (excluding postfix) that the data feed provides.
-	 * E.g., if the data feed supports resolutions such as `["1S", "5S", "15S"]`, but has 1-second bars for some symbols then you should set `seconds_multipliers` of this symbol to `[1]`.
-	 * This will make the library build 5S and 15S resolutions by itself.
+	 * An array of seconds resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "2"]`.
+	 * This property is required to enable seconds resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-seconds) article for more information.
+	 *
+	 * The library also uses resolutions listed in `seconds_multipliers` to display higher resolution that your datafeed does not explicitly support. If `seconds_multipliers` is not specified, the library cannot build additional resolutions.
+	 * Consider the example. You need to enable one-second and five-second resolutions but your datafeed contains only one-second data. In this case, you should set `seconds_multipliers` to `["1"]`.
+	 * The library will build the five-second resolution from one-second data.
 	 */
 	seconds_multipliers?: string[];
 	/**
@@ -14811,54 +14904,44 @@ export interface LibrarySymbolInfo {
 	 */
 	build_seconds_from_ticks?: boolean;
 	/**
-	 * The boolean value specifying whether the datafeed can supply historical data at the daily resolution.
+	 * A flag indicating whether your datafeed contains daily data for this symbol.
+	 * If `true`, the library requests this data when a daily resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If `has_daily` is set to `false`, all buttons for resolutions that include days are disabled for this particular symbol.
-	 * Otherwise, the library requests daily bars from the datafeed.
-	 * All daily resolutions that the datafeed supplies must be included in the {@link LibrarySymbolInfo.daily_multipliers} array.
-	 *
+	 * `has_daily` is set to `true` by default. However, you should also specify {@link daily_multipliers} to enable daily resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-days) article for more information.
 	 * @default true
 	 */
 	has_daily?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-format) (in days - without the suffix) supported by the datafeed. {@link ResolutionString}
+	 * An array of daily resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "2"]`.
+	 * This property is required to enable daily resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-days) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * daily_multipliers = ['1', '3', '4', '6', '7'];
-	 * ```
-	 * @default ['1']
+	 * The library also uses resolutions listed in `daily_multipliers` to display higher resolution that your datafeed does not explicitly support. If `daily_multipliers` is not specified, the library cannot build additional resolutions.
+	 * @default ["1"]
 	 */
 	daily_multipliers?: string[];
 	/**
-	 * The boolean value showing whether data feed has its own weekly and monthly resolution bars or not.
+	 * A flag indicating whether your datafeed contains weekly or monthly data for this symbol. If `true`, the library requests this data when the corresponding resolution is selected.
+	 * To enable weekly or monthly resolutions, you should also specify the {@link weekly_multipliers} or {@link monthly_multipliers} properties.
+	 * Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * If `has_weekly_and_monthly` = `false` then the library will build the respective resolutions using daily bars by itself.
-	 * If not, then it will request those bars from the data feed using either the `weekly_multipliers` or `monthly_multipliers` if specified.
-	 * If resolution is not within either list an error will be raised.
+	 * If `has_weekly_and_monthly` is set to `false`, the library attempts to build the resolutions using daily bars. Note that building bars requires a large number of requests to your datafeed.
+	 * If the library fails to build bars, _No data here_ is displayed on the chart.
 	 * @default false
 	 */
 	has_weekly_and_monthly?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * An array of weekly resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "3"]`.
+	 * This property is required to enable weekly resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * weekly_multipliers = ['1', '5', '10'];
-	 * ```
+	 * The library also uses resolutions listed in `weekly_multipliers` to display higher resolution that your datafeed does not explicitly support. If `weekly_multipliers` is not specified, the library cannot build additional resolutions.
 	 * @default ['1']
 	 */
 	weekly_multipliers?: string[];
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * An array of monthly resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "3", "6", "12"]`.
+	 * This property is required to enable monthly resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * monthly_multipliers = ['1', '3', '4', '12'];
-	 * ```
+	 * The library also uses resolutions listed in `monthly_multipliers` to display higher resolution that your datafeed does not explicitly support. If `monthly_multipliers` is not specified, the library cannot build additional resolutions.
 	 * @default ['1']
 	 */
 	monthly_multipliers?: string[];
@@ -26017,6 +26100,15 @@ export interface SubscribeEventsMap {
 	 * @param {RangeOptions} range - Object that represents a selected time frame.
 	 */
 	timeframe_interval: (range: RangeOptions) => void;
+	/**
+	 * Drag start
+	 * @param  {boolean} enabled - if drag export is currently enabled
+	 */
+	dragStart: (params: DragStartParams) => void;
+	/**
+	 * Drag end
+	 */
+	dragEnd: EmptyCallback;
 }
 export interface SuccessFormatterParseResult<T> extends FormatterParseResult {
 	/** @inheritDoc */
@@ -27453,11 +27545,11 @@ export interface VertlineLineToolOverrides {
  */
 export interface VisiblePriceRange {
 	/**
-	 * A UNIX timestamp. The start of the range.
+	 * The start of the range.
 	 */
 	from: number;
 	/**
-	 * A UNIX timestamp. The end of the range.
+	 * The end of the range.
 	 */
 	to: number;
 }
@@ -28438,6 +28530,10 @@ export type ColorGradient = [
 /** These are defining the types for a background */
 export type ColorTypes = "solid" | "gradient";
 /**
+ * Determines the baseline position for column series, either at the bottom of the pane or aligned with the price scale's zero value.
+ */
+export type ColumnStyleBaselinePosition = "bottom" | "zero";
+/**
  * Context menu items processor signature
  * @param  {readonlyIActionVariant[]} items - an array of items the library wants to display
  * @param  {ActionsFactory} actionsFactory - factory you could use to create a new items for the context menu.
@@ -28465,7 +28561,7 @@ export type CustomTableFormatElementFunction<T extends TableFormatterInputValues
  * Identifier for a custom timezone (string).
  */
 export type CustomTimezoneId = Nominal<"CustomTimezoneId", string>;
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 /**
  * Custom translation function
  * @param  {string} originalText - original raw text taking into account pluralization rules
@@ -28930,7 +29026,15 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  * Displays the {@link DatafeedQuoteValues.short_name} value as a symbol name in the [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details). If disabled, the [`ticker`](@api/interfaces/Charting_Library.LibrarySymbolInfo.md#ticker) value will be used instead.
  * @default true
  */
-"prefer_quote_short_name";
+"prefer_quote_short_name" | 
+/**
+ * EXPERIMENTAL. Enables the Image drawing.
+ *
+ * By default images have no size limit and are saved in the chart layout which may not be suitable, depending on your chart storage implementation.
+ *
+ * @default false
+ */
+"image_drawingtool";
 export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;

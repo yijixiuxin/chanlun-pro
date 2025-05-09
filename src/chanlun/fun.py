@@ -135,15 +135,41 @@ def now_dt():
     return datetime_to_str(datetime.datetime.now(tz=__tz))
 
 
+def reverse_decimal_to_power_of_ten(decimal_number):
+    """
+    将小数转换为对应的小数点后几位的 10 的幂次方。
+    参数:
+        decimal_number (float): 输入的小数。
+    返回:
+        int: 对应的小数点后几位的 10 的幂次方。
+    """
+    # 检查输入是否为正数且小于 1 的小数
+    if decimal_number <= 0 or decimal_number >= 1:
+        return 1000
+    # 转换成 str
+    decimal_str = str(decimal_number)
+    # 如果其中包括 . 则说明有小数点，否则没有小数点
+    if "." in decimal_str:
+        num_zeros = len(decimal_str) - decimal_str.index(".") - 1
+    if "e-" in decimal_str:
+        num_zeros = int(decimal_str[decimal_str.index("e-") + 2 :])
+    # 返回对应的 10 的幂次方
+    return 10**num_zeros
+
+
 if __name__ == "__main__":
-    nowdt = now_dt()
-    print(nowdt)
+    # nowdt = now_dt()
+    # print(nowdt)
 
     # print(str_to_datetime(nowdt))
 
     # dtint = str_to_timeint(nowdt)
     # print(dtint)
 
-    print(timeint_to_datetime(int(1745550739000 / 1000)))
+    # print(timeint_to_datetime(int(1745550739000 / 1000)))
 
     # print(timeint_to_str(dtint))
+
+    for i in range(1, 10):
+        dn = 1 / (10**i)
+        print(dn, reverse_decimal_to_power_of_ten(dn))

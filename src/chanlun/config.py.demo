@@ -35,15 +35,19 @@ REDIS_PORT = 6379
 # A股市场支持：tdx / baostock /qmt / db
 # 港股市场支持：tdx_hk / futu / db
 # 期货市场支持：tq / tdx_futures / db
+# 纽约期货市场支持：tdx_ny_futures / db
 # 外汇市场支持 tdx_fx / db
-# 数字货币支持： binance / zb / db
+# 数字货币（合约）支持： binance / zb / db
+# 数字货币（现货）支持：binance_spot / db
 # 美股市场支持： alpaca / polygon / ib / tdx_us / db
-EXCHANGE_A = 'tdx'
-EXCHANGE_HK = 'tdx_hk'
-EXCHANGE_FUTURES = 'tdx_futures'
-EXCHANGE_CURRENCY = 'binance'
-EXCHANGE_US = 'tdx_us'
-EXCHANGE_FX = 'tdx_fx'
+EXCHANGE_A = "tdx"  # 沪深A股市场
+EXCHANGE_HK = "tdx_hk"  # 港股市场
+EXCHANGE_FUTURES = "tdx_futures"  # 期货市场
+EXCHANGE_NY_FUTURES = "tdx_ny_futures"  # 纽约期货市场
+EXCHANGE_CURRENCY = "binance"  # 数字货币（合约）
+EXCHANGE_CURRENCY_SPOT = "binance_spot"  # 数字货币（现货）
+EXCHANGE_US = "tdx_us"  # 美股市场
+EXCHANGE_FX = "tdx_fx"  # 外汇市场
 
 
 # 通达信目录（例如 C:/new_tdx），用于获取行业与概念信息，留空则使用 exchange/stocks_bkgn.json 进行获取
