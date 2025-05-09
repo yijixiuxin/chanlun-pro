@@ -7,13 +7,13 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -36,6 +36,7 @@ class ExchangeTDXFutures(Exchange):
         try:
             # 选择最优的服务器，并保存到 cache 中
             self.connect_info = db.cache_get("tdxex_connect_ip")
+            # self.connect_info = None
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
                 # print(f"TDXEX 最优服务器：{self.connect_info}")

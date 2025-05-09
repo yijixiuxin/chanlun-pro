@@ -5,6 +5,7 @@ from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
+
 from chanlun.fun import (
     datetime_to_int,
     datetime_to_str,
@@ -599,7 +600,7 @@ def convert_tdx_futures_kline_frequency(
             "22:30:00": ["22:00:00", "22:29:59"],
             "23:00:00": ["22:30:00", "23:00:00"],
             "23:30:00": ["23:00:00", "23:29:59"],
-            "00:00:00": ["23:30:00", "24:59:59"],
+            "00:00:00": ["23:30:00", "23:59:59"],
             "00:30:00": ["00:00:00", "00:29:59"],
             "01:00:00": ["00:30:00", "00:59:59"],
             "01:30:00": ["01:00:00", "01:29:59"],
@@ -613,7 +614,7 @@ def convert_tdx_futures_kline_frequency(
             "15:00:00": ["14:15:00", "15:00:00"],
             "22:00:00": ["21:00:00", "21:59:59"],
             "23:00:00": ["22:00:00", "23:00:00"],
-            "00:00:00": ["23:00:00", "24:59:59"],
+            "00:00:00": ["23:00:00", "23:59:59"],
             "01:00:00": ["00:00:00", "00:59:59"],
             "02:00:00": ["01:00:00", "02:00:00"],
         },
@@ -826,6 +827,7 @@ def convert_kline_frequency(
 
 if __name__ == "__main__":
     import pandas as pd
+
     from chanlun.exchange.exchange_db import ExchangeDB
 
     code = "SHFE.RB"
@@ -853,5 +855,7 @@ if __name__ == "__main__":
     # print(convert_klines_60m.tail())
 
     # print('klines_30m')
+    # print(klines_30m.tail(30))
+    # print(klines_30m.tail(30))
     # print(klines_30m.tail(30))
     # print(klines_30m.tail(30))

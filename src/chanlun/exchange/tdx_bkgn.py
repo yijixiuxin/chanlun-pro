@@ -1,16 +1,17 @@
 """
 通达信板块概念
 """
+
 import pathlib
 import struct
 from typing import Dict, List
 
 import pandas as pd
 from pytdx.hq import TdxHq_API
-from pytdx.util import best_ip
 
 from chanlun import config
 from chanlun.db import db
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 class TdxBKGN:
