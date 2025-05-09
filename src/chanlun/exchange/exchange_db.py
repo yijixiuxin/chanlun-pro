@@ -45,6 +45,8 @@ class ExchangeDB(Exchange):
             return "HK.00700"
         elif self.market == Market.FUTURES.value:
             return "KQ.m@SHFE.rb"
+        elif self.market == Market.NY_FUTURES.value:
+            return "CO.GC00W"
         elif self.market == Market.US.value:
             return "AAPL"
         elif self.market == Market.CURRENCY.value:
@@ -80,6 +82,18 @@ class ExchangeDB(Exchange):
                 "5m": "5m",
             }
         elif self.market == Market.FUTURES.value:
+            return {
+                "w": "W",
+                "d": "D",
+                "120m": "2H",
+                "60m": "1H",
+                "30m": "30m",
+                "15m": "15m",
+                "10m": "10m",
+                "5m": "5m",
+                "1m": "1m",
+            }
+        elif self.market == Market.NY_FUTURES.value:
             return {
                 "w": "W",
                 "d": "D",

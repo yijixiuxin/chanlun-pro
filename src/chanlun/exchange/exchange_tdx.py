@@ -114,7 +114,15 @@ class ExchangeTDX(Exchange):
                         if code in __codes:
                             continue
                         __codes.append(code)
-                        __all_stocks.append({"code": code, "name": name, "type": _type})
+                        precision = 100 if _type == "stock_cn" else 1000
+                        __all_stocks.append(
+                            {
+                                "code": code,
+                                "name": name,
+                                "type": _type,
+                                "precision": precision,
+                            }
+                        )
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
@@ -603,7 +611,7 @@ class ExchangeTDX(Exchange):
         stock = [_s for _s in all_stock if _s["code"] == code]
         if not stock:
             return None
-        return {"code": stock[0]["code"], "name": stock[0]["name"]}
+        return stock[0]
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """
@@ -965,10 +973,13 @@ if __name__ == "__main__":
     ex = ExchangeTDX()
     all_stocks = ex.all_stocks()
     print(len(all_stocks))
-    codes = [[_s['code'], _s['name']] for _s in all_stocks if _s['code'][0:5] in ['SH.60', 'SZ.00', 'SZ.30'] and 'ST' not in _s['name']]
-    df = pd.DataFrame(codes, columns=['code', 'name'])
-    df.to_csv('stock_list.csv', index=False)
-
+    codes = [
+        [_s["code"], _s["name"]]
+        for _s in all_stocks
+        if _s["code"][0:5] in ["SH.60", "SZ.00", "SZ.30"] and "ST" not in _s["name"]
+    ]
+    df = pd.DataFrame(codes, columns=["code", "name"])
+    df.to_csv("stock_list.csv", index=False)
 
     # klines = ex.klines("BJ.832145", "d")
     # print(klines.head(5))
