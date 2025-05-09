@@ -52,7 +52,8 @@
                   <select name="market" lay-filter="select_market">
                     <option value="a">沪深A股</option>
                     <option value="hk">港股</option>
-                    <option value="futures">期货</option>
+                    <option value="futures">国内期货</option>
+                    <option value="ny_futures">纽约期货</option>
                     <option value="fx">外汇</option>
                     <option value="us">美股</option>
                     <option value="currency">数字货币(合约)</option>
@@ -122,11 +123,9 @@
                           class="layui-input" />
                       </label>
                     </div>
-                    <div class="layui-form-mid" style="width: 30%;padding: 0 !important; float: left">
+                    <div class="layui-form-mid" style="width: 30%; padding: 0 !important; float: left">
                       <label>
-                        <select name="ai_frequencys" id="ai_frequencys">
-
-                        </select>
+                        <select name="ai_frequencys" id="ai_frequencys"></select>
                       </label>
                     </div>
                     <div class="layui-form-mid" style="padding: 4px 0 !important; float: left">
@@ -194,6 +193,8 @@
         fx_interval_2: "1D",
         futures_interval_1: "1D",
         futures_interval_2: "1D",
+        ny_futures_interval_1: "1D",
+        ny_futures_interval_2: "1D",
         currency_interval_1: "1D",
         currency_interval_2: "1D",
         currency_spot_interval_1: "1D",
@@ -204,6 +205,7 @@
         us_code: "{{ market_default_codes.us }}",
         fx_code: "{{ market_default_codes.fx }}",
         futures_code: "{{ market_default_codes.futures }}",
+        ny_futures_code: "{{ market_default_codes.ny_futures }}",
         currency_code: "{{ market_default_codes.currency }}",
         currency_spot_code: "{{ market_default_codes.currency_spot }}",
       };
@@ -282,7 +284,7 @@
 
         charts_storage_url: "/tv",
         charts_storage_api_version: "1.1",
-        client_id: "chanlun_pro_" + id,
+        client_id: "chanlun_pro_" + market + "_" + id,
         user_id: "999",
         load_last_chart: true,
 
@@ -730,17 +732,15 @@
           const code_start = performance.now();
 
           let symbolInterval = widget.symbolInterval();
+          console.log(symbolInterval);
+          let symbol_res_key = symbolInterval["symbol"].toString().toLowerCase() + symbolInterval["interval"].toString().toLowerCase();
           let bars_result = udf_datafeed._historyProvider.bars_result.get(
-            symbolInterval["symbol"].toString().toLowerCase()
+            symbol_res_key
           );
           if (bars_result === undefined) {
             return true;
           }
-          bars_result = bars_result.get(
-            symbolInterval["interval"].toString().toLowerCase()
-          );
-          // console.log(symbolInterval);
-          // console.log(bars_result);
+          console.log(bars_result);
 
           // 画缠论图表
           let visible_range = chart.getVisibleRange();

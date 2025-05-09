@@ -51,14 +51,13 @@ class ExchangeTDXFutures(Exchange):
                         all_markets = client.get_markets()
                         for _m in all_markets:
                             if _m["category"] == 3 and _m["market"] in [
-                                23,
-                                28,
-                                29,
-                                30,
-                                42,
-                                47,
-                                60,
-                                66,
+                                # 23, # PR 香港金融期货
+                                28,  # QZ 郑州商品
+                                29,  # QD 大连商品
+                                30,  # QS 上海期货
+                                42,  # TI 商品指数
+                                47,  # CZ 中金所期货
+                                66,  # QG 广州期货
                             ]:
                                 self.market_maps[_m["short_name"]] = {
                                     "market": _m["market"],
@@ -87,8 +86,6 @@ class ExchangeTDXFutures(Exchange):
 
     def support_frequencys(self):
         return {
-            "y": "Y",
-            "q": "Q",
             "m": "M",
             "w": "W",
             "d": "D",
@@ -112,9 +109,7 @@ class ExchangeTDXFutures(Exchange):
             start_i = 0
             count = 1000
             market_map_short_names = {
-                _m_i["market"]: _m_s
-                for _m_s, _m_i in self.market_maps.items()
-                if _m_s not in ["PH", "EG", "MA"]
+                _m_i["market"]: _m_s for _m_s, _m_i in self.market_maps.items()
             }
             while True:
                 instruments = client.get_instrument_info(start_i, count)
@@ -277,6 +272,7 @@ class ExchangeTDXFutures(Exchange):
         else:
             _format = "%Y-%m-%d"
         dt = fun.str_to_datetime(dt, _format)
+
         if dt.hour >= 21:
             dt = dt - datetime.timedelta(days=1)
         return fun.datetime_to_str(dt)
@@ -423,18 +419,21 @@ if __name__ == "__main__":
     # print(ex.market_maps)
     # stocks = ex.all_stocks()
     # for s in stocks:
-    #     if "黄金" in s["name"]:
+    #     if "TI." in s["code"]:
     #         print(s)
     # print(len(stocks))
+    # print(ex.market_maps)
     # for s in stocks:
     #     if '原油' in s["name"]:
     #         print(s)
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("CO.GC00W", "15m")
+    klines = ex.klines("QS.AUL9", "60m")
+    # klines = ex.klines(ex.default_code(), "60m")
     print(len(klines))
-    print(klines)
+    print(klines.tail(30))
 
     # ticks = ex.all_ticks()
+    # print(len(ticks))
     # print(len(ticks))

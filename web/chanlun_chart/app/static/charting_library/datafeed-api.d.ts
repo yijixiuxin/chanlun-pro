@@ -160,13 +160,20 @@ export interface DatafeedConfiguration {
  */
 export interface DatafeedQuoteValues {
 	/**
-	 * Price change (usually counts as an open price on a particular day).
-	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
+	 * Price change. It is usually calculated as a difference between the current price and close price of the previous day (regular session).
+	 * In the UI, `ch` and {@link chp} are represented as the last day change parameter in *Data Window*.
+	 * You can also display these values in the [legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
+	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
+	 *
+	 * Note that `ch` and `chp` are **required** for mobile apps. Otherwise, [`NaN` values](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#nan-values-in-legend) will appear in the legend.
 	 */
 	ch?: number;
 	/**
-	 * Price change percentage.
-	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
+	 * Price change percentage. In the UI, `chp` and {@link ch} are represented as the last day change parameter in *Data Window*.
+	 * You can also display these values in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
+	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
+	 *
+	 * Note that `ch` and `chp` are **required** for mobile apps. Otherwise, [`NaN` values](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#nan-values-in-legend) will appear in the Legend.
 	 */
 	chp?: number;
 	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widgets. You can disable the [`prefer_quote_short_name`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#prefer_quote_short_name) to use the {@link LibrarySymbolInfo.ticker} value instead. */
@@ -566,14 +573,10 @@ export interface LibrarySymbolInfo {
 	 */
 	variable_tick_size?: string;
 	/**
-	 * Boolean value showing whether the symbol includes intraday (minutes) historical data.
+	 * A flag indicating whether your datafeed contains intraday (minutes) data for this symbol.
+	 * If `true`, the library requests this data when an intraday resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for intraday resolutions will be disabled for this particular symbol.
-	 * If it is set to `true`, all intradays resolutions that are supplied directly by the datafeed must be provided in `intraday_multipliers` array.
-	 *
-	 * **WARNING** Any daily, weekly or monthly resolutions cannot be inferred from intraday resolutions.
-	 *
-	 * `false` if DWM only
+	 * This property is required to enable intraday resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-minutes-intraday) article for more information.
 	 * @default false
 	 */
 	has_intraday?: boolean;
@@ -601,37 +604,41 @@ export interface LibrarySymbolInfo {
 	 */
 	supported_resolutions?: ResolutionString[];
 	/**
-	 * Array of resolutions (in minutes) supported directly by the data feed. Each such resolution may be passed to, and should be implemented by, `getBars`. The default of [] means that the data feed supports aggregating by any number of minutes.
+	 * An array of intraday (minutes) resolutions that your datafeed supports. Items in the array should be listed in ascending order, for example: `["1", "2"]`.
 	 *
-	 * If the data feed only supports certain minute resolutions but not the requested resolution, `getBars` will be called (repeatedly if needed) with a higher resolution as a parameter, in order to build the requested resolution.
+	 * This property is required to enable intraday resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-minutes-intraday) article for more information.
+	 * Note that each resolution in `intraday_multipliers` should be handled in the {@link IDatafeedChartApi.getBars} implementation.
+	 * Consider the [example](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#example).
 	 *
-	 * For example, if the data feed only supports minute resolution, set `intraday_multipliers` to `['1']`.
+	 * The library also uses resolutions listed in `intraday_multipliers` to display higher resolution that your datafeed does not explicitly support. If `intraday_multipliers` is not specified, the library cannot build additional resolutions.
 	 *
-	 * When the user wants to see 5-minute data, `getBars` will be called with the resolution set to 1 until the library builds all the 5-minute resolution by itself.
-	 * @example (for ex.: "1,5,60") - only these resolutions will be requested, all others will be built using them if possible
-	 * @default []
+	 * Note that the library **cannot** build daily, weekly, or monthly resolutions using intraday data.
+	 * @default [] — specifies that the datafeed can provide data for any requested resolution.
 	 */
 	intraday_multipliers?: string[];
 	/**
-	 * Boolean value showing whether the symbol includes seconds in the historical data.
+	 * A flag indicating whether your datafeed contains seconds data for this symbol.
+	 * If `true`, the library requests this data when a seconds resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for resolutions that include seconds will be disabled for this particular symbol.
-	 *
-	 * If it is set to `true`, all resolutions that are supplied directly by the data feed must be provided in `seconds_multipliers` array.
+	 * You should set `has_seconds` to `true` to enable seconds resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-seconds) article for more information.
 	 * @default false
 	 */
 	has_seconds?: boolean;
 	/**
-	 * Boolean value showing whether the symbol includes ticks in the historical data.
+	 * A flag indicating whether your datafeed contains ticks data for this symbol.
+	 * If `true`, the library requests this data when a resolution in ticks is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If it's `false` then all buttons for resolutions that include ticks will be disabled for this particular symbol.
+	 * You should set `has_ticks` to `true` to enable ticks resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-ticks) article for more information.
 	 * @default false
 	 */
 	has_ticks?: boolean;
 	/**
-	 * It is an array containing resolutions that include seconds (excluding postfix) that the data feed provides.
-	 * E.g., if the data feed supports resolutions such as `["1S", "5S", "15S"]`, but has 1-second bars for some symbols then you should set `seconds_multipliers` of this symbol to `[1]`.
-	 * This will make the library build 5S and 15S resolutions by itself.
+	 * An array of seconds resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "2"]`.
+	 * This property is required to enable seconds resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-seconds) article for more information.
+	 *
+	 * The library also uses resolutions listed in `seconds_multipliers` to display higher resolution that your datafeed does not explicitly support. If `seconds_multipliers` is not specified, the library cannot build additional resolutions.
+	 * Consider the example. You need to enable one-second and five-second resolutions but your datafeed contains only one-second data. In this case, you should set `seconds_multipliers` to `["1"]`.
+	 * The library will build the five-second resolution from one-second data.
 	 */
 	seconds_multipliers?: string[];
 	/**
@@ -646,54 +653,44 @@ export interface LibrarySymbolInfo {
 	 */
 	build_seconds_from_ticks?: boolean;
 	/**
-	 * The boolean value specifying whether the datafeed can supply historical data at the daily resolution.
+	 * A flag indicating whether your datafeed contains daily data for this symbol.
+	 * If `true`, the library requests this data when a daily resolution is selected. If `false`, _No data here_ is displayed on the chart.
 	 *
-	 * If `has_daily` is set to `false`, all buttons for resolutions that include days are disabled for this particular symbol.
-	 * Otherwise, the library requests daily bars from the datafeed.
-	 * All daily resolutions that the datafeed supplies must be included in the {@link LibrarySymbolInfo.daily_multipliers} array.
-	 *
+	 * `has_daily` is set to `true` by default. However, you should also specify {@link daily_multipliers} to enable daily resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-days) article for more information.
 	 * @default true
 	 */
 	has_daily?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-format) (in days - without the suffix) supported by the datafeed. {@link ResolutionString}
+	 * An array of daily resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "2"]`.
+	 * This property is required to enable daily resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-days) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * daily_multipliers = ['1', '3', '4', '6', '7'];
-	 * ```
-	 * @default ['1']
+	 * The library also uses resolutions listed in `daily_multipliers` to display higher resolution that your datafeed does not explicitly support. If `daily_multipliers` is not specified, the library cannot build additional resolutions.
+	 * @default ["1"]
 	 */
 	daily_multipliers?: string[];
 	/**
-	 * The boolean value showing whether data feed has its own weekly and monthly resolution bars or not.
+	 * A flag indicating whether your datafeed contains weekly or monthly data for this symbol. If `true`, the library requests this data when the corresponding resolution is selected.
+	 * To enable weekly or monthly resolutions, you should also specify the {@link weekly_multipliers} or {@link monthly_multipliers} properties.
+	 * Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * If `has_weekly_and_monthly` = `false` then the library will build the respective resolutions using daily bars by itself.
-	 * If not, then it will request those bars from the data feed using either the `weekly_multipliers` or `monthly_multipliers` if specified.
-	 * If resolution is not within either list an error will be raised.
+	 * If `has_weekly_and_monthly` is set to `false`, the library attempts to build the resolutions using daily bars. Note that building bars requires a large number of requests to your datafeed.
+	 * If the library fails to build bars, _No data here_ is displayed on the chart.
 	 * @default false
 	 */
 	has_weekly_and_monthly?: boolean;
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) (in weeks - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * An array of weekly resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "3"]`.
+	 * This property is required to enable weekly resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * weekly_multipliers = ['1', '5', '10'];
-	 * ```
+	 * The library also uses resolutions listed in `weekly_multipliers` to display higher resolution that your datafeed does not explicitly support. If `weekly_multipliers` is not specified, the library cannot build additional resolutions.
 	 * @default ['1']
 	 */
 	weekly_multipliers?: string[];
 	/**
-	 * Array (of strings) containing the [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) (in months - without the suffix) supported by the data feed. {@link ResolutionString}
+	 * An array of monthly resolutions that your datafeed supports. Items in the array should be listed in ascending order and **should not** include letters, for example: `["1", "3", "6", "12"]`.
+	 * This property is required to enable monthly resolutions. Refer to the [Resolution](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-in-weeks--months) article for more information.
 	 *
-	 * For example it could be something like
-	 *
-	 * ```javascript
-	 * monthly_multipliers = ['1', '3', '4', '12'];
-	 * ```
+	 * The library also uses resolutions listed in `monthly_multipliers` to display higher resolution that your datafeed does not explicitly support. If `monthly_multipliers` is not specified, the library cannot build additional resolutions.
 	 * @default ['1']
 	 */
 	monthly_multipliers?: string[];
@@ -1075,7 +1072,7 @@ export interface Unit {
 	/** Description */
 	description: string;
 }
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 export type DOMCallback = (data: DOMData) => void;
 export type DatafeedErrorCallback = (reason: string) => void;
 export type GetMarksCallback<T> = (marks: T[]) => void;
