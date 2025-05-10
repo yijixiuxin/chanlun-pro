@@ -357,6 +357,9 @@ class ExchangeTDXFutures(Exchange):
                     # ('ZongLiang', 254179), ('XianLiang', 2), ('ZongJinE', 5730089472.0), ('NeiPan', 128701), ('WaiPan', 125478),
                     # ('ChiCangLiang', 674677), ('MaiRuJia', 2257.0), ('MaiRuLiang', 72), ('MaiChuJia', 2258.0), ('MaiChuLiang', 25)])
 
+                    if _quote["MaiChu"] == 0.0:
+                        continue
+
                     ticks[f"{_name}.{_quote['code']}"] = Tick(
                         code=f"{_name}.{_quote['code']}",
                         last=_quote["MaiChu"],
@@ -430,7 +433,7 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("QS.AUL9", "60m")
+    klines = ex.klines("QS.RBL8", "5m")
     # klines = ex.klines(ex.default_code(), "60m")
     print(len(klines))
     print(klines.tail(30))
