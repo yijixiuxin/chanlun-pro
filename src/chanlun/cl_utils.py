@@ -637,7 +637,7 @@ def prices_jiaodu(prices):
     return j if prices[-1] > prices[0] else -j
 
 
-def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
+def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None) -> Union[dict, None]:
     """
     将缠论数据，转换成 tv 画图的坐标数据
     """
@@ -654,6 +654,8 @@ def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None):
         for k in cd.get_klines()
     ]
     klines = pd.DataFrame(klines)
+    if len(klines) == 0:
+        return None
     klines.loc[:, "code"] = cd.get_code()
     if to_frequency is not None:
         # 将数据转换成指定的周期数据
