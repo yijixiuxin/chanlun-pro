@@ -189,7 +189,7 @@ class ExchangeTDXFutures(Exchange):
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if klines is None:
+                if klines is None or len(klines) == 0:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
                         [
@@ -433,10 +433,12 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
     #
-    klines = ex.klines("QS.RBL8", "5m")
-    # klines = ex.klines(ex.default_code(), "60m")
-    print(len(klines))
-    print(klines.tail(30))
+    for _f in ex.support_frequencys().keys():
+        klines = ex.klines("QZ.SR2601", _f)
+        # klines = ex.klines(ex.default_code(), "60m")
+        print(_f)
+        print(len(klines))
+        print(klines.tail(5))
 
     # ticks = ex.all_ticks()
     # print(len(ticks))
