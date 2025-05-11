@@ -714,14 +714,11 @@ class ExchangeTDX(Exchange):
 
 
 if __name__ == "__main__":
+    from tqdm.auto import tqdm
+
     ex = ExchangeTDX()
     all_stocks = ex.all_stocks()
     print(len(all_stocks))
-
-    codes = [_s["code"] for _s in all_stocks]
-    ticks = ex.ticks(codes)
-
-    print(len(ticks))
 
     # klines = ex.klines("BJ.832145", "d")
     # print(klines.head(5))
