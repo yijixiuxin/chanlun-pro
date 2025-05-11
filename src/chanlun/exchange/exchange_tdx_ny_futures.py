@@ -4,15 +4,14 @@ from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from pytdx.errors import TdxConnectionError
-from pytdx.exhq import TdxExHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
-
 from chanlun import fun
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
+from pytdx.errors import TdxConnectionError
+from pytdx.exhq import TdxExHq_API
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 
 @fun.singleton
@@ -78,7 +77,6 @@ class ExchangeTDXNYFutures(Exchange):
     def support_frequencys(self):
         return {
             "y": "Y",
-            "q": "Q",
             "m": "M",
             "w": "W",
             "d": "D",
@@ -122,6 +120,11 @@ class ExchangeTDXNYFutures(Exchange):
                 start_i += count
                 if len(instruments) < count:
                     break
+
+        # 获取 tick ，如果没有tick 的，则不显示code
+        ticks = self.all_ticks()
+        tick_codes = [_c for _c, _t in ticks.items()]
+        __all_stocks = [_s for _s in __all_stocks if _s["code"] in tick_codes]
 
         self.g_all_stocks = __all_stocks
         # print(f"期货获取数量：{len(self.g_all_stocks)}")
@@ -346,6 +349,9 @@ class ExchangeTDXNYFutures(Exchange):
                     # ('ZongLiang', 254179), ('XianLiang', 2), ('ZongJinE', 5730089472.0), ('NeiPan', 128701), ('WaiPan', 125478),
                     # ('ChiCangLiang', 674677), ('MaiRuJia', 2257.0), ('MaiRuLiang', 72), ('MaiChuJia', 2258.0), ('MaiChuLiang', 25)])
 
+                    if _quote["MaiChu"] == 0.0 or _quote["ZongLiang"] == 0.0:
+                        continue
+
                     ticks[f"{_name}.{_quote['code']}"] = Tick(
                         code=f"{_name}.{_quote['code']}",
                         last=_quote["MaiChu"],
@@ -399,20 +405,30 @@ if __name__ == "__main__":
     ex = ExchangeTDXNYFutures()
     # print(ex.market_maps)
     stocks = ex.all_stocks()
+    print(len(stocks))
+
+    for _s in stocks:
+        print(_s["code"], _s["name"])
+
     # for s in stocks:
     #     #     if "黄金" in s["name"]:
     #     print(s)
-    print(len(stocks))
-    print(ex.market_maps)
+    # print(len(stocks))
+    # print(ex.market_maps)
     # for s in stocks:
     #     if '原油' in s["name"]:
     #         print(s)
 
     # print(ex.to_tdx_code('QS.ZN2306'))
-    #
-    klines = ex.klines("CO.GC00W", "30m")
-    print(len(klines))
-    print(klines)
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))
+    # for _code, _tick in ticks.items():
+    #     print(_code, _tick.last, _tick.volume)
+
+    # klines = ex.klines("CO.GC00W", "30m")
+    # print(len(klines))
+    # print(klines)
 
     # ticks = ex.all_ticks()
     # print(len(ticks))
