@@ -14,7 +14,8 @@ from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from chanlun import fun
 from chanlun.config import get_data_path
 from chanlun.db import db
-from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
+from chanlun.exchange.exchange import (Exchange, Tick,
+                                       convert_stock_kline_frequency)
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
 from chanlun.exchange.tdx_bkgn import TdxBKGN
@@ -720,10 +721,10 @@ if __name__ == "__main__":
     all_stocks = ex.all_stocks()
     print(len(all_stocks))
 
-    # klines = ex.klines("BJ.832145", "d")
-    # print(klines.head(5))
-    # print(klines.tail(10))
-    # print(len(klines))
+    klines = ex.klines("SH.000001", "d")
+    print(klines.head(5))
+    print(klines.tail(10))
+    print(len(klines))
 
     # print("use time : ", time.time() - s_time)
     # 207735
