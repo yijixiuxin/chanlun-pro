@@ -9,6 +9,7 @@ from pytdx.exhq import TdxExHq_API
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
@@ -187,7 +188,9 @@ class ExchangeTDXFX(Exchange):
                 multithread=True, raise_exception=True, auto_retry=True
             )
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.FX.value, code, frequency
+                )
                 if klines is None:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
@@ -233,7 +236,7 @@ class ExchangeTDXFX(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(code, frequency, klines)
+            self.fdb.save_tdx_klines(Market.FX.value, code, frequency, klines)
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
