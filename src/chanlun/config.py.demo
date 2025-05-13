@@ -115,7 +115,19 @@ FEISHU_KEYS = {
         "app_id": "cli_********",
         "app_secret": "TlQXy9Y7********",
     },
+    "fx": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
     "futures": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "ny_futures": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
+    "currency_spot": {
         "app_id": "cli_********",
         "app_secret": "TlQXy9Y7********",
     },

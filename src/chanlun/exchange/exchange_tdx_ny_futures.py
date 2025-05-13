@@ -4,14 +4,16 @@ from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
+from pytdx.errors import TdxConnectionError
+from pytdx.exhq import TdxExHq_API
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
-from pytdx.errors import TdxConnectionError
-from pytdx.exhq import TdxExHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 
 @fun.singleton
@@ -183,7 +185,9 @@ class ExchangeTDXNYFutures(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.NY_FUTURES.value, code, frequency
+                )
                 if klines is None:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
@@ -235,7 +239,7 @@ class ExchangeTDXNYFutures(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(code, frequency, klines)
+            self.fdb.save_tdx_klines(Market.NY_FUTURES.value, code, frequency, klines)
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
@@ -404,11 +408,11 @@ class ExchangeTDXNYFutures(Exchange):
 if __name__ == "__main__":
     ex = ExchangeTDXNYFutures()
     # print(ex.market_maps)
-    stocks = ex.all_stocks()
-    print(len(stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
 
-    for _s in stocks:
-        print(_s["code"], _s["name"])
+    # for _s in stocks:
+    #     print(_s["code"], _s["name"])
 
     # for s in stocks:
     #     #     if "黄金" in s["name"]:
@@ -426,9 +430,9 @@ if __name__ == "__main__":
     # for _code, _tick in ticks.items():
     #     print(_code, _tick.last, _tick.volume)
 
-    # klines = ex.klines("CO.GC00W", "30m")
-    # print(len(klines))
-    # print(klines)
+    klines = ex.klines("CO.GC00W", "30m")
+    print(len(klines))
+    print(klines)
 
     # ticks = ex.all_ticks()
     # print(len(ticks))

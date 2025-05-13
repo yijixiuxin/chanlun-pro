@@ -12,10 +12,10 @@ from pytdx.hq import TdxHq_API
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.config import get_data_path
 from chanlun.db import db
-from chanlun.exchange.exchange import (Exchange, Tick,
-                                       convert_stock_kline_frequency)
+from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
 from chanlun.exchange.tdx_bkgn import TdxBKGN
@@ -135,6 +135,7 @@ class ExchangeTDX(Exchange):
                     "code": _c,
                     "name": _n,
                     "type": "stock_cn",
+                    "precision": 100,
                 }
             )
 
@@ -231,7 +232,9 @@ class ExchangeTDX(Exchange):
                 else:
                     get_bars = client.get_security_bars
 
-                ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                ks: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.A.value, code, frequency
+                )
                 if ks is None or len(ks) == 0:
                     # 获取 8*700 = 5600 条数据
                     ks = pd.concat(
@@ -289,7 +292,7 @@ class ExchangeTDX(Exchange):
             # 删除重复数据
             ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
 
-            self.fdb.save_tdx_klines(code, frequency, ks)
+            self.fdb.save_tdx_klines(Market.A.value, code, frequency, ks)
 
             ks.loc[:, "code"] = code
             ks.loc[:, "volume"] = ks["vol"]
@@ -718,10 +721,10 @@ if __name__ == "__main__":
     from tqdm.auto import tqdm
 
     ex = ExchangeTDX()
-    all_stocks = ex.all_stocks()
-    print(len(all_stocks))
+    # all_stocks = ex.all_stocks()
+    # print(len(all_stocks))
 
-    klines = ex.klines("SH.000001", "d")
+    klines = ex.klines("SZ.000001", "5m")
     print(klines.head(5))
     print(klines.tail(10))
     print(len(klines))

@@ -11,6 +11,7 @@ from pytdx.exhq import TdxExHq_API
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
@@ -179,7 +180,9 @@ class ExchangeTDXHK(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.HK.value, code, frequency
+                )
                 if klines_df is None:
                     # 获取 8*700 = 5600 条数据
                     klines_df = pd.concat(
@@ -225,7 +228,7 @@ class ExchangeTDXHK(Exchange):
             klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
                 "date"
             )
-            self.fdb.save_tdx_klines(code, frequency, klines_df)
+            self.fdb.save_tdx_klines(Market.HK.value, code, frequency, klines_df)
 
             klines_df.loc[:, "date"] = klines_df["date"].dt.tz_localize(self.tz)
             klines_df = klines_df.sort_values("date")

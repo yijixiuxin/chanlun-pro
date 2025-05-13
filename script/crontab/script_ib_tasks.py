@@ -1,14 +1,16 @@
+import datetime
 import json
 import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+
 import ib_insync
-import datetime
-import pytz
 import pandas as pd
-from chanlun import config
-from chanlun import rd, fun
+import pytz
+
+from chanlun import config, fun, rd
+from chanlun.base import Market
 from chanlun.exchange.exchange_ib import CmdEnum, ib_res_hkey
 from chanlun.file_db import FileCacheDB
 
@@ -59,7 +61,7 @@ def run_tasks(client_id: int):
         for i in range(2):
             contract = get_contract_by_code(code)
             history_klines = fdb.get_tdx_klines(
-                f"ib_{code}", barSizeSetting.replace(" ", "")
+                Market.US.value, f"ib_{code}", barSizeSetting.replace(" ", "")
             )
             new_durationStr = durationStr
             if history_klines is not None and len(history_klines) >= 100:
@@ -156,7 +158,10 @@ def run_tasks(client_id: int):
             # 进行本地保存
             klines_df = pd.DataFrame(klines_res)
             fdb.save_tdx_klines(
-                f"ib_{code}", barSizeSetting.replace(" ", ""), klines_df
+                Market.US.value,
+                f"ib_{code}",
+                barSizeSetting.replace(" ", ""),
+                klines_df,
             )
             return klines_res
         return []
