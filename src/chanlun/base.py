@@ -14,3 +14,8 @@ class Market(Enum):
     CURRENCY_SPOT = "currency_spot"  # 数字货币现货
     US = "us"  # 美股
     FX = "fx"  # 外汇
+
+
+if __name__ == "__main__":
+    for market in Market:
+        print(market.name, market.value)
