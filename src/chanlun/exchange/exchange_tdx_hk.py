@@ -1,18 +1,22 @@
+import datetime
 import time
+import traceback
+from typing import Dict, List, Union
+
 import akshare as ak
-
-from typing import Union
-
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
-from chanlun import fun
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
-from chanlun.db import db
-from chanlun.exchange.exchange import *
-from chanlun.file_db import FileCacheDB
+from chanlun import fun
+from chanlun.base import Market
 from chanlun.config import get_data_path
+from chanlun.db import db
+from chanlun.exchange.exchange import Exchange, Tick
+from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -26,35 +30,41 @@ class ExchangeTDXHK(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"最优服务器：{self.connect_info}")
-
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-        # 初始化，映射交易所代码
-        self.market_maps = {}
-        while True:
-            try:
-                client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                    all_markets = client.get_markets()
-                    for _m in all_markets:
-                        if _m["category"] == 2:
-                            self.market_maps[_m["short_name"]] = {
-                                "market": _m["market"],
-                                "category": _m["category"],
-                                "name": _m["name"],
-                            }
-                break
-            except TdxConnectionError:
-                self.reset_tdx_ip()
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"最优服务器：{self.connect_info}")
+
+            # 初始化，映射交易所代码
+            self.market_maps = {}
+            while True:
+                try:
+                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
+                    with client.connect(
+                        self.connect_info["ip"], self.connect_info["port"]
+                    ):
+                        all_markets = client.get_markets()
+                        for _m in all_markets:
+                            if _m["category"] == 2:
+                                self.market_maps[_m["short_name"]] = {
+                                    "market": _m["market"],
+                                    "category": _m["category"],
+                                    "name": _m["name"],
+                                }
+                    break
+                except TdxConnectionError:
+                    self.reset_tdx_ip()
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 香港行情接口初始化失败，香港行情不可用")
 
     def reset_tdx_ip(self):
         """
@@ -170,7 +180,9 @@ class ExchangeTDXHK(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.HK.value, code, frequency
+                )
                 if klines_df is None:
                     # 获取 8*700 = 5600 条数据
                     klines_df = pd.concat(
@@ -199,11 +211,11 @@ class ExchangeTDXHK(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
                         old_end_dt = klines_df.iloc[-1]["date"]
@@ -216,7 +228,7 @@ class ExchangeTDXHK(Exchange):
             klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
                 "date"
             )
-            self.fdb.save_tdx_klines(code, frequency, klines_df)
+            self.fdb.save_tdx_klines(Market.HK.value, code, frequency, klines_df)
 
             klines_df.loc[:, "date"] = klines_df["date"].dt.tz_localize(self.tz)
             klines_df = klines_df.sort_values("date")
@@ -294,15 +306,10 @@ class ExchangeTDXHK(Exchange):
     def now_trading(self):
         """
         返回当前是否是交易时间
-        TODO 简单判断 ：9-12 , 13:30-15:00 21:00-02:30
+        TODO 简单判断 ：9:00-16:00
         """
         hour = int(time.strftime("%H"))
-        minute = int(time.strftime("%M"))
-        if (
-            hour in {9, 10, 11, 14, 21, 22, 23, 0, 1}
-            or (hour == 13 and minute >= 30)
-            or (hour == 2 and minute <= 30)
-        ):
+        if hour in {9, 10, 11, 12, 13, 14, 15}:
             return True
         return False
 
@@ -381,8 +388,8 @@ if __name__ == "__main__":
     #
     # print(ex.to_tdx_code('KH.00700'))
     #
-    klines = ex.klines("KH.00006", "d", args={"pages": 1})
-    print(klines)
+    klines = ex.klines("KH.09618", "d")
+    print(klines.tail(20))
 
     # ticks = ex.ticks(['KH.00700'])
     # print(ticks)

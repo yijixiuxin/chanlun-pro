@@ -1,19 +1,23 @@
 import os
+from typing import List
 
 import MyTT
+import numpy as np
+import pandas as pd
 import talib
-import MyTT
 
 # 画图配置
 from pyecharts import options as opts
-from pyecharts.charts import Kline as cKline, Line, Bar, Grid, Scatter
+from pyecharts.charts import Bar, Grid, Line, Scatter
+from pyecharts.charts import Kline as cKline
 from pyecharts.commons.utils import JsCode
 
+from chanlun.backtesting.base import Strategy
 from chanlun.cl_analyse import LinesFormAnalyse
-from chanlun.cl_interface import *
-from chanlun.cl_utils import cl_qstd
+from chanlun.cl_interface import ICL, LINE, ZS
+from chanlun.cl_utils import cl_qstd, klines_to_heikin_ashi_klines
 from chanlun.exchange import exchange
-from chanlun.fun import str_to_datetime, datetime_to_str
+from chanlun.fun import str_to_datetime
 
 if "JPY_PARENT_PID" in os.environ:
     from pyecharts.globals import CurrentConfig, NotebookType
@@ -65,6 +69,7 @@ def render_charts(
         "chart_show_zsd_bc": True,
         "chart_show_qsd_bc": True,
         "chart_show_ma": True,
+        "chart_show_ama": True,
         "chart_show_boll": False,
         "chart_show_futu": "macd",
         "chart_show_ld": "xd",
@@ -79,7 +84,9 @@ def render_charts(
         "chart_idx_atr_multiplier": 1.5,
         "chart_idx_cci_period": 14,
         "chart_idx_kdj_period": "9,3,3",
+        "chart_idx_ama_ags": "10,2,30",
         "chart_qstd": "xd,0",
+        "chart_kline_type": "default",  # default 默认k线 ashi 平均k线
         # 图表高度
         "chart_width": "100%",
         "chart_high": "800px",
@@ -99,6 +106,8 @@ def render_charts(
                     "chart_show_futu",
                     "chart_qstd",
                     "chart_show_ld",
+                    "chart_idx_ama_ags",
+                    "chart_kline_type",
                 ]:
                     config[_k] = str(config[_k])
                 elif _k in ["chart_idx_atr_multiplier"]:
@@ -107,7 +116,7 @@ def render_charts(
                     config[_k] = bool(int(config[_k]))
                 elif "chart_idx_" in _k or "chart_kline_nums" in _k:
                     config[_k] = int(config[_k])
-            except Exception as e:
+            except Exception:
                 print(f"{_k} val error {config[_k]}")
                 config[_k] = _v
 
@@ -160,6 +169,8 @@ def render_charts(
     ]
     klines = pd.DataFrame(klines)
     klines.loc[:, "code"] = cl_data.get_code()
+    if config["chart_kline_type"] == "ashi":
+        klines = klines_to_heikin_ashi_klines(klines)
 
     fxs = cl_data.get_fxs()
     bis = cl_data.get_bis()
@@ -494,10 +505,7 @@ def render_charts(
                     o["datetime"], tz=cl_data.get_src_klines()[-1].date.tzinfo
                 )
             else:
-                odt = str_to_datetime(
-                    datetime_to_str(o["datetime"]),
-                    tz=cl_data.get_src_klines()[-1].date.tzinfo,
-                )  # 这样转换后，加了个时区
+                odt = o["datetime"]
             k_dt = dts[dts >= odt]
             if len(k_dt) == 0:
                 continue
@@ -916,6 +924,31 @@ def render_charts(
                     .set_global_opts()
                 )
             )
+    if config["chart_show_ama"]:
+        # 计算ma线
+        ama_ags = config["chart_idx_ama_ags"].split(",")[0:3]
+        ama = Strategy.idx_ama(
+            cl_data,
+            N=int(ama_ags[0]),
+            fast_N=int(ama_ags[1]),
+            slow_N=int(ama_ags[2]),
+        )
+        overlap_kline = overlap_kline.overlap(
+            (
+                Line()
+                .add_xaxis(xaxis_data=klines_xaxis)
+                .add_yaxis(
+                    series_name="AMA",
+                    is_symbol_show=False,
+                    y_axis=ama,
+                    linestyle_opts=opts.LineStyleOpts(
+                        width=2, color="rgb(255,128,255)"
+                    ),
+                    label_opts=opts.LabelOpts(is_show=False),
+                )
+                .set_global_opts()
+            )
+        )
     if config["chart_show_atr_stop_loss"]:
         # 计算 atr stop loss
         #  'chart_idx_atr_period': 14,
@@ -940,14 +973,14 @@ def render_charts(
                 Line()
                 .add_xaxis(xaxis_data=klines_xaxis)
                 .add_yaxis(
-                    series_name=f"Atr Stop Loss",
+                    series_name="Atr Stop Loss",
                     is_symbol_show=False,
                     y_axis=up_stop_loss_vals,
                     linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(255,82,82)"),
                     label_opts=opts.LabelOpts(is_show=False),
                 )
                 .add_yaxis(
-                    series_name=f"Atr Stop Loss",
+                    series_name="Atr Stop Loss",
                     is_symbol_show=False,
                     y_axis=down_stop_loss_vals,
                     linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(0,137,123)"),
@@ -1560,15 +1593,15 @@ def lines_to_charts(lines: List[LINE]):
     if len(dones) > 0:
         line_dones["index"].append(dones[0].start.k.date)
         line_dones["val"].append(dones[0].start.val)
-    for l in dones:
-        line_dones["index"].append(l.end.k.date)
-        line_dones["val"].append(l.end.val)
+    for _l in dones:
+        line_dones["index"].append(_l.end.k.date)
+        line_dones["val"].append(_l.end.val)
     if len(no_dones) > 0:
         line_no_dones["index"].append(no_dones[0].start.k.date)
         line_no_dones["val"].append(no_dones[0].start.val)
-    for l in no_dones:
-        line_no_dones["index"].append(l.end.k.date)
-        line_no_dones["val"].append(l.end.val)
+    for _l in no_dones:
+        line_no_dones["index"].append(_l.end.k.date)
+        line_no_dones["val"].append(_l.end.val)
     return line_dones, line_no_dones
 
 
@@ -1607,4 +1640,5 @@ def datetime_convert_frequency(src_dates, target_dates):
             res_dates.append(_dt)
         else:
             res_dates.append(_dts.iloc[-1])
+    return res_dates
     return res_dates

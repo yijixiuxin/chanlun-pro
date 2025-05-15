@@ -1,10 +1,8 @@
 import datetime
 import json
 import os
-import pathlib
 import time
 import traceback
-from flask_login import LoginManager, UserMixin, login_required, login_user
 
 import pinyin
 import pytz
@@ -12,41 +10,42 @@ from apscheduler.events import (
     EVENT_ALL,
     EVENT_EXECUTOR_ADDED,
     EVENT_EXECUTOR_REMOVED,
+    EVENT_JOB_ADDED,
+    EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MAX_INSTANCES,
+    EVENT_JOB_MISSED,
+    EVENT_JOB_MODIFIED,
+    EVENT_JOB_REMOVED,
+    EVENT_JOB_SUBMITTED,
     EVENT_JOBSTORE_ADDED,
     EVENT_JOBSTORE_REMOVED,
-    EVENT_JOB_ADDED,
-    EVENT_JOB_REMOVED,
-    EVENT_JOB_MODIFIED,
-    EVENT_JOB_SUBMITTED,
-    EVENT_JOB_MAX_INSTANCES,
-    EVENT_JOB_EXECUTED,
-    EVENT_JOB_ERROR,
-    EVENT_JOB_MISSED,
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, redirect, send_file
-from flask import render_template
-from flask import request
+from flask import Flask, redirect, render_template, request, send_file
+from flask_login import LoginManager, UserMixin, login_required, login_user
+from tzlocal import get_localzone
 
+from chanlun import config, fun
 from chanlun.base import Market
-from chanlun import fun, config
 from chanlun.cl_utils import (
+    cl_data_to_tv_chart,
+    del_cl_chart_config,
     kcharts_frequency_h_l_map,
     query_cl_chart_config,
-    web_batch_get_cl_datas,
-    cl_data_to_tv_chart,
     set_cl_chart_config,
-    del_cl_chart_config,
+    web_batch_get_cl_datas,
 )
+from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import get_exchange
-from chanlun.config import get_data_path
 from chanlun.tools.ai_analyse import AIAnalyse
 from chanlun.zixuan import ZiXuan
+
 from .alert_tasks import AlertTasks
-from .xuangu_tasks import XuanguTasks
 from .other_tasks import OtherTasks
+from .xuangu_tasks import XuanguTasks
 
 
 def create_app(test_config=None):
@@ -129,6 +128,7 @@ def create_app(test_config=None):
         "fx": list(get_exchange(Market.FX).support_frequencys().keys()),
         "us": list(get_exchange(Market.US).support_frequencys().keys()),
         "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
+        "ny_futures": list(get_exchange(Market.NY_FUTURES).support_frequencys().keys()),
         "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
         "currency_spot": list(
             get_exchange(Market.CURRENCY_SPOT).support_frequencys().keys()
@@ -142,6 +142,7 @@ def create_app(test_config=None):
         "fx": get_exchange(Market.FX).default_code(),
         "us": get_exchange(Market.US).default_code(),
         "futures": get_exchange(Market.FUTURES).default_code(),
+        "ny_futures": get_exchange(Market.NY_FUTURES).default_code(),
         "currency": get_exchange(Market.CURRENCY).default_code(),
         "currency_spot": get_exchange(Market.CURRENCY_SPOT).default_code(),
     }
@@ -149,10 +150,11 @@ def create_app(test_config=None):
     # 各个市场的交易时间
     market_session = {
         "a": "24x7",
-        "hk": "0930-1201,1330-1601",
+        "hk": "24x7",
         "fx": "24x7",
         "us": "0400-0931,0930-1631,1600-2001",
         "futures": "24x7",
+        "ny_futures": "24x7",
         "currency": "24x7",
         "currency_spot": "24x7",
     }
@@ -164,8 +166,9 @@ def create_app(test_config=None):
         "fx": "Asia/Shanghai",
         "us": "America/New_York",
         "futures": "Asia/Shanghai",
-        "currency": "Asia/Shanghai",
-        "currency_spot": "Asia/Shanghai",
+        "ny_futures": "Asia/Shanghai",
+        "currency": str(get_localzone()),
+        "currency_spot": str(get_localzone()),
     }
 
     market_types = {
@@ -174,6 +177,7 @@ def create_app(test_config=None):
         "fx": "stock",
         "us": "stock",
         "futures": "futures",
+        "ny_futures": "futures",
         "currency": "crypto",
         "currency_spot": "crypto",
     }
@@ -274,7 +278,8 @@ def create_app(test_config=None):
                 {"value": "hk", "name": "港股", "desc": "港股"},
                 {"value": "fx", "name": "外汇", "desc": "外汇"},
                 {"value": "us", "name": "美股", "desc": "美股"},
-                {"value": "futures", "name": "期货", "desc": "期货"},
+                {"value": "futures", "name": "国内期货", "desc": "国内期货"},
+                {"value": "ny_futures", "name": "纽约期货", "desc": "纽约期货"},
                 {
                     "value": "currency",
                     "name": "数字货币(Futures)",
@@ -328,20 +333,20 @@ def create_app(test_config=None):
                 gnbk = ex.stock_owner_plate(code)
                 sector = " / ".join([_g["name"] for _g in gnbk["GN"]])
                 industry = " / ".join([_h["name"] for _h in gnbk["HY"]])
-            except:
+            except Exception:
                 pass
 
         info = {
             "name": stocks["code"],
-            "ticker": f'{market}:{stocks["code"]}',
-            "full_name": f'{market}:{stocks["code"]}',
+            "ticker": f"{market}:{stocks['code']}",
+            "full_name": f"{market}:{stocks['code']}",
             "description": stocks["name"],
             "exchange": market,
             "type": market_types[market],
             "session": market_session[market],
             "timezone": market_timezone[market],
             "pricescale": (
-                1000 if market in ["a", "hk", "fx", "us", "futures"] else 100000000
+                stocks["precision"] if "precision" in stocks.keys() else 1000
             ),
             "visible_plots_set": "ohlcv",
             "supported_resolutions": [
@@ -378,7 +383,7 @@ def create_app(test_config=None):
                 "2",
             ],
             "has_intraday": True,
-            "has_seconds": True if market == "futures" else False,
+            "has_seconds": True if market in ["futures", "ny_futures"] else False,
             "has_daily": True,
             "has_weekly_and_monthly": True,
             "sector": sector,
@@ -400,7 +405,7 @@ def create_app(test_config=None):
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
 
-        if exchange in ["us", "currency", "currency_spot"]:
+        if exchange in ["currency", "currency_spot"]:
             res_stocks = [
                 stock for stock in all_stocks if query.lower() in stock["code"].lower()
             ]
@@ -421,10 +426,10 @@ def create_app(test_config=None):
                 {
                     "symbol": stock["code"],
                     "name": stock["code"],
-                    "full_name": f'{exchange}:{stock["code"]}',
+                    "full_name": f"{exchange}:{stock['code']}",
                     "description": stock["name"],
                     "exchange": exchange,
-                    "ticker": f'{exchange}:{stock["code"]}',
+                    "ticker": f"{exchange}:{stock['code']}",
                     "type": type,
                     "session": market_session[exchange],
                     "timezone": market_timezone[exchange],
@@ -448,7 +453,6 @@ def create_app(test_config=None):
         _from = request.args.get("from")
         _to = request.args.get("to")
         resolution = request.args.get("resolution")
-        countback = request.args.get("countback")
         firstDataRequest = request.args.get("firstDataRequest", "false")
 
         _symbol_res_old_k_time_key = f"{symbol}_{resolution}"
@@ -528,23 +532,60 @@ def create_app(test_config=None):
         )
         # __log.info(f'{code} - {frequency} to tv chart data time : {time.time() - s_time}')
 
+        # 根据 from_time 和 to_time 来获取对应的K线数据
+        if firstDataRequest == "false":
+            _t = cl_chart_data["t"][-10:]
+            _c = cl_chart_data["c"][-10:]
+            _o = cl_chart_data["o"][-10:]
+            _h = cl_chart_data["h"][-10:]
+            _l = cl_chart_data["l"][-10:]
+            _v = cl_chart_data["v"][-10:]
+            _fxs = cl_chart_data["fxs"][-5:]
+            _bis = cl_chart_data["bis"][-5:]
+            _xds = cl_chart_data["xds"][-5:]
+            _zsds = cl_chart_data["zsds"][-5:]
+            _bi_zss = cl_chart_data["bi_zss"][-5:]
+            _xd_zss = cl_chart_data["xd_zss"][-5:]
+            _zsd_zss = cl_chart_data["zsd_zss"][-5:]
+            _bcs = cl_chart_data["bcs"][-5:]
+            _mmds = cl_chart_data["mmds"][-5:]
+        else:
+            _t = cl_chart_data["t"]
+            _c = cl_chart_data["c"]
+            _o = cl_chart_data["o"]
+            _h = cl_chart_data["h"]
+            _l = cl_chart_data["l"]
+            _v = cl_chart_data["v"]
+            _fxs = cl_chart_data["fxs"]
+            _bis = cl_chart_data["bis"]
+            _xds = cl_chart_data["xds"]
+            _zsds = cl_chart_data["zsds"]
+            _bi_zss = cl_chart_data["bi_zss"]
+            _xd_zss = cl_chart_data["xd_zss"]
+            _zsd_zss = cl_chart_data["zsd_zss"]
+            _bcs = cl_chart_data["bcs"]
+            _mmds = cl_chart_data["mmds"]
+
         info = {
             "s": s,
-            "t": cl_chart_data["t"],
-            "c": cl_chart_data["c"],
-            "o": cl_chart_data["o"],
-            "h": cl_chart_data["h"],
-            "l": cl_chart_data["l"],
-            "v": cl_chart_data["v"],
-            "fxs": cl_chart_data["fxs"],
-            "bis": cl_chart_data["bis"],
-            "xds": cl_chart_data["xds"],
-            "zsds": cl_chart_data["zsds"],
-            "bi_zss": cl_chart_data["bi_zss"],
-            "xd_zss": cl_chart_data["xd_zss"],
-            "zsd_zss": cl_chart_data["zsd_zss"],
-            "bcs": cl_chart_data["bcs"],
-            "mmds": cl_chart_data["mmds"],
+            "t": _t,
+            "c": _c,
+            "o": _o,
+            "h": _h,
+            "l": _l,
+            "v": _v,
+            "fxs": _fxs,
+            "bis": _bis,
+            "xds": _xds,
+            "zsds": _zsds,
+            "bi_zss": _bi_zss,
+            "xd_zss": _xd_zss,
+            "zsd_zss": _zsd_zss,
+            "bcs": _bcs,
+            "mmds": _mmds,
+            "update": (
+                False if firstDataRequest == "true" else True
+            ),  # 是否是后续更新数据
         }
         return info
 
@@ -745,6 +786,30 @@ def create_app(test_config=None):
             db.tv_chart_save("template", client_id, user_id, name, content, "", "")
             return {"status": "ok"}
 
+    @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
+    @login_required
+    def tv_drawings(version):
+        """
+        图表绘图保存与加载 TODO TV 库报错，暂时不用
+        """
+        client_id = str(request.args.get("client"))
+        user_id = str(request.args.get("user"))
+        chart_id = request.args.get("chart")
+        layout_id = request.args.get("layout")
+
+        print(
+            f"{request.method} client_id={client_id}, user_id={user_id}, chart_id={chart_id}, layout_id={layout_id}"
+        )
+
+        if request.method == "GET":
+            return {
+                "status": "ok",
+                "data": {},
+            }
+        else:
+            # 更新与保存操作
+            return {"status": "ok"}
+
     # 查询配置项
     @app.route("/get_cl_config/<market>/<code>")
     @login_required
@@ -798,6 +863,7 @@ def create_app(test_config=None):
             "zs_bi_type",
             "zs_xd_type",
             "zs_qj",
+            "zs_cd",
             "zs_wzgx",
             # MACD 配置（计算力度背驰）
             "idx_macd_fast",
@@ -862,7 +928,7 @@ def create_app(test_config=None):
                 for _c, _t in stock_ticks.items()
             ]
             return {"now_trading": now_trading, "ticks": res_ticks}
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
         return {"now_trading": False, "ticks": []}
 
@@ -933,7 +999,7 @@ def create_app(test_config=None):
         finally:
             try:
                 os.remove(down_file)
-            except Exception as e:
+            except Exception:
                 pass
 
     @app.route("/zixuan_opt_import", methods=["POST"])
@@ -980,7 +1046,7 @@ def create_app(test_config=None):
 
         try:
             os.remove(import_file)
-        except Exception as e:
+        except Exception:
             pass
 
         return {"ok": True, "msg": f"成功导入 {import_nums} 条记录"}
@@ -1249,7 +1315,6 @@ def create_app(test_config=None):
     @app.route("/ai/analyse", methods=["POST"])
     @login_required
     def ai_analyse():
-
         market = request.form["market"]
         code = request.form["code"]
         frequency = request.form["frequency"]

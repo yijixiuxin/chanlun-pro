@@ -1,19 +1,20 @@
 import datetime
-from typing import List, Dict, Union
+from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from chanlun import fun
-from chanlun.db import db
+from tzlocal import get_localzone
 
+from chanlun import fun
 from chanlun.base import Market
+from chanlun.db import db
 from chanlun.exchange.exchange import (
     Exchange,
+    Tick,
+    convert_currency_kline_frequency,
     convert_futures_kline_frequency,
     convert_stock_kline_frequency,
     convert_us_kline_frequency,
-    convert_currency_kline_frequency,
-    Tick,
 )
 
 
@@ -34,6 +35,8 @@ class ExchangeDB(Exchange):
         self.tz = pytz.timezone("Asia/Shanghai")
         if self.market == "us":
             self.tz = pytz.timezone("US/Eastern")
+        if self.market in ["currency", "currency_spot"]:
+            self.tz = pytz.timezone(str(get_localzone()))
 
     def default_code(self):
         if self.market == Market.A.value:
@@ -42,6 +45,8 @@ class ExchangeDB(Exchange):
             return "HK.00700"
         elif self.market == Market.FUTURES.value:
             return "KQ.m@SHFE.rb"
+        elif self.market == Market.NY_FUTURES.value:
+            return "CO.GC00W"
         elif self.market == Market.US.value:
             return "AAPL"
         elif self.market == Market.CURRENCY.value:
@@ -77,6 +82,18 @@ class ExchangeDB(Exchange):
                 "5m": "5m",
             }
         elif self.market == Market.FUTURES.value:
+            return {
+                "w": "W",
+                "d": "D",
+                "120m": "2H",
+                "60m": "1H",
+                "30m": "30m",
+                "15m": "15m",
+                "10m": "10m",
+                "5m": "5m",
+                "1m": "1m",
+            }
+        elif self.market == Market.NY_FUTURES.value:
             return {
                 "w": "W",
                 "d": "D",
@@ -192,17 +209,18 @@ class ExchangeDB(Exchange):
         )
         kline_pd = []
         for _k in klines:
-            kline_pd.append(
-                {
-                    "code": _k.code,
-                    "date": _k.dt,
-                    "open": _k.o,
-                    "high": _k.h,
-                    "low": _k.l,
-                    "close": _k.c,
-                    "volume": _k.v,
-                }
-            )
+            _kline = {
+                "code": _k.code,
+                "date": _k.dt,
+                "open": _k.o,
+                "high": _k.h,
+                "low": _k.l,
+                "close": _k.c,
+                "volume": _k.v,
+            }
+            if self.market == Market.FUTURES.value:
+                _kline["position"] = _k.p
+            kline_pd.append(_kline)
         if len(kline_pd) == 0:
             kline_pd = pd.DataFrame(
                 [], columns=["date", "code", "high", "low", "open", "close", "volume"]

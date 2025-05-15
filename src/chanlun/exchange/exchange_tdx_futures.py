@@ -1,16 +1,20 @@
+import datetime
 import time
 import traceback
-from typing import Union
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -24,35 +28,50 @@ class ExchangeTDXFutures(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"TDXEX 最优服务器：{self.connect_info}")
-
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-        # 初始化，映射交易所代码
-        self.market_maps = {}
-        while True:
-            try:
-                client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                    all_markets = client.get_markets()
-                    for _m in all_markets:
-                        if _m["category"] == 3:
-                            self.market_maps[_m["short_name"]] = {
-                                "market": _m["market"],
-                                "category": _m["category"],
-                                "name": _m["name"],
-                            }
-                break
-            except TdxConnectionError:
-                self.reset_tdx_ip()
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            # self.connect_info = None
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"TDXEX 最优服务器：{self.connect_info}")
+
+            # 初始化，映射交易所代码
+            self.market_maps = {}
+            while True:
+                try:
+                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
+                    with client.connect(
+                        self.connect_info["ip"], self.connect_info["port"]
+                    ):
+                        all_markets = client.get_markets()
+                        for _m in all_markets:
+                            if _m["category"] == 3 and _m["market"] in [
+                                # 23, # PR 香港金融期货
+                                28,  # QZ 郑州商品
+                                29,  # QD 大连商品
+                                30,  # QS 上海期货
+                                42,  # TI 商品指数
+                                47,  # CZ 中金所期货
+                                66,  # QG 广州期货
+                            ]:
+                                self.market_maps[_m["short_name"]] = {
+                                    "market": _m["market"],
+                                    "category": _m["category"],
+                                    "name": _m["name"],
+                                }
+                    break
+                except TdxConnectionError:
+                    self.reset_tdx_ip()
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 期货行情接口初始化失败，期货行情不可用")
 
     def reset_tdx_ip(self):
         """
@@ -69,8 +88,6 @@ class ExchangeTDXFutures(Exchange):
 
     def support_frequencys(self):
         return {
-            "y": "Y",
-            "q": "Q",
             "m": "M",
             "w": "W",
             "d": "D",
@@ -94,9 +111,7 @@ class ExchangeTDXFutures(Exchange):
             start_i = 0
             count = 1000
             market_map_short_names = {
-                _m_i["market"]: _m_s
-                for _m_s, _m_i in self.market_maps.items()
-                if _m_s not in ["PH", "EG", "MA"]
+                _m_i["market"]: _m_s for _m_s, _m_i in self.market_maps.items()
             }
             while True:
                 instruments = client.get_instrument_info(start_i, count)
@@ -174,8 +189,10 @@ class ExchangeTDXFutures(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
-                if klines is None:
+                klines: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.FUTURES.value, code, frequency
+                )
+                if klines is None or len(klines) == 0:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
                         [
@@ -206,8 +223,8 @@ class ExchangeTDXFutures(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         _ks["datetime"] = _ks["datetime"].apply(self.fix_yp_date)
@@ -222,7 +239,7 @@ class ExchangeTDXFutures(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(code, frequency, klines)
+            self.fdb.save_tdx_klines(Market.FUTURES.value, code, frequency, klines)
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
@@ -259,6 +276,7 @@ class ExchangeTDXFutures(Exchange):
         else:
             _format = "%Y-%m-%d"
         dt = fun.str_to_datetime(dt, _format)
+
         if dt.hour >= 21:
             dt = dt - datetime.timedelta(days=1)
         return fun.datetime_to_str(dt)
@@ -318,6 +336,55 @@ class ExchangeTDXFutures(Exchange):
                     )
         return ticks
 
+    def all_ticks(self) -> Dict[str, Tick]:
+        ticks = {}
+        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+            for _name, _mc in self.market_maps.items():
+                _quotes = []
+                _req_start = 0
+                while True:
+                    _qs = client.get_instrument_quote_list(
+                        _mc["market"],
+                        _mc["category"],
+                        start=_req_start,
+                        count=_req_start + 80,
+                    )
+                    _quotes.extend(_qs)
+                    _req_start += 80
+                    if len(_qs) < 80:
+                        break
+                for _quote in _quotes:
+                    # OrderedDict([('market', 28), ('code', 'MA2509'),
+                    # ('BiShu', 10569), ('ZuoJie', 2262.0), ('JinKai', 2260.0), ('ZuiGao', 2266.0), ('ZuiDi', 2242.0), ('MaiChu', 2258.0), ('KaiCang', 262905),
+                    # ('ZongLiang', 254179), ('XianLiang', 2), ('ZongJinE', 5730089472.0), ('NeiPan', 128701), ('WaiPan', 125478),
+                    # ('ChiCangLiang', 674677), ('MaiRuJia', 2257.0), ('MaiRuLiang', 72), ('MaiChuJia', 2258.0), ('MaiChuLiang', 25)])
+
+                    if _quote["MaiChu"] == 0.0:
+                        continue
+
+                    ticks[f"{_name}.{_quote['code']}"] = Tick(
+                        code=f"{_name}.{_quote['code']}",
+                        last=_quote["MaiChu"],
+                        buy1=_quote["MaiRuJia"],
+                        sell1=_quote["MaiChuJia"],
+                        low=_quote["ZuiDi"],
+                        high=_quote["ZuiGao"],
+                        volume=_quote["ZongLiang"],
+                        open=_quote["JinKai"],
+                        rate=(
+                            round(
+                                (_quote["MaiChu"] - _quote["ZuoJie"])
+                                / _quote["MaiChu"]
+                                * 100,
+                                2,
+                            )
+                            if _quote["MaiChu"] > 0
+                            else 0
+                        ),
+                    )
+        return ticks
+
     def now_trading(self):
         """
         返回当前是否是交易时间
@@ -358,13 +425,27 @@ if __name__ == "__main__":
     ex = ExchangeTDXFutures()
     # print(ex.market_maps)
     # stocks = ex.all_stocks()
+    # for s in stocks:
+    #     if "TI." in s["code"]:
+    #         print(s)
     # print(len(stocks))
+    # print(ex.market_maps)
     # for s in stocks:
     #     if '原油' in s["name"]:
     #         print(s)
 
     # print(ex.to_tdx_code('QS.ZN2306'))
-    #
-    klines = ex.klines("QZ.SA2501", "30m", args={"pages": 1})
-    print(len(klines))
+
+    klines = ex.klines(ex.default_code(), "d")
     print(klines)
+    #
+    # for _f in ex.support_frequencys().keys():
+    #     klines = ex.klines("QZ.SR2601", _f)
+    #     # klines = ex.klines(ex.default_code(), "60m")
+    #     print(_f)
+    #     print(len(klines))
+    #     print(klines.tail(5))
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))
+    # print(len(ticks))

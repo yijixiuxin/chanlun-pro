@@ -1,5 +1,7 @@
 import datetime
+
 from apscheduler.schedulers.background import BackgroundScheduler
+
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 
 
@@ -31,3 +33,4 @@ class OtherTasks:
             id="update_fri_stock_bkgn",
             name="每周五16点更新行业概念信息",
         )
+        pass

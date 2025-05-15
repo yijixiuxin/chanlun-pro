@@ -1,37 +1,38 @@
 import copy
+import datetime
+import gc
 import hashlib
 import os
 import pickle
 import time
-import gc
 import traceback
-from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+from pathlib import Path
+from typing import Dict, List
 
+import empyrical as ep
+import numpy as np
+import pandas as pd
 import prettytable as pt
-from pyecharts import options as opts
-from pyecharts.charts import Line, Bar, Grid
-
 import pyfolio as pf
+from pyecharts import options as opts
+from pyecharts.charts import Bar, Grid, Line
+from tqdm.auto import tqdm
 
-from chanlun import cl
-from chanlun import kcharts, fun
+from chanlun import cl, fun, kcharts
 from chanlun.backtesting import futures_contracts
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.base import POSITION, Strategy
 from chanlun.backtesting.klines_generator import KlinesGenerator
 from chanlun.backtesting.optimize import OptimizationSetting
-from chanlun.backtesting.klines_generator import KlinesGenerator
-from chanlun.backtesting.optimize import OptimizationSetting
-from chanlun.cl_interface import *
+from chanlun.cl_interface import ICL
 from chanlun.exchange.exchange import (
-    convert_stock_kline_frequency,
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,
+    convert_stock_kline_frequency,
 )
-from tqdm.auto import tqdm
 
 
 class BackTest:
@@ -239,7 +240,7 @@ class BackTest:
             # 更新持仓盈亏与资金变化
             try:
                 self.trader.update_position_record()
-            except Exception as e:
+            except Exception:
                 self.log.error(f"执行记录持仓信息 : {self.datas.now_date} 异常")
                 self.log.error(traceback.format_exc())
 
@@ -247,7 +248,7 @@ class BackTest:
                 try:
                     self.strategy.on_bt_loop_start(self)
                     self.trader.run(code, is_filter=self.strategy.is_filter_opts())
-                except Exception as e:
+                except Exception:
                     self.log.error(f"执行 {code} : {self.datas.now_date} 异常")
                     self.log.error(traceback.format_exc())
                     # raise e
@@ -257,7 +258,7 @@ class BackTest:
                     self.trader.buffer_opts, self.trader
                 )
                 self.trader.run_buffer_opts()
-            except Exception as e:
+            except Exception:
                 self.log.error(f"执行 {code} 操作二次过滤 : {self.datas.now_date} 异常")
                 self.log.error(traceback.format_exc())
             if loop_callback_fun:
@@ -359,7 +360,7 @@ class BackTest:
                 bh_df = pd.DataFrame(balance_history.values())
                 bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
                 self.trader.balance_history = bh_df.sum(axis=1)
-            except Exception as e:
+            except Exception:
                 self.log.error("合并资金历史记录异常")
                 self.log.error(traceback.format_exc())
 
@@ -369,7 +370,7 @@ class BackTest:
                 self.log.error(traceback.format_exc())
                 raise e
             finally:
-                 # 确保资源被释放
+                # 确保资源被释放
                 gc.collect()
         return True
 
@@ -502,29 +503,29 @@ class BackTest:
                         print(f'参数：{r["params"]}')
                         print(f'落地文件：{r["save_file"]}')
                         BT.result(True)
-                    except Exception as e:
+                    except Exception:
                         self.log.error(f"处理优化结果异常：{r['save_file']}")
                         self.log.error(traceback.format_exc())
                         continue
                     finally:
-                         # 确保每次循环后释放资源
-                        if 'BT' in locals():
+                        # 确保每次循环后释放资源
+                        if "BT" in locals():
                             BT.trader = None
                             BT.strategy = None
                             BT.datas = None
                             del BT
                             gc.collect()
-            except Exception as e:
-                    self.log.error("处理优化结果集异常")
-                    self.log.error(traceback.format_exc())
+            except Exception:
+                self.log.error("处理优化结果集异常")
+                self.log.error(traceback.format_exc())
 
-                    return results
+                return results
             except Exception as e:
                 self.log.error("参数优化执行异常")
                 self.log.error(traceback.format_exc())
                 raise e
             finally:
-            # 确保资源被释放
+                # 确保资源被释放
                 gc.collect()
 
     def show_charts(
@@ -882,7 +883,7 @@ class BackTest:
         print(res["mmd_infos"])
         return
 
-    def result_by_pyfolio(self, live_start_date=None):
+    def result_by_pyfolio(self, live_start_date=None, is_return=False):
         """
         使用 pyfolio 计算回测结果
         """
@@ -901,6 +902,32 @@ class BackTest:
         df.index.name = "date"
         df = df.sort_index()
         df["return"] = df["balance"].pct_change()
+
+        if is_return:
+            # 夏普比率（默认无风险利率=0，年化周期=252天）
+            sharpe = ep.sharpe_ratio(df["return"])
+
+            # 卡玛比率（需计算年化收益和最大回撤）
+            calmar = ep.calmar_ratio(df["return"])
+
+            # 索提诺比率（仅考虑下行波动率）
+            sortino = ep.sortino_ratio(df["return"])
+
+            # 欧米茄比率（阈值默认为0）
+            omega = ep.omega_ratio(df["return"])
+
+            # 稳定性：年化波动率的倒数（需调整符号确保数值有意义）
+            annual_volatility = ep.annual_volatility(df["return"])
+            stability = 1 / annual_volatility if annual_volatility != 0 else np.nan
+
+            return {
+                "Sharpe Ratio": sharpe,
+                "Calmar Ratio": calmar,
+                "Sortino Ratio": sortino,
+                "Omega Ratio": omega,
+                "Stability (1/Annual Vol)": stability,
+                "Stability": ep.stability_of_timeseries(df["return"]),
+            }
 
         # 持仓记录
         positions = {}
@@ -1138,13 +1165,25 @@ class BackTest:
         if uids is None:
             uids = ["clear"]
 
-        # 查询平仓 uids
-        query_uids = self.trader.get_opt_close_uids(pos.code, pos.mmd, uids)
-        if "clear" not in query_uids:
-            query_uids.append("clear")
+        if uids == "__max_profit":
+            # 获取最大利润的 close_uid
+            query_uids = [_r["close_uid"] for _r in pos.close_records]
+            if pos.type == "做多":
+                close_records = sorted(
+                    pos.close_records, key=lambda _r: _r["price"], reverse=True
+                )
+            else:
+                close_records = sorted(
+                    pos.close_records, key=lambda _r: _r["price"], reverse=False
+                )
+        else:
+            # 查询平仓 uids
+            query_uids = self.trader.get_opt_close_uids(pos.code, pos.mmd, uids)
+            if "clear" not in query_uids:
+                query_uids.append("clear")
 
-        # 按照时间从早到晚排序
-        close_records = sorted(pos.close_records, key=lambda _r: _r["datetime"])
+            # 按照时间从早到晚排序
+            close_records = sorted(pos.close_records, key=lambda _r: _r["datetime"])
 
         # 记录平仓释放的保证金与手续费
         release_balance = 0

@@ -34,7 +34,8 @@
                     <select type="select" name="market" lay-filter="cl_config" disabled>
                         <option value="a" {% if market=='a' %} selected {% endif %}>沪深A股</option>
                         <option value="hk" {% if market=='hk' %} selected {% endif %}>港股</option>
-                        <option value="futures" {% if market=='futures' %} selected {% endif %}>期货</option>
+                        <option value="futures" {% if market=='futures' %} selected {% endif %}>国内期货</option>
+                        <option value="ny_futures" {% if market=='ny_futures' %} selected {% endif %}>纽约期货</option>
                         <option value="fx" {% if market=='fx' %} selected {% endif %}>外汇</option>
                         <option value="us" {% if market=='us' %} selected {% endif %}>美股</option>
                         <option value="currency" {% if market=='currency' %} selected {% endif %}>数字货币(合约)</option>
@@ -61,7 +62,7 @@
                 </label>
             </div>
         </div>
-        <div class="layui-form-item" title="K线类型，平均K线的高开收低与默认的不同">
+        <div class="layui-form-item" title="K线类型中，缠论K线，是经过合并后的K线数据">
             <label class="layui-form-label">K线类型</label>
             <div class="layui-input-block">
                 <label for="kline_type">
@@ -413,6 +414,19 @@
                     </label>
                 </div>
             </div>
+            <div class="layui-inline" title="中枢重叠，用来计算中枢重叠区间的依据">
+                <label class="layui-form-label">中枢重叠</label>
+                <div class="layui-input-inline">
+                    <label for="zs_cd">
+                        <select type="select" class="form-control" name="zs_cd" lay-filter="cl_config">
+                            <option value="zs_cd_three" {% if zs_cd=='zs_cd_three' %} selected {% endif %}>前三段
+                            </option>
+                            <option value="zs_cd_more" {% if zs_cd=='zs_cd_more' %} selected {% endif %}>所有段
+                            </option>
+                        </select>
+                    </label>
+                </div>
+            </div>
             <div class="layui-inline" title="计算两个中枢的位置关系，来判断是上涨还是下跌趋势">
                 <label class="layui-form-label">中枢位置</label>
                 <div class="layui-input-inline">
@@ -632,7 +646,7 @@
             个人定制，不特殊说明，不明白使用默认配置即可
         </p>
         <div class="layui-form-item">
-            <div class="layui-inline" title="K线缺口处理方式">
+            <div class="layui-inline" title="如果缠论K线中间有缺口，则插入一根缠论K线；会影响笔的计算；">
                 <label class="layui-form-label">K线缺口</label>
                 <div class="layui-input-inline">
                     <label for="kline_qk">

@@ -1,17 +1,21 @@
+import datetime
 import traceback
-from typing import Union
-import akshare as ak
+from typing import Dict, List, Union
 
+import akshare as ak
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
-from chanlun import fun
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
-from chanlun.db import db
-from chanlun.exchange.exchange import *
-from chanlun.file_db import FileCacheDB
+from chanlun import fun
+from chanlun.base import Market
 from chanlun.config import get_data_path
+from chanlun.db import db
+from chanlun.exchange.exchange import Exchange, Tick, convert_us_tdx_kline_frequency
+from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -25,11 +29,15 @@ class ExchangeTDXUS(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"最优服务器：{self.connect_info}")
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"最优服务器：{self.connect_info}")
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 美股行情接口初始化失败，美股行情不可用")
 
         # 设置时区
         self.tz = pytz.timezone("US/Eastern")
@@ -152,7 +160,9 @@ class ExchangeTDXUS(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.US.value, code, frequency
+                )
                 if klines_df is None:
                     # 获取 8*700 = 5600 条数据
                     klines_df = pd.concat(
@@ -181,11 +191,11 @@ class ExchangeTDXUS(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
                         old_end_dt = klines_df.iloc[-1]["date"]
@@ -199,7 +209,7 @@ class ExchangeTDXUS(Exchange):
             klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
                 "date"
             )
-            self.fdb.save_tdx_klines(code, frequency, klines_df)
+            self.fdb.save_tdx_klines(Market.US.value, code, frequency, klines_df)
 
             klines_df.loc[:, "date"] = klines_df["date"].apply(self._convert_dt)
             klines_df = klines_df.sort_values("date")
@@ -374,37 +384,37 @@ class ExchangeTDXUS(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXUS()
-    stocks = ex.all_stocks()
-    print(len(stocks))
-    not_stocks = []
-    for s in stocks:
-        if "做多" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "ETF" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "指数" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "期货" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "基金" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-        if "组合" in s["name"]:
-            print(s)
-            not_stocks.append(s)
-    print(not_stocks)
-    print(len(not_stocks))
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
+    # not_stocks = []
+    # for s in stocks:
+    #     if "做多" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "ETF" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "指数" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "期货" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "基金" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    #     if "组合" in s["name"]:
+    #         print(s)
+    #         not_stocks.append(s)
+    # print(not_stocks)
+    # print(len(not_stocks))
     # print(stocks)
     #
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    # klines = ex.klines("ABCS", "d")
-    # print(klines)
+    klines = ex.klines("SPXC", "60m")
+    print(klines.tail(20))
 
     # ticks = ex.ticks([ex.default_code()])
     # print(ticks)

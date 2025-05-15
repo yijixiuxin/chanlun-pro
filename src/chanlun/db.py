@@ -1,32 +1,28 @@
 import datetime
 import json
 import time
+import warnings
 from typing import List, Union
+
 import numpy as np
 import pandas as pd
-import warnings
-
 from sqlalchemy import (
-    UniqueConstraint,
-    create_engine,
     Column,
+    DateTime,
+    Float,
     Integer,
     String,
-    Float,
-    DateTime,
-    Date,
     Text,
+    UniqueConstraint,
+    create_engine,
     func,
 )
-import sqlalchemy
 from sqlalchemy.dialects.mysql import insert
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
 
+from chanlun import config, fun
 from chanlun.base import Market
-from chanlun import fun
-from chanlun import config
 from chanlun.config import get_data_path
 
 warnings.filterwarnings("ignore")
@@ -210,6 +206,8 @@ class DB(object):
                 f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
                 echo=False,
                 poolclass=QueuePool,
+                pool_recycle=3600,
+                pool_pre_ping=True,
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
@@ -270,6 +268,10 @@ class DB(object):
             __table_args__ = {
                 "mysql_collate": "utf8mb4_general_ci",
             }
+
+        if market == Market.FUTURES.value:
+            # 期货市场，添加持仓列
+            TableByKlines.p = Column(Float, comment="持仓量")
 
         self.__cache_tables[table_name] = TableByKlines
         Base.metadata.create_all(self.engine)
@@ -357,13 +359,15 @@ class DB(object):
                     _in_k = {
                         "code": code,
                         "f": frequency,
-                        "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
+                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
                         "o": _k["open"],
                         "c": _k["close"],
                         "h": _k["high"],
                         "l": _k["low"],
                         "v": _k["volume"],
                     }
+                    if "position" in _k.keys():
+                        _in_k["p"] = _k["position"]
                     db_k = (
                         session.query(table)
                         .filter(
@@ -389,23 +393,27 @@ class DB(object):
             groups = [
                 group.reset_index(drop=True) for _, group in klines.groupby(group)
             ]
+            in_position = "position" in klines.columns
             for g_klines in groups:
                 insert_klines = []
                 for _, _k in g_klines.iterrows():
-                    insert_klines.append(
-                        {
-                            "code": code,
-                            "dt": fun.str_to_datetime(fun.datetime_to_str(_k["date"])),
-                            "f": frequency,
-                            "o": _k["open"],
-                            "c": _k["close"],
-                            "h": _k["high"],
-                            "l": _k["low"],
-                            "v": _k["volume"],
-                        }
-                    )
+                    _insert_k = {
+                        "code": code,
+                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
+                        "f": frequency,
+                        "o": _k["open"],
+                        "c": _k["close"],
+                        "h": _k["high"],
+                        "l": _k["low"],
+                        "v": _k["volume"],
+                    }
+                    if in_position:
+                        _insert_k["p"] = _k["position"]
+                    insert_klines.append(_insert_k)
                 insert_stmt = insert(table).values(insert_klines)
                 update_keys = ["o", "c", "h", "l", "v"]
+                if in_position:
+                    update_keys.append("p")
                 update_columns = {
                     x.name: x for x in insert_stmt.inserted if x.name in update_keys
                 }
@@ -846,7 +854,7 @@ class DB(object):
                 bi_is_done=bi_is_done,
                 bi_is_td=bi_is_td,
                 line_type=line_type,
-                line_dt=fun.str_to_datetime(fun.datetime_to_str(line_dt)),
+                line_dt=line_dt.replace(tzinfo=None),
                 alert_dt=datetime.datetime.now(),
             )
             session.add(recored)

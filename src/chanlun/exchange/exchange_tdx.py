@@ -1,22 +1,26 @@
 import copy
-import pathlib
+import datetime
 import time
 import traceback
-from typing import Union
 import warnings
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
-from chanlun.exchange.exchange import *
+from chanlun.base import Market
+from chanlun.config import get_data_path
+from chanlun.db import db
+from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from chanlun.exchange.stocks_bkgn import StocksBKGN
+from chanlun.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
 from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
-from chanlun.db import db
-from chanlun.config import get_data_path
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -30,12 +34,16 @@ class ExchangeTDX(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdx_connect_ip")
-        # connect_info = None # 手动重新选择最优服务器
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"最优服务器：{self.connect_info}")
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdx_connect_ip")
+            # self.connect_info = None  # 手动重新选择最优服务器
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"最优服务器：{self.connect_info}")
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 沪深行情接口初始化失败，沪深行情不可用")
 
         # 板块概念信息
         self.stock_bkgn = StocksBKGN()
@@ -66,13 +74,10 @@ class ExchangeTDX(Exchange):
             "m": "M",
             "w": "W",
             "d": "D",
-            "120m": "120m",
             "60m": "60m",
             "30m": "30m",
             "15m": "15m",
-            "10m": "10m",
             "5m": "5m",
-            "2m": "2m",
             "1m": "1m",
         }
 
@@ -109,11 +114,35 @@ class ExchangeTDX(Exchange):
                         if code in __codes:
                             continue
                         __codes.append(code)
-                        __all_stocks.append({"code": code, "name": name, "type": _type})
+                        precision = 100 if _type == "stock_cn" else 1000
+                        __all_stocks.append(
+                            {
+                                "code": code,
+                                "name": name,
+                                "type": _type,
+                                "precision": precision,
+                            }
+                        )
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
             return self.all_stocks()
+
+        # 添加北京A股的股票
+        for _c, _n in tdx_codes_by_bj.items():
+            __all_stocks.append(
+                {
+                    "code": _c,
+                    "name": _n,
+                    "type": "stock_cn",
+                    "precision": 100,
+                }
+            )
+
+        # 错误的代码过滤
+        __all_stocks = [
+            _s for _s in __all_stocks if _s["code"] not in tdx_codes_by_error
+        ]
 
         self.g_all_stocks = __all_stocks
         # print(f"股票共获取数量：{len(self.g_all_stocks)}")
@@ -133,11 +162,17 @@ class ExchangeTDX(Exchange):
             market = 1
         elif market == "SZ.":
             market = 0
+        elif market == "BJ.":
+            market = 2
         else:
             market = None
-        all_stocks = self.all_stocks()
-        stock = [_s for _s in all_stocks if _s["code"] == code]
-        _type = stock[0]["type"] if stock else None
+
+        if market == 2:
+            _type = "stock_cn"
+        else:
+            all_stocks = self.all_stocks()
+            stock = [_s for _s in all_stocks if _s["code"] == code]
+            _type = stock[0]["type"] if stock else None
         return market, code[-6:], _type
 
     @retry(
@@ -197,7 +232,9 @@ class ExchangeTDX(Exchange):
                 else:
                     get_bars = client.get_security_bars
 
-                ks: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                ks: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.A.value, code, frequency
+                )
                 if ks is None or len(ks) == 0:
                     # 获取 8*700 = 5600 条数据
                     ks = pd.concat(
@@ -228,8 +265,8 @@ class ExchangeTDX(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         if len(_ks) == 0:
@@ -255,7 +292,7 @@ class ExchangeTDX(Exchange):
             # 删除重复数据
             ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
 
-            self.fdb.save_tdx_klines(code, frequency, ks)
+            self.fdb.save_tdx_klines(Market.A.value, code, frequency, ks)
 
             ks.loc[:, "code"] = code
             ks.loc[:, "volume"] = ks["vol"]
@@ -316,7 +353,7 @@ class ExchangeTDX(Exchange):
         stock = [_s for _s in all_stock if _s["code"] == code]
         if not stock:
             return None
-        return {"code": stock[0]["code"], "name": stock[0]["name"]}
+        return stock[0]
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """
@@ -339,9 +376,14 @@ class ExchangeTDX(Exchange):
             # 分批次获取数据
             batch_size = 80
             quotes = []
+            error_codes = []
             for i in range(0, total_quotes, batch_size):
                 batch_stocks = query_stocks[i : i + batch_size]
-                batch_quotes = client.get_security_quotes(batch_stocks)
+                try:
+                    batch_quotes = client.get_security_quotes(batch_stocks)
+                except Exception as e:
+                    error_codes += batch_stocks
+                    print(f"获取数据失败: {e}")
                 quotes += batch_quotes
             # ('market', 0), ('code', '000001'), ('active1', 4390), ('price', 14.29), ('last_close', 14.24), ('open', 14.35),
             # ('high', 14.37), ('low', 14.14), ('servertime', '14:59:55.939'), ('reversed_bytes0', 14998872),
@@ -356,7 +398,16 @@ class ExchangeTDX(Exchange):
                 if _q["code"] == "999999":
                     _code = "SH.000001"
                 else:
-                    _code = [_c for _c in codes if _c[-6:] == _q["code"]]
+                    _code = [
+                        _c
+                        for _c in codes
+                        if _c[-6:] == _q["code"]
+                        and (
+                            (_c[:2] == "SZ" and _q["market"] == 0)
+                            or (_c[:2] == "SH" and _q["market"] == 1)
+                            or (_c[:2] == "BJ" and _q["market"] == 2)
+                        )
+                    ]
                     if len(_code) == 0:
                         continue
                     _code = _code[0]
@@ -667,23 +718,24 @@ class ExchangeTDX(Exchange):
 
 
 if __name__ == "__main__":
+    from tqdm.auto import tqdm
+
     ex = ExchangeTDX()
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
 
-    # s_time = time.time()
-    # klines = ex.klines("SH.600519", "w")
-    # # print(klines.head(5))
-    # print(klines.tail(10))
-    # print(len(klines))
+    klines = ex.klines("SZ.000001", "5m")
+    print(klines.head(5))
+    print(klines.tail(10))
+    print(len(klines))
 
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.600498", "5m")
-    print(klines)
+    # klines = ex.klines("SH.600498", "60m")
+    # print(klines.tail(20))
 
-    # ticks = ex.ticks(['SZ.300474'])
+    # ticks = ex.ticks(["SH.000001", "SZ.000001"])
     # print(ticks)
 
     # 获取复权相关信息

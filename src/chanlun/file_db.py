@@ -3,19 +3,19 @@ import hashlib
 import pathlib
 import pickle
 import random
-from decimal import Decimal
 import time
+from decimal import Decimal
 from typing import Union
 
 import pandas as pd
 import pytz
 
-from chanlun import cl
-from chanlun import fun
-from chanlun.db import db
+from chanlun import cl, fun
+from chanlun.base import Market
 from chanlun.cl_interface import ICL
-from chanlun.exchange import Exchange
 from chanlun.config import get_data_path
+from chanlun.db import db
+from chanlun.exchange import Exchange
 
 
 class FileCacheDB(object):
@@ -40,6 +40,15 @@ class FileCacheDB(object):
         self.cache_pkl_path = self.project_path / "cache_pkl"
         if self.cache_pkl_path.is_dir() is False:
             self.cache_pkl_path.mkdir()
+
+        # 遍历 enum 中的值
+        for market in Market:
+            market_cl_data_path = self.cl_data_path / market.value
+            if market_cl_data_path.is_dir() is False:
+                market_cl_data_path.mkdir()
+            market_klines_path = self.klines_path / market.value
+            if market_klines_path.is_dir() is False:
+                market_klines_path.mkdir()
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -71,6 +80,7 @@ class FileCacheDB(object):
             "zs_bi_type",
             "zs_xd_type",
             "zs_qj",
+            "zs_cd",
             "zs_wzgx",
             "zs_optimize",
             "cl_mmd_cal_qs_1mmd",
@@ -89,17 +99,21 @@ class FileCacheDB(object):
         ]
 
         # 缠论的更新时间，如果与当前保存不一致，需要清空缓存的计算结果，重新计算
-        self.cl_update_date = "2024-10-18"
+        self.cl_update_date = "2025-02-12"
         cache_cl_update_date = db.cache_get("__cl_update_date")
         if cache_cl_update_date != self.cl_update_date:
             db.cache_set("__cl_update_date", self.cl_update_date)
             self.clear_all_cl_data()
 
-    def get_tdx_klines(self, code: str, frequency: str) -> Union[None, pd.DataFrame]:
+    def get_tdx_klines(
+        self, market: str, code: str, frequency: str
+    ) -> Union[None, pd.DataFrame]:
         """
         获取缓存在文件中的股票数据
         """
-        file_pathname = self.klines_path / f"{code.replace('.', '_')}_{frequency}.csv"
+        file_pathname = (
+            self.klines_path / market / f"{code.replace('.', '_')}_{frequency}.csv"
+        )
         if file_pathname.is_file() is False:
             return None
         try:
@@ -116,24 +130,30 @@ class FileCacheDB(object):
             _klines = _klines.iloc[0:-1:]
 
         # 加一个随机概率，去清理历史的缓存，避免太多占用空间
-        if random.randint(0, 100) <= 5:
-            self.clear_tdx_old_klines()
+        if random.randint(0, 1000) <= 5:
+            self.clear_tdx_old_klines(market)
         return _klines
 
-    def save_tdx_klines(self, code: str, frequency: str, kline: pd.DataFrame):
+    def save_tdx_klines(
+        self, market: str, code: str, frequency: str, kline: pd.DataFrame
+    ):
         """
         保存通达信k线数据对象到文件中
         """
-        file_pathname = self.klines_path / f"{code.replace('.', '_')}_{frequency}.csv"
+        file_pathname = (
+            self.klines_path / market / f"{code.replace('.', '_')}_{frequency}.csv"
+        )
         kline.to_csv(file_pathname, index=False)
         return True
 
     def clear_tdx_old_klines(self):
         """
-        删除七天前的k线数据，不活跃的，减少占用空间
+        删除15天前的k线数据，不活跃的，减少占用空间
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (7 * 24 * 60 * 60)
-        for filename in self.klines_path.glob("*.csv"):
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
+            15 * 24 * 60 * 60
+        )
+        for filename in (self.klines_path / market).glob("*.csv"):
             try:
                 if filename.stat().st_mtime < del_lt_times:
                     filename.unlink()
@@ -159,6 +179,7 @@ class FileCacheDB(object):
 
         file_pathname = (
             self.cl_data_path
+            / market
             / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
         )
         cd: ICL = cl.CL(code, frequency, cl_config)
@@ -185,9 +206,9 @@ class FileCacheDB(object):
                         or cd.get_src_klines()[0].date > klines.iloc[0]["date"]
                     )
                 ):
-                    print(
-                        f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
-                    )
+                    # print(
+                    #     f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
+                    # )
                     cd = cl.CL(code, frequency, cl_config)
                 # 判断缓存中的数据，与给定的K线数据是否有差异，有则表示数据有变（比如复权会产生变化），则重新全量计算
                 if len(cd.get_src_klines()) >= 2 and len(klines) >= 2:
@@ -206,14 +227,14 @@ class FileCacheDB(object):
                         or Decimal(src_klines.iloc[0]["volume"])
                         != Decimal(cd_pre_kline.a)
                     ):
-                        print(
-                            f"{market}--{code}--{frequency} {key}",
-                            cd_pre_kline,
-                            src_klines.iloc[0].to_dict(),
-                        )
-                        print(
-                            f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
-                        )
+                        # print(
+                        #     f"{market}--{code}--{frequency} {key}",
+                        #     cd_pre_kline,
+                        #     src_klines.iloc[0].to_dict(),
+                        # )
+                        # print(
+                        #     f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
+                        # )
                         # print(cd_pre_kline, src_klines)
                         cd = cl.CL(code, frequency, cl_config)
                 # 判断缓存中的最近一百根时间范围内的数量是否一致
@@ -224,15 +245,15 @@ class FileCacheDB(object):
                         & (klines["date"] <= _valid_cd_klines[-1].date)
                     ]
                     if len(_valid_cd_klines) != len(_valid_src_klines):
-                        print(
-                            f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
-                        )
+                        # print(
+                        #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
+                        # )
                         cd = cl.CL(code, frequency, cl_config)
         except Exception as e:
             if file_pathname.is_file():
-                print(
-                    f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
-                )
+                # print(
+                #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
+                # )
                 try:
                     file_pathname.unlink()
                 except Exception:
@@ -247,7 +268,7 @@ class FileCacheDB(object):
             print(f"写入缓存异常 {market} {code} {frequency} - {e}")
 
         # 加一个随机概率，去清理历史的缓存，避免太多占用空间
-        if random.randint(0, 100) <= 5:
+        if random.randint(0, 1000) <= 5:
             self.clear_old_web_cl_data()
 
         return cd
@@ -256,7 +277,7 @@ class FileCacheDB(object):
         """
         清除指定市场下标的缠论缓存对象
         """
-        for filename in self.cl_data_path.glob("*.pkl"):
+        for filename in (self.cl_data_path / market).glob("*.pkl"):
             try:
                 if f"{market}_{code.replace('/', '_').replace('.', '_')}" in str(
                     filename
@@ -268,27 +289,31 @@ class FileCacheDB(object):
 
     def clear_old_web_cl_data(self):
         """
-        清除时间超过7天的缓存数据
+        清除时间超过15天的缓存数据
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (7 * 24 * 60 * 60)
-        for filename in self.cl_data_path.glob("*.pkl"):
-            try:
-                if filename.stat().st_mtime < del_lt_times:
-                    filename.unlink()
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
+            15 * 24 * 60 * 60
+        )
+        for _market in Market:
+            for filename in (self.cl_data_path / _market.value).glob("*.pkl"):
+                try:
+                    if filename.stat().st_mtime < del_lt_times:
+                        filename.unlink()
 
-            except Exception:
-                pass
+                except Exception:
+                    pass
         return True
 
     def clear_all_cl_data(self):
         """
         删除所有缓存的计算结果文件
         """
-        for filename in self.cl_data_path.glob("*.pkl"):
-            try:
-                filename.unlink()
-            except Exception as e:
-                pass
+        for _market in Market:
+            for filename in (self.cl_data_path / _market.value).glob("*.pkl"):
+                try:
+                    filename.unlink()
+                except Exception:
+                    pass
         return True
 
     def get_low_to_high_cl_data(

@@ -29,7 +29,6 @@ try:
         "bi_fx_cgd": Config.BI_FX_CHD_NO.value,
         "bi_qj": Config.BI_QJ_DD.value,
         # 线段默认配置
-        "xd_bzh": Config.XD_BZH_NO.value,
         "xd_qj": Config.XD_QJ_DD.value,
         # 走势段默认配置
         "zsd_bzh": Config.ZSD_BZH_NO.value,

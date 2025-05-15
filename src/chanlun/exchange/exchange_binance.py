@@ -1,15 +1,16 @@
-import traceback
-from typing import Union
+import datetime
+from typing import Dict, List, Union
 
 import ccxt
-import pymysql.err
+import pandas as pd
 import pytz
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+from tzlocal import get_localzone
 
 from chanlun import config, fun
-from chanlun.utils import config_get_proxy
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick, convert_currency_kline_frequency
 from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.utils import config_get_proxy
 
 
 @fun.singleton
@@ -27,7 +28,7 @@ class ExchangeBinance(Exchange):
         # print(proxy)
 
         # 设置是否使用代理
-        if proxy != None and proxy["host"] != "":
+        if proxy["host"] != "":
             params["proxies"] = {
                 "https": f"http://{proxy['host']}:{proxy['port']}",
                 "http": f"http://{proxy['host']}:{proxy['port']}",
@@ -43,7 +44,8 @@ class ExchangeBinance(Exchange):
         self.db_exchange = ExchangeDB("currency")
 
         # 设置时区
-        self.tz = pytz.timezone("Asia/Shanghai")
+        # self.tz = pytz.timezone("Asia/Shanghai")
+        self.tz = pytz.timezone(str(get_localzone()))
 
     def default_code(self):
         return "BTC/USDT"
@@ -77,7 +79,10 @@ class ExchangeBinance(Exchange):
         """
         数字货币全部返回 code 值
         """
-        return {"code": code, "name": code}
+        all_stocks = self.all_stocks()
+        for _s in all_stocks:
+            if _s["code"] == code:
+                return _s
 
     def all_stocks(self):
         """
@@ -86,14 +91,17 @@ class ExchangeBinance(Exchange):
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        markets = self.exchange.load_markets()
+        markets = self.exchange.load_markets(reload=True)
         __all_stocks = []
         for _, s in markets.items():
-            if s["quote"] == "USDT":
+            if s["active"] and s["quote"] == "USDT":
                 __all_stocks.append(
                     {
                         "code": s["base"] + "/" + s["quote"],
                         "name": s["base"] + "/" + s["quote"],
+                        "precision": fun.reverse_decimal_to_power_of_ten(
+                            s["precision"]["price"]
+                        ),
                     }
                 )
         self.g_all_stocks = __all_stocks
@@ -125,51 +133,169 @@ class ExchangeBinance(Exchange):
             return self.online_klines(code, frequency, start_date, end_date, args)
 
         try:
-            if start_date is not None or end_date is not None:
-                online_klines = self.online_klines(
-                    code, frequency, start_date, end_date, args
+            # 查询数据库，如果数据库为0，api查询并插入数据库
+            db_klines = self.db_exchange.klines(code, frequency, args={"limit": 10000})
+            if len(db_klines) == 0:
+                online_klines = self.increment_klines_by_online(
+                    code, frequency, start_date=None
                 )
                 self.db_exchange.insert_klines(code, frequency, online_klines)
                 return online_klines
             else:
-                # 查询数据库，如果数据库为0，api查询并插入数据库
-                db_klines = self.db_exchange.klines(
-                    code, frequency, args={"limit": 10000}
+                # 根据数据库中的最后时间，调用api进行返回数据
+                last_datetime = db_klines.iloc[-2]["date"].strftime("%Y-%m-%d %H:%M:%S")
+                online_klines = self.increment_klines_by_online(
+                    code, frequency, start_date=last_datetime
                 )
-                if len(db_klines) == 0:
-                    online_klines = self.online_klines(
-                        code, frequency, start_date, end_date, args
-                    )
-                    self.db_exchange.insert_klines(code, frequency, online_klines)
-                    return online_klines
-
-                while True:
-                    # 根据数据库中的最后时间，调用api进行返回数据
-                    last_datetime = db_klines.iloc[-2]["date"].strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                    online_klines = self.online_klines(
-                        code, frequency, start_date=last_datetime
-                    )
-                    self.db_exchange.insert_klines(code, frequency, online_klines)
-                    if (
-                        len(online_klines) == 1500
-                    ):  # 如果api获取的还是 1500，则说明没有跟新到最新的数据，则继续调用
-                        db_klines = self.db_exchange.klines(
-                            code, frequency, args={"limit": 10000}
-                        )
-                    else:
-                        break
-
-                klines = pd.concat([db_klines, online_klines], ignore_index=True)
-                klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
-                return klines[-10000::]
+                self.db_exchange.insert_klines(code, frequency, online_klines)
+            klines = pd.concat([db_klines, online_klines], ignore_index=True)
+            klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
+            klines = klines.sort_values(by="date", ascending=True)
+            return klines[-10000::]
         except Exception as e:
             print(f"{code} - {frequency} Error : {e}")
             # print(traceback.format_exc())
             # exit()
 
         return None
+
+    def increment_klines_by_online(
+        self,
+        code: str,
+        frequency: str,
+        start_date: str = None,
+        args=None,
+    ) -> Union[pd.DataFrame, None]:
+        """
+        增量 API 接口请求行情数据
+
+        Args:
+            code: 交易对代码
+            frequency: K线周期
+            start_date: 开始日期，格式为 "YYYY-MM-DD HH:MM:SS"
+            end_date: 结束日期，格式为 "YYYY-MM-DD HH:MM:SS"
+            args: 额外参数
+
+        Returns:
+            pd.DataFrame: 包含K线数据的DataFrame，如果出错则返回None
+
+        说明:
+            - 如果start_date为空，则从最新数据往前获取，直到获取10000根或返回不足1000根
+            - 如果start_date有值，则从该时间点开始往后获取，直到获取到最新数据
+        """
+        # 1m  3m  5m  15m  30m  1h  2h  4h  6h  8h  12h  1d  3d  1w  1M
+        if args is None:
+            args = {}
+        frequency_map = {
+            "w": "1w",
+            "d": "1d",
+            "12h": "12h",
+            "8h": "8h",
+            "6h": "6h",
+            "4h": "4h",
+            "3h": "1h",
+            "60m": "1h",
+            "30m": "30m",
+            "15m": "15m",
+            "10m": "5m",
+            "5m": "5m",
+            "3m": "3m",
+            "2m": "1m",
+            "1m": "1m",
+        }
+        if frequency not in frequency_map.keys():
+            raise Exception(f"不支持的周期: {frequency}")
+
+        # 转换时间戳
+        start_timestamp = None
+
+        if start_date is not None:
+            start_timestamp = (
+                int(
+                    datetime.datetime.timestamp(
+                        datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+                    )
+                )
+                * 1000
+            )
+
+        # 存储所有获取的K线数据
+        all_klines = []
+        target_count = 10000  # 目标K线数量
+
+        if start_date is None:
+            # 从最新数据往前获取
+            current_end = None  # 初始为None表示获取最新数据
+            while len(all_klines) < target_count:
+                params = {}
+                if current_end is not None:
+                    params["endTime"] = current_end
+                # 获取K线数据
+                kline = self.exchange.fetch_ohlcv(
+                    symbol=code,
+                    timeframe=frequency_map[frequency],
+                    limit=1000,
+                    params=params,
+                )
+                # 如果返回的数据少于1000条，说明已经没有更多历史数据了
+                if len(kline) < 1000:
+                    all_klines = kline + all_klines
+                    break
+
+                # 更新结束时间为当前批次的第一条记录的时间（最早的时间）
+                current_end = kline[0][0]
+
+                # 将当前批次添加到结果中（注意顺序）
+                all_klines = kline + all_klines
+
+                # 如果已经获取足够多的数据，就停止
+                if len(all_klines) >= target_count:
+                    break
+        else:
+            # 从指定的开始时间往后获取，直到最新数据
+            current_start = start_timestamp
+
+            while True:
+                params = {"startTime": current_start}
+
+                # 获取K线数据
+                kline = self.exchange.fetch_ohlcv(
+                    symbol=code,
+                    timeframe=frequency_map[frequency],
+                    limit=1000,
+                    params=params,
+                )
+
+                # 如果返回的数据少于1000条，说明已经到达最新数据
+                if len(kline) < 1000:
+                    all_klines.extend(kline)
+                    break
+
+                all_klines.extend(kline)
+
+                # 更新开始时间为当前批次的最后一条记录的时间（最新的时间）
+                current_start = kline[-1][0]
+
+        # 如果没有获取到数据，返回None
+        if len(all_klines) == 0:
+            return None
+
+        # 转换为DataFrame
+        kline_pd = pd.DataFrame(
+            all_klines, columns=["date", "open", "high", "low", "close", "volume"]
+        )
+        kline_pd["code"] = code
+        kline_pd["date"] = kline_pd["date"].apply(
+            lambda x: datetime.datetime.fromtimestamp(x / 1e3).astimezone(self.tz)
+        )
+        kline_pd = kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
+        kline_pd.drop_duplicates(subset=["date"], keep="last", inplace=True)
+
+        # 自定义级别，需要进行转换
+        if frequency in ["10m", "2m", "3h"] and len(kline_pd) > 0:
+            kline_pd = convert_currency_kline_frequency(kline_pd, frequency)
+
+        return kline_pd
 
     def online_klines(
         self,
@@ -252,40 +378,24 @@ class ExchangeBinance(Exchange):
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         res_ticks = {}
-        for code in codes:
-            try:
-                _t = self.exchange.fetch_ticker(code)
-                res_ticks[code] = Tick(
-                    code=code,
-                    last=_t["last"],
-                    buy1=_t["last"],
-                    sell1=_t["last"],
-                    high=_t["high"],
-                    low=_t["low"],
-                    open=_t["open"],
-                    volume=_t["quoteVolume"],
-                    rate=_t["percentage"],
-                )
-            except Exception as e:
-                print(f"{code} 获取 tick 异常 {e}")
-        return res_ticks
+        _ts = self.exchange.fetch_tickers(codes)
+        for _s, _t in _ts.items():
+            if _t["last"] is None:
+                continue
+            _c = _s.split(":")[0]
+            res_ticks[_c] = Tick(
+                code=_c,
+                last=_t["last"],
+                buy1=_t["last"],
+                sell1=_t["last"],
+                high=_t["high"],
+                low=_t["low"],
+                open=_t["open"],
+                volume=_t["quoteVolume"],
+                rate=_t["percentage"],
+            )
 
-    def ticker24HrRank(self, num=20):
-        """
-        获取24小时交易量排行前的交易对儿
-        TODO 废弃了，不用了
-        :param num:
-        :return:
-        """
-        tickers = self.exchange.fapiPublicGetTicker24hr()
-        tickers = sorted(tickers, key=lambda d: float(d["quoteVolume"]), reverse=True)
-        codes = []
-        for t in tickers:
-            if t["symbol"][-4:] == "USDT":
-                codes.append(t["symbol"][:-4] + "/" + t["symbol"][-4:])
-            if len(codes) >= num:
-                break
-        return codes
+        return res_ticks
 
     def balance(self):
         b = self.exchange.fetch_balance()
@@ -363,12 +473,20 @@ class ExchangeBinance(Exchange):
 
 
 if __name__ == "__main__":
-    from chanlun import zixuan
-
     ex = ExchangeBinance()
 
-    klines = ex.klines("BTC/USDT", "60m")
-    print(klines)
+    stocks = ex.all_stocks()
+    print(len(stocks))
+    print(stocks[0])
+
+    # klines = ex.klines("BTC/USDT", "1m")
+    # print(klines)
+
+    # ticks = ex.ticks(["BTC/USDT", "ETH/USDT"])
+    # for _c, _t in ticks.items():
+    #     print(
+    #         _c, _t.last, _t.buy1, _t.sell1, _t.high, _t.low, _t.open, _t.volume, _t.rate
+    #     )
 
     # zx = zixuan.ZiXuan("currency")
     # zx_group = "选股"

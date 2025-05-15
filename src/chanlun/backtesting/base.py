@@ -1,9 +1,14 @@
-from abc import ABC
+import datetime
+import math
+from abc import ABC, abstractmethod
+from typing import Dict, List, Union
 
 import MyTT
+import numpy as np
+import pandas as pd
 import talib
 
-from chanlun.cl_interface import *
+from chanlun.cl_interface import BI, ICL, XD, ZS
 from chanlun.cl_utils import cal_zs_macd_infos
 from chanlun.fun import get_logger
 
@@ -23,8 +28,8 @@ class POSITION:
         amount: float = 0,
         loss_price: float = None,
         open_date: str = None,
-        open_datetime: datetime = None,
-        close_datetime: datetime = None,
+        open_datetime: datetime.datetime = None,
+        close_datetime: datetime.datetime = None,
         profit_rate: float = 0,
         max_profit_rate: float = 0,
         max_loss_rate: float = 0,
@@ -127,8 +132,16 @@ class Operation:
         open_uid: str = None,
         close_uid: str = "clear",
     ):
-        # 操作指示  buy  买入  sell  卖出
-        self.opt: str = opt
+        # TODO 历史原因，后期 opt 值修改为 open  close ，分别表示 开仓与平仓
+        # TODO 但是为了兼容之前的  buy sell ，这里单独做个转换，内部还是使用 buy sell 进行判断开平仓
+        opt_map = {
+            "open": "buy",
+            "close": "sell",
+        }
+        # 旧的 操作指示  buy  买入  sell  卖出 （buy 表示开仓 sell 表示平仓，新的用 open  close 进行表示了）
+        # 新的 操作指示  open 开仓  close  平仓
+        self.opt: str = opt if opt not in opt_map.keys() else opt_map[opt]
+
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
         # 背驰点 例如：down_bi_bc_buy down_pz_bc_buy down_qs_bc_buy up_bi_bc_sell up_pz_bc_sell up_qs_bc_sell
@@ -238,7 +251,7 @@ class Strategy(ABC):
         # 实盘中起效果，允许执行的 close_uid 列表
         # 有两种格式
         #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
-        #       字典格式：{'buy': ['a', 'b'0], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
+        #       字典格式：{'buy': ['a', 'b'], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
         self.allow_close_uids = None
         self.use_times = {}
         pass
@@ -509,12 +522,49 @@ class Strategy(ABC):
         }
 
     @staticmethod
+    def idx_ama(cd: ICL, N=10, fast_N=2, slow_N=30) -> np.array:
+        CLOSE = np.array([k.c for k in cd.get_src_klines()])
+
+        DIR = MyTT.ABS(CLOSE - MyTT.REF(CLOSE, N))
+
+        VIR = MyTT.SUM(MyTT.ABS(CLOSE - MyTT.REF(CLOSE, 1)), N)
+
+        ER = DIR / VIR
+
+        CS = ER * (2 / (fast_N + 1) - 2 / (slow_N + 1)) + 2 / (slow_N + 1)
+
+        CQ = CS * CS
+        AMA = np.zeros(len(CLOSE))
+        for _i in range(len(CQ)):
+            _cq = CQ[_i]
+            if _cq != _cq:
+                AMA[_i] = CLOSE[_i]
+            else:
+                AMA[_i] = AMA[_i - 1] + _cq * (CLOSE[_i] - AMA[_i - 1])
+
+        return AMA
+
+    @staticmethod
     def idx_atr_by_sma(CLOSE, HIGH, LOW, N: int = 20):
         TR = MyTT.MAX(
             MyTT.MAX((HIGH - LOW), MyTT.ABS(MyTT.REF(CLOSE, 1) - HIGH)),
             MyTT.ABS(MyTT.REF(CLOSE, 1) - LOW),
         )
         return MyTT.SMA(TR, N)
+
+    @staticmethod
+    def idx_sar(cd: ICL, acceleration=0.02, maximum=0.2):
+        # 指标说明：
+        # 1、当股票价格从SAR曲线下方开始向上突破SAR曲线时，为买入信号，预示着股票价格一轮上升行情可能展开，投资者应迅速及时地买进该股票。
+        # 2、当股票价格向上突破SAR曲线后继续向上，而SAR曲线也同时向上运动时，表明上涨趋势已形成。SAR曲线对股票价格构成强劲的支撑，投资者应坚决看多或逢低买入该股票。
+        # 3、当股票价格从SAR曲线上方开始向下突破SAR曲线时，为卖出信号，预示着股票价格一轮下跌行情可能展开，投资者应及时地卖出该股票。
+        # 4、当股票价格向下突破SAR曲线后继续向下，而SAR曲线也同时向下运动的话，表明下跌趋势已形成，SAR曲线对价格会构成巨大的压力，投资者应坚决看空或逢高做空该股票。
+        high_prices = np.array([k.h for k in cd.get_klines()])
+        low_prices = np.array([k.l for k in cd.get_klines()])
+        sar = talib.SAR(
+            high_prices, low_prices, acceleration=acceleration, maximum=maximum
+        )
+        return sar
 
     @staticmethod
     def get_max_loss_price(
@@ -564,13 +614,13 @@ class Strategy(ABC):
         atr_vals = self.idx_atr_by_sma(
             close_prices, high_prices, low_prices, atr_period
         )
-        price = cd.get_klines()[-1].c
+        price = cd.get_src_klines()[-1].c
         high_stop_loss_price = high_prices[-2] + atr_vals[-2] * atr_m
         low_stop_loss_price = low_prices[-2] - atr_vals[-2] * atr_m
         if "buy" in pos.mmd and price <= low_stop_loss_price:
             return Operation(
                 code=cd.get_code(),
-                opt="sell",
+                opt="close",
                 mmd=pos.mmd,
                 msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
                 % (pos.mmd, low_stop_loss_price, price),
@@ -578,7 +628,7 @@ class Strategy(ABC):
         elif "sell" in pos.mmd and price >= high_stop_loss_price:
             return Operation(
                 code=cd.get_code(),
-                opt="sell",
+                opt="close",
                 mmd=pos.mmd,
                 msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
                 % (pos.mmd, high_stop_loss_price, price),
@@ -598,7 +648,7 @@ class Strategy(ABC):
             if price < pos.loss_price:
                 return Operation(
                     code=pos.code,
-                    opt="sell",
+                    opt="close",
                     mmd=mmd,
                     msg="%s 止损 （止损价格 %s 当前价格 %s）"
                     % (mmd, pos.loss_price, price),
@@ -608,7 +658,7 @@ class Strategy(ABC):
             if price > pos.loss_price:
                 return Operation(
                     code=pos.code,
-                    opt="sell",
+                    opt="close",
                     mmd=mmd,
                     msg="%s 止损 （止损价格 %s 当前价格 %s）"
                     % (mmd, pos.loss_price, price),
@@ -644,7 +694,7 @@ class Strategy(ABC):
             )
             if profit_rate > 0 and pos.max_profit_rate - profit_rate >= max_back_rate:
                 return Operation(
-                    code=pos.code, opt="sell", mmd=mmd, msg="%s 回调止损" % mmd
+                    code=pos.code, opt="close", mmd=mmd, msg="%s 回调止损" % mmd
                 )
         return None
 
@@ -739,7 +789,6 @@ class Strategy(ABC):
         """
         平均K线，笔转折判断
         """
-        cl_config = cd.get_config()
         # 笔要完成
         if bi.is_done() is False:
             return False
@@ -1037,6 +1086,12 @@ def fee_us(opt: str, price: float, amlunt: float):
 
 
 if __name__ == "__main__":
-    # A 股手续费计算
-    fee_total = fee_a("sell", 100, 100)
-    print(fee_total)
+    from chanlun import cl
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
+
+    ex = ExchangeTDX()
+    klines = ex.klines("SH.000001", "d")
+    print(klines.tail(10))
+    cd = cl.CL("SH.000001", "d", {}).process_klines(klines)
+    ama = Strategy.idx_ama(cd, 10, 2, 30)
+    print(ama)

@@ -52,7 +52,8 @@
                   <select name="market" lay-filter="select_market">
                     <option value="a">沪深A股</option>
                     <option value="hk">港股</option>
-                    <option value="futures">期货</option>
+                    <option value="futures">国内期货</option>
+                    <option value="ny_futures">纽约期货</option>
                     <option value="fx">外汇</option>
                     <option value="us">美股</option>
                     <option value="currency">数字货币(合约)</option>
@@ -122,11 +123,9 @@
                           class="layui-input" />
                       </label>
                     </div>
-                    <div class="layui-form-mid" style="width: 30%;padding: 0 !important; float: left">
+                    <div class="layui-form-mid" style="width: 30%; padding: 0 !important; float: left">
                       <label>
-                        <select name="ai_frequencys" id="ai_frequencys">
-
-                        </select>
+                        <select name="ai_frequencys" id="ai_frequencys"></select>
                       </label>
                     </div>
                     <div class="layui-form-mid" style="padding: 4px 0 !important; float: left">
@@ -194,6 +193,8 @@
         fx_interval_2: "1D",
         futures_interval_1: "1D",
         futures_interval_2: "1D",
+        ny_futures_interval_1: "1D",
+        ny_futures_interval_2: "1D",
         currency_interval_1: "1D",
         currency_interval_2: "1D",
         currency_spot_interval_1: "1D",
@@ -204,6 +205,7 @@
         us_code: "{{ market_default_codes.us }}",
         fx_code: "{{ market_default_codes.fx }}",
         futures_code: "{{ market_default_codes.futures }}",
+        ny_futures_code: "{{ market_default_codes.ny_futures }}",
         currency_code: "{{ market_default_codes.currency }}",
         currency_spot_code: "{{ market_default_codes.currency_spot }}",
       };
@@ -282,7 +284,7 @@
 
         charts_storage_url: "/tv",
         charts_storage_api_version: "1.1",
-        client_id: "chanlun_pro_" + id,
+        client_id: "chanlun_pro_" + market + "_" + id,
         user_id: "999",
         load_last_chart: true,
 
@@ -487,7 +489,175 @@
                   return [k.get(0), d.get(0), j.get(0)];
                 };
               }
-            }
+            },
+            // ama的自定义指标
+            {
+              name: 'Custom AMA',
+              metainfo: {
+                _metainfoVersion: 53,
+                id: 'CustomIndicatorsAMA@tv-basicstudies-1',
+                description: 'AMA',
+                shortDescription: 'AMA 自适应移动均线',
+                is_price_study: true,
+                isCustomIndicator: true,
+                plots: [
+                  {
+                    'id': 'plot_ama',
+                    'type': 'line',
+                  },
+                  {
+                    'id': 'plot_1',
+                    'type': 'colorer',
+                    'target': 'plot_ama',
+                    'palette': 'paletteId1',
+                  },
+                ],
+                defaults: {
+                  palettes: {
+                    paletteId1: {
+                      colors: {
+                        0: {
+                          color: 'red',
+                          width: 2,
+                          style: 0,
+                        },
+                        1: {
+                          color: 'blue',
+                          width: 2,
+                          style: 0,
+                        },
+                      },
+                    },
+                  },
+                  styles: {
+                    plot_ama: {
+                      linestyle: 0,
+                      linewidth: 2,
+                      plottype: 0,
+                      trackPrice: false,
+                      transparency: 0,
+                      visible: true,
+                      color: '#FFCC33',
+                    },
+                  },
+                  inputs: {
+                    N: 10,
+                    fast_n: 2,
+                    slow_n: 30,
+                    cal_type: 0,
+                  },
+                },
+                palettes: {
+                  paletteId1: {
+                    colors: {
+                      0: {
+                        name: 'First color',
+                      },
+                      1: {
+                        name: 'Second color',
+                      },
+                    },
+                  },
+                },
+                styles: {
+                  plot_ama: {
+                    title: 'AMA',
+                    histogramBase: 0,
+                  },
+                },
+                inputs: [
+                  {
+                    id: 'N',
+                    name: 'N',
+                    type: 'integer',
+                    defval: 10,
+                    min: 1,
+                    max: 100,
+                  },
+                  {
+                    id: 'fast_n',
+                    name: 'Fast n',
+                    type: 'integer',
+                    defval: 2,
+                    min: 1,
+                    max: 100,
+                  },
+                  {
+                    id: 'slow_n',
+                    name: 'Slow n',
+                    type: 'integer',
+                    defval: 30,
+                    min: 1,
+                    max: 100,
+                  },
+                  {
+                    id: 'cal_type',
+                    name: '计算方式',
+                    type: 'integer',
+                    defval: 0,
+                    min: 0,
+                    max: 1,
+                  },
+                ],
+                format: {},
+              },
+              constructor: function () {
+                this.init = function (context, inputCallback) {
+                  context.amas = [];
+                };
+                this.main = function (context, inputCallback) {
+                  this._context = context;
+                  this._input = inputCallback;
+
+                  var N = this._input(0);
+                  var fast_n = this._input(1);
+                  var slow_n = this._input(2);
+                  var cal_type = this._input(3);
+                  console.log('N', N, 'fast_n', fast_n, 'slow_n', slow_n, 'cal_type', cal_type);
+
+                  const h = this._context.new_var(PineJS.Std.high(this._context));
+                  const l = this._context.new_var(PineJS.Std.low(this._context));
+                  const c = this._context.new_var(PineJS.Std.close(this._context));
+
+                  // 原始的计算公式
+                  let direction = NaN;
+                  let volatility = NaN;
+                  if (cal_type === 0) {
+                    // direction = math.abs(close - close[n])
+                    // volatility = math.sum(math.abs(close - close[1]), n)
+                    direction = PineJS.Std.abs(c - c.get(N));
+                    const close_diff = this._context.new_var(PineJS.Std.abs(c - c.get(1)));
+                    volatility = PineJS.Std.sum(close_diff, N, this._context);
+                  } else {
+                    // 改进后的计算公式
+                    // direction = 周期内的最高价 - 最低价
+                    // volatility = 周期内的 TR 的和
+                    direction = PineJS.Std.highest(h, N, this._context) - PineJS.Std.lowest(l, N, this._context);
+                    const trs = this._context.new_var(PineJS.Std.tr(true, this._context));
+                    volatility = PineJS.Std.sum(trs, N, this._context);
+                  }
+
+                  // ER = direction / volatility
+                  const er = direction / volatility;
+                  // sc = math.pow(ER * (fastest - slowest) + slowest, 2)
+                  const sc = Math.pow(er * (2 / (fast_n + 1) - 2 / (slow_n + 1)) + 2 / (slow_n + 1), 2);
+
+                  if (PineJS.Std.na(sc)) {
+                    this._context.amas.push(c.get(0));
+                  } else {
+                    // ama.get(1) + sc * (c.get(0) - ama.get(1)));
+                    this._context.amas.push(this._context.amas[this._context.amas.length - 1] + sc * (c.get(0) - this._context.amas[this._context.amas.length - 1]));
+                  }
+
+                  // 颜色设置
+                  const colorIndex = (this._context.amas.length >= 2 && this._context.amas[this._context.amas.length - 1] > this._context.amas[this._context.amas.length - 2]) ? 0 : 1;
+
+                  // 返回 this._context.amas 数组最后一个
+                  return [this._context.amas[this._context.amas.length - 1], colorIndex];
+                };
+              }
+            },
+
           ]);
         },
       });
@@ -562,17 +732,15 @@
           const code_start = performance.now();
 
           let symbolInterval = widget.symbolInterval();
+          console.log(symbolInterval);
+          let symbol_res_key = symbolInterval["symbol"].toString().toLowerCase() + symbolInterval["interval"].toString().toLowerCase();
           let bars_result = udf_datafeed._historyProvider.bars_result.get(
-            symbolInterval["symbol"].toString().toLowerCase()
+            symbol_res_key
           );
           if (bars_result === undefined) {
             return true;
           }
-          bars_result = bars_result.get(
-            symbolInterval["interval"].toString().toLowerCase()
-          );
-          // console.log(symbolInterval);
-          // console.log(bars_result);
+          console.log(bars_result);
 
           // 画缠论图表
           let visible_range = chart.getVisibleRange();
@@ -1360,11 +1528,11 @@
             templet:
               '<div><i class="layui-icon layui-icon-speaker"></i> <span>新增监控</span></div>',
             id: 4,
-          }, {
-            title: "运行选股",
-            templet:
-              '<div><i class="layui-icon layui-icon-test"></i> <span>运行选股</span></div>',
-            id: 5,
+            // }, {
+            //   title: "运行选股",
+            //   templet:
+            //     '<div><i class="layui-icon layui-icon-test"></i> <span>运行选股</span></div>',
+            //   id: 5,
           }, {
             title: "当前任务",
             templet:
@@ -1393,7 +1561,7 @@
             layer.open({
               type: 2,
               title: "缠论配置项变更",
-              area: ["1000px", "90vh"],
+              area: ["1100px", "90vh"],
               content:
                 "/get_cl_config/" + market + "/" + code.replace("/", "__"),
               anim: 1,

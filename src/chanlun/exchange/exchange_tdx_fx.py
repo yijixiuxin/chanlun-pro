@@ -1,16 +1,19 @@
 import time
 import traceback
-from typing import Union
+from typing import Dict, List, Union
 
+import pandas as pd
+import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
+from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange.exchange import *
+from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -24,37 +27,43 @@ class ExchangeTDXFX(Exchange):
     def __init__(self):
         # super().__init__()
 
-        # 选择最优的服务器，并保存到 cache 中
-        self.connect_info = db.cache_get("tdxex_connect_ip")
-        if self.connect_info is None:
-            self.connect_info = self.reset_tdx_ip()
-            # print(f"TDXEX 最优服务器：{self.connect_info}")
-
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-        # 初始化，映射交易所代码
-        self.market_maps = {}
-        while True:
-            try:
-                client = TdxExHq_API(
-                    multithread=True, raise_exception=True, auto_retry=True
-                )
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                    all_markets = client.get_markets()
-                    for _m in all_markets:
-                        if _m["category"] == 4:
-                            self.market_maps[_m["short_name"]] = {
-                                "market": _m["market"],
-                                "category": _m["category"],
-                                "name": _m["name"],
-                            }
-                break
-            except TdxConnectionError:
-                self.reset_tdx_ip()
+        try:
+            # 选择最优的服务器，并保存到 cache 中
+            self.connect_info = db.cache_get("tdxex_connect_ip")
+            if self.connect_info is None:
+                self.connect_info = self.reset_tdx_ip()
+                # print(f"TDXEX 最优服务器：{self.connect_info}")
+
+            # 初始化，映射交易所代码
+            self.market_maps = {}
+            while True:
+                try:
+                    client = TdxExHq_API(
+                        multithread=True, raise_exception=True, auto_retry=True
+                    )
+                    with client.connect(
+                        self.connect_info["ip"], self.connect_info["port"]
+                    ):
+                        all_markets = client.get_markets()
+                        for _m in all_markets:
+                            if _m["category"] == 4:
+                                self.market_maps[_m["short_name"]] = {
+                                    "market": _m["market"],
+                                    "category": _m["category"],
+                                    "name": _m["name"],
+                                }
+                    break
+                except TdxConnectionError:
+                    self.reset_tdx_ip()
+        except Exception:
+            print(traceback.format_exc())
+            print("通达信 外汇行情接口初始化失败，外汇行情不可用")
 
     def reset_tdx_ip(self):
         """
@@ -179,7 +188,9 @@ class ExchangeTDXFX(Exchange):
                 multithread=True, raise_exception=True, auto_retry=True
             )
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(code, frequency)
+                klines: pd.DataFrame = self.fdb.get_tdx_klines(
+                    Market.FX.value, code, frequency
+                )
                 if klines is None:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
@@ -189,8 +200,8 @@ class ExchangeTDXFX(Exchange):
                                     frequency_map[frequency],
                                     market,
                                     tdx_code,
-                                    (i - 1) * 800,
-                                    800,
+                                    (i - 1) * 700,
+                                    700,
                                 )
                             )
                             for i in range(1, args["pages"] + 1)
@@ -210,8 +221,8 @@ class ExchangeTDXFX(Exchange):
                                 frequency_map[frequency],
                                 market,
                                 tdx_code,
-                                (i - 1) * 800,
-                                800,
+                                (i - 1) * 700,
+                                700,
                             )
                         )
                         _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
@@ -225,7 +236,7 @@ class ExchangeTDXFX(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(code, frequency, klines)
+            self.fdb.save_tdx_klines(Market.FX.value, code, frequency, klines)
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
