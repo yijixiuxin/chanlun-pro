@@ -246,6 +246,7 @@ class ExchangeTDXFutures(Exchange):
             klines.loc[:, "date"] = pd.to_datetime(klines["datetime"]).dt.tz_localize(
                 self.tz
             )
+            klines.sort_values("date", inplace=True)
 
             if frequency in {"y", "q", "m", "w", "d"}:
                 klines["date"] = klines["date"].apply(self.__convert_date)
@@ -436,7 +437,7 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
 
-    klines = ex.klines(ex.default_code(), "d")
+    klines = ex.klines(ex.default_code(), "15m")
     print(klines)
     #
     # for _f in ex.support_frequencys().keys():

@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import Dict, List, Union
 
 import pandas as pd
@@ -151,6 +152,9 @@ class ExchangeQMT(Exchange):
         else:
             download_start_date = ""
 
+        if "download_start_date" in args:
+            download_start_date = args["download_start_date"]
+
         qmt_code = self.code_to_qmt(code)
         # 首先下载到本地
         # s_time = time.time()
@@ -159,7 +163,7 @@ class ExchangeQMT(Exchange):
             frequency_map[frequency],
             start_time=download_start_date,
             end_time="",
-            incrementally=None,
+            incrementally=True,
         )
         # print(f"{code}-{frequency} 下载历史数据耗时：{time.time() - s_time}")
 
@@ -260,9 +264,11 @@ class ExchangeQMT(Exchange):
                 low=_t["low"],
                 open=_t["open"],
                 volume=_t["volume"],
-                rate=(_t["lastPrice"] - _t["lastClose"]) / _t["lastClose"] * 100
-                if _t["lastClose"] != 0
-                else 0,
+                rate=(
+                    (_t["lastPrice"] - _t["lastClose"]) / _t["lastClose"] * 100
+                    if _t["lastClose"] != 0
+                    else 0
+                ),
             )
 
         return ticks
@@ -326,34 +332,38 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    # klines = ex.klines(
-    #     "SH.600519",
-    #     "5m",
-    #     # start_date="2025-04-20",
-    #     args={"req_counts": 12 * 8000, "dividend_type": "none"},
-    # )
-    # print(klines)
+    klines = ex.klines(
+        "SH.600519",
+        "1m",
+        start_date="2025-05-06",
+        args={
+            "req_counts": 12 * 8000,
+            "dividend_type": "none",
+            "download_start_date": "",
+        },
+    )
+    print(klines)
 
-    def on_klines(_qmt_code, tick):
-        if _qmt_code != "600519.SH":
-            return
-        print(
-            _qmt_code,
-            "最新价格",
-            tick["lastPrice"],
-            " 时间：",
-            fun.timeint_to_datetime(int(tick["time"] / 1000)),
-        )
-        _tdx_code = ex.code_to_tdx(_qmt_code)
-        print(tick)
-        # for _f in ["1m", "5m", "d"]:
-        #     print(f"周期：{_f}")
-        #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
+    # def on_klines(_qmt_code, tick):
+    #     if _qmt_code != "600519.SH":
+    #         return
+    #     print(
+    #         _qmt_code,
+    #         "最新价格",
+    #         tick["lastPrice"],
+    #         " 时间：",
+    #         fun.timeint_to_datetime(int(tick["time"] / 1000)),
+    #     )
+    #     _tdx_code = ex.code_to_tdx(_qmt_code)
+    #     print(tick)
+    #     # for _f in ["1m", "5m", "d"]:
+    #     #     print(f"周期：{_f}")
+    #     #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
 
-        #     print(klines_df)
-        print("-" * 20)
+    #     #     print(klines_df)
+    #     print("-" * 20)
 
-    ex.subscribe_all_ticks(on_klines)
+    # ex.subscribe_all_ticks(on_klines)
 
     # ticks = ex.all_ticks()
     # print(len(ticks))
