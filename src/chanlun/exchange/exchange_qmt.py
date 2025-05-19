@@ -67,10 +67,31 @@ class ExchangeQMT(Exchange):
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
+        # 黑名单 code
+        black_codes = [
+            "SZ.399290",
+            "SZ.399289",
+            "SZ.399302",
+            "SZ.399298",
+            "SZ.399481",
+            "SZ.399299",
+            "SZ.399301",
+            "SH.000013",
+            "SH.000022",
+            "SH.000116",
+            "SH.000061",
+            "SH.000101",
+            "SH.000012",
+            "SZ.988201",
+            "SZ.980068",
+            "SZ.980001",
+            "SZ.980023",
+        ]
+
         ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
         tick_codes = list(ticks.keys())
 
-        self.g_all_stocks = []
+        all_stocks = []
         for _c in tick_codes:
             _stock_type: dict = xtdata.get_instrument_type(_c)
             if (
@@ -82,7 +103,11 @@ class ExchangeQMT(Exchange):
             else:
                 continue
             _stock = self.stock_info(self.code_to_tdx(_c))
-            self.g_all_stocks.append(_stock)
+            all_stocks.append(_stock)
+
+        all_stocks = [_s for _s in all_stocks if _s["code"] not in black_codes]
+
+        self.g_all_stocks = all_stocks
 
         # print(f"股票共获取数量：{len(self.g_all_stocks)}")
         # print(f"耗时：{time.time() - s_time}")
@@ -221,7 +246,11 @@ class ExchangeQMT(Exchange):
         """
         qmt_code = self.code_to_qmt(code)
         stock_detail = xtdata.get_instrument_detail(qmt_code, False)
-        return {"code": code, "name": stock_detail["InstrumentName"]}
+        return {
+            "code": code,
+            "name": stock_detail["InstrumentName"],
+            "precision": fun.reverse_decimal_to_power_of_ten(stock_detail["PriceTick"]),
+        }
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """
@@ -272,6 +301,17 @@ class ExchangeQMT(Exchange):
             )
 
         return ticks
+
+    def get_divid_factors(self, stock_code: str) -> pd.DataFrame:
+        """
+        获取股票除权除息信息
+        """
+        df = xtdata.get_divid_factors(self.code_to_qmt(stock_code))
+        if df is None or df.empty:
+            return None
+        df.loc[:, "stock_code"] = stock_code
+        df["divid_date"] = pd.to_datetime(df["time"] / 1000, unit="s")
+        return df
 
     def subscribe_all_ticks(self, callback):
         all_stocks = self.all_stocks()
@@ -332,17 +372,24 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    klines = ex.klines(
-        "SH.600519",
-        "1m",
-        start_date="2025-05-06",
-        args={
-            "req_counts": 12 * 8000,
-            "dividend_type": "none",
-            "download_start_date": "",
-        },
-    )
-    print(klines)
+    # klines = ex.klines(
+    #     "SH.600519",
+    #     "1m",
+    #     start_date="2025-05-06",
+    #     args={
+    #         "req_counts": 12 * 8000,
+    #         "dividend_type": "none",
+    #         "download_start_date": "",
+    #     },
+    # )
+    # print(klines)
+
+    # stock = ex.stock_info("SH.000001")
+    # print(stock)
+
+    df = ex.get_divid_factors("SH.600519")
+
+    print(df)
 
     # def on_klines(_qmt_code, tick):
     #     if _qmt_code != "600519.SH":
