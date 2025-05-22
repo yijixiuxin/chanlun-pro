@@ -12,7 +12,11 @@ from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from chanlun import fun
 from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange.exchange import Exchange, Tick
+from chanlun.exchange.exchange import (
+    Exchange,
+    Tick,
+    convert_tdx_futures_kline_frequency,
+)
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
 
@@ -95,6 +99,8 @@ class ExchangeTDXFutures(Exchange):
             "30m": "30m",
             "15m": "15m",
             "5m": "5m",
+            "3m": "3m",
+            "2m": "2m",
             "1m": "1m",
         }
 
@@ -178,6 +184,8 @@ class ExchangeTDXFutures(Exchange):
             "30m": 2,
             "15m": 1,
             "5m": 0,
+            "3m": 8,
+            "2m": 8,
             "1m": 8,
         }
         market, tdx_code = self.to_tdx_code(code)
@@ -253,6 +261,8 @@ class ExchangeTDXFutures(Exchange):
 
             # 将 volume 转换成 float类型
             klines[["volume"]] = klines[["volume"]].astype(float)
+            if frequency in ["2m", "3m"]:
+                klines = convert_tdx_futures_kline_frequency(klines, frequency)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
@@ -437,7 +447,7 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
 
-    klines = ex.klines(ex.default_code(), "15m")
+    klines = ex.klines(ex.default_code(), "3m")
     print(klines)
     #
     # for _f in ex.support_frequencys().keys():
