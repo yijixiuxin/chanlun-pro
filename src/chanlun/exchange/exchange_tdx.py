@@ -384,6 +384,7 @@ class ExchangeTDX(Exchange):
                 except Exception as e:
                     error_codes += batch_stocks
                     print(f"获取数据失败: {e}")
+                    continue
                 quotes += batch_quotes
             # ('market', 0), ('code', '000001'), ('active1', 4390), ('price', 14.29), ('last_close', 14.24), ('open', 14.35),
             # ('high', 14.37), ('low', 14.14), ('servertime', '14:59:55.939'), ('reversed_bytes0', 14998872),

@@ -2,6 +2,18 @@
 
 ---
 
+### 2025-05-22
+
+> config.py 配置文件变更，新增 OPENROUTER_AI_KEYS OPENROUTER_AI_MODEL 配置
+
+* 优化前端部分功能的操作体验
+* 优化周期合成方法性能
+* 新增 Openrouterai 模型调用支持
+* 优化 AI 分析提示词与页面展示
+* 升级 Tradingview 到最新版本
+* 重构前端代码，按功能拆分 js 代码
+
+
 ### 2025-05-09
 
 * 新增纽约期货市场
