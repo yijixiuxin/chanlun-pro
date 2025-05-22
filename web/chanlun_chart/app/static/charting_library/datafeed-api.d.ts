@@ -150,12 +150,13 @@ export interface DatafeedConfiguration {
 	symbols_grouping?: Record<string, string>;
 }
 /**
- * This object contains symbol quote values, where a quote represents a set of data describing the current price.
+ * This object contains symbol quote values, where a [quote](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/quotes) represents a set of data describing the current price.
  * The library uses quote data for various trading functionalities, including the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket), [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend),
  * and widgets, such as [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List), [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details),
  * [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), and [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market).
  *
  * While all properties in this object are marked as optional, populating most of them is required for supporting trading functionalities.
+ * Providing values that do not match the expected data types can cause issues such as UI [loading delays](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues#delays-in-trading-platform-ui-elements) or [missing data](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues#quotes-are-not-displayed-or-refreshed).
  * See property descriptions for more information.
  */
 export interface DatafeedQuoteValues {
@@ -178,26 +179,26 @@ export interface DatafeedQuoteValues {
 	chp?: number;
 	/** Short name for a symbol. Short name is used in the title for the [News](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/news), [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widgets. You can disable the [`prefer_quote_short_name`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#prefer_quote_short_name) to use the {@link LibrarySymbolInfo.ticker} value instead. */
 	short_name?: string;
-	/** The name of the exchange */
+	/** The name of the exchange. The exchange name is displayed in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	exchange?: string;
 	/** A short description of the symbol. This description is displayed in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget and the tooltip of the [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) widget. */
 	description?: string;
 	/**
 	 * The price at which the most recent trade of a security occurred, regardless of whether it was a buy or sell.
-	 * Required for the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) and [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) widgets.
+	 * Required for the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket), [Depth of Market](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#depth-of-market), [Buy/Sell buttons](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#buysell-buttons-and-lines), and [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) and [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) widgets.
 	 */
 	lp?: number;
-	/** Ask price */
+	/** Ask price – the lowest price a seller is willing to accept for a security. The value is displayed in the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) and [Buy/Sell buttons](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#buysell-buttons-and-lines). */
 	ask?: number;
-	/** Bid price */
+	/** Bid price – the highest price a buyer is willing to pay for a security. The value is displayed in the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) and [Buy/Sell buttons](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#buysell-buttons-and-lines). */
 	bid?: number;
-	/** Spread (difference between the ask and bid prices) */
+	/** Spread – the difference between the ask and bid prices. The value is displayed between [Buy/Sell buttons](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#buysell-buttons-and-lines). */
 	spread?: number;
 	/** Today's opening price */
 	open_price?: number;
-	/** Today's high price */
+	/** Today's high price. The value is displayed in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	high_price?: number;
-	/** Today's low price */
+	/** Today's low price. The value is displayed in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	low_price?: number;
 	/**
 	 * Closing price of the symbol from the previous regular market session.
@@ -205,10 +206,18 @@ export interface DatafeedQuoteValues {
 	 * Required for mobile apps. Otherwise, `NaN` values will appear in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend).
 	 */
 	prev_close_price?: number;
-	/** Today's trading volume */
+	/** Today's trading volume. This value is displayed in the [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) widget. */
 	volume?: number;
 	/** Original name */
 	original_name?: string;
+	/** Pre-/post-market price. This value is required to display the [pre-/post-market price line](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Extended-Sessions#enable-the-price-line) on the chart and information on the extended session in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	rtc?: number;
+	/** Pre-/post-market price update time. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	rtc_time?: number;
+	/** Pre-/post-market price change. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	rch?: number;
+	/** Pre-/post-market price change percentage. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Extended-Sessions) the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	rchp?: number;
 	[valueName: string]: string | number | string[] | number[] | undefined;
 }
 export interface DatafeedSymbolType {
@@ -306,7 +315,7 @@ export interface IDatafeedChartApi {
 	 * @param resolution Resolution of the symbol
 	 * @param periodParams An object used to pass specific requirements for getting bars
 	 * @param onResult Callback function for historical data
-	 * @param onError Callback function whose only argument is a text error message
+	 * @param onError Callback function whose only argument is a text error message. If using special characters, please consider `encodeURIComponent`.
 	 */
 	getBars(symbolInfo: LibrarySymbolInfo, resolution: ResolutionString, periodParams: PeriodParams, onResult: HistoryCallback, onError: DatafeedErrorCallback): void;
 	/**
@@ -437,7 +446,8 @@ export interface LibrarySymbolInfo {
 	 * It is an unique identifier for a particular symbol in your [symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology).
 	 * If you specify this property, its value will be used for all data requests for this symbol.
 	 * `ticker` will be treated the same as {@link LibrarySymbolInfo.name} if not specified explicitly.
-	 * Note that it should not contain the exchange name.
+	 *
+	 * You should avoid using colons (":") in ticker values unless you are following the TradingView format: "NYSE:IBM". Using colons may cause unexpected behaviour and display bugs.
 	 */
 	ticker?: string;
 	/**
@@ -584,7 +594,7 @@ export interface LibrarySymbolInfo {
 	 * An array of [resolutions](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution) which should be enabled in the _Resolution_ drop-down menu for this symbol.
 	 * Each item of the array is expected to be a string that has a specific [format](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Resolution#resolution-format).
 	 *
-	 * If one changes the symbol and the new symbol does not support the selected resolution, the resolution will be switched to the first available one in the list.
+	 * If one changes the symbol and the new symbol does not support the selected resolution, an error message will be shown on the chart.
 	 *
 	 * **Resolution availability logic (pseudocode):**
 	 * ```
@@ -953,7 +963,13 @@ export interface SearchSymbolResultItem {
 	description: string;
 	/** Exchange name */
 	exchange: string;
-	/** Symbol ticker name. Should be an unique id */
+	/**
+	 * It is a unique identifier for a particular symbol in your [symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology).
+	 *
+	 * You should avoid using colons (":") in ticker values unless you are following the TradingView format: "NYSE:IBM". Using colons may cause unexpected behaviour and display bugs.
+	 *
+	 * Corresponds with {@link LibrarySymbolInfo.ticker}.
+	 */
 	ticker?: string;
 	/**
 	 * Type of symbol
@@ -1009,7 +1025,7 @@ export interface SymbolResolveExtension {
 	/**
 	 * Indicates the currency for conversions if `currency_codes` configuration field is set,
 	 * and `currency_code` is provided in the original symbol information ({@link LibrarySymbolInfo}).
-	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale#currency-conversion).
+	 * Read more about [currency conversion](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale#enable-currency-conversion).
 	 */
 	currencyCode?: string;
 	/**

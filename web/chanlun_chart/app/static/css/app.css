@@ -39,3 +39,11 @@
 .xm-search .xm-search-input {
   color: #e54d42;
 } */
+
+.zixuan-form-bg {
+  background-color: #ffffff;
+}
+
+.ai-analyse-div table, tr, td, th {
+  border: #5f5f5f 1px solid;
+}
