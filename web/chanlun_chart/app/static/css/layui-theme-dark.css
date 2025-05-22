@@ -205,6 +205,9 @@ body{color:var(--lay-color-text-2);background-color: var(--lay-color-bg-1); colo
 hr{border-bottom:1px solid var(--lay-color-border-2)!important}
 a{color:var(--lay-color-text-1);}
 a:hover{color:var(--lay-color-text-3)}
+.zixuan-form-bg {
+  background-color: #17171A!important;
+}
 /* 三角形 */
 .layui-edge{border-color:transparent}
 .layui-edge-top{border-bottom-color:var(--lay-color-border-4)}

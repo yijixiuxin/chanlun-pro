@@ -146,7 +146,7 @@ class FileCacheDB(object):
         kline.to_csv(file_pathname, index=False)
         return True
 
-    def clear_tdx_old_klines(self):
+    def clear_tdx_old_klines(self, market):
         """
         删除15天前的k线数据，不活跃的，减少占用空间
         """
