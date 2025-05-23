@@ -113,12 +113,12 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_binance_spot import ExchangeBinanceSpot
 
             g_exchange_obj[market.value] = ExchangeBinanceSpot()
-        elif config.EXCHANGE_CURRENCY == "db":
+        elif config.EXCHANGE_CURRENCY_SPOT == "db":
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.CURRENCY_SPOT.value)
         else:
-            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY}")
+            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY_SPOT}")
     elif market == Market.US:
         # 美股 交易所
         if config.EXCHANGE_US == "alpaca":

@@ -42,8 +42,14 @@
           id="chart_container"
           style="display: flex; flex-direction: column; height: 100vh">
           {# 图表内容 #}
-          <div id="tv_chart_container_1" style="flex: 0.5"></div>
-          <div id="tv_chart_container_2" style="flex: 0.5"></div>
+          <div
+            id="tv_charts_area"
+            style="
+              width: 100%;
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+            "></div>
         </div>
         <div
           class="layui-col-xs2 layui-col-sm2 layui-col-md2"
@@ -294,7 +300,7 @@
       currency_interval_2: "1D",
       currency_spot_interval_1: "1D",
       currency_spot_interval_2: "1D",
-      chart_num: "1",
+      chart_layout_type: "single",
       a_code: "{{ market_default_codes.a }}",
       hk_code: "{{ market_default_codes.hk }}",
       us_code: "{{ market_default_codes.us }}",
@@ -304,7 +310,6 @@
       currency_code: "{{ market_default_codes.currency }}",
       currency_spot_code: "{{ market_default_codes.currency_spot }}",
     };
-    var zx_group = "我的关注";
     var chart_widgets = [];
 
     // 变更图表展示的标的
@@ -370,10 +375,36 @@
               id: 6,
             },
             {
-              title: "切换单/双图",
+              title: "切换图表布局",
               templet:
-                '<div><i class="layui-icon layui-icon-carousel"></i> <span>切换单/双图</span></div>',
+                '<div><i class="layui-icon layui-icon-carousel"></i> <span>切换图表布局</span></div>',
               id: 7,
+              child: [
+                {
+                  title: "布局-单图",
+                  id: "single",
+                },
+                {
+                  title: "布局-横向双图",
+                  id: "horizontal-2",
+                },
+                {
+                  title: "布局-横向7/3",
+                  id: "horizontal-7-3",
+                },
+                {
+                  title: "布局-纵向双图",
+                  id: "vertical-2",
+                },
+                {
+                  title: "布局-三图",
+                  id: "three",
+                },
+                {
+                  title: "布局-四图",
+                  id: "four",
+                },
+              ],
             },
             {
               title: "切换主题",
@@ -600,13 +631,8 @@
                 fixed: true, // 不固定
                 shadeClose: true,
               });
-            } else if (item.title === "切换单/双图") {
-              let chart_num = Utils.get_local_data("chart_num");
-              if (chart_num === "1") {
-                Utils.set_local_data("chart_num", "2");
-              } else {
-                Utils.set_local_data("chart_num", "1");
-              }
+            } else if (item.title.startsWith("布局-")) {
+              Utils.set_local_data("chart_layout_type", item.id);
               location.reload();
             } else if (item.title === "切换主题") {
               let theme = Utils.get_local_data("theme");
@@ -630,35 +656,8 @@
           },
         });
 
-        // 自选操作下拉菜单
-        dropdown.render({
-          elem: "#add_zixuan",
-          data: [],
-          click: function (data, othis) {
-            let opt = "ADD";
-            if (data["exists"] === 1) {
-              opt = "DEL";
-            }
-            $.ajax({
-              type: "POST",
-              url: "/set_stock_zixuan",
-              data: {
-                opt: opt,
-                market: Utils.get_market(),
-                group_name: data["title"],
-                code: data["code"],
-                color: "",
-                direction: "",
-              },
-              dataType: "json",
-              success: function (res) {
-                ZiXuan.render_zixuan_opts();
-                ZiXuan.render_zixuan_stocks();
-              },
-            });
-            return false;
-          },
-        });
+        // 自选操作初始
+        ZiXuan.init_zixuan_opts();
 
         // 折叠面板事件
         element.on("collapse(collapse-opts)", function (data) {
@@ -699,204 +698,119 @@
           Utils.set_local_data("market", market);
           location.reload();
         });
-        // 自选组变化
-        form.on("select(select_zx_group)", function (data) {
-          zx_group = data.value;
-          ZiXuan.render_zixuan_stocks();
-        });
 
         // 固定条，显示与隐藏菜单栏
-        util.fixbar({
-          bars: [
-            {
-              // 定义可显示的 bar 列表信息 -- v2.8.0 新增
-              type: "hide_menu",
-              icon: "layui-icon-spread-left", // layui-icon-shrink-right
-            },
-          ],
-          default: false,
-          on: {
-            // 任意事件 --  v2.8.0 新增
-          },
-          // 点击事件
-          click: function (type) {
-            if (type === "hide_menu") {
-              var fixed_li = $(".layui-fixbar  li:first-child");
-              if (fixed_li.attr("class").includes("layui-icon-spread-left")) {
-                fixed_li
-                  .removeClass("layui-icon-spread-left")
-                  .addClass("layui-icon-shrink-right");
-                $("#chart_menu").hide();
-                $("#chart_container")
-                  .removeClass("layui-col-xs10 layui-col-sm10 layui-col-md10")
-                  .addClass("layui-col-xs12 layui-col-sm12 layui-col-md12");
-              } else {
-                fixed_li
-                  .removeClass("layui-icon-shrink-right")
-                  .addClass("layui-icon-spread-left");
-                $("#chart_menu").show();
-                $("#chart_container")
-                  .removeClass("layui-col-xs12 layui-col-sm12 layui-col-md12")
-                  .addClass("layui-col-xs10 layui-col-sm10 layui-col-md10");
-              }
-            }
-          },
-        });
+        Utils.render_fixbar();
 
         // AI 分析助手
-        let ai_frequencys = $("#ai_frequencys");
-        $(ai_frequencys).html();
-        layui.each(market_frequencys[Utils.get_market()], function (i, f) {
-          $(ai_frequencys).append(
-            "<option value='" + f + "'>" + f + "</option>"
-          );
-        });
-        layui.form.render($(ai_frequencys));
-        $(ai_frequencys)
-          .siblings("div.layui-form-select")
-          .find("dl")
-          .find("dd[lay-value=d]")
-          .click();
-
-        $("#ai_code").val(Utils.get_code());
-
+        AI.init_ai_opts();
         AI.get_ai_analyse_records();
-
-        $("#ai_analyse_btn").click(function () {
-          // 将 btn 置灰
-          $("#ai_analyse_btn")
-            .addClass("layui-btn-disabled")
-            .attr("disabled", true);
-          $("#ai_analyse_btn").html("分析中...");
-          $.ajax({
-            type: "POST",
-            url: "/ai/analyse",
-            data: {
-              market: Utils.get_market(),
-              code: $("#ai_code").val(),
-              frequency: $("#ai_frequencys").val(),
-            },
-            dataType: "json",
-            success: function (res) {
-              if (res["ok"] === true) {
-                layer.msg("分析成功");
-                AI.get_ai_analyse_records();
-              } else {
-                layer.msg(res["msg"]);
-              }
-              $("#ai_analyse_btn")
-                .removeClass("layui-btn-disabled")
-                .attr("disabled", false);
-              $("#ai_analyse_btn").html("分析");
-            },
-          });
-        });
-      });
-
-      $("#refresh_zixuan").click(function () {
-        ZiXuan.render_zixuan_stocks();
-      });
-
-      // 代码搜索
-      const searchSelect = xmSelect.render({
-        el: "#code_search",
-        filterable: true,
-        remoteSearch: true,
-        radio: true,
-        clickClose: true,
-        tips: "商品代码搜索",
-        empty: "没有搜索商品",
-        theme: {
-          color: "#e54d42",
-          // hover: '#e54d42',
-        },
-        delay: 1000,
-        remoteMethod: function (val, cb, show) {
-          if (val) {
-            $.ajax({
-              type: "GET",
-              url:
-                "/tv/search?limit=30&type=&query=" +
-                val +
-                "&exchange=" +
-                Utils.get_market(),
-              dataType: "json",
-              success: function (res) {
-                let lst = [];
-                layui.each(res, function (i, r) {
-                  lst.push({
-                    name: r["symbol"] + ":" + r["description"],
-                    value: r["symbol"],
-                  });
-                });
-                cb(lst);
-              },
-            });
-          } else {
-            // 远程搜索时，文本框内物搜索关键字，使用缓存的历史记录展示
-            let storedItems =
-              JSON.parse(
-                localStorage.getItem(Utils.get_market() + "_selectedItems")
-              ) || [];
-            cb(storedItems);
-          }
-        },
-        show: function () {
-          // 展开折叠面板加载历史记录
-          let storedItems =
-            JSON.parse(
-              localStorage.getItem(Utils.get_market() + "_selectedItems")
-            ) || [];
-          searchSelect.update({
-            data: storedItems,
-          });
-        },
-        on: function (data) {
-          if (data.arr.length > 0) {
-            change_chart_ticker(Utils.get_market(), data.arr[0]["value"]);
-            Utils.add_to_cache(data);
-          }
-        },
-        data: [],
       });
 
       // 初始化展示页面
       function init_web() {
-        // 获取自选组
-        $.ajax({
-          type: "GET",
-          url: "/get_zixuan_groups/" + Utils.get_market(),
-          dataType: "json",
-          success: function (res) {
-            let zixuan_groups = $("#zixuan_groups");
-            $(zixuan_groups).html();
-            layui.each(res, function (i, r) {
-              $(zixuan_groups).append(
-                "<option value='" + r.name + "'>" + r.name + "</option>"
-              );
-            });
-            layui.form.render($(zixuan_groups));
-            $(zixuan_groups)
-              .siblings("div.layui-form-select")
-              .find("dl")
-              .find("dd")[0]
-              .click();
-          },
-        });
-
-        let chart_num = Utils.get_local_data("chart_num");
-        let tv_chart_container_1 = $("#tv_chart_container_1");
-        let tv_chart_container_2 = $("#tv_chart_container_2");
+        let chart_layout_type =
+          Utils.get_local_data("chart_layout_type") || "single";
+        let charts_area = $("#tv_charts_area");
+        charts_area.empty();
         let win_height = window.innerHeight;
-        if (chart_num === "1") {
-          tv_chart_container_1.css("flex", "1");
-          tv_chart_container_2.css("flex", "0");
-          chart_widgets.push(Charts.show_tv_chart("1", win_height));
-        } else {
-          chart_widgets.push(Charts.show_tv_chart("1", win_height / 2));
-          chart_widgets.push(Charts.show_tv_chart("2", win_height / 2));
+        let win_width = charts_area.width() || window.innerWidth;
+        let chart_configs = [];
+        if (chart_layout_type === "single") {
+          chart_configs = [{ id: "1", style: "flex:1;" }];
+          charts_area.css({ display: "flex", flexDirection: "column" });
+        } else if (chart_layout_type === "vertical-2") {
+          chart_configs = [
+            { id: "1", style: "flex:1;" },
+            { id: "2", style: "flex:1;" },
+          ];
+          charts_area.css({ display: "flex", flexDirection: "row" });
+        } else if (chart_layout_type === "horizontal-2") {
+          chart_configs = [
+            { id: "1", style: "flex:1;" },
+            { id: "2", style: "flex:1;" },
+          ];
+          charts_area.css({ display: "flex", flexDirection: "column" });
+        } else if (chart_layout_type === "three") {
+          chart_configs = [{ id: "1" }, { id: "2" }, { id: "3" }];
+          charts_area.css({ display: "flex", flexDirection: "column" });
+        } else if (chart_layout_type === "horizontal-7-3") {
+          chart_configs = [{ id: "1" }, { id: "2" }];
+          charts_area.css({ display: "flex", flexDirection: "column" });
+        } else if (chart_layout_type === "four") {
+          chart_configs = [
+            { id: "1", style: "width:50%;height:50%;float:left;" },
+            { id: "2", style: "width:50%;height:50%;float:left;" },
+            { id: "3", style: "width:50%;height:50%;float:left;" },
+            { id: "4", style: "width:50%;height:50%;float:left;" },
+          ];
+          charts_area.css({
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+          });
         }
 
+        chart_widgets = [];
+        if (chart_layout_type === "horizontal-7-3") {
+          charts_area.append(
+            '<div id="tv_chart_container_1" style="width:100%;height:' +
+              win_height * 0.7 +
+              'px;"></div>'
+          );
+          charts_area.append(
+            '<div id="tv_chart_container_2" style="width:100%;height:' +
+              win_height * 0.3 +
+              'px;"></div>'
+          );
+          chart_widgets.push(Charts.show_tv_chart("1", win_height * 0.7));
+          chart_widgets.push(Charts.show_tv_chart("2", win_height * 0.3));
+        } else if (chart_layout_type === "three") {
+          // 上面一行两个图
+          let rowDiv = $(
+            '<div style="display:flex;width:100%;height:' +
+              win_height / 2 +
+              'px;"></div>'
+          );
+          rowDiv.append(
+            '<div id="tv_chart_container_1" style="flex:1;"></div>'
+          );
+          rowDiv.append(
+            '<div id="tv_chart_container_2" style="flex:1;"></div>'
+          );
+          charts_area.append(rowDiv);
+          // 下面一行一个图
+          charts_area.append(
+            '<div id="tv_chart_container_3" style="width:100%;height:' +
+              win_height / 2 +
+              'px;"></div>'
+          );
+          chart_widgets.push(Charts.show_tv_chart("1", win_height / 2));
+          chart_widgets.push(Charts.show_tv_chart("2", win_height / 2));
+          chart_widgets.push(Charts.show_tv_chart("3", win_height / 2));
+        } else {
+          chart_configs.forEach(function (cfg, idx) {
+            let div_id = "tv_chart_container_" + cfg.id;
+            charts_area.append(
+              '<div id="' +
+                div_id +
+                '" style="' +
+                (cfg.style || "") +
+                '"></div>'
+            );
+            // 计算每个图表的高度/宽度
+            let chart_height =
+              chart_layout_type === "single"
+                ? win_height
+                : chart_layout_type === "vertical-2" ||
+                  chart_layout_type === "horizontal-2"
+                ? win_height / 2
+                : chart_layout_type === "four"
+                ? win_height / 2
+                : win_height;
+            chart_widgets.push(Charts.show_tv_chart(cfg.id, chart_height));
+          });
+        }
         ZiXuan.render_zixuan_opts();
       }
 

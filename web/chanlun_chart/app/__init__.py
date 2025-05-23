@@ -924,7 +924,7 @@ def create_app(test_config=None):
         try:
             now_trading = ex.now_trading()
             res_ticks = [
-                {"code": _c, "rate": round(float(_t.rate), 2)}
+                {"code": _c, "price": _t.last, "rate": round(float(_t.rate), 2)}
                 for _c, _t in stock_ticks.items()
             ]
             return {"now_trading": now_trading, "ticks": res_ticks}

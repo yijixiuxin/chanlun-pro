@@ -19,7 +19,9 @@ var Utils = (function () {
     add_to_cache: function (data) {
       // 获取之前的列表
       let selectedItems =
-        JSON.parse(localStorage.getItem(Utils.get_market() + "_selectedItems")) || [];
+        JSON.parse(
+          localStorage.getItem(Utils.get_market() + "_selectedItems")
+        ) || [];
 
       // 将当前选择的项目添加到列表的最前面
       selectedItems.unshift({
@@ -52,6 +54,49 @@ var Utils = (function () {
     },
     get_code: function () {
       return Utils.get_local_data(Utils.get_market() + "_code");
+    },
+    render_fixbar: function () {
+      // 渲染底部工具栏
+      // 固定条，显示与隐藏菜单栏
+      layui.use(function () {
+        var util = layui.util;
+        util.fixbar({
+          bars: [
+            {
+              // 定义可显示的 bar 列表信息 -- v2.8.0 新增
+              type: "hide_menu",
+              icon: "layui-icon-spread-left", // layui-icon-shrink-right
+            },
+          ],
+          default: false,
+          on: {
+            // 任意事件 --  v2.8.0 新增
+          },
+          // 点击事件
+          click: function (type) {
+            if (type === "hide_menu") {
+              var fixed_li = $(".layui-fixbar  li:first-child");
+              if (fixed_li.attr("class").includes("layui-icon-spread-left")) {
+                fixed_li
+                  .removeClass("layui-icon-spread-left")
+                  .addClass("layui-icon-shrink-right");
+                $("#chart_menu").hide();
+                $("#chart_container")
+                  .removeClass("layui-col-xs10 layui-col-sm10 layui-col-md10")
+                  .addClass("layui-col-xs12 layui-col-sm12 layui-col-md12");
+              } else {
+                fixed_li
+                  .removeClass("layui-icon-shrink-right")
+                  .addClass("layui-icon-spread-left");
+                $("#chart_menu").show();
+                $("#chart_container")
+                  .removeClass("layui-col-xs12 layui-col-sm12 layui-col-md12")
+                  .addClass("layui-col-xs10 layui-col-sm10 layui-col-md10");
+              }
+            }
+          },
+        });
+      });
     },
   };
 })();
