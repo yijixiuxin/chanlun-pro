@@ -1,4 +1,6 @@
 var ZiXuan = (function () {
+  var zx_group = "我的关注";
+
   return {
     render_zixuan_opts: function () {
       $.ajax({
@@ -46,75 +48,78 @@ var ZiXuan = (function () {
       if (codes.length === 0) {
         return true;
       }
-      $.ajax({
-        type: "POST",
-        url: "/ticks",
-        data: { market: Utils.get_market(), codes: JSON.stringify(codes) },
-        dataType: "json",
-        success: function (ticks) {
-          for (let i = 0; i < ticks["ticks"].length; i++) {
-            let tick = ticks["ticks"][i];
-            let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
-            let obj_span_rate = $(
-              '.code_rate[data-code="' + tick["code"] + '"]'
-            );
-            obj_span_rate.html(tick["rate"] + "%");
-            obj_span_rate.css("color", color);
-          }
-          let now_trading = ticks["now_trading"];
-          if (now_trading !== true) {
-            clearInterval(interval_update_rates);
-          }
-        },
+      layui.use(["laytpl"], function () {
+        var laytpl = layui.laytpl;
+        var rate_show_tpl = laytpl(
+          "<div style='color:{{= d.color }}' class='code_rate' data-code='{{= d.code }}'><div style='color:{{= d.color }}' class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
+        );
+        $.ajax({
+          type: "POST",
+          url: "/ticks",
+          data: { market: Utils.get_market(), codes: JSON.stringify(codes) },
+          dataType: "json",
+          success: function (ticks) {
+            for (let i = 0; i < ticks["ticks"].length; i++) {
+              let tick = ticks["ticks"][i];
+              let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
+              if (tick["rate"] === 0) {
+                color = "";
+              }
+              let obj_span_rate = $(
+                '.code_rate[data-code="' + tick["code"] + '"]'
+              );
+              obj_span_rate.html(
+                rate_show_tpl.render({
+                  code: tick["code"],
+                  price: tick["price"],
+                  rate: tick["rate"],
+                  color: color,
+                })
+              );
+            }
+            let now_trading = ticks["now_trading"];
+            if (now_trading !== true) {
+              clearInterval(interval_update_rates);
+            }
+          },
+        });
       });
     },
     render_zixuan_stocks: function () {
       // 自选列表渲染与操作
       layui.use(["table", "dropdown", "util"], function () {
+        var laytpl = layui.laytpl;
         let table = layui.table;
         let dropdown = layui.dropdown;
+        var code_show_tpl = laytpl(
+          "<div style='color:{{= d.color }}' class='layui-font-14'>{{= d.name }}</div><div class='layui-font-12 layui-font-gray'>{{= d.code }}</div>"
+        );
+        var rate_show_tpl = laytpl(
+          "<div class='code_rate' data-code='{{= d.code }}'><div class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
+        );
         // 创建自选列表渲染实例
         table.render({
           elem: "#table_zixuan_list",
           defaultContextmenu: false,
-          url: "/get_zixuan_stocks/" + Utils.get_market() + "/" + zx_group,
+          url:
+            "/get_zixuan_stocks/" + Utils.get_market() + "/" + ZiXuan.zx_group,
           page: false,
           className: "layui-font-12",
           size: "sm",
+          lineStyle: "height: 52px;",
+          loading: true,
           cols: [
             [
               {
                 field: "code",
-                title: "代码",
+                title: "标的",
                 sort: false,
                 templet: function (d) {
-                  if (d.color !== undefined && d.color !== "") {
-                    return (
-                      '<span style="color: ' +
-                      d.color +
-                      '">' +
-                      d.code +
-                      "</span>"
-                    );
-                  }
-                  return d.code;
-                },
-              },
-              {
-                field: "name",
-                title: "名称",
-                sort: false,
-                templet: function (d) {
-                  if (d.color !== undefined && d.color !== "") {
-                    return (
-                      '<span style="color: ' +
-                      d.color +
-                      '">' +
-                      d.name +
-                      "</span>"
-                    );
-                  }
-                  return d.name;
+                  return code_show_tpl.render({
+                    color: d.color,
+                    name: d.name,
+                    code: d.code,
+                  });
                 },
               },
               {
@@ -123,11 +128,11 @@ var ZiXuan = (function () {
                 sort: false,
                 width: 70,
                 templet: function (d) {
-                  return (
-                    '<span class="code_rate" data-code="' +
-                    d.code +
-                    '">--</span>'
-                  );
+                  return rate_show_tpl.render({
+                    code: d.code,
+                    price: "-",
+                    rate: "-",
+                  });
                 },
               },
             ],
@@ -222,7 +227,7 @@ var ZiXuan = (function () {
                   data: {
                     opt: "DEL",
                     market: Utils.get_market(),
-                    group_name: zx_group,
+                    group_name: ZiXuan.zx_group,
                     code: data.code,
                     color: "",
                     direction: "",
@@ -244,7 +249,7 @@ var ZiXuan = (function () {
                   data: {
                     opt: "COLOR",
                     market: Utils.get_market(),
-                    group_name: zx_group,
+                    group_name: ZiXuan.zx_group,
                     code: data.code,
                     color: menuData["color"],
                     direction: "",
@@ -269,7 +274,7 @@ var ZiXuan = (function () {
                   data: {
                     opt: "SORT",
                     market: Utils.get_market(),
-                    group_name: zx_group,
+                    group_name: ZiXuan.zx_group,
                     code: data.code,
                     color: "",
                     direction: menuData["direction"],
@@ -288,6 +293,139 @@ var ZiXuan = (function () {
               }
             },
           });
+        });
+      });
+    },
+    init_zixuan_opts: function () {
+      // 自选操作下拉菜单
+      layui.use(function () {
+        var layer = layui.layer;
+        var dropdown = layui.dropdown;
+        var form = layui.form;
+
+        // 获取自选组
+        $.ajax({
+          type: "GET",
+          url: "/get_zixuan_groups/" + Utils.get_market(),
+          dataType: "json",
+          success: function (res) {
+            let zixuan_groups = $("#zixuan_groups");
+            $(zixuan_groups).html();
+            layui.each(res, function (i, r) {
+              $(zixuan_groups).append(
+                "<option value='" + r.name + "'>" + r.name + "</option>"
+              );
+            });
+            layui.form.render($(zixuan_groups));
+            $(zixuan_groups)
+              .siblings("div.layui-form-select")
+              .find("dl")
+              .find("dd")[0]
+              .click();
+          },
+        });
+
+        dropdown.render({
+          elem: "#add_zixuan",
+          data: [],
+          click: function (data, othis) {
+            let opt = "ADD";
+            if (data["exists"] === 1) {
+              opt = "DEL";
+            }
+            $.ajax({
+              type: "POST",
+              url: "/set_stock_zixuan",
+              data: {
+                opt: opt,
+                market: Utils.get_market(),
+                group_name: data["title"],
+                code: data["code"],
+                color: "",
+                direction: "",
+              },
+              dataType: "json",
+              success: function (res) {
+                if (data["title"] == ZiXuan.zx_group) {
+                  ZiXuan.render_zixuan_opts();
+                  ZiXuan.render_zixuan_stocks();
+                }
+              },
+            });
+            return false;
+          },
+        });
+        // 自选组变化
+        form.on("select(select_zx_group)", function (data) {
+          ZiXuan.zx_group = data.value;
+          ZiXuan.render_zixuan_stocks();
+        });
+        // 刷新自选操作
+        $("#refresh_zixuan").click(function () {
+          ZiXuan.render_zixuan_stocks();
+        });
+
+        // 代码搜索
+        const searchSelect = xmSelect.render({
+          el: "#code_search",
+          filterable: true,
+          remoteSearch: true,
+          radio: true,
+          clickClose: true,
+          tips: "商品代码搜索",
+          empty: "没有搜索商品",
+          theme: {
+            color: "#e54d42",
+            // hover: '#e54d42',
+          },
+          delay: 1000,
+          remoteMethod: function (val, cb, show) {
+            if (val) {
+              $.ajax({
+                type: "GET",
+                url:
+                  "/tv/search?limit=30&type=&query=" +
+                  val +
+                  "&exchange=" +
+                  Utils.get_market(),
+                dataType: "json",
+                success: function (res) {
+                  let lst = [];
+                  layui.each(res, function (i, r) {
+                    lst.push({
+                      name: r["symbol"] + ":" + r["description"],
+                      value: r["symbol"],
+                    });
+                  });
+                  cb(lst);
+                },
+              });
+            } else {
+              // 远程搜索时，文本框内物搜索关键字，使用缓存的历史记录展示
+              let storedItems =
+                JSON.parse(
+                  localStorage.getItem(Utils.get_market() + "_selectedItems")
+                ) || [];
+              cb(storedItems);
+            }
+          },
+          show: function () {
+            // 展开折叠面板加载历史记录
+            let storedItems =
+              JSON.parse(
+                localStorage.getItem(Utils.get_market() + "_selectedItems")
+              ) || [];
+            searchSelect.update({
+              data: storedItems,
+            });
+          },
+          on: function (data) {
+            if (data.arr.length > 0) {
+              change_chart_ticker(Utils.get_market(), data.arr[0]["value"]);
+              Utils.add_to_cache(data);
+            }
+          },
+          data: [],
         });
       });
     },
