@@ -62,7 +62,7 @@ var AI = (function () {
             type: 1,
             title: title,
             content: show_html,
-            area: ["720px", "950px"],
+            area: ["720px", "650px"],
             // maxHeight: 950,
             anim: "slideLeft",
             shade: 0,
@@ -72,6 +72,57 @@ var AI = (function () {
           // 切换到该股票
           change_chart_ticker(Utils.get_market(), data.stock_code);
           $("#ai_code").val(data.stock_code);
+        });
+      });
+    },
+    init_ai_opts: function () {
+      let ai_frequencys = $("#ai_frequencys");
+      $(ai_frequencys).html();
+      layui.each(market_frequencys[Utils.get_market()], function (i, f) {
+        $(ai_frequencys).append("<option value='" + f + "'>" + f + "</option>");
+      });
+      layui.form.render($(ai_frequencys));
+      $(ai_frequencys)
+        .siblings("div.layui-form-select")
+        .find("dl")
+        .find("dd[lay-value=d]")
+        .click();
+
+      $("#ai_code").val(Utils.get_code());
+      $("#ai_analyse_btn").click(function () {
+        // 将 btn 置灰
+        $("#ai_analyse_btn")
+          .addClass("layui-btn-disabled")
+          .attr("disabled", true);
+        $("#ai_analyse_btn").html("分析中...");
+        $.ajax({
+          type: "POST",
+          url: "/ai/analyse",
+          data: {
+            market: Utils.get_market(),
+            code: $("#ai_code").val(),
+            frequency: $("#ai_frequencys").val(),
+          },
+          dataType: "json",
+          success: function (res) {
+            if (res["ok"] === true) {
+              layer.msg("分析成功");
+              AI.get_ai_analyse_records();
+            } else {
+              layer.msg(res["msg"]);
+            }
+            $("#ai_analyse_btn")
+              .removeClass("layui-btn-disabled")
+              .attr("disabled", false);
+            $("#ai_analyse_btn").html("分析");
+          },
+          error: function (res) {
+            layer.msg("分析失败，查看控制台，查找错误问题");
+            $("#ai_analyse_btn")
+              .removeClass("layui-btn-disabled")
+              .attr("disabled", false);
+            $("#ai_analyse_btn").html("分析");
+          },
         });
       });
     },

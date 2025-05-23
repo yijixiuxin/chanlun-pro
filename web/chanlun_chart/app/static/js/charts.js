@@ -145,7 +145,7 @@ class ChartManager {
     this.widget = null;
     this.udf_datafeed = null;
     this.chart = null;
-    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 300);
+    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
   }
 
   // 初始化图表
@@ -191,9 +191,9 @@ class ChartManager {
   // 获取自定义指标
   getCustomIndicators(PineJS) {
     return Promise.resolve([
-      TvIdx.idx_demo(),
-      TvIdx.idx_kdj(),
-      TvIdx.idx_ama(),
+      TvIdx.idx_demo(PineJS),
+      TvIdx.idx_kdj(PineJS),
+      TvIdx.idx_ama(PineJS),
     ]);
   }
 
@@ -319,6 +319,7 @@ class ChartManager {
   // 清除已绘制的图表
   clear_draw_chanlun(clear_type) {
     // 如果  clear_type == 'last' ，则按照 time 从低到高排序，删除 time 值最大的一个对象
+    console.log("清除已绘制的图表 : " + clear_type);
     if (clear_type == "last") {
       for (const symbolKey in this.obj_charts) {
         for (const chartType in this.obj_charts[symbolKey]) {
