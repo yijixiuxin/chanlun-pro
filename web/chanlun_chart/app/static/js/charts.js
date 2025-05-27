@@ -145,7 +145,7 @@ class ChartManager {
     this.widget = null;
     this.udf_datafeed = null;
     this.chart = null;
-    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
+    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 1000);
   }
 
   // 初始化图表
