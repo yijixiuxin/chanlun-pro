@@ -209,18 +209,19 @@ class ExchangeTq(Exchange):
 
         codes = []
         for c in ["FUTURE", "CONT"]:
-            codes += self.get_api().query_quotes(ins_class=c)
+            codes += self.get_api().query_quotes(ins_class=c, expired=False)
             # print(f'tq type {c} codes : {len(codes)}')
         infos = self.get_api().query_symbol_info(codes)
 
         __all_stocks = []
         for code in codes:
+            code_df = infos[infos["instrument_id"] == code].iloc[0]
+            if code_df["expired"]:
+                continue
             __all_stocks.append(
                 {
                     "code": code,
-                    "name": infos[infos["instrument_id"] == code].iloc[0][
-                        "instrument_name"
-                    ],
+                    "name": code_df["instrument_name"],
                 }
             )
         self.g_all_stocks = __all_stocks
