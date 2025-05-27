@@ -1015,32 +1015,33 @@ def create_app(test_config=None):
         file.save(import_file)
         zx = ZiXuan(market)
         ex = get_exchange(Market(market))
-        all_stocks = ex.all_stocks()
-        codes = [s["code"] for s in all_stocks]
         import_nums = 0
+        market_all_stocks = ex.all_stocks()
+        market_all_codes = [s["code"] for s in market_all_stocks]
         with open(import_file, "r", encoding="utf-8") as fp:
             for line in fp.readlines():
                 try:
                     import_infos = line.strip().split(",")
                     if len(import_infos) >= 2:
-                        code = import_infos[0]
-                        name = import_infos[1].replace(" ", "")
+                        code = import_infos[0].strip()
+                        name = import_infos[1].strip()
                     else:
-                        code = import_infos[0]
+                        code = import_infos[0].strip()
                         name = None
 
                     # 股票代码兼容性处理
                     if market == "a":
                         code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
-                        if len(code) == 6:
-                            if code[0:2] in ["00", "30"]:
-                                code = "SZ." + code
-                            else:
-                                code = "SH." + code
 
-                    if code in codes:
-                        zx.add_stock(zx_group, code, name)
-                        import_nums += 1
+                    if code not in market_all_codes:
+                        same_codes = [_c for _c in market_all_codes if code in _c]
+                        if len(same_codes) == 1:
+                            code = same_codes[0]
+                        else:
+                            continue
+
+                    zx.add_stock(zx_group, code, name)
+                    import_nums += 1
                 except Exception as e:
                     print(line, e)
 
