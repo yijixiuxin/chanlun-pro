@@ -6,6 +6,11 @@ const CHART_CONFIG = {
     BI: "#708090",
     XD: "#00BFFF",
     ZSD: "#FFA710",
+    BI_ZSS: "#708090",
+    XD_ZSS: "#00BFFF",
+    ZSD_ZSS: "#FFA710",
+    BCS: "#D1D4DC",
+    BC_TEXT: "#fccbcd",
     MMD_UP: "#FA8072",
     MMD_DOWN: "#1E90FF",
   },
@@ -14,7 +19,17 @@ const CHART_CONFIG = {
     DOTTED: 1,
     DASHED: 2,
   },
-  CHART_TYPES: ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "bcs", "mmds"],
+  CHART_TYPES: [
+    "fxs",
+    "bis",
+    "xds",
+    "zsds",
+    "bi_zss",
+    "xd_zss",
+    "zsd_zss",
+    "bcs",
+    "mmds",
+  ],
 };
 
 // 防抖函数
@@ -86,7 +101,9 @@ const ChartUtils = {
         linewidth: options.linewidth || 1,
         linecolor: options.color || CHART_CONFIG.COLORS.BI,
         backgroundColor: options.color || CHART_CONFIG.COLORS.BI,
-        transparency: 90,
+        transparency: 95,
+        color: options.color,
+        "trendline.linecolor": options.color,
         fillBackground: true,
         filled: true,
         ...options.overrides,
@@ -124,9 +141,9 @@ const ChartUtils = {
       shape: "balloon",
       text: bc.text,
       overrides: {
-        markerColor: "#D1D4DC",
-        backgroundColor: "#D1D4DC",
-        textColor: "#fccbcd",
+        markerColor: CHART_CONFIG.COLORS.BCS,
+        backgroundColor: CHART_CONFIG.COLORS.BCS,
+        textColor: CHART_CONFIG.COLORS.BC_TEXT,
         transparency: 70,
         backgroundTransparency: 70,
         fontsize: 12,
@@ -483,7 +500,7 @@ class ChartManager {
             time: bi_zs.points[0].time,
             key,
             id: ChartUtils.createZhongshuShape(this.chart, bi_zs, {
-              color: CHART_CONFIG.COLORS.BI,
+              color: CHART_CONFIG.COLORS.BI_ZSS,
               linewidth: 1,
             }),
           });
@@ -504,7 +521,28 @@ class ChartManager {
             time: xd_zs.points[0].time,
             key,
             id: ChartUtils.createZhongshuShape(this.chart, xd_zs, {
-              color: CHART_CONFIG.COLORS.XD,
+              color: CHART_CONFIG.COLORS.XD_ZSS,
+              linewidth: 2,
+            }),
+          });
+        }
+      });
+    }
+
+    // 绘制走势段中枢
+    if (barsResult.zsd_zss) {
+      barsResult.zsd_zss.forEach((zsd_zs) => {
+        if (zsd_zs.points?.[0]?.time >= from) {
+          const key = JSON.stringify(zsd_zs);
+          const existed = chartContainer.zsd_zss.find(
+            (item) => item.key === key
+          );
+          if (existed) return;
+          chartContainer.zsd_zss.push({
+            time: zsd_zs.points[0].time,
+            key,
+            id: ChartUtils.createZhongshuShape(this.chart, zsd_zs, {
+              color: CHART_CONFIG.COLORS.ZSD_ZSS,
               linewidth: 2,
             }),
           });
