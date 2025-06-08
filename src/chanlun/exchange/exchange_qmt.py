@@ -1,5 +1,4 @@
 import datetime
-import time
 from typing import Dict, List, Union
 
 import pandas as pd
@@ -177,7 +176,7 @@ class ExchangeQMT(Exchange):
         else:
             download_start_date = ""
 
-        if "download_start_date" in args:
+        if args is not None and "download_start_date" in args:
             download_start_date = args["download_start_date"]
 
         qmt_code = self.code_to_qmt(code)
@@ -372,24 +371,18 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    # klines = ex.klines(
-    #     "SH.600519",
-    #     "1m",
-    #     start_date="2025-05-06",
-    #     args={
-    #         "req_counts": 12 * 8000,
-    #         "dividend_type": "none",
-    #         "download_start_date": "",
-    #     },
-    # )
-    # print(klines)
+    klines = ex.klines(
+        "SH.600519",
+        "d",
+    )
+    print(klines)
 
     # stock = ex.stock_info("SH.000001")
     # print(stock)
 
-    df = ex.get_divid_factors("SH.600519")
+    # df = ex.get_divid_factors("SH.600519")
 
-    print(df)
+    # print(df)
 
     # def on_klines(_qmt_code, tick):
     #     if _qmt_code != "600519.SH":
