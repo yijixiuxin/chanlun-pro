@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import Dict, List, Union
 
 import pandas as pd
@@ -164,32 +165,55 @@ class ExchangeQMT(Exchange):
         if start_date:
             req_counts = -1
 
-        # 根据周期，决定下载的时间起始日期
-        if frequency in ["1m", "3m"]:
-            download_start_date = fun.datetime_to_str(
-                datetime.datetime.now() - datetime.timedelta(days=180), "%Y%m%d"
-            )
-        elif frequency in ["5m", "15m", "30m", "60m"]:
-            download_start_date = fun.datetime_to_str(
-                datetime.datetime.now() - datetime.timedelta(days=2880), "%Y%m%d"
-            )
-        else:
-            download_start_date = ""
-
-        if args is not None and "download_start_date" in args:
-            download_start_date = args["download_start_date"]
-
         qmt_code = self.code_to_qmt(code)
-        # 首先下载到本地
-        # s_time = time.time()
-        xtdata.download_history_data(
-            qmt_code,
-            frequency_map[frequency],
-            start_time=download_start_date,
+
+        # 首先检查当前是否有数据
+        kline_exists = xtdata.get_market_data(
+            field_list=[],
+            stock_list=[qmt_code],
+            period=frequency_map[frequency],
+            start_time="",
             end_time="",
-            incrementally=True,
+            count=1,
+            dividend_type=dividend_type,
+            fill_data=False,
         )
-        # print(f"{code}-{frequency} 下载历史数据耗时：{time.time() - s_time}")
+        if kline_exists is None or kline_exists["time"].empty:
+            # 如果没有数据，则全量下载
+            s_time = time.time()
+            # 根据周期，决定下载的时间起始日期
+            if frequency in ["1m", "3m"]:
+                download_start_date = fun.datetime_to_str(
+                    datetime.datetime.now() - datetime.timedelta(days=180), "%Y%m%d"
+                )
+            elif frequency in ["5m", "15m", "30m", "60m"]:
+                download_start_date = fun.datetime_to_str(
+                    datetime.datetime.now() - datetime.timedelta(days=2880), "%Y%m%d"
+                )
+            else:
+                download_start_date = ""
+            if args is not None and "download_start_date" in args:
+                download_start_date = args["download_start_date"]
+
+            xtdata.download_history_data(
+                qmt_code,
+                frequency_map[frequency],
+                start_time=download_start_date,
+                end_time="",
+                incrementally=True,
+            )
+            # print(f"{code}-{frequency} 全量下载历史数据耗时：{time.time() - s_time}")
+        else:
+            # 增量下载
+            # s_time = time.time()
+            xtdata.download_history_data(
+                qmt_code,
+                frequency_map[frequency],
+                start_time="",
+                end_time="",
+                incrementally=True,
+            )
+            # print(f"{code}-{frequency} 增量下载历史数据耗时：{time.time() - s_time}")
 
         # s_time = time.time()
         qmt_klines = xtdata.get_market_data(
@@ -204,7 +228,7 @@ class ExchangeQMT(Exchange):
         )
         # print(f"{code}-{frequency} 获取历史数据耗时：{time.time() - s_time}")
 
-        # s_time = time.time()
+        s_time = time.time()
         klines_df = pd.DataFrame(
             {key: value.values[0] for key, value in qmt_klines.items()}
         )
@@ -372,7 +396,7 @@ if __name__ == "__main__":
     # print(len(stocks))
 
     klines = ex.klines(
-        "SH.600519",
+        "SH.000001",
         "d",
     )
     print(klines)
