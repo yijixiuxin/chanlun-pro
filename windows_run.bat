@@ -12,9 +12,6 @@ echo uv 目录
 set "UV_DIR=%ROOT_DIR%script\bin\uv.exe"
 echo UV_DIR: %UV_DIR%
 
-echo 激活虚拟环境
-call .venv\Scripts\activate.bat
-
 echo 设置环境变量
 set "PYTHONPATH=%ROOT_DIR%src"
 echo 设置PYTHONPATH: !PYTHONPATH!
