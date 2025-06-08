@@ -1093,5 +1093,5 @@ if __name__ == "__main__":
     klines = ex.klines("SH.000001", "d")
     print(klines.tail(10))
     cd = cl.CL("SH.000001", "d", {}).process_klines(klines)
-    ama = Strategy.idx_ama(cd, 10, 2, 30)
+    ama = Strategy.idx_atr(cd)
     print(ama)
