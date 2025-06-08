@@ -1,0 +1,54 @@
+[project]
+name = "chanlun-pro"
+version = "1.0.0"
+description = "chanlun pro"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "akshare>=1.16.98",
+    "alpaca-py>=0.40.1",
+    "apscheduler>=3.11.0",
+    "baostock>=0.8.9",
+    "ccxt>=4.4.88",
+    "chardet>=5.2.0",
+    "dbutils>=3.1.1",
+    "flask>=3.1.1",
+    "flask-login>=0.6.3",
+    "futu-api>=9.2.5208",
+    "gevent>=25.5.1",
+    "ib-insync>=0.9.86",
+    "ipywidgets>=8.1.7",
+    "lark-oapi>=1.4.17",
+    "matplotlib>=3.10.3",
+    "mytt>=2.9.3",
+    "numpy==1.26.4",
+    "openai>=1.84.0",
+    "pandas==2.1.0",
+    "pinyin>=0.4.0",
+    "polygon-api-client>=1.14.6",
+    "prettytable>=3.16.0",
+    "pyarmor>=9.1.7",
+    "pyecharts==2.0.8",
+    "pyfolio-reloaded>=0.9.9",
+    "pymysql>=1.1.1",
+    "pytdx",
+    "qiniu>=7.16.0",
+    "redis>=6.2.0",
+    "requests>=2.32.3",
+    "setuptools>=80.9.0",
+    "snapshot-selenium>=0.0.2",
+    "sqlalchemy>=2.0.41",
+    "ta-lib",
+    "tenacity>=9.1.2",
+    "tornado>=6.5.1",
+    "tqdm>=4.67.1",
+    "tqsdk>=3.8.2",
+]
+
+[tool.uv.sources]
+ta-lib = { path = "package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl" }
+pytdx = { path = "package/pytdx-1.72r2-py3-none-any.whl" }
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

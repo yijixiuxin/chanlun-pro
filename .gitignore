@@ -111,8 +111,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-pyproject.toml
-uv.lock
 
 # Spyder project settings
 .spyderproject
