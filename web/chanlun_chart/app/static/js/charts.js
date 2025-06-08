@@ -169,25 +169,26 @@ class ChartManager {
   init() {
     this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 30000);
     this.widget = window.tvWidget = new TradingView.widget({
+      debug: false,
       autosize: true,
+      fullscreen: false,
+      container: "tv_chart_container_" + this.id,
       symbol: Utils.get_market() + ":" + Utils.get_code(),
       interval: Utils.get_local_data(
         Utils.get_market() + "_interval_" + this.id
       ),
-      container: "tv_chart_container_" + this.id,
-      debug: false,
       datafeed: this.udf_datafeed,
       library_path: "static/charting_library/",
-      locale: "zh",
-      disabled_features: ["go_to_date"],
-      enabled_features: ["study_templates", "seconds_resolution"],
       theme: Utils.get_local_data("theme"),
       numeric_formatting: { decimal_sign: "." },
       time_frames: [],
       timezone: "Asia/Shanghai",
+      locale: "zh",
       symbol_search_request_delay: 100,
       auto_save_delay: 5,
       study_count_limit: 100,
+      disabled_features: ["go_to_date"],
+      enabled_features: ["study_templates", "seconds_resolution"],
       saved_data_meta_info: {
         uid: 1,
         name: "default",
