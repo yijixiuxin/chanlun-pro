@@ -11,7 +11,7 @@
 > 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
 > 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
 > 网盘下载：    
->     链接: https://pan.quark.cn/s/43af02e8fdd6     
+>     链接: https://pan.quark.cn/s/5b074744a7c8     
  
  
 ---
