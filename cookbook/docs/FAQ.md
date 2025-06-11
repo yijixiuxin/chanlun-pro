@@ -17,14 +17,15 @@
 
 ### 沪深A股的 行业/概念 板块更新
 
-> 如果有配置 config.py 中的 TDX_PATH 配置项，则通过读取通达信本地文件获取 行业/概念 信息，无需执行以下脚本 
+关于沪深股票行业与板块的获取方式，项目中提供了两种方式：    
 
-项目中的行业/概念板块，采用同花顺的板块与概念数据，数据通过脚本采集更新，并保存在本地 json 文件中，需要手动定时去更新
+1. 通过 Akshare 抓取东方财务网页内容，获取行业、板块信息，有可能会被封禁，需要手动打开页面进行验证才可继续使用 
+2. 通过设置 config.py 配置的 TDX_PATH 本地通达信安装路径，读取通达信文件获取行业与概念；（推荐使用）
 
+```
     Python 文件 ：src/chanlun/exchange/stocks_bkgn.py
-    JSON 文件：src/chanlun/exchange/stocks_bkgn.json
-    
-    # 更新方式：python  stocks_bkgn.py 即可
+    JSON 文件：src/chanlun/exchange/new_stocks_bkgn.json
+```
 
 ### 如何获取 v2rayN 的 HTTP 代理 IP 和端口？
 

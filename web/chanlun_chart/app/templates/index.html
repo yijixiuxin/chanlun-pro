@@ -173,7 +173,31 @@
                   class="layui-hide"
                   id="table_alert_reocrds"
                   lay-filter="table_alert_reocrds"></table>
-
+                <hr class="layui-border-red" />
+              </div>
+            </div>
+            <div class="layui-colla-item" id="collapse-bkgn">
+              <div class="layui-colla-title" data-ca-title="板块概念">
+                板块概念
+              </div>
+              <div class="layui-colla-content" style="padding: 0">
+                <form
+                  class="layui-form"
+                  lay-filter="bkgn_form"
+                  style="padding: 10px 10px 0 10px">
+                  <div class="layui-form-item" style="margin-bottom: 5px">
+                    <div class="layui-input-inline" style="width: 100%">
+                      <div id="bkgn_xm_select"></div>
+                    </div>
+                  </div>
+                </form>
+                <div style="padding: 10px">
+                  <table
+                    class="layui-hide"
+                    id="bkgn_table"
+                    lay-filter="bkgn_table"
+                    style="width: 100%; display: none"></table>
+                </div>
                 <hr class="layui-border-red" />
               </div>
             </div>
@@ -330,6 +354,7 @@
   <script src="{{ url_for('static', filename='js/zixuan.js') }}"></script>
   <script src="{{ url_for('static', filename='js/alert.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ai.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/bkgn.js') }}"></script>
   <script>
     $(function () {
       // 缠论配置项更改
@@ -686,6 +711,13 @@
               clearInterval(interval_get_alert_records);
             }
           }
+
+          if (ca_title === "板块概念") {
+            if (is_open) {
+              // 板块概念
+              BKGN.init_bkgn_opts();
+            }
+          }
         });
 
         // 初始赋值
@@ -709,6 +741,11 @@
 
       // 初始化展示页面
       function init_web() {
+        // 如果市场不是 a，则隐藏 collapse-bkgn
+        if (Utils.get_market() !== "a") {
+          $("#collapse-bkgn").hide();
+        }
+
         let chart_layout_type =
           Utils.get_local_data("chart_layout_type") || "single";
         let charts_area = $("#tv_charts_area");

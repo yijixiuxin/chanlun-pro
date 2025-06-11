@@ -40,6 +40,7 @@ from chanlun.cl_utils import (
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import get_exchange
+from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.tools.ai_analyse import AIAnalyse
 from chanlun.zixuan import ZiXuan
 
@@ -1098,6 +1099,8 @@ def create_app(test_config=None):
                 "check_xd_type": _l.check_xd_type,
                 "check_xd_beichi": _l.check_xd_beichi,
                 "check_xd_mmd": _l.check_xd_mmd,
+                "check_idx_ma_info": _l.check_idx_ma_info,
+                "check_idx_macd_info": _l.check_idx_macd_info,
                 "is_send_msg": _l.is_send_msg,
                 "is_run": _l.is_run,
             }
@@ -1122,12 +1125,40 @@ def create_app(test_config=None):
             "check_xd_type": "up,down",
             "check_xd_beichi": "pz,qs",
             "check_xd_mmd": "",
+            "check_idx_ma_info_enable": 0,
+            "check_idx_ma_info_slow": 10,
+            "check_idx_ma_info_fast": 5,
+            "check_idx_ma_info_cross_up": 0,
+            "check_idx_ma_info_cross_down": 0,
+            "check_idx_macd_info_enable": 0,
+            "check_idx_macd_info_cross_up": 0,
+            "check_idx_macd_info_cross_down": 0,
             "is_send_msg": 1,
             "is_run": 1,
         }
         if id != "0":
             _alert_config = _alert_tasks.alert_get(id)
             if _alert_config is not None:
+                check_idx_ma_info = (
+                    json.loads(_alert_config.check_idx_ma_info)
+                    if _alert_config.check_idx_ma_info
+                    else {
+                        "enable": 0,
+                        "slow": 10,
+                        "fast": 5,
+                        "cross_up": 0,
+                        "cross_down": 0,
+                    }
+                )
+                check_idx_macd_info = (
+                    json.loads(_alert_config.check_idx_macd_info)
+                    if _alert_config.check_idx_macd_info
+                    else {
+                        "enable": 0,
+                        "cross_up": 0,
+                        "cross_down": 0,
+                    }
+                )
                 alert_config = {
                     "id": _alert_config.id,
                     "market": _alert_config.market,
@@ -1141,6 +1172,14 @@ def create_app(test_config=None):
                     "check_xd_type": _alert_config.check_xd_type,
                     "check_xd_beichi": _alert_config.check_xd_beichi,
                     "check_xd_mmd": _alert_config.check_xd_mmd,
+                    "check_idx_ma_info_enable": check_idx_ma_info["enable"],
+                    "check_idx_ma_info_slow": check_idx_ma_info["slow"],
+                    "check_idx_ma_info_fast": check_idx_ma_info["fast"],
+                    "check_idx_ma_info_cross_up": check_idx_ma_info["cross_up"],
+                    "check_idx_ma_info_cross_down": check_idx_ma_info["cross_down"],
+                    "check_idx_macd_info_enable": check_idx_macd_info["enable"],
+                    "check_idx_macd_info_cross_up": check_idx_macd_info["cross_up"],
+                    "check_idx_macd_info_cross_down": check_idx_macd_info["cross_down"],
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
@@ -1162,6 +1201,54 @@ def create_app(test_config=None):
     @app.route("/alert_save", methods=["POST"])
     @login_required
     def alert_save():
+        check_idx_ma_infos = json.dumps(
+            {
+                "enable": (
+                    int(request.form["check_idx_ma_info_enable"])
+                    if request.form["check_idx_ma_info_enable"]
+                    else 0
+                ),
+                "slow": (
+                    int(request.form["check_idx_ma_info_slow"])
+                    if request.form["check_idx_ma_info_slow"]
+                    else 0
+                ),
+                "fast": (
+                    int(request.form["check_idx_ma_info_fast"])
+                    if request.form["check_idx_ma_info_fast"]
+                    else 0
+                ),
+                "cross_up": (
+                    int(request.form["check_idx_ma_info_cross_up"])
+                    if request.form["check_idx_ma_info_cross_up"]
+                    else 0
+                ),
+                "cross_down": (
+                    int(request.form["check_idx_ma_info_cross_down"])
+                    if request.form["check_idx_ma_info_cross_down"]
+                    else 0
+                ),
+            }
+        )
+        check_idx_macd_infos = json.dumps(
+            {
+                "enable": (
+                    int(request.form["check_idx_macd_info_enable"])
+                    if request.form["check_idx_macd_info_enable"]
+                    else 0
+                ),
+                "cross_up": (
+                    int(request.form["check_idx_macd_info_cross_up"])
+                    if request.form["check_idx_macd_info_cross_up"]
+                    else 0
+                ),
+                "cross_down": (
+                    int(request.form["check_idx_macd_info_cross_down"])
+                    if request.form["check_idx_macd_info_cross_down"]
+                    else 0
+                ),
+            }
+        )
         alert_config = {
             "id": request.form["id"],
             "market": request.form["market"],
@@ -1175,6 +1262,8 @@ def create_app(test_config=None):
             "check_xd_type": request.form["check_xd_type"],
             "check_xd_beichi": request.form["check_xd_beichi"],
             "check_xd_mmd": request.form["check_xd_mmd"],
+            "check_idx_ma_info": check_idx_ma_infos,
+            "check_idx_macd_info": check_idx_macd_infos,
             "is_send_msg": int(request.form["is_send_msg"]),
             "is_run": int(request.form["is_run"]),
         }
@@ -1196,9 +1285,11 @@ def create_app(test_config=None):
                 "code": _r.stock_code,
                 "name": _r.stock_name,
                 "frequency": _r.frequency,
-                "jh_type": _r.alert_msg,
+                "line_type": _r.line_type,
+                "msg": _r.alert_msg,
                 "is_done": _r.bi_is_done,
                 "is_td": _r.bi_is_td,
+                "task_name": _r.task_name,
                 "datetime_str": fun.datetime_to_str(_r.alert_dt),
             }
             for _r in records
@@ -1335,5 +1426,63 @@ def create_app(test_config=None):
             "count": len(ai_analyse_records),
             "data": ai_analyse_records,
         }
+
+    @app.route("/a/bkgn_list", methods=["GET"])
+    @login_required
+    def a_bkgn_list():
+        """
+        获取沪深a股市场的板块列表
+        """
+        stock_bkgn = StocksBKGN()
+        bkgn_infos = stock_bkgn.file_bkgns()
+        all_hy_names = bkgn_infos["hys"]
+        all_gn_names = bkgn_infos["gns"]
+
+        res_bkgn_list = []
+        for _hy in all_hy_names:
+            res_bkgn_list.append(
+                {
+                    "type": "hy",
+                    "bkgn_name": f"行业:{_hy}",
+                    "bkgn_code": _hy,
+                }
+            )
+        for _gn in all_gn_names:
+            res_bkgn_list.append(
+                {
+                    "type": "gn",
+                    "bkgn_name": f"概念:{_gn}",
+                    "bkgn_code": _gn,
+                }
+            )
+        return {
+            "code": 0,
+            "msg": "",
+            "data": res_bkgn_list,
+            "count": len(res_bkgn_list),
+        }
+
+    @app.route("/a/bkgn_codes", methods=["POST"])
+    @login_required
+    def a_bkgn_codes():
+        bkgn_type = request.form["bkgn_type"]
+        bkgn_code = request.form["bkgn_code"]
+        stock_bkgn = StocksBKGN()
+
+        if bkgn_type == "hy":
+            codes = stock_bkgn.ths_to_tdx_codes(stock_bkgn.get_codes_by_hy(bkgn_code))
+        elif bkgn_type == "gn":
+            codes = stock_bkgn.ths_to_tdx_codes(stock_bkgn.get_codes_by_gn(bkgn_code))
+        else:
+            codes = []
+
+        ex = get_exchange(Market.A)
+        stocks = {}
+        for _code in codes:
+            _stock = ex.stock_info(_code)
+            if _stock is not None:
+                stocks[_code] = _stock
+
+        return {"code": 0, "msg": "", "data": stocks, "count": len(stocks)}
 
     return app
