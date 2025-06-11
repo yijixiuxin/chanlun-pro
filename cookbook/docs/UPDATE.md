@@ -2,6 +2,27 @@
 
 ---
 
+### 2025-06-11
+
+> 数据库变更语句：
+
+```
+ALTER TABLE `cl_alert_task`
+	ADD COLUMN `check_idx_ma_info` VARCHAR(200) NULL DEFAULT NULL COMMENT '检查指数的均线' AFTER `check_xd_mmd`,
+	ADD COLUMN `check_idx_macd_info` VARCHAR(200) NULL DEFAULT NULL COMMENT '检查指数的MACD' AFTER `check_idx_ma_info`;
+```
+
+> 关于沪深股票行业与板块的获取方式，项目中提供了两种方式：    
+> 1. 通过 Akshare 抓取东方财务网页内容，获取行业、板块信息，有可能会被封禁，需要手动打开页面进行验证才可继续使用
+> 
+> 2. 通过设置 config.py 配置的 TDX_PATH 本地通达信安装路径，读取通达信文件获取行业与概念；（推荐使用）
+
+* 沪深市场，网页增加行业&概念板块查看
+* 提醒设置，增加指标的监控，包括均线与macd指标的上穿下穿提醒
+* 重新梳理获取行业与概念板块的代码
+* 优化页面显示提醒消息的列表展示
+
+
 ### 2025-05-22
 
 > config.py 配置文件变更，新增 OPENROUTER_AI_KEYS OPENROUTER_AI_MODEL 配置

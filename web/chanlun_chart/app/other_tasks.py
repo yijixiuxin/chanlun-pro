@@ -17,7 +17,7 @@ class OtherTasks:
         # 检查当前是否有行业板块文件，没有现在就进行同步
         if self.stock_bkgn.file_name.is_file() is False:
             self.scheduler.add_job(
-                self.stock_bkgn.reload_dfcf_bkgn,
+                self.stock_bkgn.reload_bkgn,
                 trigger="date",
                 next_run_time=datetime.datetime.now(),
                 id="now_update_fri_stock_bkgn",
@@ -25,7 +25,7 @@ class OtherTasks:
             )
         # 每周 5 下午16点更新行业概念信息
         self.scheduler.add_job(
-            self.stock_bkgn.reload_dfcf_bkgn,
+            self.stock_bkgn.reload_bkgn,
             trigger="cron",
             day_of_week="fri",
             hour=16,

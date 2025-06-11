@@ -18,7 +18,6 @@ from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 from chanlun.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
-from chanlun.exchange.tdx_bkgn import TdxBKGN
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
 
@@ -47,7 +46,6 @@ class ExchangeTDX(Exchange):
 
         # 板块概念信息
         self.stock_bkgn = StocksBKGN()
-        self.tdx_bkgn = TdxBKGN()
 
         # 文件缓存
         self.fdb = FileCacheDB()
@@ -541,10 +539,6 @@ class ExchangeTDX(Exchange):
         使用已经保存好的板块概念信息
         """
 
-        # 如果有配置通达信本地目录，则使用通达信的 行业概念 信息
-        if self.tdx_bkgn.tdx_path is not None:
-            return self.tdx_bkgn.get_code_bkgn(code)
-
         code_type = ""
         if "SH." in code:
             code_type = self.for_sh(code.split(".")[1])
@@ -561,26 +555,17 @@ class ExchangeTDX(Exchange):
         """
         使用已经保存好的板块概念信息
         """
-        if self.tdx_bkgn.tdx_path is not None:
-            codes = self.tdx_bkgn.get_bk_codes(code)
-            return [
-                self.stock_info(_c) for _c in codes if self.stock_info(_c) is not None
-            ]
-
         stock_codes = self.stock_bkgn.get_codes_by_gn(code)
         stock_codes += self.stock_bkgn.get_codes_by_hy(code)
 
-        def code_to_tdx(_code: str):
-            if _code[0] == "6":
-                return "SH." + _code
-            else:
-                return "SZ." + _code
+        stock_codes = self.stock_bkgn.ths_to_tdx_codes(stock_codes)
 
-        return [
-            self.stock_info(code_to_tdx(c))
-            for c in stock_codes
-            if self.stock_info(code_to_tdx(c)) is not None
-        ]
+        stocks = []
+        for _c in stock_codes:
+            _stock = self.stock_info(_c)
+            if _stock:
+                stocks.append(_stock)
+        return stocks
 
     def balance(self):
         raise Exception("交易所不支持")

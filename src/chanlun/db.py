@@ -91,6 +91,8 @@ class TableByAlertTask(Base):
     check_xd_type = Column(String(20), comment="检查线段的类型")  # 检查线段的类型
     check_xd_beichi = Column(String(200), comment="检查线段的背驰")  # 检查线段的背驰
     check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
+    check_idx_ma_info = Column(String(200), comment="检查指数的均线")
+    check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
@@ -109,7 +111,9 @@ class TableByAlertRecord(Base):
     frequency = Column(String(10), comment="提醒周期")  # 提醒周期
     line_type = Column(String(5), comment="提醒线段的类型")  # 提醒线段的类型
     alert_msg = Column(Text, comment="提醒消息")  # 提醒消息
-    bi_is_done = Column(String(10), comment="笔是否完成")  # 笔是否完成
+    bi_is_done = Column(
+        String(10), comment="笔是否完成,如果是指标，则记录上穿或下穿"
+    )  # 笔是否完成
     bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
     line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
@@ -731,6 +735,8 @@ class DB(object):
         check_xd_type: str,
         check_xd_beichi: str,
         check_xd_mmd: str,
+        check_idx_ma_info: str,
+        check_idx_macd_info: str,
         is_run: int,
         is_send_msg: int,
     ):
@@ -749,6 +755,8 @@ class DB(object):
                     check_xd_type=check_xd_type,
                     check_xd_beichi=check_xd_beichi,
                     check_xd_mmd=check_xd_mmd,
+                    check_idx_ma_info=check_idx_ma_info,
+                    check_idx_macd_info=check_idx_macd_info,
                     is_run=is_run,
                     is_send_msg=is_send_msg,
                     dt=datetime.datetime.now(),
@@ -792,6 +800,8 @@ class DB(object):
         check_xd_type: str,
         check_xd_beichi: str,
         check_xd_mmd: str,
+        check_idx_ma_info: str,
+        check_idx_macd_info: str,
         is_run: int,
         is_send_msg: int,
     ):
@@ -810,6 +820,8 @@ class DB(object):
                     TableByAlertTask.check_xd_type: check_xd_type,
                     TableByAlertTask.check_xd_beichi: check_xd_beichi,
                     TableByAlertTask.check_xd_mmd: check_xd_mmd,
+                    TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
+                    TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
                     TableByAlertTask.is_run: is_run,
                     TableByAlertTask.is_send_msg: is_send_msg,
                     TableByAlertTask.dt: datetime.datetime.now(),

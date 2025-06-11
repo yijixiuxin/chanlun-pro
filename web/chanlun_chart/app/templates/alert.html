@@ -180,6 +180,28 @@
                 </label>
             </div>
         </div>
+        <!-- 均线指标报警设置 -->
+        <div class="layui-form-item">
+            <label class="layui-form-label">均线报警</label>
+            <div class="layui-input-block" style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" name="check_idx_ma_info_enable" value="1" title="启用" lay-filter="alert_config" {% if check_idx_ma_info_enable==1 %}checked{% endif %} />
+                <span>快线</span>
+                <input type="number" name="check_idx_ma_info_fast" value="{{ check_idx_ma_info_fast }}" class="layui-input" style="width: 60px; display: inline-block;" lay-filter="alert_config" min="1" />
+                <span>慢线</span>
+                <input type="number" name="check_idx_ma_info_slow" value="{{ check_idx_ma_info_slow }}" class="layui-input" style="width: 60px; display: inline-block;" lay-filter="alert_config" min="1" />
+                <input type="checkbox" name="check_idx_ma_info_cross_up" value="1" title="上穿报警" lay-filter="alert_config" {% if check_idx_ma_info_cross_up==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_ma_info_cross_down" value="1" title="下穿报警" lay-filter="alert_config" {% if check_idx_ma_info_cross_down==1 %}checked{% endif %} />
+            </div>
+        </div>
+        <!-- MACD指标报警设置 -->
+        <div class="layui-form-item">
+            <label class="layui-form-label">MACD报警</label>
+            <div class="layui-input-block" style="display: flex; align-items: center; gap: 10px;">
+                <input type="checkbox" name="check_idx_macd_info_enable" value="1" title="启用" lay-filter="alert_config" {% if check_idx_macd_info_enable==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_macd_info_cross_up" value="1" title="上穿报警" lay-filter="alert_config" {% if check_idx_macd_info_cross_up==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_macd_info_cross_down" value="1" title="下穿报警" lay-filter="alert_config" {% if check_idx_macd_info_cross_down==1 %}checked{% endif %} />
+            </div>
+        </div>
         <div class="layui-form-item">
             <label class="layui-form-label">发送消息</label>
             <div class="layui-input-block" title="启用">

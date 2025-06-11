@@ -12,29 +12,36 @@ var Alert = (function () {
           className: "layui-font-12",
           size: "sm",
           maxHeight: 550,
+          lineStyle: "height: auto;",
           cols: [
             [
-              { field: "jh_type", title: "触发", sort: false, width: 230 },
               {
-                field: "datetime_str",
-                title: "时间",
-                sort: false,
-                width: 160,
-              },
-              { field: "code", title: "代码", sort: false, width: 80 },
-              { field: "name", title: "名称", sort: false, width: 80 },
-              { field: "frequency", title: "周期", sort: false, width: 60 },
-              {
-                field: "task_name",
-                title: "监控名称",
-                sort: false,
-                width: 80,
+                field: "custom",
+                title: "",
                 templet: function (d) {
-                  return d.task_name;
+                  return `
+                    <div class="alert-record-row">
+                      <div style="font-weight: bold; font-size: 14px;">
+                        ${d.name || ""} <span style="color: #888;">${
+                    d.code || ""
+                  }</span> <span style="color: #16baaa;">${
+                    d.frequency || ""
+                  }</span> <span style="color: #b37feb;">${
+                    d.line_type || ""
+                  }</span>
+                      </div>
+                      <div style="font-size: 16px;">${d.msg || ""}</div>
+                      <div style="color: #888; font-size: 12px;">
+                        ${
+                          d.datetime_str || ""
+                        } <span style="margin-left: 10px; color:rgb(203, 243, 183);">${
+                    d.task_name || ""
+                  }</span>
+                      </div>
+                    </div>
+                  `;
                 },
               },
-              { field: "is_done", title: "是否完成", sort: false, width: 80 },
-              { field: "is_td", title: "是否停顿", sort: false, width: 80 },
             ],
           ],
         });
