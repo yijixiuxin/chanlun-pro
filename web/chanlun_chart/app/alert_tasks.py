@@ -1,14 +1,14 @@
+import json
 from typing import Dict, List
 
 from apscheduler.schedulers.background import BackgroundScheduler
-
 from tqdm.auto import tqdm
 
 from chanlun import fun, monitor
 from chanlun.cl_utils import query_cl_chart_config
+from chanlun.db import TableByAlertTask, db
 from chanlun.exchange import Market, get_exchange
 from chanlun.zixuan import ZiXuan
-from chanlun.db import TableByAlertTask, db
 
 
 class AlertTasks(object):
@@ -63,13 +63,25 @@ class AlertTasks(object):
                     s["code"],
                     s["name"],
                     [alert_config.frequency],
-                    {
+                    check_cl_types={
                         "bi_types": alert_config.check_bi_type.split(","),
                         "bi_beichi": alert_config.check_bi_beichi.split(","),
                         "bi_mmd": alert_config.check_bi_mmd.split(","),
                         "xd_types": alert_config.check_xd_type.split(","),
                         "xd_beichi": alert_config.check_xd_beichi.split(","),
                         "xd_mmd": alert_config.check_xd_mmd.split(","),
+                    },
+                    check_idx_types={
+                        "idx_ma": (
+                            json.loads(alert_config.check_idx_ma_info)
+                            if alert_config.check_idx_ma_info
+                            else {"enable": 0}
+                        ),
+                        "idx_macd": (
+                            json.loads(alert_config.check_idx_macd_info)
+                            if alert_config.check_idx_macd_info
+                            else {"enable": 0}
+                        ),
                     },
                     is_send_msg=bool(alert_config.is_send_msg),
                     cl_config=cl_config,

@@ -18,6 +18,7 @@ from pyecharts.render import make_snapshot
 from snapshot_selenium import snapshot
 
 from chanlun import config, kcharts
+from chanlun.backtesting.base import Strategy
 from chanlun.cl_interface import ICL
 from chanlun.cl_utils import bi_td, web_batch_get_cl_datas
 from chanlun.db import db
@@ -31,7 +32,8 @@ def monitoring_code(
     code: str,
     name: str,
     frequencys: list,
-    check_types: dict = None,
+    check_cl_types: dict = None,
+    check_idx_types: dict = None,
     is_send_msg: bool = False,
     cl_config=None,
 ):
@@ -41,35 +43,45 @@ def monitoring_code(
     :param code: 代码
     :param name: 名称
     :param frequencys: 检查周期
-    :param check_types: 监控项目
+    :param check_cl_types: 监控的缠论项目
+    :param check_idx_types: 监控的指标项目
     :param is_send_msg: 是否发送消息
     :param cl_config: 缠论配置
     :return:
     """
-    if check_types is None:
-        check_types = {
-            "bi_types": ["up", "down"],
+    if check_cl_types is None:
+        check_cl_types = {
+            "bi_types": [],
             "bi_beichi": [],
             "bi_mmd": [],
-            "xd_types": ["up", "down"],
+            "xd_types": [],
             "xd_beichi": [],
             "xd_mmd": [],
         }
 
-    if (
-        len(check_types["bi_beichi"]) == 0
-        and len(check_types["bi_mmd"]) == 0
-        and len(check_types["xd_beichi"]) == 0
-        and len(check_types["xd_mmd"]) == 0
-    ):
-        return ""
+    if check_idx_types is None:
+        check_idx_types = {
+            "idx_ma": {
+                "enable": 0,
+                "slow": 10,
+                "fast": 5,
+                "cross_up": 0,
+                "cross_down": 0,
+            },
+            "idx_macd": {
+                "enable": 0,
+                "cross_up": 0,
+                "cross_down": 0,
+            },
+        }
 
     ex = get_exchange(Market(market))
 
     klines = {f: ex.klines(code, f) for f in frequencys}
     cl_datas: List[ICL] = web_batch_get_cl_datas(market, code, klines, cl_config)
 
-    jh_msgs = []  # 这里保存当前触发的所有机会信息
+    jh_cl_msgs = []  # 这里保存缠论触发的机会信息
+    jh_idx_msgs = []  # 这里保存指标触发的机会信息
     bc_maps = {"xd": "线段背驰", "bi": "笔背驰", "pz": "盘整背驰", "qs": "趋势背驰"}
     mmd_maps = {
         "1buy": "一买点",
@@ -91,8 +103,8 @@ def monitoring_code(
         end_bi = bis[-1]
         end_xd = cd.get_xds()[-1] if len(cd.get_xds()) > 0 else None
         # 检查背驰和买卖点
-        if end_bi.type in check_types["bi_types"]:
-            jh_msgs.extend(
+        if end_bi.type in check_cl_types["bi_types"]:
+            jh_cl_msgs.extend(
                 {
                     "type": f"笔 {end_bi.type} {bc_maps[bc_type]}",
                     "frequency": frequency,
@@ -101,11 +113,11 @@ def monitoring_code(
                     "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
                 }
-                for bc_type in check_types["bi_beichi"]
+                for bc_type in check_cl_types["bi_beichi"]
                 if end_bi.bc_exists([bc_type], "|")
             )
 
-            jh_msgs.extend(
+            jh_cl_msgs.extend(
                 {
                     "type": f"笔 {mmd_maps[mmd]}",
                     "frequency": frequency,
@@ -114,37 +126,105 @@ def monitoring_code(
                     "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
                 }
-                for mmd in check_types["bi_mmd"]
+                for mmd in check_cl_types["bi_mmd"]
                 if end_bi.mmd_exists([mmd], "|")
             )
 
         if end_xd:
             # 检查背驰和买卖点
-            if end_xd.type in check_types["xd_types"]:
-                jh_msgs.extend(
+            if end_xd.type in check_cl_types["xd_types"]:
+                jh_cl_msgs.extend(
                     {
                         "type": f"线段 {end_xd.type} {bc_maps[bc_type]}",
                         "frequency": frequency,
                         "xd": end_xd,
                         "line_dt": end_xd.start.k.date,
                     }
-                    for bc_type in check_types["xd_beichi"]
+                    for bc_type in check_cl_types["xd_beichi"]
                     if end_xd.bc_exists([bc_type], "|")
                 )
 
-                jh_msgs.extend(
+                jh_cl_msgs.extend(
                     {
                         "type": f"线段 {mmd_maps[mmd]}",
                         "frequency": frequency,
                         "xd": end_xd,
                         "line_dt": end_xd.start.k.date,
                     }
-                    for mmd in check_types["xd_mmd"]
+                    for mmd in check_cl_types["xd_mmd"]
                     if end_xd.mmd_exists([mmd], "|")
                 )
 
+        # 指标监测
+        if (
+            check_idx_types["idx_ma"]["enable"]
+            and len(cd.get_src_klines()) > check_idx_types["idx_ma"]["slow"]
+        ):
+            idx_ma_slow = Strategy.idx_ma(cd, period=check_idx_types["idx_ma"]["slow"])
+            idx_ma_fast = Strategy.idx_ma(cd, period=check_idx_types["idx_ma"]["fast"])
+            if (
+                check_idx_types["idx_ma"]["cross_up"]
+                and idx_ma_fast[-1] > idx_ma_slow[-1]
+                and idx_ma_fast[-2] < idx_ma_slow[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "ma",
+                        "msg": f"均线上穿[{check_idx_types['idx_ma']['slow']},{check_idx_types['idx_ma']['fast']}]",
+                        "frequency": frequency,
+                        "cross": "up",
+                        "k_date": cd.get_src_klines()[-1].date,
+                    }
+                )
+            if (
+                check_idx_types["idx_ma"]["cross_down"]
+                and idx_ma_fast[-1] < idx_ma_slow[-1]
+                and idx_ma_fast[-2] > idx_ma_slow[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "ma",
+                        "msg": f"均线下穿[{check_idx_types['idx_ma']['slow']},{check_idx_types['idx_ma']['fast']}]",
+                        "frequency": frequency,
+                        "cross": "down",
+                        "k_date": cd.get_src_klines()[-1].date,
+                    }
+                )
+        if check_idx_types["idx_macd"]["enable"]:
+            idx_macd_dif = cd.get_idx()["macd"]["dif"]
+            idx_macd_dea = cd.get_idx()["macd"]["dea"]
+            if (
+                check_idx_types["idx_macd"]["cross_up"]
+                and idx_macd_dif[-1] > idx_macd_dea[-1]
+                and idx_macd_dif[-2] < idx_macd_dea[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "macd",
+                        "msg": "MACD上穿",
+                        "frequency": frequency,
+                        "cross": "up",
+                        "k_date": cd.get_src_klines()[-1].date,
+                    }
+                )
+            if (
+                check_idx_types["idx_macd"]["cross_up"]
+                and idx_macd_dif[-1] > idx_macd_dea[-1]
+                and idx_macd_dif[-2] < idx_macd_dea[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "macd",
+                        "msg": "MACD下穿",
+                        "frequency": frequency,
+                        "cross": "down",
+                        "k_date": cd.get_src_klines()[-1].date,
+                    }
+                )
+
     send_msgs = []
-    for jh in jh_msgs:
+    # 记录缠论提醒信息
+    for jh in jh_cl_msgs:
         line_type = "bi"
         if "bi" in jh.keys():
             is_done = "笔完成" if jh["bi"].is_done() else "笔未完成"
@@ -162,10 +242,10 @@ def monitoring_code(
             is_exists is None
             or is_exists.bi_is_done != is_done
             or is_exists.bi_is_td != is_td
-        ) and is_send_msg:
+        ):
             fx_ld = f" FX:{jh['fx_ld']}" if "fx_ld" in jh.keys() else ""  # 分型力度
-            msg = f"【{name} - {jh['frequency']}】触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
-            send_msgs.append(msg)
+            msg = f"触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
+            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
             db.alert_record_save(
                 market,
                 task_name,
@@ -178,6 +258,27 @@ def monitoring_code(
                 line_type,
                 jh["line_dt"],
             )
+    # 记录指标提醒信息
+    for jh in jh_idx_msgs:
+        is_exists = db.alert_record_query_by_code(
+            market, code, jh["frequency"], jh["type"], jh["k_date"]
+        )
+        if is_exists is None:
+            # 之前没有，进行记录
+            msg = f"触发 {jh['msg']}"
+            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            db.alert_record_save(
+                market,
+                task_name,
+                code,
+                name,
+                jh["frequency"],
+                msg,
+                "--",
+                "--",
+                jh["type"],
+                jh["k_date"],
+            )
 
     # 沪深A股，增加行业概念信息
     if market == "a" and len(send_msgs) > 0:
@@ -188,17 +289,17 @@ def monitoring_code(
             send_msgs.append("概念 : " + "/".join([_["name"] for _ in hygn["GN"]]))
 
     # 添加图片
-    if len(send_msgs) > 0:
+    if is_send_msg and len(send_msgs) > 0:
         for cd in cl_datas:
             title = f"{name} - {cd.get_frequency()}"
             image_key = kchart_to_png(market, title, cd, cl_config)
             if image_key != "":
                 send_msgs.append(image_key)
     # 发送消息
-    if len(send_msgs) > 0:
+    if is_send_msg and len(send_msgs) > 0:
         send_fs_msg(market, f"{task_name} 监控提醒", send_msgs)
 
-    return jh_msgs
+    return jh_cl_msgs
 
 
 def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
