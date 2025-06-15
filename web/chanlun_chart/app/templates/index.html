@@ -169,6 +169,22 @@
                 监控提醒
               </div>
               <div class="layui-colla-content" style="padding: 0">
+                <form
+                  class="layui-form"
+                  lay-filter="alert_records_form"
+                  style="padding: 10px 10px 0 10px">
+                  <div class="layui-form-item">
+                    <label class="layui-form-label">任务名称</label>
+                    <div class="layui-input-block">
+                      <select
+                        name="task_name_select"
+                        id="task_name_select"
+                        lay-filter="task_name_select">
+                        <option value="">全部</option>
+                      </select>
+                    </div>
+                  </div>
+                </form>
                 <table
                   class="layui-hide"
                   id="table_alert_reocrds"
@@ -701,6 +717,7 @@
           }
           if (ca_title === "监控提醒") {
             if (is_open) {
+              Alert.init();
               // 获取警报记录
               Alert.get_alert_records();
               interval_get_alert_records = setInterval(

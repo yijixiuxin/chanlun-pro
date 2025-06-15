@@ -1,13 +1,43 @@
 var Alert = (function () {
   return {
+    init: function () {
+      layui.use(["table", "form"], function () {
+        let form = layui.form;
+
+        // 获取提醒任务列表并填充到select中
+        $.get("/alert_list/" + Utils.get_market(), function (res) {
+          if (res.code == 0) {
+            let task_name_select = $("#task_name_select");
+            task_name_select.empty();
+            task_name_select.append("<option value=''>全部</option>");
+            $.each(res.data, function (index, item) {
+              task_name_select.append(
+                `<option value='${item.task_name}'>${item.task_name}</option>`
+              );
+            });
+            form.render("select");
+          }
+        });
+
+        // 监听select选择器，选择后刷新列表
+        form.on("select(task_name_select)", function (data) {
+          Alert.get_alert_records();
+        });
+      });
+    },
+
     get_alert_records: function () {
-      layui.use(["table"], function () {
+      layui.use(["table", "form"], function () {
         let table = layui.table;
 
         table.render({
           elem: "#table_alert_reocrds",
           defaultContextmenu: false,
-          url: "/alert_records/" + Utils.get_market(),
+          url:
+            "/alert_records/" +
+            Utils.get_market() +
+            "?task_name=" +
+            $("#task_name_select").val(),
           page: false,
           className: "layui-font-12",
           size: "sm",

@@ -115,10 +115,10 @@ class AlertTasks(object):
             del alert_config["id"]
             db.task_save(**alert_config)
         else:
-            del alert_config["id"]
+            alert_config["id"] = int(alert_config["id"])
             db.task_update(**alert_config)
 
-        # 重新允许新的监控
+        # 重新运行新的监控
         self.run()
         return True
 
