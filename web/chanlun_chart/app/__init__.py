@@ -1279,7 +1279,8 @@ def create_app(test_config=None):
     @app.route("/alert_records/<market>")
     @login_required
     def alert_records(market):
-        records = db.alert_record_query(market)
+        task_name = request.args.get("task_name")
+        records = db.alert_record_query(market, task_name)
         rls = [
             {
                 "code": _r.stock_code,
