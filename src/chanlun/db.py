@@ -789,6 +789,7 @@ class DB(object):
 
     def task_update(
         self,
+        id: int,
         market: str,
         task_name: str,
         zx_group: str,
@@ -808,9 +809,10 @@ class DB(object):
         with self.Session() as session:
             session.query(TableByAlertTask).filter(
                 TableByAlertTask.market == market,
-                TableByAlertTask.task_name == task_name,
+                TableByAlertTask.id == id,
             ).update(
                 {
+                    TableByAlertTask.task_name: task_name,
                     TableByAlertTask.zx_group: zx_group,
                     TableByAlertTask.frequency: frequency,
                     TableByAlertTask.interval_minutes: interval_minutes,
@@ -904,7 +906,9 @@ class DB(object):
                 .first()
             )
 
-    def alert_record_query(self, market: str) -> List[TableByAlertRecord]:
+    def alert_record_query(
+        self, market: str, task_name: str = None
+    ) -> List[TableByAlertRecord]:
         """
         查询预警记录
         :param market:
@@ -914,12 +918,11 @@ class DB(object):
         :return:
         """
         with self.Session() as session:
-            return (
-                session.query(TableByAlertRecord)
-                .filter(TableByAlertRecord.market == market)
-                .order_by(TableByAlertRecord.alert_dt.desc())
-                .limit(100)
-            )
+            query = session.query(TableByAlertRecord)
+            query = query.filter(TableByAlertRecord.market == market)
+            if task_name:
+                query = query.filter(TableByAlertRecord.task_name == task_name)
+            return query.order_by(TableByAlertRecord.alert_dt.desc()).limit(100)
 
     def marks_add(
         self,
