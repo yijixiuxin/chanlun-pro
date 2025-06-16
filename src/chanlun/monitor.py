@@ -208,7 +208,7 @@ def monitoring_code(
                     }
                 )
             if (
-                check_idx_types["idx_macd"]["cross_up"]
+                check_idx_types["idx_macd"]["cross_down"]
                 and idx_macd_dif[-1] > idx_macd_dea[-1]
                 and idx_macd_dif[-2] < idx_macd_dea[-2]
             ):
