@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 
 from chanlun import fun
-from chanlun.cl_interface import (BI, FX, ICL, LINE, MACD_INFOS, ZS, Config,
-                                  Kline)
+from chanlun.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
 from chanlun.db import db
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
@@ -305,7 +304,7 @@ def query_cl_chart_config(
         # 分型配置
         "fx_qy": Config.FX_QY_THREE.value,
         "fx_qj": Config.FX_QJ_K.value,
-        "fx_bh": Config.FX_BH_NO.value,
+        "fx_bh": Config.FX_BH_YES.value,
         # 笔配置
         "bi_type": Config.BI_TYPE_OLD.value,
         "bi_bzh": Config.BI_BZH_YES.value,
@@ -324,11 +323,11 @@ def query_cl_chart_config(
         "xd_allow_split_zs_more_line": "1",
         "xd_allow_split_zs_no_direction": "1",
         # 中枢配置
-        "zs_bi_type": [Config.ZS_TYPE_DN.value],
-        "zs_xd_type": [Config.ZS_TYPE_DN.value],
+        "zs_bi_type": [Config.ZS_TYPE_BZ.value],
+        "zs_xd_type": [Config.ZS_TYPE_BZ.value],
         "zs_qj": Config.ZS_QJ_DD.value,
         "zs_cd": Config.ZS_CD_THREE.value,
-        "zs_wzgx": Config.ZS_WZGX_ZGGDD.value,
+        "zs_wzgx": Config.ZS_WZGX_ZGD.value,
         "zs_optimize": "0",
         # MACD 配置（计算力度背驰）
         "idx_macd_fast": 12,
@@ -637,7 +636,9 @@ def prices_jiaodu(prices):
     return j if prices[-1] > prices[0] else -j
 
 
-def cl_data_to_tv_chart(cd: ICL, config: dict, to_frequency: str = None) -> Union[dict, None]:
+def cl_data_to_tv_chart(
+    cd: ICL, config: dict, to_frequency: str = None
+) -> Union[dict, None]:
     """
     将缠论数据，转换成 tv 画图的坐标数据
     """
