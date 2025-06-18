@@ -1,5 +1,5 @@
 import itertools
-from typing import List
+from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -699,6 +699,50 @@ def xg_single_week_k_overlap(code: str, mk_datas: MarketDatas, opt_type: list = 
     return {
         "code": code,
         "msg": f"周线重叠，重叠数量：{overlap_nums}，有可观的上涨区间",
+    }
+
+
+def xg_single_xd_next_zz(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+) -> Union[None, dict]:
+    """
+    单周期，查找线段结束转折要转折的的标的
+    要求：
+    1. 线段内部必须有两个或以上的中枢
+    2. 当前的笔方向与线段方向要一致，并且（下跌笔的低点要高于线段的低点，上涨笔的高点要低于线段的高点）
+    3. 笔是线段结束笔的下一笔
+    """
+    opt_direction, opt_mmd = get_opt_types(opt_type)
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+    if len(cd.get_xds()) == 0:
+        return None
+    xd = cd.get_xds()[-1]
+    bi = cd.get_bis()[-1]
+    if xd.type not in opt_direction:
+        return None
+    # 线段与笔的方向是否一致
+    if xd.type != bi.type:
+        return None
+    # 笔是不是线段结束笔的下下一笔
+    if bi.index != xd.end_line.index + 2:
+        return None
+    # 是否高于或低于线段结束的高低点
+    if bi.type == "down" and bi.low < xd.end_line.low:
+        return None
+    if bi.type == "up" and bi.high > xd.end_line.high:
+        return None
+    # 检查线段内的中枢数量
+    xd_zss = [
+        _zs
+        for _zs in cd.get_bi_zss()
+        if _zs.lines[1].start.k.date > xd.start.k.date
+        and _zs.lines[1].start.k.date > xd.end.k.date
+    ]
+    if len(xd_zss) < 2:
+        return None
+    return {
+        "code": code,
+        "msg": f"线段内有{len(xd_zss)}个中枢，笔是线段结束笔的下下一笔，笔方向与线段方向一致，且笔价格在线段价格附近",
     }
 
 
