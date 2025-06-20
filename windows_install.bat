@@ -13,6 +13,7 @@ set "UV_DIR=%ROOT_DIR%script\bin\uv.exe"
 echo UV_DIR: %UV_DIR%
 
 echo 2. 创建虚拟环境
+%UV_DIR% venv --python=3.11 .venv
 %UV_DIR% sync
 
 echo 3. 检查配置文件
