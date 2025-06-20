@@ -213,6 +213,15 @@ class ChartManager {
       TvIdx.idx_kdj(PineJS),
       TvIdx.idx_ama(PineJS),
       TvIdx.idx_atr(PineJS),
+      TvIdx.idx_hdly(PineJS),
+      TvIdx.idx_cmcm(PineJS),
+      TvIdx.idx_fcx(PineJS),
+      TvIdx.idx_hlblw(PineJS),
+      TvIdx.idx_ltqs(PineJS),
+      TvIdx.idx_heima(PineJS),
+      TvIdx.idx_cdbb(PineJS),
+      TvIdx.idx_vol(PineJS),
+      TvIdx.idx_hlftx(PineJS),
     ]);
   }
 
