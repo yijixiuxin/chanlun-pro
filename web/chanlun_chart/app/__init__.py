@@ -526,6 +526,10 @@ def create_app(test_config=None):
             cd = web_batch_get_cl_datas(market, code, {frequency: klines}, cl_config)[0]
             # __log.info(f'{code} - {frequency} get cd time : {time.time() - s_time}')
 
+        # 如果图表指定返回的时间太早，直接返回无数据
+        if int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
+            return {"s": "no_data"}
+
         # 将缠论数据，转换成 tv 画图的坐标数据
         # s_time = time.time()
         cl_chart_data = cl_data_to_tv_chart(
