@@ -72,11 +72,19 @@
 >
 > 扫码添加作者微信，备注 ：“chanlun-pro 试用”
 
-![微信](cookbook/docs/img/wx.jpg)
+### 作者微信
 
-QQ 群
+![Wechat](cookbook/docs/img/wx.jpg)
+
+### QQ 群
 
 ![QQ](cookbook/docs/img/qq.png)
+
+### 在线网站【缠论交易园】飞书交流群
+
+![飞书](cookbook/docs/img/feishu.jpg)
+
+
 
 ### 实际运行效果展示
 
