@@ -38,3 +38,4 @@ tqsdk
 openai
 
 pyfolio-reloaded
+dtaidistance

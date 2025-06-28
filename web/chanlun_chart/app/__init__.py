@@ -383,6 +383,8 @@ def create_app(test_config=None):
                 "1",
                 "2",
             ],
+            "minmov": 1,
+            "minmov2": 0,
             "has_intraday": True,
             "has_seconds": True if market in ["futures", "ny_futures"] else False,
             "has_daily": True,
