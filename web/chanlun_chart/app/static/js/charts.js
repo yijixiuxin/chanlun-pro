@@ -222,6 +222,7 @@ class ChartManager {
       TvIdx.idx_cdbb(PineJS),
       TvIdx.idx_vol(PineJS),
       TvIdx.idx_hlftx(PineJS),
+      TvIdx.idx_ma(PineJS),
     ]);
   }
 

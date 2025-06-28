@@ -327,7 +327,7 @@ def query_cl_chart_config(
         "zs_xd_type": [Config.ZS_TYPE_BZ.value],
         "zs_qj": Config.ZS_QJ_DD.value,
         "zs_cd": Config.ZS_CD_THREE.value,
-        "zs_wzgx": Config.ZS_WZGX_ZGD.value,
+        "zs_wzgx": Config.ZS_WZGX_GD.value,
         "zs_optimize": "0",
         # MACD 配置（计算力度背驰）
         "idx_macd_fast": 12,

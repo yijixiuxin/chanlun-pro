@@ -381,6 +381,7 @@ dependencies = [
     { name = "ccxt" },
     { name = "chardet" },
     { name = "dbutils" },
+    { name = "dtaidistance" },
     { name = "flask" },
     { name = "flask-login" },
     { name = "futu-api" },
@@ -423,6 +424,7 @@ requires-dist = [
     { name = "ccxt", specifier = ">=4.4.88" },
     { name = "chardet", specifier = ">=5.2.0" },
     { name = "dbutils", specifier = ">=3.1.1" },
+    { name = "dtaidistance", specifier = ">=2.3.13" },
     { name = "flask", specifier = ">=3.1.1" },
     { name = "flask-login", specifier = ">=0.6.3" },
     { name = "futu-api", specifier = ">=9.2.5208" },
@@ -675,6 +677,23 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2" },
+]
+
+[[package]]
+name = "dtaidistance"
+version = "2.3.13"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/32/0d/04de7998fba3b4881bf9abb4abe4a5422a53050670000ea7f03abaf9d7ed/dtaidistance-2.3.13.tar.gz", hash = "sha256:b0344a9b6f642863fcedacf5de86c4a0a0d4b4adec9b9be561a6f513ecf5e695" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/10/c0/e690152c04207972cd6686553099ed7c81e5a658122e81787e6be8de8c2a/dtaidistance-2.3.13-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:02f2de97f147cd17c7de1b19140d3a5f48d876c19ae28105c12cca45f9af2520" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/50/bd/18e647e214865cfc37d95d3bd414240e83be31c3ad7354ea72949452cbfb/dtaidistance-2.3.13-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c61ef66588cac8b1f2ec7c8a7ca15bc6ae058804f8e5514919a0b682818fa60a" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/81/c9/a1964a5aa966e20220a316c715d5b5ee55a874424336f7e992db76148c4d/dtaidistance-2.3.13-cp311-cp311-win_amd64.whl", hash = "sha256:ac8536147977419a2ab5b4a89d97d91bbaf8ea339d91bbb63e26bea0a842ec5e" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/71/5e/95d32583d7f0a76ece94177724465d4f4547e078c48c6588c06d40bf16bf/dtaidistance-2.3.13-cp312-cp312-macosx_10_13_universal2.whl", hash = "sha256:a09b9916f8ecbf11ef3f8824bfb306c1c3bfc63a32dcb4703551a1d5bbe6fa6c" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/d5/70/5c8994a7d1408b89ca8b66773e7f005482013da5cb49816a7bc381d7faf7/dtaidistance-2.3.13-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d071392388dab99462922df8e4fb99f905e59888bd7246dee318ba7fe0d6332d" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/bf/9e/b81d1db49a492dbd79eef25b852651b74c519af5fa081b7b2947275ae2ba/dtaidistance-2.3.13-cp312-cp312-win_amd64.whl", hash = "sha256:465f45d380a1cd4416201a9aeffa9fdf34848db10fe66918456d616989d61316" },
 ]
 
 [[package]]
