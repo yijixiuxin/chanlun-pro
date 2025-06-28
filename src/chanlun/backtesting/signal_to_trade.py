@@ -1,15 +1,16 @@
 # 信号回测文件，转换成交易模式
 
-import time
 import datetime
-from chanlun import fun
-from chanlun.backtesting.base import POSITION, Operation, Strategy
-from chanlun.backtesting.backtest_trader import BackTestTrader
-from chanlun.backtesting.backtest import BackTest
-from chanlun.cl_interface import *
-from chanlun.exchange.exchange_db import ExchangeDB
+import time
+from typing import Dict, List
+
+import pandas as pd
 from tqdm.auto import tqdm
 
+from chanlun.backtesting.backtest import BackTest
+from chanlun.backtesting.backtest_trader import BackTestTrader
+from chanlun.backtesting.base import Operation, Strategy
+from chanlun.exchange.exchange_db import ExchangeDB
 
 """
 信号回测结果转交易回测结果
@@ -221,11 +222,13 @@ class SignalToTrade(BackTestTrader):
                     p
                     for p in self.positions_now_holding
                     if (
-                        p["code"] == _pos["code"]
-                        and p["mmd"] == _pos["mmd"]
-                        and p["open_uid"] == _pos["open_uid"]
+                        (
+                            p["code"] == _pos["code"]
+                            and p["mmd"] == _pos["mmd"]
+                            and p["open_uid"] == _pos["open_uid"]
+                        )
+                        == False
                     )
-                    == False
                 ]
 
                 opt = Operation(

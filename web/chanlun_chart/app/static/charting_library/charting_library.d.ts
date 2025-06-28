@@ -68,6 +68,12 @@ export declare const enum PaneSize {
 	Medium = "medium",
 	Large = "large"
 }
+export declare const enum SearchInitiationPoint {
+	SymbolSearch = "symbolSearch",
+	Watchlist = "watchlist",
+	Compare = "compare",
+	IndicatorInputs = "indicatorInputs"
+}
 export declare const widget: ChartingLibraryWidgetConstructor;
 export declare enum ActionId {
 	ChartAddIndicatorToAllCharts = "Chart.AddIndicatorToAllCharts",
@@ -2406,6 +2412,11 @@ export interface BrokerCustomUI {
 	 * @param  {Position|IndividualPosition} position - position to be closed
 	 */
 	showClosePositionDialog?: (position: Position | IndividualPosition) => Promise<boolean>;
+	/**
+	 * Shows the Reverse Position Dialog.
+	 * @param  {Position} position - position to be reversed
+	 */
+	showReversePositionDialog?: (position: Position) => Promise<boolean>;
 }
 /**
  * Override properties that can be used within {@link TradingCustomization.brokerOrder} of the {@link TradingTerminalWidgetOptions.trading_customization} object.
@@ -3257,6 +3268,12 @@ export interface ChartPropertiesOverrides {
 	 * @default true
 	 */
 	"paneProperties.legendProperties.showBarChange": boolean;
+	/**
+	 * Series series legend close value visibility when on mobile.
+	 *
+	 * @default true
+	 */
+	"paneProperties.legendProperties.showSeriesLegendCloseOnMobile": boolean;
 	/**
 	 * Series legend volume value visibility.
 	 *
@@ -4899,7 +4916,7 @@ export interface ChartingLibraryWidgetOptions {
 	 */
 	overrides?: Partial<WidgetOverrides>;
 	/**
-	 * This URL is used to send a POST request with binary chart snapshots when a user presses the [snapshot](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Snapshots) button.
+	 * This URL is used to send a POST request with binary chart snapshots when a user clicks the [snapshot](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Snapshots) button.
 	 * This POST request contains `multipart/form-data` with the field `preparedImage` that represents binary data of the snapshot image in `image/png` format.
 	 *
 	 * This endpoint should return the full URL of the saved image in the response.
@@ -5993,7 +6010,7 @@ export interface CustomFormatters {
 	 * **Remark**: `tickMarkFormatter` must display the UTC date, and not the date corresponding to your local time zone.
 	 */
 	tickMarkFormatter?: (date: Date, tickMarkType: TickMarkType) => string;
-	/** Used to format the number displayed in the price axis  */
+	/** Used to format numeric price values on the [price scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale) and [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) (*Last* and *Chg* columns).  */
 	priceFormatterFactory?: SeriesFormatterFactory;
 	/**
 	 * Used to format the numbers displayed within a custom study.
@@ -9974,6 +9991,8 @@ export interface IBrokerConnectionAdapterHost {
 	orderUpdate(order: Order): void;
 	/**
 	 * Call this method to clear the current cache for orders and notify the chart that it needs to request orders again.
+	 * Use this method only in cases such as ID mismatches.
+	 * For more details, see [Order and position IDs mismatch](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#order-and-position-ids-mismatch).
 	 */
 	ordersFullUpdate(): void;
 	/**
@@ -9991,6 +10010,8 @@ export interface IBrokerConnectionAdapterHost {
 	positionUpdate(position: Position, isHistoryUpdate?: boolean): void;
 	/**
 	 * Call this method to clear the current cache for positions and notify the chart that it needs to request positions again.
+	 * Use this method only in cases such as ID mismatches.
+	 * For more details, see [Order and position IDs mismatch](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#order-and-position-ids-mismatch).
 	 */
 	positionsFullUpdate(): void;
 	/**
@@ -10008,6 +10029,8 @@ export interface IBrokerConnectionAdapterHost {
 	individualPositionUpdate(individualPosition: IndividualPosition, isHistoryUpdate?: boolean): void;
 	/**
 	 * Call this method to clear the current cache for individual positions and notify the chart that it needs to request individual positions again.
+	 * Use this method only in cases such as ID mismatches.
+	 * For more details, see [Order and position IDs mismatch](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#order-and-position-ids-mismatch).
 	 */
 	individualPositionsFullUpdate(): void;
 	/**
@@ -10080,6 +10103,9 @@ export interface IBrokerConnectionAdapterHost {
 	domUpdate(symbol: string, equity: DOMData): void;
 	/**
 	 * Sets the quantity for a given symbol.
+	 * Use this method only when you need to [override the user-specified quantity](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#symbol-quantity-is-overriden) with a new value.
+	 *
+	 * To specify the default quantity, use the {@link InstrumentInfo.qty} field instead.
 	 * @param  {string} symbol - symbol
 	 * @param  {number} quantity - quantity to update
 	 */
@@ -10093,7 +10119,7 @@ export interface IBrokerConnectionAdapterHost {
 	/**
 	 * Adds a callback to be executed whenever there's a change of quantity for a given symbol.
 	 *
-	 * It's the user's responsibility to manage the unsubscription of any added listener
+	 * Make sure to unsubscribe from these changes using the corresponding {@link unsubscribeSuggestedQtyChange} method.
 	 *
 	 * @param  {string} symbol - symbol to which the callback will be linked to
 	 * @param  {SuggestedQtyChangedListener} listener - callback
@@ -10252,6 +10278,8 @@ export interface IBrokerTerminal extends IBrokerCommon, IBrokerAccountInfo {
 	 * You should handle this request on your backend side and provide the library with a new order state. To do this, call the {@link IBrokerConnectionAdapterHost.orderUpdate} method right afterwards.
 	 * Otherwise, the library will return a [timeout issue](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#timeout-issue).
 	 *
+	 * Note that [market orders](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/orders#order-types) cannot be modified.
+	 *
 	 * To enable an order preview before modification, set the {@link BrokerConfigFlags.supportModifyOrderPreview} configuration flag to `true`.
 	 * Refer to [Enable order preview](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#enable-order-preview) for more information.
 	 * @param  {Order} order - Order information.
@@ -10351,11 +10379,11 @@ export interface IBrokerTerminal extends IBrokerCommon, IBrokerAccountInfo {
 	 */
 	subscribeMarginAvailable?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use a standard Order Ticket.
-	 * `pipValues` is displayed in the Order info and it is used to calculate the Trade Value and risks.
-	 * If this method is not implemented then `pipValue` from the `symbolInfo` is used in the order panel/dialog.
+	 * Use this method to enable dynamic updates of the pip value defined in {@link InstrumentInfo.pipValue}.
+	 * The pip value is displayed in the *Order info* section of the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) and is used to calculate the trade value and risks.
+	 * Once `subscribePipValue` is called, your Broker API implementation should provide pip value updates through the {@link IBrokerConnectionAdapterHost.pipValueUpdate} method.
 	 *
-	 * Once this method is called the broker should provide `pipValue` updates via {@link IBrokerConnectionAdapterHost.pipValueUpdate} method.
+	 * If `subscribePipValue` is not implemented, the static value from {@link InstrumentInfo.pipValue} is displayed in the UI.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	subscribePipValue?(symbol: string): void;
@@ -11329,6 +11357,15 @@ export interface IChartWidgetApi {
 	 * This method requires that the [`saveload_separate_drawings_storage`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#saveload_separate_drawings_storage) featureset is enabled.
 	 */
 	reloadLineToolsFromServer(): void;
+	/**
+	 * The visibility of inactivity gaps on intraday charts.
+	 *
+	 * The 'intraday_inactivity_gaps' featureset should be enabled to use this option.
+	 *
+	 * When enabled (`true`), the chart displays gaps during trading sessions where there is missing data during to market inactivity.
+	 * When disabled (`false`), these gaps are hidden and the chart appears continuous.
+	 */
+	intradayInactivityGaps(): IWatchedValue<boolean>;
 }
 /**
  * The main interface for interacting with the library, returned by {@link ChartingLibraryWidgetConstructor}.
@@ -12322,8 +12359,9 @@ export interface IDatafeedChartApi {
 	 * @param exchange The requested exchange. Empty value means no filter was specified
 	 * @param symbolType Type of symbol. Empty value means no filter was specified
 	 * @param onResult Callback function that returns an array of results ({@link SearchSymbolResultItem}) or empty array if no symbols found
+	 * @param searchSource The source of the search ({@link SearchInitiationPoint}).
 	 */
-	searchSymbols(userInput: string, exchange: string, symbolType: string, onResult: SearchSymbolsCallback): void;
+	searchSymbols(userInput: string, exchange: string, symbolType: string, onResult: SearchSymbolsCallback, searchSource?: SearchInitiationPoint): void;
 	/**
 	 * The library will call this function when it needs to get SymbolInfo by symbol name.
 	 *
@@ -14766,9 +14804,17 @@ export interface InsidepitchforkLineToolOverrides {
 	"linetoolinsidepitchfork.transparency": number;
 }
 export interface InstrumentInfo {
-	/** Quantity field step and boundaries */
+	/** The default quantity parameters for a symbol. */
 	qty: QuantityMetainfo;
-	/** Value of 1 pip for the instrument in the account currency */
+	/**
+	 * The value of one pip for the instrument, expressed in the account currency.
+	 * This value is displayed in the *Order info* section of the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket).
+	 *
+	 * If set to `0`, the *Order info* section will not be displayed, and there will be no way to show it programmatically.
+	 * To ensure the section and the value appears in the UI, set this property to a non-zero value.
+	 *
+	 * If you implement [Trading Platform](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/), use {@link IBrokerTerminal.subscribePipValue} to enable dynamic value updates.
+	 */
 	pipValue: number;
 	/** Size of 1 pip (e.g., 0.0001 for EURUSD) */
 	pipSize: number;
@@ -15158,9 +15204,7 @@ export interface LibrarySymbolInfo {
 	 * Array of base symbols
 	 * Example: for `AAPL*MSFT` it is `['NASDAQ:AAPL', 'NASDAQ:MSFT']`
 	 */
-	base_name?: [
-		string
-	];
+	base_name?: string[];
 	/**
 	 * It is an unique identifier for a particular symbol in your [symbology](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Symbology).
 	 * If you specify this property, its value will be used for all data requests for this symbol.
@@ -17379,8 +17423,9 @@ export interface PineJSStd {
 	 * Display an error message.
 	 *
 	 * @param message - message to display for error
+	 * @param title - title to display for error
 	 */
-	error(message: string): never;
+	error(message: string, title?: string): never;
 	/**
 	 * Zig-zag pivot points
 	 *
@@ -17930,9 +17975,9 @@ export interface PineStudyResultComposite<TPineStudyResultSimple> {
 	data: TPineStudyResultSimple[];
 }
 export interface PipValues {
-	/** value of 1 pip if you buy */
+	/** The value of one pip for buy orders, expressed in account currency. */
 	buyPipValue: number;
-	/** value of 1 pip if you sell */
+	/** The value of one pip for sell orders, expressed in account currency. */
 	sellPipValue: number;
 }
 /**
@@ -29042,7 +29087,23 @@ export type ChartingLibraryFeatureset =
  * Enables custom color themes features.
  * @default true
  */
-"library_custom_color_themes";
+"library_custom_color_themes" | 
+/**
+ * Uses the name of a symbol rather than its ticker name in the Symbol Search dialog and header button.
+ * @default false
+ */
+"use_symbol_name_for_header_toolbar" | 
+/**
+ * Enables the ability to display inactivity gaps on intraday charts. These gaps represent periods within the trading session when there has been no trading activity, resulting in missing bars on the chart.
+ *
+ * With this feature enabled, users can visually identify periods of market inactivity within intraday sessions on the chart.
+ *
+ * **Behaviour**
+ * - **Chart Settings Dialog:** When this featureset is enabled (`true`), a checkbox appears in the chart settings dialog, allowing users to toggle the visibility of inactivity gaps on or off.
+ * - **Widget API Integration:** The featureset also exposes the `intradayInactivityGaps` watched value on the Widget API. This allows programmatic control of the inactivity gap behaviour, enabling or disabling it via API calls.
+ * @default false
+ */
+"intraday_inactivity_gaps";
 /**
  * A color gradient from lightest to darkest to override one of the default color theme colors.
  */
@@ -29589,7 +29650,7 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  * @default true
  */
 "watchlist_cross_tab_sync";
-export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c";
+export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c" | "hlc";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;
 export type WatchListSymbolListRemovedCallback = (listId: string) => void;
