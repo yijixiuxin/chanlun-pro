@@ -349,9 +349,9 @@ class StocksBKGN(object):
         for _c in _codes:
             if _c[0:3] == "688":  # 科创板
                 _res_codes.append(f"SH.{_c}")
-            if _c[0] == "8" or _c[0] == "4" or _c[0] == "9":  # 京交所
+            elif _c[0] == "8" or _c[0] == "4" or _c[0] == "9":  # 京交所
                 _res_codes.append(f"BJ.{_c}")
-            if _c[0] == "6":
+            elif _c[0] == "6":
                 _res_codes.append(f"SH.{_c}")
             else:
                 _res_codes.append(f"SZ.{_c}")
