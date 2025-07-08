@@ -36,6 +36,7 @@ dependencies = [
     "qiniu>=7.16.0",
     "redis>=6.2.0",
     "requests>=2.32.3",
+    "selenium>=4.32.0",
     "setuptools>=80.9.0",
     "snapshot-selenium>=0.0.2",
     "sqlalchemy>=2.0.41",

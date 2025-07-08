@@ -271,7 +271,7 @@ def create_app(test_config=None):
             "supports_search": True,
             "supports_group_request": False,
             "supported_resolutions": supportedResolutions,
-            "supports_marks": False,
+            "supports_marks": True,
             "supports_timescale_marks": True,
             "supports_time": False,
             "exchanges": [
@@ -665,6 +665,49 @@ def create_app(test_config=None):
                     )
 
         return marks
+
+    @app.route("/tv/marks")
+    @login_required
+    def tv_marks():
+        symbol = request.args.get("symbol")
+        _from = int(request.args.get("from"))
+        _to = int(request.args.get("to"))
+        resolution = request.args.get("resolution")
+        market = symbol.split(":")[0]
+        code = symbol.split(":")[1]
+
+        freq = resolution_maps[resolution]
+
+        marks = []
+        price_marks = db.marks_query_by_price(market, code, start_date=_from)
+        for i in range(len(price_marks)):
+            _m = price_marks[i]
+            if _m.frequency == "" or _m.frequency == freq:
+                if _from <= _m.mark_time <= _to:
+                    marks.append(
+                        {
+                            "id": f"m-{i}",
+                            "time": int(_m.mark_time),
+                            "color": _m.mark_color,
+                            "text": _m.mark_text,
+                            "label": _m.mark_label,
+                            "labelFontColor": _m.mark_label_font_color,
+                            "minSize": _m.mark_min_size,
+                        }
+                    )
+
+        return marks
+
+    @app.route("/tv/del_marks", methods=["POST"])
+    @login_required
+    def tv_del_marks():
+        symbol = request.form["symbol"]
+        market = symbol.split(":")[0]
+        code = symbol.split(":")[1]
+
+        db.marks_del_all_by_code(market, code)
+
+        return {"status": "ok"}
 
     @app.route("/tv/time")
     @login_required

@@ -122,7 +122,7 @@ class TableByAlertRecord(Base):
 
 
 class TableByTVMarks(Base):
-    # TV 图表的 mark 标记
+    # TV 图表的 mark 标记 (在时间轴上的标记)
     __tablename__ = "cl_tv_marks"
     id = Column(Integer, primary_key=True, autoincrement=True)
     market = Column(String(20), comment="市场")  # 市场
@@ -134,6 +134,26 @@ class TableByTVMarks(Base):
     mark_tooltip = Column(String(100), comment="提示")  # 提示
     mark_shape = Column(String(20), comment="形状")  # 形状
     mark_color = Column(String(20), comment="颜色")  # 颜色
+    dt = Column(DateTime, comment="添加时间")
+    # 添加配置设置编码
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+
+
+class TableByTVMarksPrice(Base):
+    # TV 图表的 mark 标记 (在价格主图的标记)
+    __tablename__ = "cl_tv_marks_price"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    market = Column(String(20), comment="市场")  # 市场
+    stock_code = Column(String(20), comment="标的代码")  # 标的代码
+    stock_name = Column(String(100), comment="标的名称")  # 标的名称
+    frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
+    mark_time = Column(Integer, comment="标签时间戳")  # 标签时间戳
+    mark_color = Column(String(20), comment="颜色")  # 颜色
+    mark_text = Column(String(100), comment="提示")  # 提示
+    mark_label = Column(String(2), comment="标签")  # 标签
+    mark_label_font_color = Column(String(20), comment="标签字体颜色")  # 标签字体颜色
+    mark_min_size = Column(Integer, comment="最小尺寸")  # 最小尺寸
+
     dt = Column(DateTime, comment="添加时间")
     # 添加配置设置编码
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
@@ -1003,6 +1023,92 @@ class DB(object):
 
         return True
 
+    def marks_add_by_price(
+        self,
+        market: str,
+        stock_code: str,
+        stock_name: str,
+        frequency: str,
+        mark_time: int,
+        mark_label: str,
+        mark_text: str,
+        mark_label_color: str,
+        mark_color: str,
+    ):
+        """
+        添加代码在 tv 价格主图显示的信息
+        """
+        with self.Session() as session:
+            # 相同的 market,code/mark_time/mark_label 只能有一个，先删除一下
+            session.query(TableByTVMarks).filter(
+                TableByTVMarks.market == market,
+                TableByTVMarks.stock_code == stock_code,
+                TableByTVMarks.mark_time == mark_time,
+                TableByTVMarks.mark_label == mark_label,
+            ).delete()
+
+            mark = TableByTVMarksPrice(
+                market=market,
+                stock_code=stock_code,
+                stock_name=stock_name,
+                frequency=frequency,
+                mark_time=mark_time,
+                mark_color=mark_color,
+                mark_text=mark_text,
+                mark_label=mark_label,
+                mark_label_font_color=mark_label_color,
+                mark_min_size=1,
+                dt=datetime.datetime.now(),
+            )
+            session.add(mark)
+            session.commit()
+
+        return True
+
+    def marks_query_by_price(
+        self, market: str, stock_code: str, start_date: int = None
+    ) -> List[TableByTVMarksPrice]:
+        """
+        查询图表标记
+        :param market:
+        :param stock_code:
+        :return:
+        """
+        with self.Session() as session:
+            query = session.query(TableByTVMarksPrice).filter(
+                TableByTVMarksPrice.market == market,
+                TableByTVMarksPrice.stock_code == stock_code,
+            )
+            if start_date is not None:
+                query = query.filter(TableByTVMarksPrice.mark_time >= start_date)
+            return query.order_by(TableByTVMarksPrice.mark_time.asc()).all()
+
+    def marks_del_by_price(self, market: str, mark_label: str):
+        with self.Session() as session:
+            session.query(TableByTVMarksPrice).filter(
+                TableByTVMarks.market == market,
+                TableByTVMarksPrice.mark_label == mark_label,
+            ).delete()
+            session.commit()
+
+        return True
+
+    def marks_del_all_by_code(self, market: str, code: str):
+        """
+        删除代码的所有标记
+        """
+        with self.Session() as session:
+            session.query(TableByTVMarks).filter(
+                TableByTVMarks.market == market,
+                TableByTVMarks.stock_code == code,
+            ).delete()
+            session.query(TableByTVMarksPrice).filter(
+                TableByTVMarksPrice.market == market,
+                TableByTVMarksPrice.stock_code == code,
+            ).delete()
+            session.commit()
+        return True
+
     def tv_chart_list(self, chart_type, client_id, user_id):
         with self.Session() as session:
             return (
@@ -1148,8 +1254,8 @@ db: DB = DB()
 if __name__ == "__main__":
     db = DB()
 
-    db.klines_tables("a", "SH.111111")
-    print("Done")
+    # db.klines_tables("a", "SH.111111")
+    # print("Done")
 
     # # 增加自选股票
     # db.zx_add_group_stock("a", "我的持仓", "SH.000001", "上证指数", "", "red", location="top")
@@ -1263,6 +1369,19 @@ if __name__ == "__main__":
     #         m.mark_tooltip,
     #         m.mark_shape,
     #     )
+
+    # 添加图表标记
+    db.marks_add_by_price(
+        "a",
+        "SH.600378",
+        "昊华科技",
+        "30m",
+        fun.str_to_timeint("2025-07-03 14:00:00"),
+        "A",
+        "测试标记2",
+        "green",
+        "red",
+    )
 
     # 缓存
     # db.cache_set("test", "12312312312312", int(time.time()) + 5)
