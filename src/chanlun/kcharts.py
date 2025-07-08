@@ -1,4 +1,5 @@
 import os
+import pathlib
 from typing import List
 
 import MyTT
@@ -11,6 +12,7 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Grid, Line, Scatter
 from pyecharts.charts import Kline as cKline
 from pyecharts.commons.utils import JsCode
+from pyecharts.globals import CurrentConfig
 
 from chanlun.backtesting.base import Strategy
 from chanlun.cl_analyse import LinesFormAnalyse
@@ -20,7 +22,7 @@ from chanlun.exchange import exchange
 from chanlun.fun import str_to_datetime
 
 if "JPY_PARENT_PID" in os.environ:
-    from pyecharts.globals import CurrentConfig, NotebookType
+    from pyecharts.globals import NotebookType
 
     CurrentConfig.NOTEBOOK_TYPE = NotebookType.JUPYTER_LAB
     cKline().load_javascript()
@@ -47,6 +49,20 @@ def render_charts(
         orders = []
     if config is None:
         config = {}
+
+    if "to_file" in config and config["to_file"] != "":
+        # 获取当前文件路径
+        file_path = (
+            pathlib.Path(__file__).parent
+            / ".."
+            / ".."
+            / "web"
+            / "chanlun_chart"
+            / "app"
+            / "static"
+        )
+        CurrentConfig.ONLINE_HOST = f"file://{file_path.absolute()}/"
+        # print(CurrentConfig.ONLINE_HOST)
 
     default_config = {
         # 展示配置项

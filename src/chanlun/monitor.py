@@ -14,10 +14,7 @@ from lark_oapi.api.im.v1 import (
     CreateImageRequestBody,
     CreateImageResponse,
 )
-from pyecharts.render import make_snapshot
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from snapshot_selenium import snapshot
+from playwright.sync_api import sync_playwright
 
 from chanlun import config, fun, kcharts
 from chanlun.backtesting.base import Strategy
@@ -346,37 +343,36 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     png_path = config.get_data_path() / "png"
     if png_path.is_dir() is False:
         png_path.mkdir(parents=True)
-    cl_config["chart_width"] = "1000px"
-    cl_config["chart_heigh"] = "800px"
+    cl_config["chart_width"] = "100%"
+    cl_config["chart_high"] = "400px"
+    cl_config["chart_show_ma"] = False
+    cl_config["chart_show_ama"] = False
+    cl_config["chart_show_boll"] = False
+    cl_config["chart_show_infos"] = False
     cl_config["chart_kline_nums"] = 600
     file_name = (
         cd.get_code().replace(".", "_").replace("/", "_").replace("@", "_")
         + "_"
         + cd.get_frequency()
     )
-    cl_config["to_file"] = f"{file_name}_{int(time.time())}.html"
+    cl_config["to_file"] = f"{str(png_path)}/{file_name}_{int(time.time())}.html"
     png_file = f"{str(png_path)}/{file_name}_{int(time.time())}.png"
 
     try:
         # 渲染并保存图片
         render_file = kcharts.render_charts(title, cd, config=cl_config)
-        # 配置无头模式（无图形界面）
-        options = Options()
-        options.add_argument("--headless")  # 启用无头模式
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        # 初始化 Chrome 驱动
-        driver = webdriver.Chrome(options=options)
 
-        make_snapshot(
-            snapshot,
-            render_file,
-            png_file,
-            is_remove_html=True,
-            delay=3,
-            browser="Chrome",
-            driver=driver,
-        )
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            # 设置页面的视口大小
+            page.set_viewport_size({"width": 800, "height": 400})
+            page.goto(f"file://{render_file}")
+            # 等待页面加载完成
+            page.wait_for_load_state("domcontentloaded")
+            # 截图
+            page.screenshot(path=png_file, type="png", full_page=True)
+            browser.close()
 
         # 上传图片
         # 创建client

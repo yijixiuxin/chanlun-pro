@@ -33,6 +33,7 @@ dependencies = [
     "pyfolio-reloaded>=0.9.9",
     "pymysql>=1.1.1",
     "pytdx",
+    "pytest-playwright>=0.7.0",
     "qiniu>=7.16.0",
     "redis>=6.2.0",
     "requests>=2.32.3",
