@@ -244,6 +244,29 @@ class ChartManager {
       buttonDeleteMark.addEventListener("click", function () {
         global_widget.activeChart().clearMarks();
       });
+      // 增加删除标记的按钮
+      var buttonDeleteMark = global_widget.createButton();
+      buttonDeleteMark.textContent = "删除标记";
+      buttonDeleteMark.addEventListener("click", function () {
+        let symbol = global_widget.symbolInterval();
+        console.log(symbol);
+        $.post({
+          type: "POST",
+          url: "/tv/del_marks",
+          dataType: "json",
+          data: {
+            symbol: symbol.symbol,
+          },
+          success: function (res) {
+            if (res.status == "ok") {
+              global_widget.activeChart().clearMarks();
+              layer.msg("删除标记成功");
+            } else {
+              layer.msg("删除标记失败");
+            }
+          },
+        });
+      });
     });
     this.widget.onChartReady(() => {
       this.chart = this.widget.activeChart();

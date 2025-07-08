@@ -36,6 +36,7 @@ ib_insync
 akshare
 tqsdk
 openai
+selenium
 
 pyfolio-reloaded
 dtaidistance
