@@ -1,5 +1,13 @@
-# import chanlun.encodefix  # Fix Windows print 乱码问题
+import pathlib
 import sys
+
+import chanlun.encodefix  # Fix Windows print 乱码问题  # noqa: F401
+
+# 将项目中的 src 目录，添加到 sys.path 中
+src_path = pathlib.Path(__file__).parent.parent / ".." / "src"
+sys.path.append(str(src_path))
+web_server_path = pathlib.Path(__file__).parent
+sys.path.append(str(web_server_path))
 
 is_wpf_launcher = False
 try:
@@ -28,7 +36,6 @@ try:
 except Exception:
     pass
 
-import pathlib
 import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
@@ -39,11 +46,8 @@ from tornado.wsgi import WSGIContainer
 
 from chanlun import config
 
-cmd_path = pathlib.Path.cwd()
-sys.path.append(str(cmd_path))
-
 try:
-    from app import create_app
+    from cl_app import create_app
 except Exception as e:
     print(e)
     traceback.print_exc()

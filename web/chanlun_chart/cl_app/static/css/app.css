@@ -1,0 +1,50 @@
+/* .layui-form-checked:hover > i,
+.layui-form-checked > i {
+  color: #ff5722;
+}
+
+.layui-form-checkbox[lay-skin="primary"]:hover > i {
+  border-color: #ff5722;
+  color: #fff;
+}
+.layui-form-checked[lay-skin="primary"] > i {
+  border-color: #ff5722 !important;
+  background-color: #ff5722;
+  color: #fff;
+}
+.layui-form-checkbox[lay-skin="primary"] > .layui-icon-indeterminate {
+  border-color: #ff5722;
+}
+.layui-form-checkbox[lay-skin="primary"] > .layui-icon-indeterminate:before {
+  background-color: #ff5722;
+}
+.layui-input-wrap .layui-input:focus + .layui-input-split {
+  border-color: #ff5722;
+}
+.layui-form-select dl dd.layui-this {
+  color: #ff5722;
+}
+
+.layui-input:focus,
+.layui-textarea:focus {
+  border-color: #ff5722 !important;
+}
+
+.layui-form-radio:hover > *,
+.layui-form-radioed,
+.layui-form-radioed > i {
+  color: #ff5722;
+}
+
+.xm-search .xm-search-input {
+  color: #e54d42;
+} */
+
+.zixuan-form-bg {
+  background-color: #ffffff;
+}
+
+.ai-analyse-div table, tr, td, th {
+  border: #5f5f5f 1px solid;
+}
+

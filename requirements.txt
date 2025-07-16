@@ -10,7 +10,6 @@ pyecharts==2.0.8
 dbutils
 apscheduler
 tenacity
-qiniu
 flask
 flask-login
 gevent
@@ -22,7 +21,6 @@ mytt
 matplotlib
 tqdm
 ipywidgets
-snapshot_selenium
 pinyin
 pyarmor
 setuptools
@@ -36,7 +34,7 @@ ib_insync
 akshare
 tqsdk
 openai
-selenium
+playwright
 
 pyfolio-reloaded
 dtaidistance
