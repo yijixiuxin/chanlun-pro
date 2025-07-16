@@ -1,0 +1,40 @@
+<script type="text/javascript">
+    (function () {
+        if (window.JSON && window.JSON.parse) {
+            var c = document.getElementsByTagName("head");
+
+            try {
+                var b = JSON.parse(localStorage.tv_chart);
+            } catch (d) {
+                b = {};
+            }
+            if ("dark" === b.theme) {
+                var a = document.createElement("link");
+                a.href = "{{ url_for('static', filename='css/layui-theme-dark.css') }}";
+                a.rel = "stylesheet";
+                a.id = "layuicss-theme-dark";
+                c[0].appendChild(a)
+
+                var b = document.createElement("link");
+                b.href = "{{ url_for('static', filename='css/xm-select-dark.css') }}";
+                b.rel = "stylesheet";
+                b.id = "xmselectcss-theme-dark";
+                c[0].appendChild(b)
+            }
+        }
+    })();
+
+    var _hmt = _hmt || [];
+    (function () {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?572abd07e459c48e1c15b1cb90a68ee4";
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+<style>
+    .layui-card-body p,
+    li {
+        color: #999;
+    }
+</style>
