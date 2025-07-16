@@ -1,0 +1,149 @@
+<!DOCTYPE HTML>
+<html lang="zh">
+
+<head>
+    <title>系统设置</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+    {% include 'dark.html' %}
+</head>
+
+<body class="layui-fluid">
+
+    <form class="layui-form layui-row setting_form" lay-filter="setting_form" role="form" style="padding: 20px;">
+
+        <div class="layui-form-item">
+            <label class="layui-form-label">飞书 App ID</label>
+            <div class="layui-input-block" title="飞书 App ID">
+                <div class="layui-input-block">
+                    <input type="text" name="fs_app_id" value="{{ fs_app_id }}" placeholder="请输入 飞书 App ID"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">飞书 App Secret</label>
+            <div class="layui-input-block" title="飞书 App Secret">
+                <div class="layui-input-block">
+                    <input type="text" name="fs_app_secret" value="{{ fs_app_secret }}" placeholder="请输入 飞书 App Secret"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">飞书 User ID</label>
+            <div class="layui-input-block" title="飞书 User ID">
+                <div class="layui-input-block">
+                    <input type="text" name="fs_user_id" value="{{ fs_user_id }}" placeholder="请输入 飞书 User ID"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+
+        <div class="layui-form-item">
+            <label class="layui-form-label">代理 Host</label>
+            <div class="layui-input-block" title="代理 Host">
+                <div class="layui-input-block">
+                    <input type="text" name="proxy_host" value="{{ proxy_host }}" placeholder="请输入 代理 Host"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+
+        <div class="layui-form-item">
+            <label class="layui-form-label">代理 Port</label>
+            <div class="layui-input-block" title="代理 Port">
+                <div class="layui-input-block">
+                    <input type="text" name="proxy_port" value="{{ proxy_port }}" placeholder="请输入 代理 Port"
+                        autocomplete="off" class="layui-input">
+                </div>
+            </div>
+        </div>
+
+
+        <div class="layui-form-item">
+            <button class="layui-btn layui-btn-fluid layui-bg-red" lay-submit lay-filter="setting_save">保存</button>
+        </div>
+    </form>
+
+    <blockquote class="layui-elem-quote layui-quote-nm">
+        <h3>设置说明：</h3>
+        <p>行情监控任务，如有警报，并且进行了飞书的配置，则会发送飞书消息；</p>
+        <p>代理服务器，如果看数字货币行情，则无需进行设置；</p>
+        <h3>飞书配置获取方式：</h3>
+        <div>
+            <ol>
+                <li>
+                    打开飞书开放平台：https://open.feishu.cn/，并进行注册登录；
+                </li>
+                <li>
+                    进入开发者后台：https://open.feishu.cn/app?lang=zh-CN，点击“创建企业自建应用”，输入自定义的名称和描述，选择自己喜欢的图标，进行“创建”；
+                </li>
+                <li>
+                    “添加应用能力”，选择“机器人”进行添加；
+                </li>
+                <li>
+                    “权限管理”，<br />
+                    搜索 “contact:user.employee_id” ，开通权限 “获取用户 userID”；<br />
+                    搜索 “im:message” ，开通权限 “获取与发送单聊、群组消息”；
+                </li>
+                <li>
+                    版本管理与发布，选择“创建新版本”，输入版本号（例如：1.0.0），点击“发布”，“申请线上发布”；
+                </li>
+                <li>
+                    “凭证与基础信息” 页面，复制 App ID 与 App Secret 到对应的设置框；
+                </li>
+                <li>
+                    获取 UserId
+                    字段方法，打开API调试台：https://open.feishu.cn/api-explorer/cli_a503a353effd100b?apiName=batch_get_id&from=op_doc_tab&project=contact&resource=user&version=v3
+                </li>
+                <li>
+                    官方帮助文档：https://open.feishu.cn/document/faq/trouble-shooting/how-to-obtain-user-id
+                </li>
+                <li>
+                    点击 API 调试台左侧「查看鉴权凭证」中 tenant_access_token 中的「点击获取」（如果之前已经获取过，则可以点击刷新按钮刷新鉴权凭证。<br />
+                    点击右侧参数列表，将查询参数 Tab 中的 user_id_type 参数设置为 user_id。<br />
+                    切换至请求体 Tab，将请求体中的 ID 删除，并修改 mobiles 参数，设为你自己的手机号。<br />
+                    点击右侧「开始调试」，调用接口。调用成功后，在下方响应体中即可拿到你自己的 User ID。<br />
+                    将 user_id 复制并填入项目的 user_id 字段中。
+                </li>
+            </ol>
+        </div>
+    </blockquote>
+
+    <script>
+        $(function () {
+            layui.use(function () {
+                const form = layui.form;
+                const layer = layui.layer;
+                // 提交事件
+                form.on('submit(setting_save)', function (data) {
+                    // data = form.val('setting_form');
+                    console.log(data.field);
+                    $.ajax({
+                        type: "POST",
+                        url: "/setting/save",
+                        data: data.field,
+                        dataType: 'json',
+                        traditional: true,
+                        success: function (result) {
+                            if (result['ok'] === true) {
+                                layer.msg('配置保存成功');
+                            } else {
+                                layer.msg('配置保存失败');
+                            }
+                        }
+                    });
+                    return false; // 阻止默认 form 跳转
+                });
+            });
+        });
+
+
+    </script>
+</body>
+
+</html>
