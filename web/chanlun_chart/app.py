@@ -1,13 +1,12 @@
 import pathlib
 import sys
 
-import chanlun.encodefix  # Fix Windows print 乱码问题  # noqa: F401
-
 # 将项目中的 src 目录，添加到 sys.path 中
 src_path = pathlib.Path(__file__).parent.parent / ".." / "src"
 sys.path.append(str(src_path))
 web_server_path = pathlib.Path(__file__).parent
 sys.path.append(str(web_server_path))
+
 
 is_wpf_launcher = False
 try:
@@ -44,6 +43,7 @@ from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.wsgi import WSGIContainer
 
+import chanlun.encodefix  # Fix Windows print 乱码问题  # noqa: F401
 from chanlun import config
 
 try:
