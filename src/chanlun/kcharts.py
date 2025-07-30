@@ -58,7 +58,7 @@ def render_charts(
             / ".."
             / "web"
             / "chanlun_chart"
-            / "app"
+            / "cl_app"
             / "static"
         )
         CurrentConfig.ONLINE_HOST = f"file://{file_path.absolute()}/"
