@@ -1,0 +1,18 @@
+﻿log4j.logger.TTConsole=ERROR,ca
+log4j.logger.TTStdFile=ERROR,ca
+log4j.logger.TTDbgFile=ERROR,ca
+
+# 文件输出1
+#log4j.appender.fa1=org.apache.log4j.DailyRollingFileAppender
+#log4j.appender.fa1.datePattern='.'yyyy-MM-dd
+#log4j.appender.fa1.MaxFileSize=500MB 
+#log4j.appender.fa1.MaxBackupIndex=10
+#log4j.appender.fa1.File=log/xtquant.log
+#log4j.appender.fa1.Append=true
+#log4j.appender.fa1.layout=org.apache.log4j.PatternLayout
+#log4j.appender.fa1.layout.ConversionPattern=%d [%p] [%t] %m%n
+
+# 控制台输出
+log4j.appender.ca=org.apache.log4j.ConsoleAppender
+log4j.appender.ca.layout=org.apache.log4j.PatternLayout
+log4j.appender.ca.layout.ConversionPattern=%d [%p] [%t] %m%n
