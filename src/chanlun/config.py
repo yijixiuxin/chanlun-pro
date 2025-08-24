@@ -18,7 +18,7 @@ PROXY_HOST = '127.0.0.1'
 PROXY_PORT = 7890
 
 # 数据库配置
-DB_TYPE = "sqlite"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填写 DB_DATABASE 即可
+DB_TYPE = "mysql"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填写 DB_DATABASE 即可
 DB_HOST = '127.0.0.1'
 DB_PORT = 3306
 DB_USER = 'root'
@@ -40,7 +40,7 @@ REDIS_PORT = 6379
 # 数字货币（合约）支持： binance / zb / db
 # 数字货币（现货）支持：binance_spot / db
 # 美股市场支持： alpaca / polygon / ib / tdx_us / db
-EXCHANGE_A = "tdx"  # 沪深A股市场
+EXCHANGE_A = "qmt"  # 沪深A股市场
 EXCHANGE_HK = "tdx_hk"  # 港股市场
 EXCHANGE_FUTURES = "tdx_futures"  # 期货市场
 EXCHANGE_NY_FUTURES = "tdx_ny_futures"  # 纽约期货市场

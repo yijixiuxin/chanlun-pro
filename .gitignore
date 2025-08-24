@@ -154,7 +154,6 @@ predict
 **/.pytest_cache
 .vscode
 
-src/xtquant
 
 # 配置文件排除
 /src/chanlun/config.py
