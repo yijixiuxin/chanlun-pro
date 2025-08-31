@@ -1,11 +1,14 @@
 import time
 import traceback
+
 from chanlun import fun
 from chanlun.cl_interface import Config
-from chanlun.exchange.exchange_ctp import MarketCTP
+from chanlun.exchange.exchange_ctp import (
+    MarketCTP,  # TODO 文件中没有 MarketCTP 行情类定义
+)
 from chanlun.strategy.strategy_demo import StrategyDemo
 from chanlun.trader.online_market_datas import OnlineMarketDatas
-from chanlun.trader.ctp_trader import CTPTrader
+from chanlun.trader.trade_ctp import CTPTrader
 
 logger = fun.get_logger("trader_ctp.log")
 
@@ -14,11 +17,11 @@ logger.info("期货自动化交易程序")
 try:
     # 初始化CTP行情接口
     market = MarketCTP()
-    
+
     # 交易品种列表
     run_codes = ["rb2405", "IF2403", "IC2403", "au2406"]  # 可根据需要修改
     frequencys = ["15m", "5m"]  # 使用的K线周期
-    
+
     # 缠论配置
     cl_config = {
         "fx_qj": Config.FX_QJ_K.value,
@@ -27,8 +30,6 @@ try:
         "bi_bzh": Config.BI_BZH_YES.value,
         "bi_fx_cgd": Config.BI_FX_CHD_NO.value,
         "bi_qj": Config.BI_QJ_DD.value,
-        "seg_bzh": Config.Seg_BZH_NO.value,
-        "seg_qj": Config.Seg_QJ_DD.value,
         "zsd_bzh": Config.ZSD_BZH_NO.value,
         "zsd_qj": Config.ZSD_QJ_DD.value,
         "zs_bi_type": Config.ZS_TYPE_DN.value,
@@ -37,12 +38,12 @@ try:
         "zs_wzgx": Config.ZS_WZGX_ZGD.value,
     }
 
-    p_redis_key = "trader_ctp"
+    p_strategy_key = "trader_ctp"
 
     # 初始化交易对象
     TR = CTPTrader("CTP", log=logger.info)
     # 从Redis加载数据
-    TR.load_from_pkl(p_redis_key)
+    TR.load_from_pkl(p_strategy_key)
     # 数据对象
     Data = OnlineMarketDatas("futures", frequencys, market, cl_config)
     # 设置策略
@@ -60,9 +61,9 @@ try:
             if not market.now_trading():
                 time.sleep(10)
                 continue
-                
+
             seconds = int(time.time())
-            
+
             # 每5分钟运行一次策略
             if seconds % (5 * 60) != 0:
                 time.sleep(1)
@@ -75,14 +76,14 @@ try:
             for code in run_codes:
                 try:
                     TR.run(code)
-                except Exception as e:
+                except Exception:
                     logger.error(f"{code} 策略运行异常: {traceback.format_exc()}")
 
             # 清空K线缓存
             Data.clear_cache()
 
             # 保存交易数据
-            TR.save_to_pkl(p_redis_key)
+            TR.save_to_pkl(p_strategy_key)
 
             # 风控检查
             if seconds % (60 * 5) == 0:  # 每5分钟检查一次
@@ -95,13 +96,13 @@ try:
                     if TR.check_position_time(pos):
                         TR.force_close(pos.code, pos, "持仓时间过长")
 
-        except Exception as e:
+        except Exception:
             logger.error(f"主循环异常: {traceback.format_exc()}")
             time.sleep(10)
 
-except Exception as e:
+except Exception:
     logger.error(f"程序异常退出: {traceback.format_exc()}")
 finally:
     logger.info("程序结束")
-    if 'TR' in locals():
+    if "TR" in locals():
         TR.close()
