@@ -1,18 +1,14 @@
 #!/usr/bin/env python
-import math, time
+import hashlib
+import os
+import os.path
+import tempfile
 import threading
+import time
 
 import ctp
 import pytest
-import sys
-import time
-import hashlib
-import tempfile
-import os, os.path
-import threading
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
-from chanlun.exchange.exchange import *
-from chanlun import config, fun
+
 
 @pytest.fixture(scope="module")
 def spi(front, broker, user, password, app, auth):
@@ -27,8 +23,9 @@ def spi(front, broker, user, password, app, auth):
             secs -= 1
             time.sleep(1)
         else:
-            break    
+            break
     return _spi
+
 
 class TraderSpi(ctp.CThostFtdcTraderSpi):
     def __init__(self, front, broker_id, user_id, password, app_id, auth_code):
@@ -49,10 +46,11 @@ class TraderSpi(ctp.CThostFtdcTraderSpi):
         self.api = self.create()
 
     def create(self):
-        dir = ''.join(('ctp', self.broker_id, self.user_id)).encode('UTF-8')
+        dir = "".join(("ctp", self.broker_id, self.user_id)).encode("UTF-8")
         dir = hashlib.md5(dir).hexdigest()
-        dir = os.path.join(tempfile.gettempdir(), dir, 'Trader') + os.sep
-        if not os.path.isdir(dir): os.makedirs(dir)
+        dir = os.path.join(tempfile.gettempdir(), dir, "Trader") + os.sep
+        if not os.path.isdir(dir):
+            os.makedirs(dir)
         return ctp.CThostFtdcTraderApi.CreateFtdcTraderApi(dir)
 
     def run(self):
@@ -83,18 +81,32 @@ class TraderSpi(ctp.CThostFtdcTraderSpi):
         self.connected = True
         self.auth()
 
-    def OnRspAuthenticate(self, pRspAuthenticateField:'ctp.CThostFtdcRspAuthenticateField', pRspInfo:'ctp.CThostFtdcRspInfoField', nRequestID:'int', bIsLast:'bool'):
+    def OnRspAuthenticate(
+        self,
+        pRspAuthenticateField: ctp.CThostFtdcRspAuthenticateField,
+        pRspInfo: ctp.CThostFtdcRspInfoField,
+        nRequestID: int,
+        bIsLast: bool,
+    ):
         print("OnRspAuthenticate:", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
         if pRspInfo.ErrorID == 0:
             self.authed = True
             self.login()
 
-    def OnRspUserLogin(self, pRspUserLogin:'ctp.CThostFtdcRspUserLoginField', pRspInfo:'ctp.CThostFtdcRspInfoField', nRequestID:'int', bIsLast:'bool'):
+    def OnRspUserLogin(
+        self,
+        pRspUserLogin: ctp.CThostFtdcRspUserLoginField,
+        pRspInfo: ctp.CThostFtdcRspInfoField,
+        nRequestID: int,
+        bIsLast: bool,
+    ):
         print("OnRspUserLogin", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
         if pRspInfo.ErrorID == 0:
             self.loggedin = True
 
-    def OnRspError(self, pRspInfo:'ctp.CThostFtdcRspInfoField', nRequestID:'int', bIsLast:'bool'):
+    def OnRspError(
+        self, pRspInfo: ctp.CThostFtdcRspInfoField, nRequestID: int, bIsLast: bool
+    ):
         print("OnRspError:", pRspInfo.ErrorID, pRspInfo.ErrorMsg)
 
     def __del__(self):
@@ -103,4 +115,4 @@ class TraderSpi(ctp.CThostFtdcTraderSpi):
 
 
 def test_init(spi):
-    assert spi.connected and spi.authed and spi.loggedin    
+    assert spi.connected and spi.authed and spi.loggedin
