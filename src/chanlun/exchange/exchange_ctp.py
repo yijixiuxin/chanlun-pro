@@ -38,7 +38,7 @@ class MarketCTP(Exchange):
         self.tick_callbacks = {}
         
         # 创建临时目录
-        self.temp_path = os.path.expanduser("~/.wts/ctp")
+        self.temp_path = os.path.expanduser("~/.chanlun-pro/ctp")
         os.makedirs(self.temp_path, exist_ok=True)
         
         # 扩展行情数据缓存
