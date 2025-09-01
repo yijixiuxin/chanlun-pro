@@ -14,7 +14,7 @@ from openctp_ctp.thostmduserapi import (
     CThostFtdcDepthMarketDataField,
     CThostFtdcRspUserLoginField
 )
-from wts import config
+from chanlun import config
 
 
 class MarketCTP(Exchange):
