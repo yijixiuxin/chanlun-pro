@@ -1,55 +1,44 @@
-from datetime import datetime
-import time
 import os
-from typing import List, Dict, Any
-from chanlun import utils
-from chanlun.backtest.backtest_trader import BackTestTrader
-from chanlun.backtest.base import POSITION, Operation
-from chanlun.exchange.exchange_ctp import MarketCTP
-from chanlun.db import db
+import time
+from datetime import datetime
+from typing import Any, Dict
+
+from openctp_ctp.thostmduserapi import (
+    CThostFtdcInputOrderActionField,
+    THOST_FTDC_AF_Delete,
+)
 from openctp_ctp.thosttraderapi import (
-    CThostFtdcTraderApi,
-    CThostFtdcReqUserLoginField,
-    CThostFtdcQryInvestorPositionField,
+    THOST_FTDC_TC_GFD,  # 当日有效
+    THOST_FTDC_VC_AV,  # 任意数量
     CThostFtdcInputOrderField,
-    CThostFtdcRspInfoField,
-    CThostFtdcRspUserLoginField,
     CThostFtdcOrderField,
-    CThostFtdcTradeField,
-    CThostFtdcReqAuthenticateField,
-    CThostFtdcUserLogoutField,
-    CThostFtdcQryTradingAccountField,
-    CThostFtdcTradingAccountField,
+    CThostFtdcQryInstrumentField,
+    CThostFtdcQryInvestorPositionField,
     CThostFtdcQryOrderField,
     CThostFtdcQryTradeField,
-    CThostFtdcInvestorPositionField,
+    CThostFtdcQryTradingAccountField,
+    CThostFtdcReqAuthenticateField,
+    CThostFtdcReqUserLoginField,
     CThostFtdcSettlementInfoConfirmField,
-    CThostFtdcQryInstrumentField,
-    CThostFtdcInstrumentField,
-    # 常量定义
-    THOST_FTDC_OPT_LimitPrice,    # 限价单
-    THOST_FTDC_OPT_AnyPrice,      # 市价单
-    THOST_FTDC_D_Buy,             # 买入
-    THOST_FTDC_D_Sell,            # 卖出
-    THOST_FTDC_OF_Open,           # 开仓
-    THOST_FTDC_OF_Close,          # 平仓
-    THOST_FTDC_OF_CloseToday,     # 平今
-    THOST_FTDC_OF_CloseYesterday, # 平昨
-    THOST_FTDC_HF_Speculation,    # 投机
-    THOST_FTDC_TC_GFD,            # 当日有效
-    THOST_FTDC_TC_IOC,            # 立即完成，否则撤销
-    THOST_FTDC_VC_AV,             # 任意数量
-    THOST_FTDC_CC_Immediately,     # 立即触发
-    THOST_FTDC_FCC_NotForceClose, # 非强平
-    THOST_FTDC_PD_Long,           # 多头
-    THOST_FTDC_PD_Short,          # 空头
-    THOST_FTDC_OST_AllTraded,     # 全部成交
-    THOST_FTDC_OST_Canceled,      # 已撤单
+    CThostFtdcTraderApi,
+    THOST_FTDC_CC_Immediately,  # 立即触发
+    THOST_FTDC_D_Buy,  # 买入
+    THOST_FTDC_D_Sell,  # 卖出
+    THOST_FTDC_HF_Speculation,  # 投机
+    THOST_FTDC_OF_Close,  # 平仓
+    THOST_FTDC_OPT_LimitPrice,  # 限价单
 )
+
+from chanlun import utils
+from chanlun.backtesting.backtest_trader import BackTestTrader
+from chanlun.backtesting.base import POSITION, Operation
+from chanlun.db import db
+from chanlun.exchange.exchange_ctp import MarketCTP
 
 
 class MyTraderCallback(CThostFtdcTraderApi):
     """CTP交易回调"""
+
     def __init__(self, trader: Any) -> None:
         super().__init__()
         self.trader = trader
@@ -65,7 +54,7 @@ class MyTraderCallback(CThostFtdcTraderApi):
     def OnFrontConnected(self):
         print("交易服务器连接成功")
         self.connected = True
-        
+
         # 如果设置了AppID，先进行认证
         if self.trader.ex.app_id:
             req = CThostFtdcReqAuthenticateField()
@@ -111,9 +100,13 @@ class MyTraderCallback(CThostFtdcTraderApi):
 
     def OnRtnTrade(self, pTrade):
         """成交回报"""
-        print(f"成交回报: {pTrade.InstrumentID} 价格:{pTrade.Price} 数量:{pTrade.Volume}")
-        
-    def OnRspQryInvestorPosition(self, pInvestorPosition, pRspInfo, nRequestID, bIsLast):
+        print(
+            f"成交回报: {pTrade.InstrumentID} 价格:{pTrade.Price} 数量:{pTrade.Volume}"
+        )
+
+    def OnRspQryInvestorPosition(
+        self, pInvestorPosition, pRspInfo, nRequestID, bIsLast
+    ):
         """持仓查询回报"""
         if pInvestorPosition:
             key = f"{pInvestorPosition.InstrumentID}_{pInvestorPosition.PosiDirection}"
@@ -122,6 +115,7 @@ class MyTraderCallback(CThostFtdcTraderApi):
 
 class CTPTrader(BackTestTrader):
     """CTP期货交易实现"""
+
     def __init__(self, name, log=None):
         super().__init__(name=name, mode="online", market="futures", log=log)
         self.ex = MarketCTP()
@@ -201,10 +195,9 @@ class CTPTrader(BackTestTrader):
         # 检查持仓数量
         self.trader_api.ReqQryInvestorPosition(
             ApiStruct.QryInvestorPosition(
-                BrokerID=self.broker_id,
-                InvestorID=self.user_id,
-                InstrumentID=code
-            ), 0
+                BrokerID=self.broker_id, InvestorID=self.user_id, InstrumentID=code
+            ),
+            0,
         )
         time.sleep(1)  # 等待查询结果
 
@@ -225,7 +218,7 @@ class CTPTrader(BackTestTrader):
             VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
             MinVolume=1,
             ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-            OrderRef=str(self.trader_api.order_ref)
+            OrderRef=str(self.trader_api.order_ref),
         )
 
         result = self.trader_api.ReqOrderInsert(req, 0)
@@ -247,10 +240,12 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             amount or 1,
             opt.msg,
-            datetime.now()
+            datetime.now(),
         )
 
-        msg = f"期货开多 {code} 价格 {tick[code].last} 数量 {amount or 1} 原因 {opt.msg}"
+        msg = (
+            f"期货开多 {code} 价格 {tick[code].last} 数量 {amount or 1} 原因 {opt.msg}"
+        )
         utils.send_fs_msg("futures_trader", "期货交易提醒", [msg])
 
         return {"price": tick[code].last, "amount": amount or 1}
@@ -266,8 +261,9 @@ class CTPTrader(BackTestTrader):
             ApiStruct.QryInvestorPosition(
                 BrokerID=self.ex.broker_id,
                 InvestorID=self.ex.user_id,
-                InstrumentID=code
-            ), 0
+                InstrumentID=code,
+            ),
+            0,
         )
         time.sleep(1)
 
@@ -288,7 +284,7 @@ class CTPTrader(BackTestTrader):
             VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
             MinVolume=1,
             ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-            OrderRef=str(self.trader_api.order_ref)
+            OrderRef=str(self.trader_api.order_ref),
         )
 
         result = self.trader_api.ReqOrderInsert(req, 0)
@@ -308,10 +304,12 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             amount or 1,
             opt.msg,
-            datetime.now()
+            datetime.now(),
         )
 
-        msg = f"期货开空 {code} 价格 {tick[code].last} 数量 {amount or 1} 原因 {opt.msg}"
+        msg = (
+            f"期货开空 {code} 价格 {tick[code].last} 数量 {amount or 1} 原因 {opt.msg}"
+        )
         utils.send_fs_msg("futures_trader", "期货交易提醒", [msg])
 
         return {"price": tick[code].last, "amount": amount or 1}
@@ -335,7 +333,7 @@ class CTPTrader(BackTestTrader):
             VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
             MinVolume=1,
             ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-            OrderRef=str(self.trader_api.order_ref)
+            OrderRef=str(self.trader_api.order_ref),
         )
 
         result = self.trader_api.ReqOrderInsert(req, 0)
@@ -355,7 +353,7 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             pos.amount,
             opt.msg,
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货平多 {code} 价格 {tick[code].last} 数量 {pos.amount} 原因 {opt.msg}"
@@ -382,7 +380,7 @@ class CTPTrader(BackTestTrader):
             VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
             MinVolume=1,
             ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-            OrderRef=str(self.trader_api.order_ref)
+            OrderRef=str(self.trader_api.order_ref),
         )
 
         result = self.trader_api.ReqOrderInsert(req, 0)
@@ -402,7 +400,7 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             pos.amount,
             opt.msg,
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货平空 {code} 价格 {tick[code].last} 数量 {pos.amount} 原因 {opt.msg}"
@@ -423,8 +421,9 @@ class CTPTrader(BackTestTrader):
             ApiStruct.QryInvestorPosition(
                 BrokerID=self.ex.broker_id,
                 InvestorID=self.ex.user_id,
-                InstrumentID=code
-            ), 0
+                InstrumentID=code,
+            ),
+            0,
         )
         time.sleep(1)
 
@@ -444,7 +443,7 @@ class CTPTrader(BackTestTrader):
                 VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
                 MinVolume=1,
                 ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-                OrderRef=str(self.trader_api.order_ref)
+                OrderRef=str(self.trader_api.order_ref),
             )
             direction = "sell"
         else:
@@ -462,7 +461,7 @@ class CTPTrader(BackTestTrader):
                 VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
                 MinVolume=1,
                 ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-                OrderRef=str(self.trader_api.order_ref)
+                OrderRef=str(self.trader_api.order_ref),
             )
             direction = "buy"
 
@@ -483,7 +482,7 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             pos.amount,
             f"锁仓:{opt.msg}",
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货锁仓 {code} 方向:{direction} 价格:{tick[code].last} 数量:{pos.amount} 原因:{opt.msg}"
@@ -500,7 +499,7 @@ class CTPTrader(BackTestTrader):
             return False
 
         self.trader_api.order_ref += 1
-        
+
         # 根据持仓方向决定平仓方向和价格
         if pos.direction == "buy":
             # 平多仓，用卖一价
@@ -543,7 +542,7 @@ class CTPTrader(BackTestTrader):
             price,
             pos.amount,
             f"强平:{opt.msg}",
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货强平 {code} 方向:{direction_str} 价格:{price} 数量:{pos.amount} 原因:{opt.msg}"
@@ -554,7 +553,7 @@ class CTPTrader(BackTestTrader):
     def force_close_all(self, opt: Operation):
         """
         强制平掉所有持仓
-        
+
         示例：
         #强平单个持仓
         opt = Operation(code, "close", "risk", 0, {}, "风控强平")
@@ -574,21 +573,18 @@ class CTPTrader(BackTestTrader):
         results = []
         for key, pos_info in self.trader_api.positions.items():
             code = pos_info.InstrumentID
-            direction = "buy" if pos_info.PosiDirection == '2' else "sell"
+            direction = "buy" if pos_info.PosiDirection == "2" else "sell"
             amount = pos_info.Position
-            
+
             pos = POSITION(
-                code=code,
-                direction=direction,
-                price=pos_info.OpenPrice,
-                amount=amount
+                code=code, direction=direction, price=pos_info.OpenPrice, amount=amount
             )
-            
+
             result = self.force_close(code, pos, opt)
             if result:
                 results.append(result)
             time.sleep(0.1)  # 避免请求太快
-            
+
         return results
 
     def close_sell(self, code, pos: POSITION, opt):
@@ -610,7 +606,7 @@ class CTPTrader(BackTestTrader):
             VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
             MinVolume=1,
             ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-            OrderRef=str(self.trader_api.order_ref)
+            OrderRef=str(self.trader_api.order_ref),
         )
 
         result = self.trader_api.ReqOrderInsert(req, 0)
@@ -630,7 +626,7 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             pos.amount,
             opt.msg,
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货平空 {code} 价格 {tick[code].last} 数量 {pos.amount} 原因 {opt.msg}"
@@ -651,8 +647,9 @@ class CTPTrader(BackTestTrader):
             ApiStruct.QryInvestorPosition(
                 BrokerID=self.ex.broker_id,
                 InvestorID=self.ex.user_id,
-                InstrumentID=code
-            ), 0
+                InstrumentID=code,
+            ),
+            0,
         )
         time.sleep(1)
 
@@ -672,7 +669,7 @@ class CTPTrader(BackTestTrader):
                 VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
                 MinVolume=1,
                 ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-                OrderRef=str(self.trader_api.order_ref)
+                OrderRef=str(self.trader_api.order_ref),
             )
             direction = "sell"
         else:
@@ -690,7 +687,7 @@ class CTPTrader(BackTestTrader):
                 VolumeCondition=ApiStruct.THOST_FTDC_VC_AV,
                 MinVolume=1,
                 ContingentCondition=ApiStruct.THOST_FTDC_CC_Immediately,
-                OrderRef=str(self.trader_api.order_ref)
+                OrderRef=str(self.trader_api.order_ref),
             )
             direction = "buy"
 
@@ -711,7 +708,7 @@ class CTPTrader(BackTestTrader):
             tick[code].last,
             pos.amount,
             f"锁仓:{opt.msg}",
-            datetime.now()
+            datetime.now(),
         )
 
         msg = f"期货锁仓 {code} 方向:{direction} 价格:{tick[code].last} 数量:{pos.amount} 原因:{opt.msg}"
@@ -749,8 +746,10 @@ class CTPTrader(BackTestTrader):
         req.InvestorID = self.ex.user_id
 
         return self.trader_api.ReqOrderAction(req, self.trader_api.order_ref) == 0
-    
-    def OnRspSettlementInfoConfirm(self, pSettlementInfoConfirm, pRspInfo, nRequestID, bIsLast):
+
+    def OnRspSettlementInfoConfirm(
+        self, pSettlementInfoConfirm, pRspInfo, nRequestID, bIsLast
+    ):
         """结算单确认响应"""
         if pRspInfo and pRspInfo.ErrorID == 0:
             print("结算单确认成功")
@@ -761,13 +760,13 @@ class CTPTrader(BackTestTrader):
         """合约查询响应"""
         if pInstrument:
             instrument_info = {
-                'code': pInstrument.InstrumentID,
-                'exchange_id': pInstrument.ExchangeID,
-                'product_id': pInstrument.ProductID,
-                'price_tick': pInstrument.PriceTick,
-                'volume_multiple': pInstrument.VolumeMultiple,
-                'max_market_order_volume': pInstrument.MaxMarketOrderVolume,
-                'min_market_order_volume': pInstrument.MinMarketOrderVolume,
+                "code": pInstrument.InstrumentID,
+                "exchange_id": pInstrument.ExchangeID,
+                "product_id": pInstrument.ProductID,
+                "price_tick": pInstrument.PriceTick,
+                "volume_multiple": pInstrument.VolumeMultiple,
+                "max_market_order_volume": pInstrument.MaxMarketOrderVolume,
+                "min_market_order_volume": pInstrument.MinMarketOrderVolume,
             }
             print(f"合约信息: {instrument_info}")
 
@@ -821,14 +820,14 @@ class CTPTrader(BackTestTrader):
         positions = {}
         for key, pos in self.trader_api.positions.items():
             if pos.InstrumentID == code:
-                direction = "buy" if pos.PosiDirection == '2' else "sell"
+                direction = "buy" if pos.PosiDirection == "2" else "sell"
                 positions[direction] = {
-                    'code': pos.InstrumentID,
-                    'direction': direction,
-                    'volume': pos.Position,
-                    'price': pos.OpenPrice,
-                    'margin': pos.UseMargin,
-                    'profit': pos.PositionProfit
+                    "code": pos.InstrumentID,
+                    "direction": direction,
+                    "volume": pos.Position,
+                    "price": pos.OpenPrice,
+                    "margin": pos.UseMargin,
+                    "profit": pos.PositionProfit,
                 }
         return positions
 
@@ -837,47 +836,48 @@ class CTPTrader(BackTestTrader):
         positions = {}
         for key, pos in self.trader_api.positions.items():
             code = pos.InstrumentID
-            direction = "buy" if pos.PosiDirection == '2' else "sell"
+            direction = "buy" if pos.PosiDirection == "2" else "sell"
             if code not in positions:
                 positions[code] = {}
             positions[code][direction] = {
-                'code': code,
-                'direction': direction,
-                'volume': pos.Position,
-                'price': pos.OpenPrice,
-                'margin': pos.UseMargin,
-                'profit': pos.PositionProfit
+                "code": code,
+                "direction": direction,
+                "volume": pos.Position,
+                "price": pos.OpenPrice,
+                "margin": pos.UseMargin,
+                "profit": pos.PositionProfit,
             }
         return positions
 
+
 if __name__ == "__main__":
     trader = CTPTrader("ctp_trader")
-    
+
     try:
         # 确认结算单
         trader.confirm_settlement()
-        
+
         # 查询账户资金
         trader.query_trading_account()
         time.sleep(1)
-        
+
         # 查询持仓
         code = "rb2401"
         positions = trader.get_position(code)
         print(f"持仓信息: {positions}")
-        
+
         # 开仓测试
         opt = Operation(code, "buy", "test", 0, {}, "测试买入")
         trade_res = trader.open_buy(code, opt, 1)
         print(f"开仓结果: {trade_res}")
-        
+
         # 等待成交
         time.sleep(5)
-        
+
         # 查询委托和成交
         trader.query_orders(code)
         trader.query_trades(code)
-        
+
     except Exception as e:
         print(f"发生错误: {str(e)}")
     finally:
