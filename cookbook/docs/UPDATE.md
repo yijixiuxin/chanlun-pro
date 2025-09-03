@@ -2,6 +2,14 @@
 
 ---
 
+### 2025-09-03
+
+> config.py 中增加 CTP 相关配置
+
+* 新增期货 CTP 交易相关功能（待测试）；
+* TradingView 指标重新整理（分文件），增加 macd 背离指标；
+* 升级 TradingView 图表库版本；
+
 ### 2025-06-28
 
 * 新增相似股票选股，选股脚本 `script/crontab/xuangu_by_same.py`
