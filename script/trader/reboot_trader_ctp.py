@@ -3,12 +3,10 @@ import traceback
 
 from chanlun import fun
 from chanlun.cl_interface import Config
-from chanlun.exchange.exchange_ctp import (
-    MarketCTP,  # TODO 文件中没有 MarketCTP 行情类定义
-)
+from chanlun.exchange.exchange_ctp import MarketCTP
 from chanlun.strategy.strategy_demo import StrategyDemo
 from chanlun.trader.online_market_datas import OnlineMarketDatas
-from chanlun.trader.trade_ctp import CTPTrader
+from chanlun.trader.trader_ctp import CTPTrader
 
 logger = fun.get_logger("trader_ctp.log")
 
