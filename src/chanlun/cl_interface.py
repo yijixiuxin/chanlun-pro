@@ -345,6 +345,18 @@ class LINE:
         j = math.degrees(k)
         return j if self.end.val > self.start.val else -j
 
+    def __eq__(self, other):
+        """判断两个BI对象是否相等"""
+        if not isinstance(other, BI):
+            return False
+        return (self.start.k.k_index == other.start.k.k_index and
+                self.end.k.k_index == other.end.k.k_index and
+                self.type == other.type)
+
+    def __hash__(self):
+        """返回BI对象的哈希值"""
+        return hash((self.start.k.k_index, self.end.k.k_index, self.type))
+
 
 class ZS:
     """
@@ -354,8 +366,8 @@ class ZS:
     def __init__(
         self,
         zs_type: str,
-        start: FX,
-        end: FX = None,
+        start: LINE,
+        end: LINE = None,
         zg: float = None,
         zd: float = None,
         gg: float = None,
@@ -366,11 +378,11 @@ class ZS:
         level: int = 0,
     ):
         self.zs_type: str = zs_type  # 标记中枢类型 bi 笔中枢 xd 线段中枢 zsd 走势段中枢
-        self.start: FX = start
+        self.start: LINE = start
         self.lines: List[Union[BI, XD, LINE]] = (
             []
         )  # 中枢，记录中枢的线（笔 or 线段）对象
-        self.end: FX = end
+        self.end: LINE = end
 
         self.zg: float = zg
         self.zd: float = zd
@@ -389,6 +401,7 @@ class ZS:
         添加 笔 or 线段
         """
         self.lines.append(line)
+        self.line_num = len(self.lines)
         return True
 
     def zf(self) -> float:
@@ -675,6 +688,10 @@ class TZXL:
         self.lines: List[LINE] = [line]
         self.done: bool = done
 
+        # 新增：记录原始笔，用于包含处理后的追溯
+        self.original_lines: List[LINE] = self.lines.copy()
+        self.is_merged: bool = False
+
         self.max: float = 0
         self.min: float = 0
         self.update_maxmin()
@@ -695,14 +712,15 @@ class TZXL:
             sort_lines = sorted(self.lines, key=lambda _l: _l.high, reverse=True)
         else:
             sort_lines = sorted(self.lines, key=lambda _l: _l.low, reverse=False)
-        return sort_lines[0].start
+        return sort_lines[0].start if sort_lines else None
 
     def get_end_fx(self):
         if self.bh_direction == "up":
             sort_lines = sorted(self.lines, key=lambda _l: _l.low, reverse=True)
         else:
             sort_lines = sorted(self.lines, key=lambda _l: _l.high, reverse=False)
-        return sort_lines[0].end
+        return sort_lines[0].end if sort_lines else None
+
 
 
 class XLFX:
