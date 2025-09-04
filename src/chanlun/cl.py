@@ -28,7 +28,13 @@ from chanlun.cl_interface import (
     Config, LINE, MACD_INFOS,
     query_macd_ld, compare_ld_beichi, user_custom_mmd
 )
+import logging
+import copy
+from typing import List, Tuple, Optional
 
+# 配置日志
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class CL(ICL):
     """
@@ -584,57 +590,69 @@ class CL(ICL):
         return s1_contains_s2 or s2_contains_s1
 
     def _process_inclusion(self, tzxls: List[TZXL], direction: str) -> List[TZXL]:
-        """对特征序列进行包含关系处理"""
+        """对特征序列进行包含关系处理（最终修正版）"""
         if len(tzxls) < 2:
             return tzxls
 
         processed = copy.deepcopy(tzxls)
-        i = 0
 
-        while i < len(processed) - 1:
-            tzxl1 = processed[i]
-            tzxl2 = processed[i + 1]
+        logging.debug(f"进入函数，共有 {len(processed)} 个特征序列。处理方向: {direction}.")
 
-            if self._check_inclusion(tzxl1, tzxl2):
-                high1, low1 = tzxl1.max, tzxl1.min
-                high2, low2 = tzxl2.max, tzxl2.min
+        while True:
+            merged_in_pass = False
+            i = 0
+            while i < len(processed) - 1:
+                tzxl1 = processed[i]
+                tzxl2 = processed[i + 1]
 
-                # 根据处理方向合并
-                if direction == 'down':
-                    new_low = min(low1, low2)
-                    new_high = min(high1, high2)
-                else:  # direction == 'up'
-                    new_high = max(high1, high2)
-                    new_low = max(low1, low2)
+                if self._check_inclusion(tzxl1, tzxl2):
+                    logging.info(
+                        f"在索引 {i} 处发现包含关系。合并 tzxl1 (max={tzxl1.max}, min={tzxl1.min}) 和 tzxl2 (max={tzxl2.max}, min={tzxl2.min}).")
 
-                # 创建合并后的特征序列
-                first_line = tzxl1.lines[0] if tzxl1.lines and tzxl1.lines[0] else tzxl1.line
-                merged_tzxl = TZXL(
-                    bh_direction=tzxl1.bh_direction,
-                    line=first_line,
-                    pre_line=tzxl1.pre_line,
-                    line_bad=tzxl1.line_bad,
-                    done=True
-                )
+                    high1, low1 = tzxl1.max, tzxl1.min
+                    high2, low2 = tzxl2.max, tzxl2.min
 
-                # 合并两个TZXL的所有笔
-                merged_tzxl.lines = tzxl1.lines + tzxl2.lines
-                merged_tzxl.max = new_high
-                merged_tzxl.min = new_low
-                merged_tzxl.is_merged = True
+                    if direction == 'down':
+                        new_low = min(low1, low2)
+                        new_high = min(high1, high2)
+                    else:  # 'up'
+                        new_high = max(high1, high2)
+                        new_low = max(low1, low2)
 
-                # 追踪原始笔
-                tzxl1_originals = tzxl1.original_lines if hasattr(tzxl1,
-                                                                  'original_lines') and tzxl1.original_lines else tzxl1.lines
-                tzxl2_originals = tzxl2.original_lines if hasattr(tzxl2,
-                                                                  'original_lines') and tzxl2.original_lines else tzxl2.lines
-                merged_tzxl.original_lines = tzxl1_originals + tzxl2_originals
+                    first_line = tzxl1.lines[0] if tzxl1.lines and tzxl1.lines[0] else tzxl1.line
+                    merged_tzxl = TZXL(
+                        bh_direction=tzxl1.bh_direction,
+                        line=first_line,
+                        pre_line=tzxl1.pre_line,
+                        line_bad=tzxl1.line_bad,
+                        done=True
+                    )
+                    merged_tzxl.lines = tzxl1.lines + tzxl2.lines
+                    merged_tzxl.max = new_high
+                    merged_tzxl.min = new_low
+                    merged_tzxl.is_merged = True
 
-                processed[i] = merged_tzxl
-                del processed[i + 1]
-            else:
-                i += 1
+                    tzxl1_originals = tzxl1.original_lines if hasattr(tzxl1,
+                                                                      'original_lines') and tzxl1.original_lines else tzxl1.lines
+                    tzxl2_originals = tzxl2.original_lines if hasattr(tzxl2,
+                                                                      'original_lines') and tzxl2.original_lines else tzxl2.lines
+                    merged_tzxl.original_lines = tzxl1_originals + tzxl2_originals
 
+                    processed[i] = merged_tzxl
+                    del processed[i + 1]
+
+                    merged_in_pass = True
+                    # 发生合并后，中断内层循环，从头开始重新扫描
+                    logging.debug(f"合并完成。序列长度变为 {len(processed)}。准备开始新一轮扫描。")
+                    break
+                else:
+                    i += 1
+
+            # 如果完整的一轮扫描没有发生任何合并，则处理完成
+            if not merged_in_pass:
+                break
+
+        logging.debug(f"退出函数，剩下 {len(processed)} 个特征序列。")
         return processed
 
     def _get_characteristic_sequence(self, segment_bis: List[BI], segment_type: str) -> List[TZXL]:
@@ -642,7 +660,6 @@ class CL(ICL):
         cs_type = 'down' if segment_type == 'up' else 'up'
         cs_bis = [bi for bi in segment_bis if bi.type == cs_type]
 
-        # 将笔转换为特征序列
         tzxls = []
         for bi in cs_bis:
             tzxl = TZXL(
@@ -657,66 +674,52 @@ class CL(ICL):
             tzxl.is_merged = False
             tzxls.append(tzxl)
 
+        # LOGGING ADDED: 记录生成的特征序列
+        logging.debug(f"为线段类型 '{segment_type}' 生成了 {len(tzxls)} 个特征序列。")
         return tzxls
 
     def _check_top_fractal(self, processed_tzxls: List[TZXL]) -> Tuple[bool, Optional[TZXL], Optional[TZXL]]:
         """在特征序列中检查顶分型"""
         if len(processed_tzxls) < 3:
             return False, None, None
-
         for i in range(len(processed_tzxls) - 2):
             tzxl1, tzxl2, tzxl3 = processed_tzxls[i:i + 3]
             h2 = tzxl2.max
             is_high_highest = h2 >= tzxl1.max and h2 >= tzxl3.max
             if is_high_highest:
+                logging.debug(f"发现顶分型: {tzxl1}, {tzxl2}, {tzxl3}")
                 return True, tzxl2, tzxl3
-
         return False, None, None
 
     def _check_bottom_fractal(self, processed_tzxls: List[TZXL]) -> Tuple[bool, Optional[TZXL], Optional[TZXL]]:
         """在特征序列中检查底分型"""
         if len(processed_tzxls) < 3:
             return False, None, None
-
         for i in range(len(processed_tzxls) - 2):
             tzxl1, tzxl2, tzxl3 = processed_tzxls[i:i + 3]
             l2 = tzxl2.min
             is_low_lowest = l2 <= tzxl1.min and l2 <= tzxl3.min
             if is_low_lowest:
+                logging.debug(f"发现底分型: {tzxl1}, {tzxl2}, {tzxl3}")
                 return True, tzxl2, tzxl3
-
         return False, None, None
 
     def _get_segment_end_bi_from_middle_cs(self, middle_tzxl: TZXL, all_bis: List[BI]) -> Optional[BI]:
-        """
-        根据分型的中间笔来确定线段的结束笔
-        采用代码二的逻辑：从TZXL中获取正确的目标笔
-        """
+        """根据分型的中间笔来确定线段的结束笔"""
         target_bi = None
-
-        # 检查中间笔是否为合并笔
         if hasattr(middle_tzxl, 'is_merged') and middle_tzxl.is_merged:
-            # 对于合并笔，目标笔是original_lines的第一笔
             if hasattr(middle_tzxl, 'original_lines') and middle_tzxl.original_lines:
                 target_bi = middle_tzxl.original_lines[0]
-            else:
-                # 回退：使用lines的第一笔
-                if middle_tzxl.lines:
-                    target_bi = middle_tzxl.lines[0]
-        else:
-            # 对于非合并笔，目标笔就是lines列表的第一笔
-            if middle_tzxl.lines and middle_tzxl.lines[0]:
+            elif middle_tzxl.lines:
                 target_bi = middle_tzxl.lines[0]
-            else:
-                return None
-
+        elif middle_tzxl.lines and middle_tzxl.lines[0]:
+            target_bi = middle_tzxl.lines[0]
+        else:
+            return None
         if not target_bi:
             return None
-
         try:
-            # 在所有笔的列表中找到目标笔的索引
             idx = all_bis.index(target_bi)
-            # 线段的结束笔是目标笔的前一笔
             if idx > 0:
                 return all_bis[idx - 1]
             else:
@@ -729,29 +732,19 @@ class CL(ICL):
         if hasattr(cs_tzxl, 'is_merged') and cs_tzxl.is_merged:
             if hasattr(cs_tzxl, 'original_lines') and cs_tzxl.original_lines:
                 return cs_tzxl.original_lines[0]
-        # 对于非合并笔，返回lines的第一笔
         if cs_tzxl.lines and cs_tzxl.lines[0]:
             return cs_tzxl.lines[0]
         return None
 
-    # +++ 新增函数：从代码二移植而来 +++
     def _find_critical_bi_and_truncate(self, all_bis: List[BI]) -> int:
-        """
-        找到一个关键的笔作为分析起点，并返回其索引。
-        这是从代码二 `find_critical_stroke_and_truncate` 移植的核心逻辑，
-        用于过滤掉行情初期的不稳定波动，从一个更可靠的位置开始划分线段。
-        """
-        # 至少需要5笔才能判断
+        """找到一个关键的笔作为分析起点，并返回其索引。"""
         if len(all_bis) < 5:
-            return 0  # 笔数不足，从头开始
-
+            return 0
         for i in range(len(all_bis) - 4):
             bi_i = all_bis[i]
             bi_i_plus_2 = all_bis[i + 2]
             bi_i_plus_4 = all_bis[i + 4]
             is_critical = False
-
-            # 判断下降笔是否为关键笔（构成一个显著高点）
             if bi_i.type == 'down':
                 is_start_higher = (self._get_bi_high(bi_i) > self._get_bi_high(bi_i_plus_2) and
                                    self._get_bi_high(bi_i) > self._get_bi_high(bi_i_plus_4))
@@ -759,8 +752,6 @@ class CL(ICL):
                                  self._get_bi_low(bi_i) > self._get_bi_low(bi_i_plus_4))
                 if is_start_higher and is_end_higher:
                     is_critical = True
-
-            # 判断上升笔是否为关键笔（构成一个显著低点）
             elif bi_i.type == 'up':
                 is_start_lower = (self._get_bi_low(bi_i) < self._get_bi_low(bi_i_plus_2) and
                                   self._get_bi_low(bi_i) < self._get_bi_low(bi_i_plus_4))
@@ -768,46 +759,53 @@ class CL(ICL):
                                 self._get_bi_high(bi_i) < self._get_bi_high(bi_i_plus_4))
                 if is_start_lower and is_end_lower:
                     is_critical = True
-
-            # 如果找到了关键笔，返回它的索引作为起点
             if is_critical:
+                logging.info(f"在索引 {i} 处找到关键笔。从此开始分析。")
                 return i
-
-        # 如果没有找到任何关键笔，则从头开始分析
+        logging.warning("未找到关键笔。从索引 0 开始分析。")
         return 0
 
     def _calculate_xds(self):
-        """根据笔列表计算线段，整合代码二的优化思路"""
+        """根据笔列表计算线段"""
+        logging.info("开始计算线段...")
         if len(self.bis) < 3:
+            logging.warning("笔的数量不足以计算线段，至少需要3笔。")
             return
 
         self.xds = []
         all_bis = self.bis
-
-        # +++ 修改部分：调用新函数确定分析起点 +++
-        # 这是整个算法最关键的优化：不再盲目地从索引0开始，
-        # 而是先寻找一个稳定的结构，过滤掉早期的噪声。
         current_list_index = self._find_critical_bi_and_truncate(all_bis)
-
         next_segment_builder = None
 
-        # 主循环
-        while current_list_index <= len(all_bis) - 3:
+        # LOGGING ADDED: 主循环卫兵
+        main_loop_guard = 0
+        max_main_loops = len(all_bis) + 100
 
-            # 优先使用builder构建下一段
+        while current_list_index <= len(all_bis) - 3:
+            # LOGGING ADDED: 主循环卫兵检查
+            main_loop_guard += 1
+            if main_loop_guard > max_main_loops:
+                logging.error(f"主循环在索引 {current_list_index} 处检测到无限循环！正在退出。")
+                break
+
+            # LOGGING ADDED: 记录主循环的当前状态
+            logging.info(f"--- 主循环迭代 #{main_loop_guard}, 当前索引 = {current_list_index} ---")
+
             if next_segment_builder and next_segment_builder.get('start_bi') and next_segment_builder.get('end_bi'):
+                logging.debug("使用 next_segment_builder 构建线段。")
                 start_bi = next_segment_builder['start_bi']
                 end_bi = next_segment_builder['end_bi']
-
                 try:
                     start_idx = all_bis.index(start_bi)
                     end_idx = all_bis.index(end_bi)
                 except ValueError:
+                    logging.warning("在笔列表中未找到来自 builder 的笔。正在重置。")
                     next_segment_builder = None
                     current_list_index += 1
                     continue
 
                 if end_idx < start_idx or (end_idx - start_idx) < 2:
+                    logging.warning(f"来自 builder 的线段无效 (start_idx={start_idx}, end_idx={end_idx})。正在重置。")
                     current_list_index = start_idx + 1
                     next_segment_builder = None
                     continue
@@ -819,36 +817,47 @@ class CL(ICL):
                 }
                 current_list_index = start_idx
                 next_segment_builder = None
+                logging.debug(
+                    f"通过 builder 构建了线段: type={current_segment['type']}, length={len(current_segment_bis)}")
 
             else:
-                # 标准模式：寻找线段起点
+                logging.debug("标准模式：寻找新线段起点。")
                 if current_list_index + 2 >= len(all_bis):
                     break
-
                 s1, s2, s3 = all_bis[current_list_index:current_list_index + 3]
-
                 if not self._check_bi_overlap(s1, s3):
+                    logging.debug(f"索引 {current_list_index} 和 {current_list_index + 2} 的笔无重叠。前进。")
                     current_list_index += 1
                     continue
-
                 current_segment = {'bis': [s1, s2, s3], 'type': s1.type}
+                logging.info(f"新线段于索引 {current_list_index} 处开始, 类型: {s1.type}")
 
-            # 检查线段是否延伸或结束
             next_check_idx = current_list_index + len(current_segment['bis'])
             is_completed = False
             break_info = None
 
-            # 内循环：线段延伸或结束判断
+            # LOGGING ADDED: 内循环卫兵
+            inner_loop_guard = 0
+            max_inner_loops = len(all_bis) + 100
+
             while next_check_idx + 1 < len(all_bis):
+                # LOGGING ADDED: 内循环卫兵检查
+                inner_loop_guard += 1
+                if inner_loop_guard > max_inner_loops:
+                    logging.error(f"内循环在 next_check_idx {next_check_idx} 处检测到无限循环！正在中断内循环。")
+                    break
+
+                logging.debug(f"内循环: next_check_idx={next_check_idx}, 当前线段长度={len(current_segment['bis'])}")
+
                 segment_high = max(self._get_bi_high(bi) for bi in current_segment['bis'])
                 segment_low = min(self._get_bi_low(bi) for bi in current_segment['bis'])
-
                 bi_for_fractal_check = all_bis[next_check_idx]
                 bi_for_extension_check = all_bis[next_check_idx + 1]
 
-                # 处理上升线段
                 if current_segment['type'] == 'up':
                     if self._get_bi_high(bi_for_extension_check) > segment_high:
+                        logging.debug(
+                            f"延伸上升线段。发现新高点: {self._get_bi_high(bi_for_extension_check)} > {segment_high}")
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
                         continue
@@ -856,22 +865,23 @@ class CL(ICL):
                         is_completed, break_info, extend_bis = self._check_segment_end_for_up(
                             current_segment['bis'], all_bis, next_check_idx, segment_high, bi_for_fractal_check
                         )
-
                         if is_completed and break_info:
+                            logging.info(f"上升线段结束条件满足。原因: {break_info.get('reason')}")
                             break
                         elif extend_bis:
+                            logging.debug(f"未中断，但根据检查结果将上升线段延伸 {len(extend_bis)} 笔。")
                             current_segment['bis'].extend(extend_bis)
                             next_check_idx += len(extend_bis)
                             continue
-                        else:  # 如果没有明确的结束或延伸信号（例如边界检查未返回任何笔），则默认延伸
+                        else:
+                            logging.debug("上升线段默认延伸。")
                             current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                             next_check_idx += 2
                             continue
-
-
-                # 处理下降线段
                 elif current_segment['type'] == 'down':
                     if self._get_bi_low(bi_for_extension_check) < segment_low:
+                        logging.debug(
+                            f"延伸下降线段。发现新低点: {self._get_bi_low(bi_for_extension_check)} < {segment_low}")
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
                         continue
@@ -879,36 +889,37 @@ class CL(ICL):
                         is_completed, break_info, extend_bis = self._check_segment_end_for_down(
                             current_segment['bis'], all_bis, next_check_idx, segment_low, bi_for_fractal_check
                         )
-
                         if is_completed and break_info:
+                            logging.info(f"下降线段结束条件满足。原因: {break_info.get('reason')}")
                             break
                         elif extend_bis:
+                            logging.debug(f"未中断，但根据检查结果将下降线段延伸 {len(extend_bis)} 笔。")
                             current_segment['bis'].extend(extend_bis)
                             next_check_idx += len(extend_bis)
                             continue
-                        else:  # 默认延伸
+                        else:
+                            logging.debug("下降线段默认延伸。")
                             current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                             next_check_idx += 2
                             continue
                 else:
                     break
 
-            # 如果线段完成，创建线段对象
             if is_completed and break_info and break_info.get('segment_end_bi'):
                 final_end_bi = break_info['segment_end_bi']
-
                 try:
                     final_bi_index = all_bis.index(final_end_bi)
                 except ValueError:
+                    logging.error("在线段结束笔列表中找不到该笔。创建待定线段并停止。")
                     self._create_pending_segment(all_bis, current_list_index, current_segment['type'])
                     break
 
                 start_bi_index = all_bis.index(current_segment['bis'][0])
-
                 xd = self._create_completed_segment(
                     all_bis, start_bi_index, final_bi_index, current_segment['type']
                 )
                 self.xds.append(xd)
+                logging.info(f"已创建完成的线段: {xd}")
 
                 if break_info.get('start_bi') and break_info.get('end_bi'):
                     next_segment_builder = {
@@ -916,58 +927,51 @@ class CL(ICL):
                         'end_bi': break_info['end_bi'],
                         'next_segment_type': break_info['next_segment_type']
                     }
-                    # 下一轮循环将通过builder的start_bi找到正确的索引
                     try:
                         current_list_index = all_bis.index(break_info['start_bi'])
+                        logging.debug(f"已设置下一线段构建器。新的起始索引为 {current_list_index}。")
                     except ValueError:
-                        break  # builder中的笔找不到了，终止
+                        logging.error("未找到下一线段的起始笔。正在终止。")
+                        break
                 else:
                     current_list_index = final_bi_index
                     next_segment_builder = None
-
+                    logging.debug(f"无构建器。新的起始索引为 {current_list_index}。")
             else:
-                # 如果内层循环正常结束（没有完成），创建待定线段
+                logging.info("内循环结束，未完成线段。正在创建待定线段。")
                 if current_list_index < len(all_bis):
                     self._create_pending_segment(all_bis, current_list_index, current_segment['type'])
                 break
+        logging.info("线段计算完成。")
 
+    # ... (其他函数保持不变) ...
     def _check_segment_end_for_up(self, current_segment_bis, all_bis, next_check_idx, segment_high,
                                   bi_for_fractal_check):
         """检查上升线段是否结束，返回 (is_completed, break_info, extend_bis)"""
         cs_existing_raw = self._get_characteristic_sequence(current_segment_bis, 'up')
         if not cs_existing_raw:
             return False, None, None
-
         last_cs_tzxl = self._process_inclusion(cs_existing_raw, 'up')[-1]
         if not last_cs_tzxl or not last_cs_tzxl.lines:
             return False, None, None
-
         lookahead_bis = all_bis[next_check_idx:]
         bounded_lookahead_bis = []
-
         for bi in lookahead_bis:
             bounded_lookahead_bis.append(bi)
             if bi.type == 'up' and self._get_bi_high(bi) > segment_high:
                 break
-
         if not bounded_lookahead_bis:
             return False, None, None
-
         last_cs_bi = self._get_extremum_bi_from_cs(last_cs_tzxl)
         if not last_cs_bi:
             return False, None, None
-
-        # 情况1：重叠，检查顶分型
         if self._check_bi_overlap(bi_for_fractal_check, last_cs_bi):
             cs_existing_processed_step1 = self._process_inclusion(cs_existing_raw, 'down')
             cs_existing_processed_step2 = self._process_inclusion(cs_existing_processed_step1, 'up')
-
             new_cs_down = self._get_characteristic_sequence(bounded_lookahead_bis, 'up')
             processed_cs_new = self._process_inclusion(new_cs_down, 'up')
-
             final_processed_cs = (cs_existing_processed_step2[-1:] + processed_cs_new
                                   if cs_existing_processed_step2 else processed_cs_new)
-
             check1_passes, cs_middle, cs_right = self._check_top_fractal(final_processed_cs)
             if check1_passes and cs_middle and cs_right:
                 segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis)
@@ -979,22 +983,17 @@ class CL(ICL):
                         'start_bi': start_bi, 'end_bi': end_bi, 'segment_end_bi': segment_end_bi
                     }, None
             return False, None, bounded_lookahead_bis
-
-        # 情况2：不重叠，双重条件判断
         else:
             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
             new_cs_down = self._get_characteristic_sequence(bounded_lookahead_bis, 'up')
             processed_cs_new = self._process_inclusion(new_cs_down, 'up')
             cs_for_check1 = (processed_cs_existing[-1:] + processed_cs_new
                              if processed_cs_existing else processed_cs_new)
-
             check1_passes, cs_middle_top, cs_right_top = self._check_top_fractal(cs_for_check1)
-
             next_segment_cs = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
             next_segment_tzxls = self._convert_bis_to_tzxls(next_segment_cs, 'up')
             processed_cs2 = self._process_inclusion(next_segment_tzxls, 'down')
             check2_passes, _, _ = self._check_bottom_fractal(processed_cs2)
-
             if check1_passes and check2_passes and cs_middle_top and cs_right_top:
                 segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_top, all_bis)
                 if segment_end_bi:
@@ -1004,7 +1003,6 @@ class CL(ICL):
                         'reason': 'dual_condition_up_break', 'next_segment_type': 'down',
                         'start_bi': start_bi, 'end_bi': end_bi, 'segment_end_bi': segment_end_bi
                     }, None
-
             return False, None, bounded_lookahead_bis
 
     def _check_segment_end_for_down(self, current_segment_bis, all_bis, next_check_idx, segment_low,
@@ -1013,36 +1011,27 @@ class CL(ICL):
         cs_existing_raw = self._get_characteristic_sequence(current_segment_bis, 'down')
         if not cs_existing_raw:
             return False, None, None
-
         last_cs_tzxl = self._process_inclusion(cs_existing_raw, 'down')[-1]
         if not last_cs_tzxl or not last_cs_tzxl.lines:
             return False, None, None
-
         lookahead_bis = all_bis[next_check_idx:]
         bounded_lookahead_bis = []
         for bi in lookahead_bis:
             bounded_lookahead_bis.append(bi)
             if bi.type == 'down' and self._get_bi_low(bi) < segment_low:
                 break
-
         if not bounded_lookahead_bis:
             return False, None, None
-
         last_cs_bi = self._get_extremum_bi_from_cs(last_cs_tzxl)
         if not last_cs_bi:
             return False, None, None
-
-        # 情况1：重叠，检查底分型
         if self._check_bi_overlap(bi_for_fractal_check, last_cs_bi):
             cs_existing_processed_step1 = self._process_inclusion(cs_existing_raw, 'up')
             cs_existing_processed_step2 = self._process_inclusion(cs_existing_processed_step1, 'down')
-
             new_cs_up = self._get_characteristic_sequence(bounded_lookahead_bis, 'down')
             processed_cs_new = self._process_inclusion(new_cs_up, 'down')
-
             final_processed_cs = (cs_existing_processed_step2[-1:] + processed_cs_new
                                   if cs_existing_processed_step2 else processed_cs_new)
-
             check1_passes, cs_middle, cs_right = self._check_bottom_fractal(final_processed_cs)
             if check1_passes and cs_middle and cs_right:
                 segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis)
@@ -1054,22 +1043,17 @@ class CL(ICL):
                         'start_bi': start_bi, 'end_bi': end_bi, 'segment_end_bi': segment_end_bi
                     }, None
             return False, None, bounded_lookahead_bis
-
-        # 情况2：不重叠，双重条件判断
         else:
             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
             new_cs_up = self._get_characteristic_sequence(bounded_lookahead_bis, 'down')
             processed_cs_new = self._process_inclusion(new_cs_up, 'down')
             cs_for_check1 = (processed_cs_existing[-1:] + processed_cs_new
                              if processed_cs_existing else processed_cs_new)
-
             check1_passes, cs_middle_bottom, cs_right_bottom = self._check_bottom_fractal(cs_for_check1)
-
             next_segment_cs = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
             next_segment_tzxls = self._convert_bis_to_tzxls(next_segment_cs, 'down')
             processed_cs2 = self._process_inclusion(next_segment_tzxls, 'up')
             check2_passes, _, _ = self._check_top_fractal(processed_cs2)
-
             if check1_passes and check2_passes and cs_middle_bottom and cs_right_bottom:
                 segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_bottom, all_bis)
                 if segment_end_bi:
@@ -1079,7 +1063,6 @@ class CL(ICL):
                         'reason': 'dual_condition_down_break', 'next_segment_type': 'up',
                         'start_bi': start_bi, 'end_bi': end_bi, 'segment_end_bi': segment_end_bi
                     }, None
-
             return False, None, bounded_lookahead_bis
 
     def _convert_bis_to_tzxls(self, bis, direction):
@@ -1102,13 +1085,10 @@ class CL(ICL):
     def _create_completed_segment(self, all_bis, start_idx, end_idx, segment_type):
         """创建完成的线段"""
         if start_idx > end_idx:
-            return None  # 无法创建
-
+            return None
         start_bi = all_bis[start_idx]
         end_bi = all_bis[end_idx]
-
         segment_bis_for_extreme = all_bis[start_idx:end_idx + 1]
-
         xd = XD(
             start=start_bi.start,
             end=end_bi.end,
@@ -1118,10 +1098,8 @@ class CL(ICL):
             index=len(self.xds),
             default_zs_type=self.config.get('zs_type_xd', None)
         )
-
         xd.high = max(self._get_bi_high(bi) for bi in segment_bis_for_extreme)
         xd.low = min(self._get_bi_low(bi) for bi in segment_bis_for_extreme)
-
         xd.zs_high = xd.high
         xd.zs_low = xd.low
         xd.done = True
@@ -1131,10 +1109,8 @@ class CL(ICL):
         """创建待定线段"""
         if start_idx >= len(all_bis):
             return
-
         start_bi = all_bis[start_idx]
         end_bi = all_bis[-1]
-
         pending_xd = XD(
             start=start_bi.start,
             end=end_bi.end,
@@ -1144,15 +1120,14 @@ class CL(ICL):
             index=len(self.xds),
             default_zs_type=self.config.get('zs_type_xd', None)
         )
-
         segment_bis = all_bis[start_idx:]
         pending_xd.high = max(self._get_bi_high(bi) for bi in segment_bis)
         pending_xd.low = min(self._get_bi_low(bi) for bi in segment_bis)
-
         pending_xd.zs_high = pending_xd.high
         pending_xd.zs_low = pending_xd.low
         pending_xd.done = False
         self.xds.append(pending_xd)
+        logging.info(f"已创建待定线段: {pending_xd}")
 
     def _calculate_zsds_and_qsds(self):
         """计算走势段和趋势段"""

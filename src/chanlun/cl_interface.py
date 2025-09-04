@@ -801,11 +801,13 @@ class XD(LINE):
         self.not_del: bool = False  # 计算过程中，不允许删除重新计算
         self.not_yx: bool = False  # 计算过程中，不允许进行延续计算
 
-    def is_qk(self) -> bool:
-        """
-        成线段的分型是否有缺口
-        """
-        return self.ding_fx.qk if self.type == "up" else self.di_fx.qk
+    def is_qk(self):
+        if self.type == "up":
+            # 检查 self.ding_fx 是否存在
+            return self.ding_fx.qk if self.ding_fx is not None else False
+        else:
+            # 检查 self.di_fx 是否存在
+            return self.di_fx.qk if self.di_fx is not None else False
 
     def fx_is_done(self) -> bool:
         """
