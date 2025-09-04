@@ -777,11 +777,11 @@ def cl_data_to_tv_chart(
                     {
                         "points": [
                             {
-                                "time": fun.datetime_to_int(zs.start.k.date),
+                                "time": fun.datetime_to_int(zs.start.end.k.date),
                                 "price": zs.zg,
                             },
                             {
-                                "time": fun.datetime_to_int(zs.end.k.date),
+                                "time": fun.datetime_to_int(zs.end.start.k.date) if zs.end else None,
                                 "price": zs.zd,
                             },
                         ],
