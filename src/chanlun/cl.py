@@ -459,175 +459,262 @@ class CL(ICL):
 
     def _calculate_bis(self):
         """
-        根据严格的缠论规则计算笔。
-        该过程通过循环迭代，不断处理和筛选分型，直至分型序列稳定。
-        处理步骤包括：
-        1. 合并同类型的相邻分型，保留极值。
-        2. 若相邻分型K线数不足，进行取舍。
+        根据严格的缠论规则动态计算笔。
+        实现未完成笔的动态识别和延续逻辑。
         """
-        print(f"开始识别笔")
+        print(f"开始动态识别笔，原始分型数量: {len(self.fxs)}")
+
         if len(self.fxs) < 2:
             self.bis = []
             return
 
-        # 使用索引标记需要保留的分型，避免频繁的列表操作
-        processed_fxs = list(self.fxs)
-        fx_count = len(processed_fxs)
+        # 第一步：预处理分型，应用基本过滤规则
+        processed_fxs = self._preprocess_fxs()
+        print(f"预处理后分型数量: {len(processed_fxs)}")
 
-        # 优化：使用标记数组替代直接删除，提升性能
-        keep_flags = [True] * fx_count
-
-        max_iterations = 100  # 防止无限循环
-        iteration = 0
-
-        while iteration < max_iterations:
-            was_modified = False
-            iteration += 1
-
-            # 步骤 1: 合并同一类型的相邻分型（使用标记方式）
-            i = 0
-            while i < fx_count - 1:
-                if not keep_flags[i]:
-                    i += 1
-                    continue
-
-                # 找到下一个有效的分型
-                j = i + 1
-                while j < fx_count and not keep_flags[j]:
-                    j += 1
-
-                if j >= fx_count:
-                    break
-
-                f1 = processed_fxs[i]
-                f2 = processed_fxs[j]
-
-                # 缓存属性访问，减少开销
-                f1_type = f1.type
-                f2_type = f2.type
-
-                if f1_type == f2_type:
-                    was_modified = True
-                    f1_val = f1.val
-                    f2_val = f2.val
-
-                    if f1_type == 'ding':  # 同为顶分型
-                        if f2_val > f1_val:
-                            keep_flags[i] = False
-                            i = j
-                        else:
-                            keep_flags[j] = False
-                    else:  # 同为底分型
-                        if f2_val < f1_val:
-                            keep_flags[i] = False
-                            i = j
-                        else:
-                            keep_flags[j] = False
-                else:
-                    i = j
-
-            # 步骤 2: 处理分型间K线数量不足的情况
-            i = 0
-            while i < fx_count - 1:
-                if not keep_flags[i]:
-                    i += 1
-                    continue
-
-                # 找到下一个有效的分型
-                j = i + 1
-                while j < fx_count and not keep_flags[j]:
-                    j += 1
-
-                if j >= fx_count:
-                    break
-
-                f1 = processed_fxs[i]
-                f2 = processed_fxs[j]
-
-                # 缓存K线索引，减少属性访问
-                k_index_diff = abs(f1.k.k_index - f2.k.k_index)
-
-                if k_index_diff < 4:
-                    was_modified = True
-                    f1_type = f1.type
-                    f1_val = f1.val
-                    f2_val = f2.val
-
-                    if f1_type == 'ding':  # 前一个是顶
-                        if f1_val > f2_val:
-                            keep_flags[j] = False
-                        else:
-                            keep_flags[i] = False
-                            i = j
-                    else:  # 前一个是底
-                        if f1_val < f2_val:
-                            keep_flags[j] = False
-                        else:
-                            keep_flags[i] = False
-                            i = j
-                else:
-                    i = j
-
-            if not was_modified:
-                break
-
-            # 重建有效分型列表（只在必要时进行）
-            if was_modified:
-                new_processed_fxs = []
-                for idx in range(fx_count):
-                    if keep_flags[idx]:
-                        new_processed_fxs.append(processed_fxs[idx])
-
-                processed_fxs = new_processed_fxs
-                fx_count = len(processed_fxs)
-                keep_flags = [True] * fx_count
-
-        # 从最终稳定后的分型序列构建笔
+        # 第二步：动态识别笔
         self.bis = []
-        bis_list = []  # 先构建列表，最后一次性赋值
+        current_incomplete_bi = None  # 当前未完成的笔
+        last_confirmed_fx = None  # 最后确认的分型
 
-        # 预分配默认配置值，减少字典查找
-        default_zs_type = self.config.get('zs_type_bi')
+        for i, fx in enumerate(processed_fxs):
+            print(f"\n处理分型 {i}: index={fx.index}, type={fx.type}, val={fx.val:.2f}")
 
-        for i in range(len(processed_fxs) - 1):
-            start_fx = processed_fxs[i]
-            end_fx = processed_fxs[i + 1]
-
-            # 缓存类型值
-            start_type = start_fx.type
-            end_type = end_fx.type
-
-            # 理论上处理完后类型肯定不同，为保险起见增加检查
-            if start_type == end_type:
+            # 第一个分型，直接作为起点
+            if last_confirmed_fx is None:
+                last_confirmed_fx = fx
+                print(f"  设置起始分型: index={fx.index}")
                 continue
 
-            bi_type = 'up' if start_type == 'di' else 'down'
+            # 检查当前分型与最后确认分型是否能构成笔
+            if self._can_form_bi(last_confirmed_fx, fx):
+                print(f"  分型 {last_confirmed_fx.index} 和 {fx.index} 可以构成笔")
 
-            # 缓存值，减少属性访问
-            start_val = start_fx.val
-            end_val = end_fx.val
+                # 如果有未完成的笔，需要先完成它
+                if current_incomplete_bi is not None:
+                    current_incomplete_bi.end.done = True  # 标记结束分型为完成
+                    print(f"  完成前一个笔: {current_incomplete_bi}")
 
-            bi = BI(
-                start=start_fx,
-                end=end_fx,
-                _type=bi_type,
-                index=len(bis_list),
-                default_zs_type=default_zs_type
-            )
+                # 创建新的未完成笔
+                bi_type = "up" if last_confirmed_fx.type == "di" else "down"
+                current_incomplete_bi = BI(
+                    start=last_confirmed_fx,
+                    end=fx,
+                    _type=bi_type,
+                    index=len(self.bis),
+                    default_zs_type='',
+                )
 
-            if bi_type == 'up':
-                bi.high = end_val
-                bi.low = start_val
+                # 设置笔的高低点
+                current_incomplete_bi.high = max(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
+                current_incomplete_bi.low = min(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
+
+                # 标记结束分型为未完成状态
+                fx.done = False
+
+                self.bis.append(current_incomplete_bi)
+                print(f"  创建未完成笔 #{current_incomplete_bi.index}: {current_incomplete_bi.type} "
+                      f"from fx_{last_confirmed_fx.index} to fx_{fx.index}")
+
+                # 更新最后确认的分型
+                last_confirmed_fx = fx
+
             else:
-                bi.high = start_val
-                bi.low = end_val
+                # 不能构成新笔，检查是否需要延续当前未完成的笔
+                if current_incomplete_bi is not None:
+                    if self._should_extend_bi(current_incomplete_bi, fx):
+                        print(f"  延续当前笔到更极端的分型: index={fx.index}, val={fx.val:.2f}")
 
-            bi.zs_high = bi.high
-            bi.zs_low = bi.low
-            bis_list.append(bi)
+                        # 延续笔到当前分型
+                        current_incomplete_bi.end = fx
 
-        self.bis = bis_list
-        print(f"笔识别完成，共找到 {len(self.bis)} 个笔。")
+                        # 更新笔的高低点
+                        current_incomplete_bi.high = max(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
+                        current_incomplete_bi.low = min(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
+
+                        # 标记新的结束分型为未完成
+                        fx.done = False
+
+                        print(f"  笔已延续: {current_incomplete_bi.type} "
+                              f"from fx_{current_incomplete_bi.start.index} to fx_{fx.index}")
+
+                        # 更新最后确认的分型
+                        last_confirmed_fx = fx
+                    else:
+                        print(f"  分型 {fx.index} 不满足延续条件，跳过")
+                else:
+                    print(f"  无未完成笔，分型 {fx.index} 不能与 {last_confirmed_fx.index} 构成笔")
+
+        # 处理最后一个未完成的笔（如果存在）
+        if current_incomplete_bi is not None and not current_incomplete_bi.end.done:
+            print(f"\n序列结束，最后一个笔保持未完成状态: {current_incomplete_bi}")
+
+        print(f"\n笔识别完成，共找到 {len(self.bis)} 个笔")
+        for bi in self.bis:
+            print(f"  笔 #{bi.index}: {bi.type} "
+                  f"from fx_{bi.start.index}({bi.start.val:.2f}) "
+                  f"to fx_{bi.end.index}({bi.end.val:.2f}) "
+                  f"完成状态: {bi.is_done()}")
+
+    def _preprocess_fxs(self):
+        """
+        预处理分型，应用规则2、规则3和规则4
+        """
+        processed_fxs = list(self.fxs)
+
+        # 应用规则2和规则3
+        changed = True
+        iteration = 0
+
+        while changed and iteration < 10:
+            changed = False
+            iteration += 1
+            new_processed_fxs = []
+
+            i = 0
+            while i < len(processed_fxs):
+                fx1 = processed_fxs[i]
+
+                if i + 2 < len(processed_fxs):
+                    fx2 = processed_fxs[i + 1]
+                    fx3 = processed_fxs[i + 2]
+
+                    # 检查fx1和fx2是否满足一笔的最低要求
+                    if not self._check_bi_requirement(fx1, fx2):
+                        # 规则2：顶1 -> 底1 -> 顶2，且顶2高于顶1
+                        if fx1.type == "ding" and fx2.type == "di" and fx3.type == "ding":
+                            if fx3.val > fx1.val:
+                                print(f"规则2：过滤分型 {fx1.index}({fx1.val:.2f}) 和 {fx2.index}({fx2.val:.2f})")
+                                changed = True
+                                i += 2
+                                continue
+
+                        # 规则3：底1 -> 顶1 -> 底2，且底2低于底1
+                        elif fx1.type == "di" and fx2.type == "ding" and fx3.type == "di":
+                            if fx3.val < fx1.val:
+                                print(f"规则3：过滤分型 {fx1.index}({fx1.val:.2f}) 和 {fx2.index}({fx2.val:.2f})")
+                                changed = True
+                                i += 2
+                                continue
+
+                new_processed_fxs.append(fx1)
+                i += 1
+
+            processed_fxs = new_processed_fxs
+
+        # 应用规则4：处理连续同类分型
+        final_fxs = []
+        i = 0
+
+        while i < len(processed_fxs):
+            current_fx = processed_fxs[i]
+            same_type_group = [current_fx]
+            j = i + 1
+
+            # 收集连续同类型分型
+            while j < len(processed_fxs) and processed_fxs[j].type == current_fx.type:
+                same_type_group.append(processed_fxs[j])
+                j += 1
+
+            # 处理连续同类分型
+            if len(same_type_group) > 1:
+                if current_fx.type == "ding":
+                    selected_fx = max(same_type_group, key=lambda x: x.val)
+                    print(f"规则4-连续顶：选择最高分型 {selected_fx.index}({selected_fx.val:.2f})")
+                else:
+                    selected_fx = min(same_type_group, key=lambda x: x.val)
+                    print(f"规则4-连续底：选择最低分型 {selected_fx.index}({selected_fx.val:.2f})")
+
+                final_fxs.append(selected_fx)
+            else:
+                final_fxs.append(current_fx)
+
+            i = j
+
+        return final_fxs
+
+    def _can_form_bi(self, start_fx, end_fx):
+        """
+        判断两个分型是否可以构成笔
+        """
+        # 必须是不同类型的分型
+        if start_fx.type == end_fx.type:
+            return False
+
+        # 必须满足一笔的基本要求
+        return self._check_bi_requirement(start_fx, end_fx)
+
+    def _should_extend_bi(self, current_bi, new_fx):
+        """
+        判断是否应该延续当前未完成的笔到新分型
+
+        延续条件：
+        1. 新分型与当前笔的结束分型类型相同
+        2. 新分型更加极端（上升笔中顶分型更高，或下降笔中底分型更低）
+        """
+        # 新分型必须与当前笔的结束分型类型相同
+        if new_fx.type != current_bi.end.type:
+            return False
+
+        # 根据笔的方向判断是否更极端
+        if current_bi.type == "up":
+            # 上升笔：新的顶分型必须更高
+            if new_fx.type == "ding" and new_fx.val > current_bi.end.val:
+                return True
+        else:  # down
+            # 下降笔：新的底分型必须更低
+            if new_fx.type == "di" and new_fx.val < current_bi.end.val:
+                return True
+
+        return False
+
+
+    def _check_bi_requirement(self, fx1: FX, fx2: FX) -> bool:
+        """
+        检查两个分型之间是否满足形成一笔的最低要求。
+        规则：相邻的顶分型和底分型必须要有一根及以上除了分型K线之外的其他K线
+
+        参数:
+            fx1: 第一个分型
+            fx2: 第二个分型
+
+        返回:
+            bool: True表示满足要求，False表示不满足
+        """
+        # 分型类型必须不同
+        if fx1.type == fx2.type:
+            return False
+
+        # 获取两个分型包含的K线范围
+        # 注意：分型的klines列表包含3个缠论K线
+        # 需要检查这些K线之间是否有足够的间隔
+
+        # 获取fx1的最后一个缠论K线
+        fx1_last_ck = None
+        for ck in reversed(fx1.klines):
+            if ck is not None:
+                fx1_last_ck = ck
+                break
+
+        # 获取fx2的第一个缠论K线
+        fx2_first_ck = fx2.klines[0]
+
+        if fx1_last_ck is None or fx2_first_ck is None:
+            return False
+
+        # 计算两个分型之间的K线数量
+        # 使用k_index来判断（缠论K线的索引）
+        k_count_between = fx2_first_ck.k_index - fx1_last_ck.k_index - 1
+
+        # 至少需要1根K线间隔
+        has_enough_gap = k_count_between >= 1
+
+        if not has_enough_gap:
+            print(f"  分型间隔不足：fx1_last_k_index={fx1_last_ck.k_index}, "
+                  f"fx2_first_k_index={fx2_first_ck.k_index}, gap={k_count_between}")
+
+        return has_enough_gap
+
 
     # === 辅助函数 ===
     def _get_bi_high(self, bi: BI) -> float:
@@ -1196,10 +1283,14 @@ class CL(ICL):
 
     def create_dn_zs(self, zs_type: str, lines: List['LINE']) -> List['ZS']:
         """
-        创建段内中枢 (V3 重构版)
-        该算法严格按照 "进入段 + 中枢核心(>=3段) + 离开段" 的结构来识别一个完整的中枢。
-        核心逻辑: 如果当前线段(j)不回到中枢区间，则其前一线段(j-1)为离开段。
-        同时，如果一个潜在中枢(3段)被第4段直接破坏，则该中枢不成立。
+        创建段内中枢 (优化版本)
+        严格按照 "进入段 + 中枢核心(>=3段) + 离开段" 的结构来识别一个完整的中枢。
+
+        主要优化：
+        1. 修正了离开段识别逻辑：明确定义"第一个不回到中枢区间的线段"
+        2. 改进了中枢完成条件的判断
+        3. 增强了边界条件处理
+        4. 优化了中枢延伸判断逻辑
 
         Args:
             zs_type: 中枢类型 (e.g., 'xd')
@@ -1208,131 +1299,202 @@ class CL(ICL):
         Returns:
             包含已完成中枢和最后一个未完成中枢的列表。
         """
-        if len(lines) < 4:
+        if len(lines) < 5:  # 至少需要5段：进入段 + 3个核心段 + 潜在离开段
             return []
 
         zss: List[ZS] = []
-        i = 1  # 主循环索引，指向潜在中枢的第一个核心段
+        i = 0  # 主循环索引，指向潜在的进入段
 
-        # 主循环: 寻找新中枢的起点
-        while i <= len(lines) - 3:
-            # 1. --- 识别潜在的中枢核心(至少3段) ---
-            seg_a = lines[i]
-            seg_b = lines[i + 1]
-            seg_c = lines[i + 2]
+        # 主循环: 寻找新中枢
+        while i <= len(lines) - 5:
+            # 1. --- 尝试以当前位置为进入段构建中枢 ---
+            entry_seg = lines[i]
+            seg_a = lines[i + 1]  # 第一个核心段
+            seg_b = lines[i + 2]  # 第二个核心段
+            seg_c = lines[i + 3]  # 第三个核心段
 
-            # 检查类型是否交替 (e.g., up-down-up)
+            # 检查核心段类型是否交替 (e.g., up-down-up)
             if not (hasattr(seg_a, 'type') and hasattr(seg_b, 'type') and hasattr(seg_c, 'type') and
                     seg_a.type != seg_b.type and seg_b.type != seg_c.type):
                 i += 1
                 continue
 
-            # 2. --- 建立初始重叠区间 [ZD, ZG] ---
-            g_a, d_a = self._get_line_high_low(seg_a)
-            g_c, d_c = self._get_line_high_low(seg_c)
+            # 2. --- 计算初始中枢区间 [ZD, ZG] ---
+            # 关键修正：中枢区间由同方向段的极值决定
+            same_direction_segs = [seg_a, seg_c]  # 第1段和第3段方向相同
 
-            if g_a is None or d_a is None or g_c is None or d_c is None:
+            # 获取同方向段的高低点
+            highs = []
+            lows = []
+            for seg in same_direction_segs:
+                high, low = self._get_line_high_low(seg)
+                if high is not None and low is not None:
+                    highs.append(high)
+                    lows.append(low)
+
+            if len(highs) < 2:  # 需要至少2个同方向段
                 i += 1
                 continue
 
-            zg = min(g_a, g_c)
-            zd = max(d_a, d_c)
+            # 中枢区间 = 同方向段的重叠区间
+            zg = min(highs)  # 中枢高点 = 同方向段最高点的最小值
+            zd = max(lows)  # 中枢低点 = 同方向段最低点的最大值
 
+            # 检查是否存在有效重叠区间
             if zd >= zg:
                 i += 1
                 continue
 
-            # 3. --- 找到了有效的中枢起点，开始向后延伸并寻找离开段 ---
-            entry_seg = lines[i - 1]
-            core_lines = [seg_a, seg_b, seg_c]
-            leave_seg = None
-
-            # 内循环：处理中枢的延伸和完成
-            j = i + 3
-            while j < len(lines):
-                current_seg = lines[j]
-                g_curr, d_curr = self._get_line_high_low(current_seg)
-                if g_curr is None: break
-
-                is_breakout = d_curr > zg or g_curr < zd
-
-                if not is_breakout:
-                    # Case A: 线段未离开中枢区间，是中枢的延伸
-                    core_lines.append(current_seg)
-                    # 动态更新中枢区间
-                    core_highs = [self._get_line_high_low(l)[0] for l in core_lines if
-                                  hasattr(l, 'type') and l.type == seg_a.type and self._get_line_high_low(l)[
-                                      0] is not None]
-                    core_lows = [self._get_line_high_low(l)[1] for l in core_lines if
-                                 hasattr(l, 'type') and l.type == seg_a.type and self._get_line_high_low(l)[
-                                     1] is not None]
-                    if core_highs and core_lows:
-                        zg = min(core_highs)
-                        zd = max(core_lows)
-                    j += 1
-                else:
-                    # Case B: 出现离开中枢的线段 (breakout)
-                    if len(core_lines) == 3:
-                        # 核心逻辑：初始3段被紧接着的第4段破坏，此中枢不成立
-                        i += 1  # 从下一个位置重新开始寻找
-                        leave_seg = "INVALID"  # 设置哨兵值以跳出并继续外层循环
-                        break
-
-                    # 中枢有效，前一个线段是离开段
-                    leave_seg = core_lines.pop()
-
-                    # 新的中枢寻找将从当前突破线段开始
-                    i = j
-                    break
-
-            if leave_seg == "INVALID":
+            # 3. --- 验证进入段是否有效 ---
+            entry_high, entry_low = self._get_line_high_low(entry_seg)
+            if entry_high is None or entry_low is None:
+                i += 1
                 continue
 
-            # 4. --- 内循环结束后，构建中枢对象 ---
+            # 进入段必须与中枢区间有交集（进入中枢）
+            if entry_low > zg or entry_high < zd:
+                i += 1
+                continue
+
+            # 4. --- 找到了有效的中枢起点，开始向后延伸并寻找离开段 ---
+            core_lines = [seg_a, seg_b, seg_c]
+            leave_seg = None
+            center_completed = False
+
+            # 内循环：处理中枢的延伸和寻找离开段
+            j = i + 4  # 指向第4段（潜在的中枢延伸段或离开段）
+
+            while j < len(lines) and not center_completed:
+                current_seg = lines[j]
+                curr_high, curr_low = self._get_line_high_low(current_seg)
+
+                if curr_high is None or curr_low is None:
+                    break
+
+                # 判断当前段是否在中枢区间内
+                is_in_center = curr_high >= zd and curr_low <= zg
+
+                if is_in_center:
+                    # Case A: 当前段在中枢区间内，继续延伸中枢
+                    core_lines.append(current_seg)
+
+                    # 重新计算中枢区间（动态调整）
+                    # 获取所有同方向段
+                    same_dir_indices = []
+                    for idx in range(len(core_lines)):
+                        if core_lines[idx].type == core_lines[0].type:
+                            same_dir_indices.append(idx)
+
+                    if len(same_dir_indices) >= 2:
+                        # 重新计算中枢区间
+                        new_highs = []
+                        new_lows = []
+                        for idx in same_dir_indices:
+                            h, l = self._get_line_high_low(core_lines[idx])
+                            if h is not None and l is not None:
+                                new_highs.append(h)
+                                new_lows.append(l)
+
+                        if new_highs and new_lows:
+                            zg = min(new_highs)
+                            zd = max(new_lows)
+
+                            # 如果重新计算后区间无效，结束中枢
+                            if zd >= zg:
+                                break
+
+                    j += 1
+
+                else:
+                    # Case B: 当前段离开了中枢区间
+                    # 检查下一个段（如果存在）是否也离开中枢区间
+                    if j + 1 < len(lines):
+                        next_seg = lines[j + 1]
+                        next_high, next_low = self._get_line_high_low(next_seg)
+
+                        if next_high is not None and next_low is not None:
+                            next_is_in_center = next_high >= zd and next_low <= zg
+
+                            if not next_is_in_center:
+                                # 连续两个段都离开中枢区间，中枢完成
+                                # 当前段就是离开段
+                                leave_seg = current_seg
+                                center_completed = True
+                                i = j  # 下次从离开段开始寻找新中枢
+                            else:
+                                # 下一个段又回到中枢内，当前段算作中枢延伸
+                                core_lines.append(current_seg)
+                                j += 1
+                        else:
+                            # 下一个段数据无效，当前段作为离开段
+                            leave_seg = current_seg
+                            center_completed = True
+                            i = j
+                    else:
+                        # 已经是最后一个段，当前段作为离开段
+                        leave_seg = current_seg
+                        center_completed = True
+                        break
+
+            # 处理循环结束的情况
+            if not center_completed:
+                # 检查是否有足够的核心段形成有效中枢
+                if len(core_lines) < 3:
+                    # 核心段不足，中枢无效
+                    i += 1
+                    continue
+
+                # 到达线段末尾，没有找到明确的离开段
+                # 最后一个段作为临时结束段，但中枢未完成
+                leave_seg = None
+
+            # 5. --- 构建中枢对象 ---
+            # 验证中枢是否有效（至少3个核心段）
+            if len(core_lines) < 3:
+                i += 1
+                continue
+
             center_type = 'up' if core_lines[0].type == 'down' else 'down'
             center = ZS(zs_type=zs_type, start=entry_seg, _type=center_type, level=0)
             center.lines = core_lines
             center.line_num = len(core_lines)
 
-            # 基于最终的核心段，精确计算 ZG, ZD, GG, DD
-            all_g = [self._get_line_high_low(l)[0] for l in core_lines if self._get_line_high_low(l)[0] is not None]
-            all_d = [self._get_line_high_low(l)[1] for l in core_lines if self._get_line_high_low(l)[1] is not None]
-            if all_g and all_d:
-                center.gg = max(all_g)
-                center.dd = min(all_d)
+            # 计算最终的中枢参数
+            # GG, DD: 所有核心段的极值
+            all_highs = []
+            all_lows = []
+            for line in core_lines:
+                h, l = self._get_line_high_low(line)
+                if h is not None and l is not None:
+                    all_highs.append(h)
+                    all_lows.append(l)
 
-            final_core_highs = [self._get_line_high_low(l)[0] for l in core_lines if
-                                hasattr(l, 'type') and l.type == seg_a.type and self._get_line_high_low(l)[
-                                    0] is not None]
-            final_core_lows = [self._get_line_high_low(l)[1] for l in core_lines if
-                               hasattr(l, 'type') and l.type == seg_a.type and self._get_line_high_low(l)[
-                                   1] is not None]
-            if final_core_highs and final_core_lows:
-                center.zg = min(final_core_highs)
-                center.zd = max(final_core_lows)
+            if all_highs and all_lows:
+                center.gg = max(all_highs)
+                center.dd = min(all_lows)
 
+            # ZG, ZD: 最终的中枢区间
+            center.zg = zg
+            center.zd = zd
             center.real = True
 
-            if leave_seg:
-                # A. 找到了离开段，是已完成的中枢
+            if leave_seg is not None:
+                # 找到了离开段，是已完成的中枢
                 center.end = leave_seg
                 center.done = True
                 zss.append(center)
-                # 主循环的索引 i 已经被更新为 j，直接进入下一次循环
             else:
-                # B. 线段走完仍未出现离开段，是未完成的中枢
+                # 线段走完仍未出现离开段，是未完成的中枢
                 center.end = lines[-1]
                 center.done = False
                 zss.append(center)
-                # 消耗了所有剩余线段，结束主循环
-                break
+                break  # 结束主循环
 
-        # 重新为所有找到的中枢编号
+        # 为所有中枢重新编号
         for idx, center in enumerate(zss):
             center.index = idx
 
         return zss
-
     def _calculate_mmds_and_bcs(self):
         """计算买卖点和背驰"""
         # 计算笔的买卖点和背驰
