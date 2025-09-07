@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import json
 import math
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
@@ -106,9 +107,22 @@ class Kline:
         self.c: float = c
         self.a: float = a
 
-    def __str__(self):
-        return f"index: {self.index} date: {self.date} h: {self.h} l: {self.l} o: {self.o} c:{self.c} a:{self.a}"
+    def to_dict(self):
+        """将Kline对象转换为字典"""
+        date_str = self.date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(self.date, 'strftime') else str(self.date)
+        return {
+            'index': self.index,
+            'date': date_str,
+            'h': self.h,
+            'l': self.l,
+            'o': self.o,
+            'c': self.c,
+            'a': self.a
+        }
 
+    def __str__(self):
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 class CLKline:
     """
@@ -144,8 +158,27 @@ class CLKline:
         self.q: bool = _q  # 是否有缺口
         self.up_qs = None  # 合并时之前的趋势
 
+    def to_dict(self):
+        """将CLKline对象转换为字典"""
+        date_str = self.date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(self.date, 'strftime') else str(self.date)
+        return {
+            'k_index': self.k_index,
+            'date': date_str,
+            'h': self.h,
+            'l': self.l,
+            'o': self.o,
+            'c': self.c,
+            'a': self.a,
+            'index': self.index,
+            'n': self.n,
+            'q': self.q,
+            'up_qs': self.up_qs,
+            'klines': [kline.to_dict() for kline in self.klines] if self.klines else []
+        }
+
     def __str__(self):
-        return f"index: {self.index} k_index:{self.k_index} date: {self.date} h: {self.h} l: {self.l} _n:{self.n} _q:{self.q} up_qs:{self.up_qs}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class FX:
@@ -285,8 +318,20 @@ class FX:
             else self.klines[-2].klines[-1]
         )
 
+    def to_dict(self):
+        """将FX对象转换为字典"""
+        return {
+            'type': self.type,
+            'val': self.val,
+            'index': self.index,
+            'done': self.done,
+            'k': self.k.to_dict() if self.k else None,
+            'klines': [kline.to_dict() for kline in self.klines] if self.klines else []
+        }
+
     def __str__(self):
-        return f"index: {self.index} type: {self.type} date : {self.k.date} val: {self.val} done: {self.done}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class LINE:
