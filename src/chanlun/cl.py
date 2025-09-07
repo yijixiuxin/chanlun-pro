@@ -1268,7 +1268,6 @@ class CL(ICL):
             self._last_xd_zs = zss[-1]
         else:
             self._last_xd_zs = None
-
     def _get_line_high_low(self, line: 'LINE') -> Tuple[Optional[float], Optional[float]]:
         """
         获取线段的高低点
@@ -1306,41 +1305,31 @@ class CL(ICL):
         i = 0  # 主循环索引，指向潜在的进入段
 
         # 主循环: 寻找新中枢
-        while i <= len(lines) - 5:
+        while i <= len(lines) - 4:
             # 1. --- 尝试以当前位置为进入段构建中枢 ---
             entry_seg = lines[i]
             seg_a = lines[i + 1]  # 第一个核心段
             seg_b = lines[i + 2]  # 第二个核心段
             seg_c = lines[i + 3]  # 第三个核心段
 
-            # 检查核心段类型是否交替 (e.g., up-down-up)
-            if not (hasattr(seg_a, 'type') and hasattr(seg_b, 'type') and hasattr(seg_c, 'type') and
-                    seg_a.type != seg_b.type and seg_b.type != seg_c.type):
+            # 检查核心段类型是否交替且进入段与B段同类型
+            if not (hasattr(entry_seg, 'type') and hasattr(seg_a, 'type') and hasattr(seg_b, 'type') and hasattr(seg_c, 'type') and
+                    entry_seg.type == seg_b.type and seg_a.type == seg_c.type and seg_a.type != seg_b.type):
                 i += 1
                 continue
 
             # 2. --- 计算初始中枢区间 [ZD, ZG] ---
-            # 关键修正：中枢区间由同方向段的极值决定
-            same_direction_segs = [seg_a, seg_c]  # 第1段和第3段方向相同
+            # 中枢区间由同方向段的极值决定
+            g_a, d_a = self._get_line_high_low(seg_a)
+            g_c, d_c = self._get_line_high_low(seg_c)
 
-            # 获取同方向段的高低点
-            highs = []
-            lows = []
-            for seg in same_direction_segs:
-                high, low = self._get_line_high_low(seg)
-                if high is not None and low is not None:
-                    highs.append(high)
-                    lows.append(low)
-
-            if len(highs) < 2:  # 需要至少2个同方向段
+            if any(p is None for p in [g_a, d_a, g_c, d_c]):
                 i += 1
                 continue
 
-            # 中枢区间 = 同方向段的重叠区间
-            zg = min(highs)  # 中枢高点 = 同方向段最高点的最小值
-            zd = max(lows)  # 中枢低点 = 同方向段最低点的最大值
+            zg = min(g_a, g_c)
+            zd = max(d_a, d_c)
 
-            # 检查是否存在有效重叠区间
             if zd >= zg:
                 i += 1
                 continue
@@ -1358,11 +1347,12 @@ class CL(ICL):
 
             # 4. --- 找到了有效的中枢起点，开始向后延伸 ---
             core_lines = [seg_a, seg_b, seg_c]
+            z_segments_info = [{'high': g_a, 'low': d_a}, {'high': g_c, 'low': d_c}]
             leave_seg = None
+            center_valid = True
 
             # 内循环：处理中枢的延伸和寻找离开段
             j = i + 4  # 指向第4段（潜在的中枢延伸段或离开段）
-            potential_leave_seg = None  # 潜在的离开段
 
             while j < len(lines):
                 current_seg = lines[j]
@@ -1371,90 +1361,63 @@ class CL(ICL):
                 if curr_high is None or curr_low is None:
                     break
 
-                # 判断当前段是否在中枢区间内
-                is_in_center = curr_high >= zd and curr_low <= zg
+                # 判断是否为离开段
+                is_leave_segment = False
+                if j + 1 < len(lines):
+                    successor = lines[j + 1]
+                    succ_high, succ_low = self._get_line_high_low(successor)
+                    if succ_high is not None and succ_low is not None:
+                        if succ_low > zg or succ_high < zd:  # successor 无交集
+                            is_leave_segment = True
 
-                if is_in_center:
-                    # Case A: 当前段在中枢区间内
-                    if potential_leave_seg is None:
-                        # 没有潜在离开段，当前段是中枢延伸
-                        core_lines.append(current_seg)
+                if is_leave_segment:
+                    # 确认离开段必须与中枢有交集
+                    if curr_low > zg or curr_high < zd:  # 无交集
+                        center_valid = False
                     else:
-                        # 有潜在离开段，但当前段又回到中枢内，潜在离开段变成中枢延伸
-                        core_lines.append(potential_leave_seg)
-                        core_lines.append(current_seg)
-                        potential_leave_seg = None
-
+                        leave_seg = current_seg
+                        i = j  # 下次从离开段开始
+                    break
+                else:
+                    # 延伸中枢
+                    core_lines.append(current_seg)
+                    if current_seg.type == seg_a.type:
+                        z_segments_info.append({'high': curr_high, 'low': curr_low})
                     j += 1
 
-                else:
-                    # Case B: 当前段离开了中枢区间
-                    if potential_leave_seg is None:
-                        # 第一次离开中枢区间，记录为潜在离开段
-                        potential_leave_seg = current_seg
-                        j += 1
-                    else:
-                        # 连续第二个段离开中枢区间，确认中枢完成
-                        if len(core_lines) == 3:
-                            # 初始3段中枢被连续突破，此中枢无效
-                            i += 1
-                            leave_seg = "INVALID"
-                            break
-
-                        # 中枢有效，潜在离开段确认为真正的离开段
-                        leave_seg = potential_leave_seg
-                        i = j - 1  # 下次从当前段开始寻找新中枢（当前段可能是下个中枢的进入段）
-                        break
-
-            # 处理循环结束的情况
-            if j >= len(lines) and potential_leave_seg is not None:
-                # 到达线段末尾，且有潜在离开段，将其作为离开段
-                if len(core_lines) > 3:
-                    leave_seg = potential_leave_seg
-                else:
-                    # 核心段不足，中枢无效
-                    leave_seg = "INVALID"
-
-            # 处理无效中枢
-            if leave_seg == "INVALID":
+            if not center_valid:
+                i += 1
                 continue
 
             # 5. --- 构建中枢对象 ---
-            center_type = 'up' if core_lines[0].type == 'down' else 'down'
+            center_type = seg_b.type
             center = ZS(zs_type=zs_type, start=entry_seg, _type=center_type, level=0)
             center.lines = core_lines
             center.line_num = len(core_lines)
 
-            # 计算最终的中枢参数
-            # GG, DD: 所有核心段的极值
-            all_highs = []
-            all_lows = []
-            for line in core_lines:
-                h, l = self._get_line_high_low(line)
-                if h is not None and l is not None:
-                    all_highs.append(h)
-                    all_lows.append(l)
+            # 计算最终的中枢参数 (仅基于同方向段)
+            all_highs = [z['high'] for z in z_segments_info]
+            all_lows = [z['low'] for z in z_segments_info]
 
             if all_highs and all_lows:
                 center.gg = max(all_highs)
                 center.dd = min(all_lows)
+                center.zg = min(all_highs)
+                center.zd = max(all_lows)
 
-            # ZG, ZD: 同方向段的重叠区间
-            center.zg = zg
-            center.zd = zd
             center.real = True
 
-            if leave_seg and leave_seg != "INVALID":
+            if leave_seg:
                 # 找到了离开段，是已完成的中枢
                 center.end = leave_seg
                 center.done = True
-                zss.append(center)
             else:
                 # 线段走完仍未出现离开段，是未完成的中枢
                 center.end = lines[-1]
                 center.done = False
-                zss.append(center)
-                break  # 结束主循环
+                i = len(lines)  # 结束主循环
+
+            zss.append(center)
 
         # 为所有中枢重新编号
         for idx, center in enumerate(zss):
