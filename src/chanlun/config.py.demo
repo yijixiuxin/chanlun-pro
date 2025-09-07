@@ -69,6 +69,15 @@ TQ_SP_NAME = 'simnow'
 TQ_SP_ACCOUNT = ''
 TQ_SP_PWD = ''
 
+# CTP期货配置
+CTP_BROKER_ID = ""      # 期货公司 broker id
+CTP_USER_ID = ""        # 账号
+CTP_PASSWORD = ""       # 密码
+CTP_APP_ID = "client_chanlun-pro_1.0"         # AppID, 自研或开源量化软件通常以client开头
+CTP_AUTH_CODE = ""      # 交易所提供的授权码
+CTP_MD_FRONT = ""       # 行情服务器地址
+CTP_TD_FRONT = ""       # 交易服务器地址
+
 # 币安交易所配置
 BINANCE_APIKEY = ''
 BINANCE_SECRET = ''
