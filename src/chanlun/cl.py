@@ -979,6 +979,10 @@ class CL(ICL):
                                     break_info = {'reason': 'top_fractal', 'next_segment_type': 'down',
                                                   'start_bi': peak_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
+                            else:
+                                current_segment['bis'].extend(bounded_lookahead_bis)
+                                next_check_idx += len(bounded_lookahead_bis)
+                                continue
                         else:
                             # 双重条件检查
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
@@ -1048,6 +1052,10 @@ class CL(ICL):
                                     break_info = {'reason': 'bottom_fractal', 'next_segment_type': 'up',
                                                   'start_bi': trough_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
+                            else:
+                                current_segment['bis'].extend(bounded_lookahead_bis)
+                                next_check_idx += len(bounded_lookahead_bis)
+                                continue
                         else:
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
                             new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
@@ -1313,7 +1321,7 @@ class CL(ICL):
                 # 主循环的索引 i 已经被更新为 j，直接进入下一次循环
             else:
                 # B. 线段走完仍未出现离开段，是未完成的中枢
-                center.end = None
+                center.end = lines[-1]
                 center.done = False
                 zss.append(center)
                 # 消耗了所有剩余线段，结束主循环
