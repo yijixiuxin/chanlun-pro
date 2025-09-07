@@ -1286,11 +1286,11 @@ class CL(ICL):
         创建段内中枢 (优化版本)
         严格按照 "进入段 + 中枢核心(>=3段) + 离开段" 的结构来识别一个完整的中枢。
 
-        主要优化：
-        1. 修正了离开段识别逻辑：明确定义"第一个不回到中枢区间的线段"
-        2. 改进了中枢完成条件的判断
-        3. 增强了边界条件处理
-        4. 优化了中枢延伸判断逻辑
+        关键优化：
+        1. 修正了进入段的识别逻辑
+        2. 修正了中枢区间的计算方法
+        3. 改进了中枢延伸的判断逻辑
+        4. 增强了边界条件处理
 
         Args:
             zs_type: 中枢类型 (e.g., 'xd')
@@ -1356,15 +1356,15 @@ class CL(ICL):
                 i += 1
                 continue
 
-            # 4. --- 找到了有效的中枢起点，开始向后延伸并寻找离开段 ---
+            # 4. --- 找到了有效的中枢起点，开始向后延伸 ---
             core_lines = [seg_a, seg_b, seg_c]
             leave_seg = None
-            center_completed = False
 
             # 内循环：处理中枢的延伸和寻找离开段
             j = i + 4  # 指向第4段（潜在的中枢延伸段或离开段）
+            potential_leave_seg = None  # 潜在的离开段
 
-            while j < len(lines) and not center_completed:
+            while j < len(lines):
                 current_seg = lines[j]
                 curr_high, curr_low = self._get_line_high_low(current_seg)
 
@@ -1375,85 +1375,51 @@ class CL(ICL):
                 is_in_center = curr_high >= zd and curr_low <= zg
 
                 if is_in_center:
-                    # Case A: 当前段在中枢区间内，继续延伸中枢
-                    core_lines.append(current_seg)
-
-                    # 重新计算中枢区间（动态调整）
-                    # 获取所有同方向段
-                    same_dir_indices = []
-                    for idx in range(len(core_lines)):
-                        if core_lines[idx].type == core_lines[0].type:
-                            same_dir_indices.append(idx)
-
-                    if len(same_dir_indices) >= 2:
-                        # 重新计算中枢区间
-                        new_highs = []
-                        new_lows = []
-                        for idx in same_dir_indices:
-                            h, l = self._get_line_high_low(core_lines[idx])
-                            if h is not None and l is not None:
-                                new_highs.append(h)
-                                new_lows.append(l)
-
-                        if new_highs and new_lows:
-                            zg = min(new_highs)
-                            zd = max(new_lows)
-
-                            # 如果重新计算后区间无效，结束中枢
-                            if zd >= zg:
-                                break
+                    # Case A: 当前段在中枢区间内
+                    if potential_leave_seg is None:
+                        # 没有潜在离开段，当前段是中枢延伸
+                        core_lines.append(current_seg)
+                    else:
+                        # 有潜在离开段，但当前段又回到中枢内，潜在离开段变成中枢延伸
+                        core_lines.append(potential_leave_seg)
+                        core_lines.append(current_seg)
+                        potential_leave_seg = None
 
                     j += 1
 
                 else:
                     # Case B: 当前段离开了中枢区间
-                    # 检查下一个段（如果存在）是否也离开中枢区间
-                    if j + 1 < len(lines):
-                        next_seg = lines[j + 1]
-                        next_high, next_low = self._get_line_high_low(next_seg)
-
-                        if next_high is not None and next_low is not None:
-                            next_is_in_center = next_high >= zd and next_low <= zg
-
-                            if not next_is_in_center:
-                                # 连续两个段都离开中枢区间，中枢完成
-                                # 当前段就是离开段
-                                leave_seg = current_seg
-                                center_completed = True
-                                i = j  # 下次从离开段开始寻找新中枢
-                            else:
-                                # 下一个段又回到中枢内，当前段算作中枢延伸
-                                core_lines.append(current_seg)
-                                j += 1
-                        else:
-                            # 下一个段数据无效，当前段作为离开段
-                            leave_seg = current_seg
-                            center_completed = True
-                            i = j
+                    if potential_leave_seg is None:
+                        # 第一次离开中枢区间，记录为潜在离开段
+                        potential_leave_seg = current_seg
+                        j += 1
                     else:
-                        # 已经是最后一个段，当前段作为离开段
-                        leave_seg = current_seg
-                        center_completed = True
+                        # 连续第二个段离开中枢区间，确认中枢完成
+                        if len(core_lines) == 3:
+                            # 初始3段中枢被连续突破，此中枢无效
+                            i += 1
+                            leave_seg = "INVALID"
+                            break
+
+                        # 中枢有效，潜在离开段确认为真正的离开段
+                        leave_seg = potential_leave_seg
+                        i = j - 1  # 下次从当前段开始寻找新中枢（当前段可能是下个中枢的进入段）
                         break
 
             # 处理循环结束的情况
-            if not center_completed:
-                # 检查是否有足够的核心段形成有效中枢
-                if len(core_lines) < 3:
+            if j >= len(lines) and potential_leave_seg is not None:
+                # 到达线段末尾，且有潜在离开段，将其作为离开段
+                if len(core_lines) > 3:
+                    leave_seg = potential_leave_seg
+                else:
                     # 核心段不足，中枢无效
-                    i += 1
-                    continue
+                    leave_seg = "INVALID"
 
-                # 到达线段末尾，没有找到明确的离开段
-                # 最后一个段作为临时结束段，但中枢未完成
-                leave_seg = None
-
-            # 5. --- 构建中枢对象 ---
-            # 验证中枢是否有效（至少3个核心段）
-            if len(core_lines) < 3:
-                i += 1
+            # 处理无效中枢
+            if leave_seg == "INVALID":
                 continue
 
+            # 5. --- 构建中枢对象 ---
             center_type = 'up' if core_lines[0].type == 'down' else 'down'
             center = ZS(zs_type=zs_type, start=entry_seg, _type=center_type, level=0)
             center.lines = core_lines
@@ -1473,12 +1439,12 @@ class CL(ICL):
                 center.gg = max(all_highs)
                 center.dd = min(all_lows)
 
-            # ZG, ZD: 最终的中枢区间
+            # ZG, ZD: 同方向段的重叠区间
             center.zg = zg
             center.zd = zd
             center.real = True
 
-            if leave_seg is not None:
+            if leave_seg and leave_seg != "INVALID":
                 # 找到了离开段，是已完成的中枢
                 center.end = leave_seg
                 center.done = True
