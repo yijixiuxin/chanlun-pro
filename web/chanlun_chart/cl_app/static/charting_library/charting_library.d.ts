@@ -1429,11 +1429,11 @@ export interface ArcLineToolOverrides {
 	"linetoolarc.transparency": number;
 }
 export interface AreaStylePreferences {
-	/** Top color */
+	/** Top color of the gradient fill. Must be an RGBA color string (e.g., `"rgba(255, 0, 0, 0.5)"`). */
 	color1: string;
-	/** Bottom color */
+	/** Bottom color of the gradient fill. Must be an RGBA color string (e.g., `"rgba(255, 0, 0, 0.5)"`). */
 	color2: string;
-	/** Line Color */
+	/** Line color. Must be a simple color string (e.g., `"red"`, `"#FF0000"`). */
 	linecolor: string;
 	/** Line Style {@link LineStyle} */
 	linestyle: number;
@@ -10103,7 +10103,7 @@ export interface IBrokerConnectionAdapterHost {
 	domUpdate(symbol: string, equity: DOMData): void;
 	/**
 	 * Sets the quantity for a given symbol.
-	 * Use this method only when you need to [override the user-specified quantity](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#symbol-quantity-is-overriden) with a new value.
+	 * Use this method only when you need to [override the user-specified quantity](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/common-issues#symbol-quantity-is-overridden) with a new value.
 	 *
 	 * To specify the default quantity, use the {@link InstrumentInfo.qty} field instead.
 	 * @param  {string} symbol - symbol
@@ -10533,7 +10533,7 @@ export interface IChartWidgetApi {
 	 */
 	onHoveredSourceChanged(): ISubscription<(sourceId: EntityId) => void>;
 	/**
-	 * Scroll and/or scale the chart so a time range is visible.
+	 * Allows you to display a certain time range on the chart.
 	 *
 	 * **Example**
 	 * ```javascript
@@ -10542,8 +10542,10 @@ export interface IChartWidgetApi {
 	 *     { percentRightMargin: 20 }
 	 * )
 	 * ```
+	 * If the library cannot fit the specified range within the canvas, which may happen on small screens, it will ignore the `from` parameter. For more information, refer to the [Time scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale#time-range) article.
+	 *
 	 * @param range A range that will be made visible.
-	 * @param options Optional object of options for the new visible range.
+	 * @param options Options for the new visible range.
 	 * @returns A promise that resolves when the visible range is set.
 	 */
 	setVisibleRange(range: SetVisibleTimeRange, options?: SetVisibleRangeOptions): Promise<void>;
@@ -11834,6 +11836,13 @@ export interface IChartingLibraryWidget {
 	 */
 	resetLayoutSizes(disableUndo?: boolean): void;
 	/**
+	 * Set the sizes of charts within a multiple-chart layout.
+	 *
+	 * @param sizes An object of sizes to set for the charts.
+	 * @param disableUndo When set to `true`, the set action is not added to the undo stack. Hence, a user cannot undo the size changes.
+	 */
+	setLayoutSizes(sizes: Partial<LayoutSizes>, disableUndo?: boolean): void;
+	/**
 	 * Change the theme of the chart.
 	 *
 	 * @param themeName A theme name.
@@ -12120,8 +12129,16 @@ export interface IContext {
 	 */
 	is_main_symbol(symbol: ISymbolInstrument | undefined): boolean;
 	/**
-	 * Allows the minimum depth to be forced.
-	 * @param  {number} value - minimum depth to set
+	 * Allows you to specify how many data points beyond the [visible range](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale#time-range) the library should request.
+	 * You should use this method only in **exceptional** cases.
+	 *
+	 * By default, the library request data for the visible range and some additional data points required for calculations.
+	 * For example, if you calculate 10-period Moving Average with the {@link PineJSStd.sma} function, the library will request at least 10 extra bars of historical data.
+	 *
+	 * However, the library cannot determine the number of extra bars when your indicator depends on another indicator (chained calculations).
+	 * In this exceptional case, you can specify this number using the `setMinimumAdditionalDepth` method.
+	 * Consider the [Custom Moving Average](https://www.tradingview.com/charting-library-docs/latest/tutorials/create-custom-indicator/constructor-implementation#2-call-setminimumadditionaldepth) example, where a series is calculated and then used as an input for the second calculation.
+	 * @param  {number} value - minimum number of bars to request
 	 */
 	setMinimumAdditionalDepth(value: number): void;
 }
@@ -12240,16 +12257,11 @@ export interface ICustomSymbolStatusAdapter {
 	setDropDownContent(content: CustomStatusDropDownContent[] | null): ICustomSymbolStatusAdapter;
 }
 /**
- * The custom symbol status API provides the ability to create (and adjust)
- * additional status items to be displayed within the symbol status section
- * of the main series legend. This section is typically used to show the
- * market status (such as open or closed) but can additionally be used to
- * display warnings related to the current symbol.
+ * This API allows you to create custom sections in the [Market Status](https://www.tradingview.com/charting-library-docs/latest/ui_elements/market-status) popup to display additional information on a symbol, such as warnings.
+ * You can also customize the icon, color, tooltip, and content.
  *
- * This API allows custom status items to be added (which are tied to a
- * specific symbol). You can customise the icon, color, tooltip, and content
- * within the dropdown tooltip menu displayed when the user clicks on the
- * icon.
+ * The API is designed to specify sections for a certain symbol. To do this, you should pass `symbolId` to the `symbol` method.
+ * Note that `symbolId` should match the ID of the resolved symbol that you can retrieve using the {@link IChartWidgetApi.symbol} method.
  *
  * **Example**
  * ```js
@@ -12257,7 +12269,7 @@ export interface ICustomSymbolStatusAdapter {
  *  .customSymbolStatus()
  *  .symbol('NASDAQNM:AAPL') // select the symbol
  *  .setVisible(true) // make the status visible
- *  .setColor('rgb(255, 40, 60)') // set the colour
+ *  .setColor('rgb(255, 40, 60)') // set the color
  *  .setIcon(myCustomIconSvgString) // string for an svg icon, i.e. '<svg> ... </svg>'
  *  .setTooltip('Tooltip') // text to be displayed within the hover tooltip
  *  .setDropDownContent([ // content to be displayed within the large pop-up tooltip
@@ -13117,7 +13129,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the body background color of the order line.
 	 *
-	 * @param value The new body background color.
+	 * @param value A color string in RGBA format for the body background color (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setBodyBackgroundColor(value: string): this;
 	/**
@@ -13127,7 +13139,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the body text color of the order line.
 	 *
-	 * @param value The new body text color.
+	 * @param value A simple color string for the body text (e.g., `"red"`, `"#FF0000"`).
 	 */
 	setBodyTextColor(value: string): this;
 	/**
@@ -13157,7 +13169,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the quantity text color of the order line.
 	 *
-	 * @param value The new quantity text color.
+	 * @param value A color string in RGBA format (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setQuantityTextColor(value: string): this;
 	/**
@@ -13177,7 +13189,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the cancel button background color of the order line.
 	 *
-	 * @param value The new cancel button background color.
+	 * @param value A color string in RGBA format for the cancel button background color (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setCancelButtonBackgroundColor(value: string): this;
 	/**
@@ -13518,12 +13530,12 @@ export interface IPositionLineAdapter {
 	 */
 	setBodyBorderColor(value: string): this;
 	/**
-	 * Get the body font of the position line.
+	 * Get the body background color of the position line.
 	 */
 	getBodyBackgroundColor(): string;
 	/**
-	 * Set the body font of the position line.
-	 * @param value The new body font.
+	 * Set the body background color of the position line.
+	 * @param value A color string in RGBA format for the body background color (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setBodyBackgroundColor(value: string): this;
 	/**
@@ -13532,7 +13544,7 @@ export interface IPositionLineAdapter {
 	getBodyTextColor(): string;
 	/**
 	 * Set the body text color of the position line.
-	 * @param value The new body text color.
+	 * @param value A simple color string for the body text (e.g., `"red"`, `"#FF0000"`).
 	 */
 	setBodyTextColor(value: string): this;
 	/**
@@ -13562,7 +13574,7 @@ export interface IPositionLineAdapter {
 	/**
 	 * Set the quantity text color of the position line.
 	 *
-	 * @param value The new quantity text color.
+	 * @param value A color string in RGBA format (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setQuantityTextColor(value: string): this;
 	/**
@@ -13580,7 +13592,7 @@ export interface IPositionLineAdapter {
 	getReverseButtonBackgroundColor(): string;
 	/**
 	 * Set the reverse button background color of the position line.
-	 * @param value The new reverse button background color.
+	 * @param value A color string in RGBA format for the reverse button background color (e.g., `"rgba(255, 0, 0, 0.5)"`).
 	 */
 	setReverseButtonBackgroundColor(value: string): this;
 	/**
@@ -14272,9 +14284,9 @@ export interface ITimeScaleApi {
 	rightOffsetChanged(): ISubscription<(rightOffset: number) => void>;
 	/** To set a new right offset */
 	setRightOffset(offset: number): void;
-	/** To set a new bar spacing */
+	/** Sets a new [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). You can call {@link barSpacing} to get the current value. */
 	setBarSpacing(newBarSpacing: number): void;
-	/** Returns the current bar spacing */
+	/** Returns the current [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). */
 	barSpacing(): number;
 	/** Returns the current right offset */
 	rightOffset(): number;
@@ -20838,6 +20850,10 @@ export interface StudyOrDrawingAddedToChartEventParams {
 	/**
 	 * Name of the added study or drawing.
 	 */
+	label: string;
+	/**
+	 * Id of the added study or drawing.
+	 */
 	value: string;
 }
 /**
@@ -26484,6 +26500,10 @@ export interface StyledText {
 	 */
 	letterSpacing?: string;
 }
+export interface SubLayoutSizesState {
+	percent: number;
+	substate?: SubLayoutSizesState[];
+}
 export interface SubscribeEventsMap {
 	/**
 	 * Drawing toolbar is shown/hidden
@@ -27079,7 +27099,15 @@ export interface TimePoint {
  * Widget Constructor option (`time_scale`) to add more/less on screen
  */
 export interface TimeScaleOptions {
-	/** Minimum allowed space between bars. Should be greater than 0. */
+	/**
+	 * Minimum allowed [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). Should be greater than 0.
+	 *
+	 * ```javascript
+	 * time_scale: {
+	 *     min_bar_spacing: 0.01
+	 * },
+	 * ```
+	 */
 	min_bar_spacing?: number;
 }
 /**
@@ -29100,7 +29128,7 @@ export type ChartingLibraryFeatureset =
  *
  * **Behaviour**
  * - **Chart Settings Dialog:** When this featureset is enabled (`true`), a checkbox appears in the chart settings dialog, allowing users to toggle the visibility of inactivity gaps on or off.
- * - **Widget API Integration:** The featureset also exposes the `intradayInactivityGaps` watched value on the Widget API. This allows programmatic control of the inactivity gap behaviour, enabling or disabling it via API calls.
+ * - **Widget API Integration:** The featureset also exposes the `intradayInactivityGaps` watched value through the Widget API. This allows programmatic control over inactivity gap behavior, enabling or disabling it via API calls.
  * @default false
  */
 "intraday_inactivity_gaps";
@@ -29318,6 +29346,8 @@ export type ISeriesStudyResult = [
 export type InputFieldValidator = (value: any) => InputFieldValidatorResult;
 export type InputFieldValidatorResult = PositiveBaseInputFieldValidatorResult | NegativeBaseInputFieldValidatorResult;
 export type LanguageCode = "ar" | "zh" | "ca_ES" | "en" | "fr" | "de" | "he_IL" | "id_ID" | "it" | "ja" | "ko" | "pl" | "pt" | "ru" | "es" | "sv" | "th" | "tr" | "vi" | "ms_MY" | "zh_TW";
+export type LayoutSizes = Record<LayoutType, LayoutSizesState>;
+export type LayoutSizesState = SubLayoutSizesState[];
 export type LayoutType = SingleChartLayoutType | MultipleChartsLayoutType;
 export type LegendMode = "horizontal" | "vertical";
 export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarket";
