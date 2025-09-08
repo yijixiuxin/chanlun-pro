@@ -1,6 +1,8 @@
-from chanlun.backtesting.base import *
-from chanlun.cl_analyse import *
+from typing import Dict, List, Union
+
 from chanlun import fun
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
+from chanlun.cl_analyse import LinesFormAnalyse, MultiLevelAnalyse
 
 
 class StrategyFuturesXDMMD(Strategy):
@@ -170,7 +172,7 @@ class StrategyFuturesXDMMD(Strategy):
                     code=code,
                     opt="sell",
                     mmd=mmd,
-                    msg=f"高级别线段反向线段，低级别判断趋势完成，并且出现笔三卖",
+                    msg="高级别线段反向线段，低级别判断趋势完成，并且出现笔三卖",
                 )
             )
         if (
@@ -183,7 +185,7 @@ class StrategyFuturesXDMMD(Strategy):
                     code=code,
                     opt="sell",
                     mmd=mmd,
-                    msg=f"高级别线段反向线段，低级别判断趋势完成，并且出现笔三买",
+                    msg="高级别线段反向线段，低级别判断趋势完成，并且出现笔三买",
                 )
             )
         return opts

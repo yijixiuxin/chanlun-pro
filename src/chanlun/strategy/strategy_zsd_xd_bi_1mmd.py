@@ -1,4 +1,6 @@
-from chanlun.backtesting.base import *
+from typing import List, Union
+
+from chanlun.backtesting.base import POSITION, Dict, MarketDatas, Operation, Strategy
 
 
 class StrategyZsdXdBi1MMD(Strategy):
