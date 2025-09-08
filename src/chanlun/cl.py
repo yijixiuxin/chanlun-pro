@@ -704,14 +704,14 @@ class CL(ICL):
 
         # 计算两个分型之间的K线数量
         # 使用k_index来判断（缠论K线的索引）
-        k_count_between = fx2_first_ck.k_index - fx1_last_ck.k_index - 1
+        k_count_between = fx2_first_ck.index - fx1_last_ck.index - 1
 
         # 至少需要1根K线间隔
         has_enough_gap = k_count_between >= 1
 
         if not has_enough_gap:
-            print(f"  分型间隔不足：fx1_last_k_index={fx1_last_ck.k_index}, "
-                  f"fx2_first_k_index={fx2_first_ck.k_index}, gap={k_count_between}")
+            print(f"  分型间隔不足：fx1_last_index={fx1_last_ck.index}, "
+                  f"fx2_first_index={fx2_first_ck.index}, gap={k_count_between}")
 
         return has_enough_gap
 
