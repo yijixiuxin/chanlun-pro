@@ -1,6 +1,8 @@
+from typing import Dict, List, Union
+
 from chanlun.backtesting.backtest import BackTest
-from chanlun.backtesting.base import *
-from chanlun.cl_analyse import *
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
+from chanlun.cl_interface import ICL
 
 
 class StrategyAXDTradeModel(Strategy):
@@ -424,7 +426,7 @@ class StrategyAXDTradeModel(Strategy):
             for _bi in bis_5m:
                 if _bi.mmd_exists(["3sell"], "|") and self.bi_td(_bi, cd_5m):
                     return Operation(
-                        code=code, opt="sell", mmd=mmd, msg=f"5m级别，出现笔的三类卖点"
+                        code=code, opt="sell", mmd=mmd, msg="5m级别，出现笔的三类卖点"
                     )
 
         return False
