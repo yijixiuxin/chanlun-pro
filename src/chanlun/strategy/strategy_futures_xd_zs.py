@@ -1,4 +1,7 @@
-from chanlun.backtesting.base import *
+from typing import Dict, List, Union
+
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
+from chanlun.cl_interface import LINE
 
 
 class StrategyFuturesXDZS(Strategy):
@@ -70,7 +73,7 @@ class StrategyFuturesXDZS(Strategy):
                         "1sell",
                         get_loss_price(high_bi),
                         info,
-                        f"中枢震荡，向上线段完成，卖出做空",
+                        "中枢震荡，向上线段完成，卖出做空",
                     )
                 ]
 
@@ -96,7 +99,7 @@ class StrategyFuturesXDZS(Strategy):
                         "1buy",
                         get_loss_price(high_bi),
                         info,
-                        f"中枢震荡，向下线段完成，买入做多",
+                        "中枢震荡，向下线段完成，买入做多",
                     )
                 ]
 
@@ -150,9 +153,9 @@ class StrategyFuturesXDZS(Strategy):
         #   超过中枢 zg/zd 后，笔的盘整/趋势背驰，买卖点进行平仓
 
         if "buy" in mmd and high_xd.type == "up" and high_xd.done:
-            opts.append(Operation(code, "sell", mmd, msg=f"向上线段完成，卖出平仓"))
+            opts.append(Operation(code, "sell", mmd, msg="向上线段完成，卖出平仓"))
         if "sell" in mmd and high_xd.type == "down" and high_xd.done:
-            opts.append(Operation(code, "sell", mmd, msg=f"向下线段完成，卖出平仓"))
+            opts.append(Operation(code, "sell", mmd, msg="向下线段完成，卖出平仓"))
 
         if (
             "buy" in mmd

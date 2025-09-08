@@ -1,9 +1,9 @@
 import datetime
-from typing import List, Union
+from typing import Dict, List, Union
 
 import pandas as pd
+
 from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
-from chanlun.cl_interface import Dict, List
 from chanlun.config import get_data_path
 
 
@@ -478,10 +478,10 @@ class StrategyADMMDTest(Strategy):
 
 
 if __name__ == "__main__":
-    from chanlun.backtesting import backtest
-    from chanlun.cl_utils import query_cl_chart_config
     import pandas as pd
 
+    from chanlun.backtesting import backtest
+    from chanlun.cl_utils import query_cl_chart_config
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     # 获取所有股票代码

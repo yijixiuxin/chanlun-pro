@@ -1,4 +1,6 @@
-from chanlun.backtesting.base import *
+from typing import Dict, List, Union
+
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
 from chanlun.config import get_data_path
 
 
@@ -100,7 +102,6 @@ class StrategyTest(Strategy):
 if __name__ == "__main__":
     from chanlun.backtesting import backtest
     from chanlun.cl_utils import query_cl_chart_config
-    import pandas as pd
 
     market = "futures"
     cl_config = query_cl_chart_config(market, "SH.000001")
@@ -123,7 +124,7 @@ if __name__ == "__main__":
         # 回测开始的时间
         "start_datetime": "2024-11-01 00:00:00",
         # 回测的结束时间
-        "end_datetime": "2024-11-02 00:00:00",
+        "end_datetime": "2025-11-02 00:00:00",
         # mode 为 trade 生效，初始账户资金
         "init_balance": 100000,
         # mode 为 trade 生效，交易手续费率

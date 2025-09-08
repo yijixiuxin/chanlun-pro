@@ -1,5 +1,7 @@
-from chanlun.backtesting.base import *
-from chanlun.cl_interface import *
+from typing import Dict, List, Union
+
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
+from chanlun.cl_interface import XD
 
 
 class StrategyXDMMD(Strategy):
