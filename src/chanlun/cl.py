@@ -411,64 +411,83 @@ class CL(ICL):
     def _identify_fractals(self):
         """
         根据“重叠冲突处理”规则，筛选最终有效分型。
-        规则: 只有当两个“潜在”分型之间K线重叠时，才需要根据前一个“已确认”分型来决定保留哪一个。
+        新规则:
+        1. 将连续的、K线重叠的潜在分型视为一个“冲突组”。
+        2. 在冲突组内，根据前一个已确认的分型，通过比较保留一个最优分型作为临时的“候选分型”。
+        3. 当冲突组结束（即下一个分型不再重叠时），才将这个从冲突中胜出的“候选分型”加入最终列表。
         """
-        # 步骤 1: 找出所有潜在分型
-        # Step 1: Find all potential fractals
         potential_fxs = self._find_all_potential_fractals()
 
         if not potential_fxs:
             print("K线数量不足，未找到任何分型。")
+            self.fxs = []
             return
 
-        # 步骤 2: 遍历潜在分型列表，构建最终结果
-        # Step 2: Iterate through the list of potential fractals to build the final result
         final_fxs = [potential_fxs[0]]
-        i = 1  # Index for iterating through potential_fxs
+
+        if len(potential_fxs) < 2:
+            self.fxs = final_fxs
+            print(f"分型识别完成，共找到 {len(self.fxs)} 个有效分型。")
+            return
+
+        # 从第二个潜在分型开始，它成为我们的第一个候选者
+        candidate_fx = potential_fxs[1]
+        i = 2  # 指针从第三个潜在分型开始
 
         while i < len(potential_fxs):
-            last_fx = final_fxs[-1]
-            fx1 = potential_fxs[i]
+            last_confirmed_fx = final_fxs[-1]
+            next_potential_fx = potential_fxs[i]
 
-            fx2 = potential_fxs[i + 1] if (i + 1) < len(potential_fxs) else None
+            # 检查当前候选分型与下一个潜在分型是否重叠
+            is_overlapping = (next_potential_fx.k.index - 1) <= (candidate_fx.k.index + 1)
 
-            # 检查 fx1 和 fx2 是否是一对K线重叠的潜在分型
-            # Check if fx1 and fx2 are a pair of potential fractals with overlapping K-lines
-            is_overlapping_pair = fx2 and (fx2.k.index - 1) <= (fx1.k.index + 1)
+            if is_overlapping:
+                # --- 情况 A: 存在重叠，进入冲突解决模式 ---
+                c_type = candidate_fx.type
+                n_type = next_potential_fx.type
 
-            candidate_fx = None
+                if c_type == 'ding' and n_type == 'ding':
+                    # 两个都是顶，取更高的顶
+                    if next_potential_fx.val > candidate_fx.val:
+                        candidate_fx = next_potential_fx
 
-            if not is_overlapping_pair:
-                # 情况 A: fx1 与下一个潜在分型不重叠，它自己就是独立的候选者
-                # Case A: fx1 does not overlap with the next potential fractal, so it is an independent candidate
-                candidate_fx = fx1
-                i += 1  # 指针前进 1
+                elif c_type == 'di' and n_type == 'di':
+                    # 两个都是底，取更低的底
+                    if next_potential_fx.val < candidate_fx.val:
+                        candidate_fx = next_potential_fx
+
+                else:
+                    # 一顶一底，应用原有的比较规则
+                    competing_top = candidate_fx if c_type == 'ding' else next_potential_fx
+                    competing_bottom = candidate_fx if c_type == 'di' else next_potential_fx
+
+                    if last_confirmed_fx.type == 'ding':
+                        # 前一个是顶，比较新顶和旧顶
+                        if competing_top.val > last_confirmed_fx.val:
+                            candidate_fx = competing_top  # 新顶更高，候选者变为顶
+                        else:
+                            candidate_fx = competing_bottom  # 否则，候选者变为底
+                    else:  # last_confirmed_fx.type == 'di'
+                        # 前一个是底，比较新底和旧底
+                        if competing_bottom.val < last_confirmed_fx.val:
+                            candidate_fx = competing_bottom  # 新底更低，候选者变为底
+                        else:
+                            candidate_fx = competing_top  # 否则，候选者变为顶
+
+                # 解决完一个重叠，指针前进 1，继续用新的 candidate_fx 和下一个分型比较
+                i += 1
+
             else:
-                # 情况 B: fx1 和 fx2 的K线重叠，必须根据 last_fx 做出选择
-                # 一顶一底重叠，应用核心规则
-                # A top and a bottom overlap, apply the core rule
-                competing_top = fx1 if fx1.type == 'ding' else fx2
-                competing_bottom = fx1 if fx1.type == 'di' else fx2
-
-                if last_fx.type == 'ding':
-                    # 前一个是顶，比较新顶和旧顶
-                    if competing_top.val > last_fx.val:
-                        candidate_fx = competing_top  # 新顶更高，保留顶
-                    else:
-                        candidate_fx = competing_bottom  # 否则，保留底
-                else:  # last_fx._type == 'di'
-                    # 前一个是底，比较新底和旧底
-                    if competing_bottom.val < last_fx.val:
-                        candidate_fx = competing_bottom  # 新底更低，保留底
-                    else:
-                        candidate_fx = competing_top  # 否则，保留顶
-
-                i += 2  # 解决了一个重叠对，指针前进 2
-
-            # 将选出的候选分型直接加入最终列表
-            # Add the selected candidate fractal directly to the final list
-            if candidate_fx:
+                # --- 情况 B: 不重叠，冲突结束 ---
                 final_fxs.append(candidate_fx)
+
+                # 更新 candidate_fx 为当前这个不重叠的分型，它将成为下一轮比较的起点
+                candidate_fx = next_potential_fx
+                i += 1
+
+        # 循环结束后，处理最后一个留下的 candidate_fx
+        if candidate_fx and (not final_fxs or candidate_fx.type != final_fxs[-1].type):
+            final_fxs.append(candidate_fx)
 
         self.fxs = final_fxs
         print(f"分型识别完成，共找到 {len(self.fxs)} 个有效分型。")
@@ -528,80 +547,80 @@ class CL(ICL):
         if len(self.fxs) < 2:
             self.bis = []
             return
-
-        # 步骤 1: 预处理分型，确保序列严格顶底交替
-        # 对于连续的同类型分型，只保留最值（顶留最高，底留最低）
-        clean_fxs = []
-        if self.fxs:
-            clean_fxs.append(self.fxs[0])
-            for i in range(1, len(self.fxs)):
-                fx = self.fxs[i]
-                last_clean_fx = clean_fxs[-1]
-                if fx.type == last_clean_fx.type:
-                    if fx.type == 'ding' and fx.val > last_clean_fx.val:
-                        clean_fxs[-1] = fx  # 保留更高的顶
-                    elif fx.type == 'di' and fx.val < last_clean_fx.val:
-                        clean_fxs[-1] = fx  # 保留更低的底
-                else:
-                    clean_fxs.append(fx)
-
-        if len(clean_fxs) < 2:
-            self.bis = []
-            return
-
-        # 步骤 2: 识别笔，处理分型间的连接关系
-        # final_fxs 存储最终构成笔的有效分型点
-        final_fxs = [clean_fxs[0]]
-
-        i = 1
-        while i < len(clean_fxs):
-            last_final_fx = final_fxs[-1]
-            current_fx = clean_fxs[i]
-
-            # 检查从 last_final_fx 到 current_fx 是否满足成笔条件
-            # 在上一步已经确保了 last_final_fx 和 current_fx 的类型是不同的
-            if self._check_bi_requirement(last_final_fx, current_fx):
-                # 条件满足，这是一个有效的笔连接，将当前分型加入最终列表
-                final_fxs.append(current_fx)
-            else:
-                # 条件不满足（通常是K线间隔不够），说明 last_final_fx 这个分型点是无效的，需要被“吃掉”
-                # 这就是笔的延续逻辑：前一笔并未在 last_final_fx 结束，而是要延续下去
-
-                # 如果 final_fxs 只有一个元素，用更极端的那个替换掉它
-                if len(final_fxs) < 2:
-                    if current_fx.type == 'ding' and current_fx.val > last_final_fx.val:
-                        final_fxs[-1] = current_fx
-                    elif current_fx.type == 'di' and current_fx.val < last_final_fx.val:
-                        final_fxs[-1] = current_fx
-                    i += 1
-                    continue
-
-                # 移除 last_final_fx，因为它是一个无效的转折点
-                final_fxs.pop()
-                # 获取前一个有效分型点，现在它成为最后一个点
-                prev_fx = final_fxs[-1]
-
-                # 现在比较 current_fx 和 prev_fx
-                # 因为 last_final_fx 被移除了，所以它们的类型是相同的
-                # 应用同类分型取最值的规则，实现笔的延续
-                if current_fx.type == 'ding' and current_fx.val > prev_fx.val:
-                    final_fxs[-1] = current_fx  # 笔延续到了一个更高的顶
-                elif current_fx.type == 'di' and current_fx.val < prev_fx.val:
-                    final_fxs[-1] = current_fx  # 笔延续到了一个更低的底
-
-            i += 1
-
-        # 步骤 3: 根据最终确认的分型点构建笔列表
-        self.bis = []
-        if len(final_fxs) >= 2:
-            for i in range(len(final_fxs) - 1):
-                start_fx = final_fxs[i]
-                end_fx = final_fxs[i + 1]
-
-                bi_type = 'up' if start_fx.type == 'di' else 'down'
-
-                new_bi = BI(start=start_fx, end=end_fx, _type=bi_type, index=len(self.bis))
-                self.bis.append(new_bi)
+        #
+        # # 步骤 1: 预处理分型，确保序列严格顶底交替
+        # # 对于连续的同类型分型，只保留最值（顶留最高，底留最低）
+        # clean_fxs = []
+        # if self.fxs:
+        #     clean_fxs.append(self.fxs[0])
+        #     for i in range(1, len(self.fxs)):
+        #         fx = self.fxs[i]
+        #         last_clean_fx = clean_fxs[-1]
+        #         if fx.type == last_clean_fx.type:
+        #             if fx.type == 'ding' and fx.val > last_clean_fx.val:
+        #                 clean_fxs[-1] = fx  # 保留更高的顶
+        #             elif fx.type == 'di' and fx.val < last_clean_fx.val:
+        #                 clean_fxs[-1] = fx  # 保留更低的底
+        #         else:
+        #             clean_fxs.append(fx)
+        #
+        # if len(clean_fxs) < 2:
+        #     self.bis = []
+        #     return
+        #
+        # # 步骤 2: 识别笔，处理分型间的连接关系
+        # # final_fxs 存储最终构成笔的有效分型点
+        # final_fxs = [clean_fxs[0]]
+        #
+        # i = 1
+        # while i < len(clean_fxs):
+        #     last_final_fx = final_fxs[-1]
+        #     current_fx = clean_fxs[i]
+        #
+        #     # 检查从 last_final_fx 到 current_fx 是否满足成笔条件
+        #     # 在上一步已经确保了 last_final_fx 和 current_fx 的类型是不同的
+        #     if self._check_bi_requirement(last_final_fx, current_fx):
+        #         # 条件满足，这是一个有效的笔连接，将当前分型加入最终列表
+        #         final_fxs.append(current_fx)
+        #     else:
+        #         # 条件不满足（通常是K线间隔不够），说明 last_final_fx 这个分型点是无效的，需要被“吃掉”
+        #         # 这就是笔的延续逻辑：前一笔并未在 last_final_fx 结束，而是要延续下去
+        #
+        #         # 如果 final_fxs 只有一个元素，用更极端的那个替换掉它
+        #         if len(final_fxs) < 2:
+        #             if current_fx.type == 'ding' and current_fx.val > last_final_fx.val:
+        #                 final_fxs[-1] = current_fx
+        #             elif current_fx.type == 'di' and current_fx.val < last_final_fx.val:
+        #                 final_fxs[-1] = current_fx
+        #             i += 1
+        #             continue
+        #
+        #         # 移除 last_final_fx，因为它是一个无效的转折点
+        #         final_fxs.pop()
+        #         # 获取前一个有效分型点，现在它成为最后一个点
+        #         prev_fx = final_fxs[-1]
+        #
+        #         # 现在比较 current_fx 和 prev_fx
+        #         # 因为 last_final_fx 被移除了，所以它们的类型是相同的
+        #         # 应用同类分型取最值的规则，实现笔的延续
+        #         if current_fx.type == 'ding' and current_fx.val > prev_fx.val:
+        #             final_fxs[-1] = current_fx  # 笔延续到了一个更高的顶
+        #         elif current_fx.type == 'di' and current_fx.val < prev_fx.val:
+        #             final_fxs[-1] = current_fx  # 笔延续到了一个更低的底
+        #
+        #     i += 1
+        #
+        # # 步骤 3: 根据最终确认的分型点构建笔列表
+        # self.bis = []
+        # if len(final_fxs) >= 2:
+        #     for i in range(len(final_fxs) - 1):
+        #         start_fx = final_fxs[i]
+        #         end_fx = final_fxs[i + 1]
+        #
+        #         bi_type = 'up' if start_fx.type == 'di' else 'down'
+        #
+        #         new_bi = BI(start=start_fx, end=end_fx, _type=bi_type, index=len(self.bis))
+        #         self.bis.append(new_bi)
 
     # === 辅助函数 ===
     def _get_bi_high(self, bi: BI) -> float:
