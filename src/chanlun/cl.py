@@ -673,6 +673,28 @@ class CL(ICL):
                 new_bi = BI(start=start_fx, end=end_fx, _type=bi_type, index=len(self.bis))
                 self.bis.append(new_bi)
 
+        # 步骤 5: 处理待定笔 (Step 5: Handle pending stroke)
+        # 待定笔是指从最后一个确认的分型点到最新一个分型点之间可能形成的笔。
+        # A pending stroke is a potential stroke forming from the last confirmed fractal
+        # point to the most recent fractal point.
+        if final_fxs and processed_fxs:
+            last_confirmed_fx = final_fxs[-1]
+            last_processed_fx = processed_fxs[-1]
+
+            # 如果最后一个处理过的分型点不是最后一个确认的笔端点，
+            # 那么它们之间就存在一根待定笔。
+            # If the last processed fractal is not the same as the last confirmed stroke endpoint,
+            # then a pending stroke exists between them.
+            if last_confirmed_fx is not last_processed_fx:
+                pending_bi_type = 'up' if last_confirmed_fx.type == 'di' else 'down'
+                pending_bi = BI(
+                    start=last_confirmed_fx,
+                    end=last_processed_fx,
+                    _type=pending_bi_type,
+                    index=len(self.bis)
+                )
+                self.bis.append(pending_bi)
+
     # === 辅助函数 ===
     def _get_bi_high(self, bi: BI) -> float:
         """获取笔的最高价"""
