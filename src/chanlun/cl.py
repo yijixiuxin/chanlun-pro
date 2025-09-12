@@ -256,12 +256,11 @@ class CL(ICL):
         if len(self.src_klines) == 0:
             return
 
-        # 逐根处理原始K线 (Process original K-lines one by one)
+        # 逐根处理原始K线
         for i in range(len(self.src_klines)):
             current_k = self.src_klines[i]
 
             # 将原始K线包装成临时的缠论K线对象
-            # (Wrap the original K-line into a temporary Chanlun K-line object)
             cl_k = CLKline(
                 k_index=current_k.index, date=current_k.date, h=current_k.h, l=current_k.l,
                 o=current_k.o, c=current_k.c, a=current_k.a, klines=[current_k],
@@ -269,7 +268,6 @@ class CL(ICL):
             )
 
             # 如果是第一根K线，直接放入结果列表
-            # (If it's the first K-line, add it directly to the results list)
             if not self.cl_klines:
                 self.cl_klines.append(cl_k)
                 continue
@@ -277,7 +275,6 @@ class CL(ICL):
             last_cl_k = self.cl_klines[-1]
 
             # 检查是否有缺口，有缺口则不进行包含处理
-            # (Check for gaps; if a gap exists, do not process for inclusion)
             has_gap = cl_k.l > last_cl_k.h or cl_k.h < last_cl_k.l
             if has_gap:
                 cl_k.q = True
@@ -285,44 +282,35 @@ class CL(ICL):
                 continue
 
             # 判断是否需要与前一根处理过的K线合并
-            # (Determine if it needs to be merged with the previously processed K-line)
             if self._need_merge(last_cl_k, cl_k):
-                # --- 核心移植逻辑开始 (Core logic start) ---
                 # 1. 确定合并方向 (1. Determine the merge direction)
                 direction = 'up'  # 默认向上 (Default to 'up')
                 if last_cl_k.up_qs is not None:
                     # 如果上一根合并K线已经有方向，则继承该方向
-                    # (If the last merged K-line already has a direction, inherit it)
                     direction = last_cl_k.up_qs
                 elif len(self.cl_klines) >= 2:
                     # 标准情况：比较最后两根已处理K线的高点来定方向
-                    # (Standard case: compare the high points of the last two processed K-lines to set the direction)
                     prev_prev_k = self.cl_klines[-2]
                     if last_cl_k.h < prev_prev_k.h:
                         direction = 'down'
                 else:
                     # 边缘情况：第一次发生包含关系，根据两根K线的高低点关系来确定初始方向
-                    # (Edge case: First time an inclusion relationship occurs, determine the initial direction based on the high/low points of the two K-lines)
                     # 规则：比较高点，高点相同则比较低点。这反映了价格的最新“努力”方向。
-                    # (Rule: Compare highs; if highs are equal, compare lows. This reflects the latest "effort" direction of the price.)
                     if cl_k.h > last_cl_k.h:
                         direction = 'up'
                     elif cl_k.h < last_cl_k.h:
                         direction = 'down'
-                    else:  # 高点相同 (Highs are the same)
+                    else:  # 高点相同
                         if cl_k.l > last_cl_k.l:
                             direction = 'up'
-                        else:  # 低点相同或更低 (Lows are the same or lower)
+                        else:  # 低点相同或更低
                             direction = 'down'
 
                 # 2. 调用合并函数，并传入确定的方向
-                # (2. Call the merge function and pass the determined direction)
                 merged_k = self._merge_klines(last_cl_k, cl_k, direction)
-                self.cl_klines[-1] = merged_k  # 替换掉最后一根K线 (Replace the last K-line)
-
+                self.cl_klines[-1] = merged_k  # 替换掉最后一根K线
             else:
                 # 如果没有包含关系，直接添加新K线
-                # (If there's no inclusion relationship, add the new K-line directly)
                 self.cl_klines.append(cl_k)
 
     def _need_merge(self, k1: CLKline, k2: CLKline) -> bool:
@@ -340,51 +328,45 @@ class CL(ICL):
         修改点：
         - 向上合并时，date 和 k_index 来源于价格最高(h)的那根 K 线。
         - 向下合并时，date 和 k_index 来源于价格最低(l)的那根 K 线。
-
-        Merges two Chanlun K-lines.
-        Modification:
-        - When merging upwards, date and k_index come from the K-line with the highest price (h).
-        - When merging downwards, date and k_index come from the K-line with the lowest price (l).
         """
         if direction == 'up':
-            # 向上合并: 取 高-高, 低-高 (Upward merge: take higher-high, higher-low)
+            # 向上合并: 取 高-高, 低-高
             h = max(k1.h, k2.h)
             l = max(k1.l, k2.l)
-            # 根据价格最高的K线确定日期和索引 (Determine date and index based on the K-line with the highest price)
+            # 根据价格最高的K线确定日期和索引
             if k1.h > k2.h:
                 date = k1.date
                 k_index = k1.k_index
-            else:  # k2.h >= k1.h, 在价格相同时，优先选择更新的K线 (if prices are equal, prefer the newer K-line)
+            else:  # k2.h >= k1.h, 在价格相同时，优先选择更新的K线
                 date = k2.date
                 k_index = k2.k_index
         else:  # direction == 'down'
-            # 向下合并: 取 高-低, 低-低 (Downward merge: take lower-high, lower-low)
+            # 向下合并: 取 高-低, 低-低
             h = min(k1.h, k2.h)
             l = min(k1.l, k2.l)
-            # 根据价格最低的K线确定日期和索引 (Determine date and index based on the K-line with the lowest price)
+            # 根据价格最低的K线确定日期和索引
             if k1.l < k2.l:
                 date = k1.date
                 k_index = k1.k_index
-            else:  # k2.l <= k1.l, 在价格相同时，优先选择更新的K线 (if prices are equal, prefer the newer K-line)
+            else:  # k2.l <= k1.l, 在价格相同时，优先选择更新的K线
                 date = k2.date
                 k_index = k2.k_index
 
         merged = CLKline(
-            k_index=k_index,  # 根据新规则更新 (Updated according to the new rule)
-            date=date,  # 根据新规则更新 (Updated according to the new rule)
+            k_index=k_index,
+            date=date,
             h=h,
             l=l,
-            o=k1.o,  # 开盘价为序列中第一根的开盘价 (Open is from the first K-line in the sequence)
-            c=k2.c,  # 收盘价为序列中最后一根的收盘价 (Close is from the last K-line in the sequence)
+            o=h,  # 开盘价为序列中第一根的开盘价
+            c=l,  # 收盘价为序列中最后一根的收盘价
             a=k1.a + k2.a,
-            klines=k1.klines + k2.klines,  # 合并原始K线列表 (Merge the list of original K-lines)
-            index=k1.index,  # 在cl_klines列表中的索引保持不变 (Index in the cl_klines list remains the same)
-            _n=k1.n + k2.n,  # 累加合并的K线数量 (Accumulate the number of merged K-lines)
-            _q=k1.q  # 合并后的K线继承第一根K线的缺口状态 (The merged K-line inherits the gap status of the first K-line)
+            klines=k1.klines + k2.klines,  # 合并原始K线列表
+            index=k1.index,  # 在cl_klines列表中的索引保持不变
+            _n=k1.n + k2.n,  # 累加合并的K线数量
+            _q=k1.q  # 合并后的K线继承第一根K线的缺口状态
         )
 
         # 将本次合并的方向记录下来，供后续的包含关系判断使用
-        # (Record the direction of this merge for subsequent inclusion relationship checks)
         merged.up_qs = direction
         return merged
 
@@ -405,269 +387,91 @@ class CL(ICL):
             'hist': macd_result[2].tolist()
         }
 
-    def _identify_fractals(self):
-        """
-        在处理后的缠论K线序列中识别顶分型和底分型。
-        这是构建笔的基础。
-        """
-        # 序列长度必须大于等于3才能形成分型
+    def _find_all_potential_fractals(self):
+        """扫描所有K线，找出所有理论上成立的潜在分型。"""
+        potential_fxs = []
         if len(self.cl_klines) < 3:
-            print("K线数量不足3根，无法形成分型。")
-            return []
+            return potential_fxs
 
-        # 遍历所有K线，检查每三根相邻K线是否构成一个分型
-        # 我们检查的窗口是 [i-1, i, i+1]，所以i的范围是从1到倒数第二根
         for i in range(1, len(self.cl_klines) - 1):
-            prev_k = self.cl_klines[i - 1]
-            curr_k = self.cl_klines[i]
-            next_k = self.cl_klines[i + 1]
+            prev_k, curr_k, next_k = self.cl_klines[i - 1], self.cl_klines[i], self.cl_klines[i + 1]
 
-            # --- 顶分型判断 (Top Fractal Condition) ---
-            # 缠论标准定义:
-            # 1. 中间K线的最高点，是三者中的【严格】最高点。
-            # 2. 中间K线的最低点，也是三者中的【严格】最高点。
             is_top_fractal = (curr_k.h > prev_k.h and curr_k.h > next_k.h) and \
                              (curr_k.l > prev_k.l and curr_k.l > next_k.l)
-
-            if is_top_fractal:
-                fx = FX(
-                    _type='ding',
-                    k=curr_k,
-                    klines=[prev_k, curr_k, next_k],
-                    val=curr_k.h
-                )
-                self.fxs.append(fx)
-                continue  # 找到顶分型后，这三根K线不能再构成底分型，跳过
-
-            # --- 底分型判断 (Bottom Fractal Condition) ---
-            # 缠论标准定义:
-            # 1. 中间K线的最低点，是三者中的【严格】最低点。
-            # 2. 中间K线的最高点，也是三者中的【严格】最低点。
             is_bottom_fractal = (curr_k.l < prev_k.l and curr_k.l < next_k.l) and \
                                 (curr_k.h < prev_k.h and curr_k.h < next_k.h)
 
-            if is_bottom_fractal:
-                fx = FX(
-                    _type='di',
-                    k=curr_k,
-                    klines=[prev_k, curr_k, next_k],
-                    val=curr_k.l
-                )
-                self.fxs.append(fx)
+            if is_top_fractal:
+                potential_fxs.append(FX(_type='ding', k=curr_k, klines=[prev_k, curr_k, next_k], val=curr_k.h))
+            elif is_bottom_fractal:
+                potential_fxs.append(FX(_type='di', k=curr_k, klines=[prev_k, curr_k, next_k], val=curr_k.l))
 
-        print(f"分型识别完成，共找到 {len(self.fxs)} 个分型。")
+        return potential_fxs
 
-    def _calculate_bis(self):
+    def _identify_fractals(self):
         """
-        根据严格的缠论规则动态计算笔。
-        实现未完成笔的动态识别和延续逻辑。
+        根据“重叠冲突处理”规则，筛选最终有效分型。
+        规则: 只有当两个“潜在”分型之间K线重叠时，才需要根据前一个“已确认”分型来决定保留哪一个。
         """
-        print(f"开始动态识别笔，原始分型数量: {len(self.fxs)}")
+        # 步骤 1: 找出所有潜在分型
+        # Step 1: Find all potential fractals
+        potential_fxs = self._find_all_potential_fractals()
 
-        if len(self.fxs) < 2:
-            self.bis = []
+        if not potential_fxs:
+            print("K线数量不足，未找到任何分型。")
             return
 
-        # 第一步：预处理分型，应用基本过滤规则
-        processed_fxs = self._preprocess_fxs()
-        print(f"预处理后分型数量: {len(processed_fxs)}")
+        # 步骤 2: 遍历潜在分型列表，构建最终结果
+        # Step 2: Iterate through the list of potential fractals to build the final result
+        final_fxs = [potential_fxs[0]]
+        i = 1  # Index for iterating through potential_fxs
 
-        # 第二步：动态识别笔
-        self.bis = []
-        current_incomplete_bi = None  # 当前未完成的笔
-        last_confirmed_fx = None  # 最后确认的分型
+        while i < len(potential_fxs):
+            last_fx = final_fxs[-1]
+            fx1 = potential_fxs[i]
 
-        for i, fx in enumerate(processed_fxs):
-            print(f"\n处理分型 {i}: index={fx.index}, type={fx.type}, val={fx.val:.2f}")
+            fx2 = potential_fxs[i + 1] if (i + 1) < len(potential_fxs) else None
 
-            # 第一个分型，直接作为起点
-            if last_confirmed_fx is None:
-                last_confirmed_fx = fx
-                print(f"  设置起始分型: index={fx.index}")
-                continue
+            # 检查 fx1 和 fx2 是否是一对K线重叠的潜在分型
+            # Check if fx1 and fx2 are a pair of potential fractals with overlapping K-lines
+            is_overlapping_pair = fx2 and (fx2.k.index - 1) <= (fx1.k.index + 1)
 
-            # 检查当前分型与最后确认分型是否能构成笔
-            if self._can_form_bi(last_confirmed_fx, fx):
-                print(f"  分型 {last_confirmed_fx.index} 和 {fx.index} 可以构成笔")
+            candidate_fx = None
 
-                # 如果有未完成的笔，需要先完成它
-                if current_incomplete_bi is not None:
-                    current_incomplete_bi.end.done = True  # 标记结束分型为完成
-                    print(f"  完成前一个笔: {current_incomplete_bi}")
-
-                # 创建新的未完成笔
-                bi_type = "up" if last_confirmed_fx.type == "di" else "down"
-                current_incomplete_bi = BI(
-                    start=last_confirmed_fx,
-                    end=fx,
-                    _type=bi_type,
-                    index=len(self.bis),
-                    default_zs_type='',
-                )
-
-                # 设置笔的高低点
-                current_incomplete_bi.high = max(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
-                current_incomplete_bi.low = min(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
-
-                # 标记结束分型为未完成状态
-                fx.done = False
-
-                self.bis.append(current_incomplete_bi)
-                print(f"  创建未完成笔 #{current_incomplete_bi.index}: {current_incomplete_bi.type} "
-                      f"from fx_{last_confirmed_fx.index} to fx_{fx.index}")
-
-                # 更新最后确认的分型
-                last_confirmed_fx = fx
-
+            if not is_overlapping_pair:
+                # 情况 A: fx1 与下一个潜在分型不重叠，它自己就是独立的候选者
+                # Case A: fx1 does not overlap with the next potential fractal, so it is an independent candidate
+                candidate_fx = fx1
+                i += 1  # 指针前进 1
             else:
-                # 不能构成新笔，检查是否需要延续当前未完成的笔
-                if current_incomplete_bi is not None:
-                    if self._should_extend_bi(current_incomplete_bi, fx):
-                        print(f"  延续当前笔到更极端的分型: index={fx.index}, val={fx.val:.2f}")
+                # 情况 B: fx1 和 fx2 的K线重叠，必须根据 last_fx 做出选择
+                # 一顶一底重叠，应用核心规则
+                # A top and a bottom overlap, apply the core rule
+                competing_top = fx1 if fx1.type == 'ding' else fx2
+                competing_bottom = fx1 if fx1.type == 'di' else fx2
 
-                        # 延续笔到当前分型
-                        current_incomplete_bi.end = fx
-
-                        # 更新笔的高低点
-                        current_incomplete_bi.high = max(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
-                        current_incomplete_bi.low = min(current_incomplete_bi.start.val, current_incomplete_bi.end.val)
-
-                        # 标记新的结束分型为未完成
-                        fx.done = False
-
-                        print(f"  笔已延续: {current_incomplete_bi.type} "
-                              f"from fx_{current_incomplete_bi.start.index} to fx_{fx.index}")
-
-                        # 更新最后确认的分型
-                        last_confirmed_fx = fx
+                if last_fx.type == 'ding':
+                    # 前一个是顶，比较新顶和旧顶
+                    if competing_top.val > last_fx.val:
+                        candidate_fx = competing_top  # 新顶更高，保留顶
                     else:
-                        print(f"  分型 {fx.index} 不满足延续条件，跳过")
-                else:
-                    print(f"  无未完成笔，分型 {fx.index} 不能与 {last_confirmed_fx.index} 构成笔")
+                        candidate_fx = competing_bottom  # 否则，保留底
+                else:  # last_fx._type == 'di'
+                    # 前一个是底，比较新底和旧底
+                    if competing_bottom.val < last_fx.val:
+                        candidate_fx = competing_bottom  # 新底更低，保留底
+                    else:
+                        candidate_fx = competing_top  # 否则，保留顶
 
-        # 处理最后一个未完成的笔（如果存在）
-        if current_incomplete_bi is not None and not current_incomplete_bi.end.done:
-            print(f"\n序列结束，最后一个笔保持未完成状态: {current_incomplete_bi}")
+                i += 2  # 解决了一个重叠对，指针前进 2
 
-        print(f"\n笔识别完成，共找到 {len(self.bis)} 个笔")
-        for bi in self.bis:
-            print(f"  笔 #{bi.index}: {bi.type} "
-                  f"from fx_{bi.start.index}({bi.start.val:.2f}) "
-                  f"to fx_{bi.end.index}({bi.end.val:.2f}) "
-                  f"完成状态: {bi.is_done()}")
+            # 将选出的候选分型直接加入最终列表
+            # Add the selected candidate fractal directly to the final list
+            if candidate_fx:
+                final_fxs.append(candidate_fx)
 
-    def _preprocess_fxs(self):
-        """
-        预处理分型，应用规则2、规则3和规则4
-        """
-        processed_fxs = list(self.fxs)
-
-        # 应用规则2和规则3
-        changed = True
-        iteration = 0
-
-        while changed and iteration < 10:
-            changed = False
-            iteration += 1
-            new_processed_fxs = []
-
-            i = 0
-            while i < len(processed_fxs):
-                fx1 = processed_fxs[i]
-
-                if i + 2 < len(processed_fxs):
-                    fx2 = processed_fxs[i + 1]
-                    fx3 = processed_fxs[i + 2]
-
-                    # 检查fx1和fx2是否满足一笔的最低要求
-                    if not self._check_bi_requirement(fx1, fx2):
-                        # 规则2：顶1 -> 底1 -> 顶2，且顶2高于顶1
-                        if fx1.type == "ding" and fx2.type == "di" and fx3.type == "ding":
-                            if fx3.val > fx1.val:
-                                print(f"规则2：过滤分型 {fx1.index}({fx1.val:.2f}) 和 {fx2.index}({fx2.val:.2f})")
-                                changed = True
-                                i += 2
-                                continue
-
-                        # 规则3：底1 -> 顶1 -> 底2，且底2低于底1
-                        elif fx1.type == "di" and fx2.type == "ding" and fx3.type == "di":
-                            if fx3.val < fx1.val:
-                                print(f"规则3：过滤分型 {fx1.index}({fx1.val:.2f}) 和 {fx2.index}({fx2.val:.2f})")
-                                changed = True
-                                i += 2
-                                continue
-
-                new_processed_fxs.append(fx1)
-                i += 1
-
-            processed_fxs = new_processed_fxs
-
-        # 应用规则4：处理连续同类分型
-        final_fxs = []
-        i = 0
-
-        while i < len(processed_fxs):
-            current_fx = processed_fxs[i]
-            same_type_group = [current_fx]
-            j = i + 1
-
-            # 收集连续同类型分型
-            while j < len(processed_fxs) and processed_fxs[j].type == current_fx.type:
-                same_type_group.append(processed_fxs[j])
-                j += 1
-
-            # 处理连续同类分型
-            if len(same_type_group) > 1:
-                if current_fx.type == "ding":
-                    selected_fx = max(same_type_group, key=lambda x: x.val)
-                    print(f"规则4-连续顶：选择最高分型 {selected_fx.index}({selected_fx.val:.2f})")
-                else:
-                    selected_fx = min(same_type_group, key=lambda x: x.val)
-                    print(f"规则4-连续底：选择最低分型 {selected_fx.index}({selected_fx.val:.2f})")
-
-                final_fxs.append(selected_fx)
-            else:
-                final_fxs.append(current_fx)
-
-            i = j
-
-        return final_fxs
-
-    def _can_form_bi(self, start_fx, end_fx):
-        """
-        判断两个分型是否可以构成笔
-        """
-        # 必须是不同类型的分型
-        if start_fx.type == end_fx.type:
-            return False
-
-        # 必须满足一笔的基本要求
-        return self._check_bi_requirement(start_fx, end_fx)
-
-    def _should_extend_bi(self, current_bi, new_fx):
-        """
-        判断是否应该延续当前未完成的笔到新分型
-
-        延续条件：
-        1. 新分型与当前笔的结束分型类型相同
-        2. 新分型更加极端（上升笔中顶分型更高，或下降笔中底分型更低）
-        """
-        # 新分型必须与当前笔的结束分型类型相同
-        if new_fx.type != current_bi.end.type:
-            return False
-
-        # 根据笔的方向判断是否更极端
-        if current_bi.type == "up":
-            # 上升笔：新的顶分型必须更高
-            if new_fx.type == "ding" and new_fx.val > current_bi.end.val:
-                return True
-        else:  # down
-            # 下降笔：新的底分型必须更低
-            if new_fx.type == "di" and new_fx.val < current_bi.end.val:
-                return True
-
-        return False
-
+        self.fxs = final_fxs
+        print(f"分型识别完成，共找到 {len(self.fxs)} 个有效分型。")
 
     def _check_bi_requirement(self, fx1: FX, fx2: FX) -> bool:
         """
@@ -715,6 +519,89 @@ class CL(ICL):
 
         return has_enough_gap
 
+    def _calculate_bis(self):
+        """
+        根据严格的缠论规则动态计算笔。
+        实现未完成笔的动态识别和延续逻辑。
+        """
+        # 步骤 0: 初始检查
+        if len(self.fxs) < 2:
+            self.bis = []
+            return
+
+        # 步骤 1: 预处理分型，确保序列严格顶底交替
+        # 对于连续的同类型分型，只保留最值（顶留最高，底留最低）
+        clean_fxs = []
+        if self.fxs:
+            clean_fxs.append(self.fxs[0])
+            for i in range(1, len(self.fxs)):
+                fx = self.fxs[i]
+                last_clean_fx = clean_fxs[-1]
+                if fx.type == last_clean_fx.type:
+                    if fx.type == 'ding' and fx.val > last_clean_fx.val:
+                        clean_fxs[-1] = fx  # 保留更高的顶
+                    elif fx.type == 'di' and fx.val < last_clean_fx.val:
+                        clean_fxs[-1] = fx  # 保留更低的底
+                else:
+                    clean_fxs.append(fx)
+
+        if len(clean_fxs) < 2:
+            self.bis = []
+            return
+
+        # 步骤 2: 识别笔，处理分型间的连接关系
+        # final_fxs 存储最终构成笔的有效分型点
+        final_fxs = [clean_fxs[0]]
+
+        i = 1
+        while i < len(clean_fxs):
+            last_final_fx = final_fxs[-1]
+            current_fx = clean_fxs[i]
+
+            # 检查从 last_final_fx 到 current_fx 是否满足成笔条件
+            # 在上一步已经确保了 last_final_fx 和 current_fx 的类型是不同的
+            if self._check_bi_requirement(last_final_fx, current_fx):
+                # 条件满足，这是一个有效的笔连接，将当前分型加入最终列表
+                final_fxs.append(current_fx)
+            else:
+                # 条件不满足（通常是K线间隔不够），说明 last_final_fx 这个分型点是无效的，需要被“吃掉”
+                # 这就是笔的延续逻辑：前一笔并未在 last_final_fx 结束，而是要延续下去
+
+                # 如果 final_fxs 只有一个元素，用更极端的那个替换掉它
+                if len(final_fxs) < 2:
+                    if current_fx.type == 'ding' and current_fx.val > last_final_fx.val:
+                        final_fxs[-1] = current_fx
+                    elif current_fx.type == 'di' and current_fx.val < last_final_fx.val:
+                        final_fxs[-1] = current_fx
+                    i += 1
+                    continue
+
+                # 移除 last_final_fx，因为它是一个无效的转折点
+                final_fxs.pop()
+                # 获取前一个有效分型点，现在它成为最后一个点
+                prev_fx = final_fxs[-1]
+
+                # 现在比较 current_fx 和 prev_fx
+                # 因为 last_final_fx 被移除了，所以它们的类型是相同的
+                # 应用同类分型取最值的规则，实现笔的延续
+                if current_fx.type == 'ding' and current_fx.val > prev_fx.val:
+                    final_fxs[-1] = current_fx  # 笔延续到了一个更高的顶
+                elif current_fx.type == 'di' and current_fx.val < prev_fx.val:
+                    final_fxs[-1] = current_fx  # 笔延续到了一个更低的底
+
+            i += 1
+
+        # 步骤 3: 根据最终确认的分型点构建笔列表
+        self.bis = []
+        if len(final_fxs) >= 2:
+            for i in range(len(final_fxs) - 1):
+                start_fx = final_fxs[i]
+                end_fx = final_fxs[i + 1]
+
+                bi_type = 'up' if start_fx.type == 'di' else 'down'
+
+                new_bi = BI(start=start_fx, end=end_fx, _type=bi_type, index=len(self.bis))
+                self.bis.append(new_bi)
 
     # === 辅助函数 ===
     def _get_bi_high(self, bi: BI) -> float:
@@ -1561,7 +1448,7 @@ class CL(ICL):
             # 返回缠论K线对应的原始K线
             result = []
             for cl_k in self.cl_klines:
-                result.extend(cl_k.klines)
+                result.append(cl_k)
             return result
         else:
             return self.src_klines
