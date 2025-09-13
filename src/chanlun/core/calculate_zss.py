@@ -77,7 +77,7 @@ def create_dn_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
             continue
 
         # 3. --- 验证进入段是否有效 ---
-        entry_high, entry_low = self._get_line_high_low(entry_seg)
+        entry_high, entry_low = _get_line_high_low(entry_seg)
         if entry_high is None or entry_low is None:
             i += 1
             continue
@@ -98,7 +98,7 @@ def create_dn_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
 
         while j < len(lines):
             current_seg = lines[j]
-            curr_high, curr_low = self._get_line_high_low(current_seg)
+            curr_high, curr_low = _get_line_high_low(current_seg)
 
             if curr_high is None or curr_low is None:
                 break
@@ -107,7 +107,7 @@ def create_dn_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
             is_leave_segment = False
             if j + 1 < len(lines):
                 successor = lines[j + 1]
-                succ_high, succ_low = self._get_line_high_low(successor)
+                succ_high, succ_low = _get_line_high_low(successor)
                 if succ_high is not None and succ_low is not None:
                     if succ_low > zg or succ_high < zd:  # successor 无交集
                         is_leave_segment = True
