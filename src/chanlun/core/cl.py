@@ -15,7 +15,7 @@ from chanlun.core.calculate_indicators import calculate_indicators
 from chanlun.core.calculate_line_signals import calculate_line_signals
 from chanlun.core.calculate_trends import calculate_trends
 from chanlun.core.calculate_xds import calculate_xds
-from chanlun.core.calculate_zss import calculate_zss, create_dn_zs
+from chanlun.core.calculate_zss import calculate_zss, create_xd_zs
 from chanlun.core.cl_interface import ICL, Kline, CLKline, FX, BI, XD, ZS, Config, LINE, compare_ld_beichi
 from chanlun.core.identify_fractals import identify_fractals
 from chanlun.core.process_cl_klines import process_cl_klines
@@ -74,9 +74,6 @@ class CL(ICL):
         self._last_bi_zs: Union[ZS, None] = None
         self._last_xd_zs: Union[ZS, None] = None
 
-        # 处理状态标记
-        self._last_kline_index = -1
-
     def _init_default_config(self):
         """初始化默认配置参数"""
         default_config = {
@@ -117,13 +114,7 @@ class CL(ICL):
     def process_klines(self, klines: pd.DataFrame):
         """
         处理K线数据，计算缠论分析结果
-        支持增量更新
-
-        Args:
-            klines: K线数据DataFrame，需包含date,high,low,open,close,volume列
-
-        Returns:
-            self: 返回自身以支持链式调用
+        支持增量更新：通过对比K线数量和最后一根K线状态，避免不必要的重复计算。
         """
         if klines is None or len(klines) == 0:
             return self
@@ -154,9 +145,8 @@ class CL(ICL):
         # 计算线段
         self.xds = calculate_xds(self.bis, self.config)
         # 计算走势段和趋势段
-        self.zsds, self.qsds = calculate_trends(self.xds)
+        # self.zsds, self.qsds = calculate_trends(self.xds)
         # 计算中枢
-        self.bi_zss = calculate_zss(self.bis, self.config)
         self.xd_zss = calculate_zss(self.xds, self.config)
         # 计算买卖点和背驰
         calculate_line_signals(self, self.bis, self.bi_zss)
@@ -452,4 +442,4 @@ class CL(ICL):
         max_line_num: int = 999,
         zs_include_last_line=True,
     ) -> List[ZS]:
-        create_dn_zs(zs_type, lines)
+        create_xd_zs(zs_type, lines)
