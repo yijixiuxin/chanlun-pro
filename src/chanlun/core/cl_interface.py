@@ -3,7 +3,7 @@ import datetime
 import json
 import math
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Dict, List, Tuple, Union
 
@@ -403,6 +403,23 @@ class LINE:
         return hash((self.start.k.k_index, self.end.k.k_index, self.type))
 
 
+    def to_dict(self):
+        """将LINE对象转换为字典"""
+        return {
+            'start': self.start.to_dict() if self.start else None,
+            'end': self.end.to_dict() if self.end else None,
+            'high': self.high,
+            'low': self.low,
+            'zs_high': self.zs_high,
+            'zs_low': self.zs_low,
+            'type': self.type,
+            'index': self.index,
+        }
+
+    def __str__(self):
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
 class ZS:
     """
     中枢对象（笔中枢，线段中枢）
@@ -488,9 +505,28 @@ class ZS:
                 bcs += _l.line_bcs(zs_type)
         return bcs
 
-    def __str__(self):
-        return f"index: {self.index} zs_type: {self.zs_type} level: {self.level} FX: ({self.start.k.date}-{self.end.k.date}) type: {self.type} zg: {self.zg} zd: {self.zd} gg: {self.gg} dd: {self.dd} done: {self.done} real: {self.real} "
+    def to_dict(self):
+        """将ZS对象转换为字典"""
+        return {
+            'zs_type': self.zs_type,
+            'start': self.start.to_dict() if self.start else None,
+            'lines': [line.to_dict() for line in self.lines],
+            'end': self.end.to_dict() if self.end else None,
+            'zg': self.zg,
+            'zd': self.zd,
+            'gg': self.gg,
+            'dd': self.dd,
+            'type': self.type,
+            'index': self.index,
+            'line_num': self.line_num,
+            'level': self.level,
+            'done': self.done,
+            'real': self.real,
+        }
 
+    def __str__(self):
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 class MMD:
     """
@@ -502,8 +538,17 @@ class MMD:
         self.zs: ZS = zs  # 买卖点对应的中枢对象
         self.msg: str = ""  # 买卖点信息
 
+    def to_dict(self):
+        """将MMD对象转换为字典"""
+        return {
+            'name': self.name,
+            'zs': self.zs.to_dict() if self.zs else None,
+            'msg': self.msg,
+        }
+
     def __str__(self):
-        return f"MMD: {self.name} ZS: {self.zs} MSG: {self.msg}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class BC:
@@ -529,8 +574,19 @@ class BC:
         self.compare_lines: List[LINE] = compare_lines  # 在趋势背驰的时候使用
         self.bc = bc  # 是否背驰
 
+    def to_dict(self):
+        """将BC对象转换为字典"""
+        return {
+            'type': self.type,
+            'zs': self.zs.to_dict() if self.zs else None,
+            'compare_line': self.compare_line.to_dict() if self.compare_line else None,
+            'compare_lines': [line.to_dict() for line in self.compare_lines],
+            'bc': self.bc,
+        }
+
     def __str__(self):
-        return f"BC type: {self.type} bc: {self.bc} zs: {self.zs}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class BI(LINE):
@@ -566,8 +622,19 @@ class BI(LINE):
         """
         return False
 
-    def __str__(self):
-        return f"index: {self.index} type: {self.type} FX: ({self.start.k.date} - {self.end.k.date}) high: {self.high} low: {self.low} done: {self.is_done()}"
+
+    def to_dict(self):
+        """将BI对象转换为字典"""
+        data = super().to_dict()
+        data.update({
+            'mmds': [mmd.to_dict() for mmd in self.mmds],
+            'bcs': [bc.to_dict() for bc in self.bcs],
+            'default_zs_type': self.default_zs_type,
+            'zs_type_mmds': {k: [mmd.to_dict() for mmd in v] for k, v in self.zs_type_mmds.items()},
+            'zs_type_bcs': {k: [bc.to_dict() for bc in v] for k, v in self.zs_type_bcs.items()},
+            'is_split': self.is_split,
+        })
+        return data
 
     def is_done(self) -> bool:
         """
@@ -741,8 +808,25 @@ class TZXL:
         self.min: float = 0
         self.update_maxmin()
 
+    def to_dict(self):
+        """将TZXL对象转换为字典"""
+        return {
+            'bh_direction': self.bh_direction,
+            'line': self.line.to_dict() if self.line else None,
+            'pre_line': self.pre_line.to_dict() if self.pre_line else None,
+            'line_bad': self.line_bad,
+            'is_up_line': self.is_up_line,
+            'lines': [l.to_dict() for l in self.lines],
+            'done': self.done,
+            'original_lines': [l.to_dict() for l in self.original_lines],
+            'is_merged': self.is_merged,
+            'max': self.max,
+            'min': self.min,
+        }
+
     def __str__(self):
-        return f"done {self.done} max {self.max} min {self.min} line_bad {self.line_bad} line {self.line} pre_line {self.pre_line} num {len(self.lines)}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
     def update_maxmin(self):
         if self.bh_direction == "up":
@@ -798,8 +882,23 @@ class XLFX:
     def get_last_xl(self) -> TZXL:
         return [_xl for _xl in self.xls if _xl is not None][-1]
 
+    def to_dict(self):
+        """将XLFX对象转换为字典"""
+        return {
+            'type': self.type,
+            'xl': self.xl.to_dict() if self.xl else None,
+            'xls': [x.to_dict() for x in self.xls if x],
+            'qk': self.qk,
+            'is_line_bad': self.is_line_bad,
+            'fx_high': self.fx_high,
+            'fx_low': self.fx_low,
+            'done': self.done,
+            'bh_type': self.bh_type,
+        }
+
     def __str__(self):
-        return f"XLFX type : {self.type} done : {self.done} qk : {self.qk} high : {self.high} low : {self.low} xl : {self.xl}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class XD(LINE):
@@ -995,9 +1094,26 @@ class XD(LINE):
         bcs = self.line_bcs(zs_type)
         return len(set(bc_types) & set(bcs)) > 0
 
-    def __str__(self):
-        return f"XD index: {self.index} type: {self.type} start: {self.start_line.start.k.date} end: {self.end_line.end.k.date} high: {self.high} low: {self.low} is_qk: {self.is_qk()} done: {self.is_done()} ({self.is_split})"
-
+    def to_dict(self):
+        """将XD对象转换为字典"""
+        data = super().to_dict()
+        data.update({
+            'start_line': self.start_line.to_dict() if self.start_line else None,
+            'end_line': self.end_line.to_dict() if self.end_line else None,
+            'mmds': [mmd.to_dict() for mmd in self.mmds],
+            'bcs': [bc.to_dict() for bc in self.bcs],
+            'ding_fx': self.ding_fx.to_dict() if self.ding_fx else None,
+            'di_fx': self.di_fx.to_dict() if self.di_fx else None,
+            'tzxls': [tzxl.to_dict() for tzxl in self.tzxls],
+            'done': self.done,
+            'is_split': self.is_split,
+            'default_zs_type': self.default_zs_type,
+            'zs_type_mmds': {k: [mmd.to_dict() for mmd in v] for k, v in self.zs_type_mmds.items()},
+            'zs_type_bcs': {k: [bc.to_dict() for bc in v] for k, v in self.zs_type_bcs.items()},
+            'not_del': self.not_del,
+            'not_yx': self.not_yx,
+        })
+        return data
 
 @dataclass
 class LOW_LEVEL_QS:
@@ -1013,8 +1129,28 @@ class LOW_LEVEL_QS:
     qs_bc: bool = False  # 是否趋势背驰
     pz_bc: bool = False  # 是否盘整背驰
 
+    # def __str__(self):
+    #     return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
+
+    def to_dict(self):
+        """将LOW_LEVEL_QS对象转换为字典"""
+        return {
+            'zss': [zs.to_dict() for zs in self.zss],
+            'lines': [line.to_dict() for line in self.lines],
+            'zs_num': self.zs_num,
+            'line_num': self.line_num,
+            'bc_line': self.bc_line.to_dict() if self.bc_line else None,
+            'last_line': self.last_line.to_dict() if self.last_line else None,
+            'qs': self.qs,
+            'pz': self.pz,
+            'line_bc': self.line_bc,
+            'qs_bc': self.qs_bc,
+            'pz_bc': self.pz_bc,
+        }
+
     def __str__(self):
-        return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 @dataclass
@@ -1028,6 +1164,15 @@ class MACD_INFOS:
     die_cross_num = 0  # 死叉次数
     last_dif = 0
     last_dea = 0
+
+    def to_dict(self):
+        """将MACD_INFOS对象转换为字典"""
+        return asdict(self)
+
+    def __str__(self):
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
 
 
 @dataclass
@@ -1051,18 +1196,36 @@ class LINE_FORM_INFOS:
     # 其他信息
     infos: dict = None
 
+    # def __str__(self):
+    #     msg = f'{"向上" if self.direction == "up" else "向下"} {self.form_type} ({self.form_level}) {"进入背驰段" if self.is_bc_line else "无背驰"}'
+    #     if self.infos is not None:
+    #         if "zs_pre_line_num" in self.infos.keys():
+    #             msg += f'  中枢前 {self.infos["zs_pre_line_num"]} 段 / '
+    #         if "zs_next_line_num" in self.infos.keys():
+    #             msg += f'  中枢后 {self.infos["zs_next_line_num"]} 段 / '
+    #         if "zs_pre_level" in self.infos.keys():
+    #             msg += f'  前中枢 {self.infos["zs_pre_level"]} 级别 / '
+    #         if "zs_next_level" in self.infos.keys():
+    #             msg += f'  后中枢 {self.infos["zs_next_level"]} 级别 / '
+    #     return msg.strip(" / ")
+
+    def to_dict(self):
+        """将LINE_FORM_INFOS对象转换为字典"""
+        return {
+            'lines': [line.to_dict() for line in self.lines],
+            'direction': self.direction,
+            'line_num': self.line_num,
+            'form_type': self.form_type,
+            'zss': [zs.to_dict() for zs in self.zss] if self.zss else None,
+            'is_bc_line': self.is_bc_line,
+            'form_level': self.form_level,
+            'form_qs': self.form_qs,
+            'infos': self.infos,
+        }
+
     def __str__(self):
-        msg = f'{"向上" if self.direction == "up" else "向下"} {self.form_type} ({self.form_level}) {"进入背驰段" if self.is_bc_line else "无背驰"}'
-        if self.infos is not None:
-            if "zs_pre_line_num" in self.infos.keys():
-                msg += f'  中枢前 {self.infos["zs_pre_line_num"]} 段 / '
-            if "zs_next_line_num" in self.infos.keys():
-                msg += f'  中枢后 {self.infos["zs_next_line_num"]} 段 / '
-            if "zs_pre_level" in self.infos.keys():
-                msg += f'  前中枢 {self.infos["zs_pre_level"]} 级别 / '
-            if "zs_next_level" in self.infos.keys():
-                msg += f'  后中枢 {self.infos["zs_next_level"]} 级别 / '
-        return msg.strip(" / ")
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 @dataclass
@@ -1080,9 +1243,21 @@ class BW_LINE_QS_INFOS:
     # 走势类型描述
     zoushi_type_str = ""
 
-    def __str__(self):
-        return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
+    # def __str__(self):
+    #     return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
 
+    def to_dict(self):
+        """将BW_LINE_QS_INFOS对象转换为字典"""
+        return {
+            'lines': [line.to_dict() for line in self.lines],
+            'zss': [zs.to_dict() for zs in self.zss],
+            'zss_str': self.zss_str,
+            'zoushi_type_str': self.zoushi_type_str,
+        }
+
+    def __str__(self):
+        """以字典形式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 class ICL(metaclass=ABCMeta):
     """
