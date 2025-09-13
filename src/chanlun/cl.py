@@ -16,23 +16,18 @@
 """
 
 import datetime
-import copy
-import logging
-from typing import Dict, List, Union, Tuple, Any, Optional
+from typing import Dict, Union
 import pandas as pd
 import numpy as np
 from talib import abstract
 
 from chanlun.cl_interface import (
-    ICL, Kline, CLKline, FX, BI, XD, ZS, MMD, BC, TZXL, XLFX,
-    Config, LINE, MACD_INFOS,
-    query_macd_ld, compare_ld_beichi, user_custom_mmd
+    ICL, Kline, CLKline, FX, BI, XD, ZS,
+    Config, LINE, compare_ld_beichi
 )
 import logging
-import copy
 from typing import List, Tuple, Optional
 
-from chanlun.segment import identify_segments
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
