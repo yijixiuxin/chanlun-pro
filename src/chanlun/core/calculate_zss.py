@@ -21,7 +21,7 @@ def _get_line_high_low(line: 'LINE') -> Tuple[Optional[float], Optional[float]]:
     return max(start_price, end_price), min(start_price, end_price)
 
 
-def create_dn_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
+def create_xd_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
     """
     创建段内中枢 (优化版本)
     严格按照 "进入段 + 中枢核心(>=3段) + 离开段" 的结构来识别一个完整的中枢。
@@ -168,7 +168,7 @@ def create_dn_zs(zs_type: str, lines: List['LINE']) -> List['ZS']:
     return zss
 
 
-def calculate_zss(lines: List[LINE], config: dict) -> dict:
+def calculate_zss(lines: List[LINE]) -> dict:
     """计算所有类型的中枢"""
-    zss = create_dn_zs(Config.ZS_TYPE_BZ.value, lines)
+    zss = create_xd_zs(Config.ZS_TYPE_BZ.value, lines)
     return {Config.ZS_TYPE_BZ.value: zss}
