@@ -23,7 +23,7 @@ def check_env():
 
     # 检查 环境变量是否设置正确
     try:
-        from chanlun import cl_interface
+        from chanlun.core import cl_interface
     except:
         print("无法导入 chanlun 模块，环境变量未设置或设置错误")
         print(f"当前的环境变量如下：{sys.path}")

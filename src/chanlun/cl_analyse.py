@@ -1,6 +1,6 @@
 from typing import Dict, List, Union
 
-from chanlun.cl_interface import (
+from chanlun.core.cl_interface import (
     BI,
     BW_LINE_QS_INFOS,
     ICL,
@@ -542,7 +542,7 @@ class LinesFormAnalyse:
 
 # 使用示例
 if __name__ == "__main__":
-    from chanlun import cl
+    from chanlun.core import cl
     from chanlun.cl_utils import query_cl_chart_config
     from chanlun.exchange.exchange_db import ExchangeDB
 

@@ -4,13 +4,14 @@ from tqdm.auto import tqdm
 
 from chanlun.exchange.exchange_baostock import ExchangeBaostock
 from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.exchange.exchange_qmt import ExchangeQMT
 
 """
 同步股票数据到数据库中
 """
 
 db_ex = ExchangeDB("a")
-line_ex = ExchangeBaostock()
+line_ex = ExchangeQMT()
 
 # 获取所有 A 股股票
 stocks = line_ex.all_stocks()

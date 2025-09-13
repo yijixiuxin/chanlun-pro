@@ -2,7 +2,7 @@ import time
 import traceback
 
 from chanlun import fun
-from chanlun.cl_interface import Config
+from chanlun.core.cl_interface import Config
 from chanlun.exchange.exchange_ctp import MarketCTP
 from chanlun.strategy.strategy_demo import StrategyDemo
 from chanlun.trader.online_market_datas import OnlineMarketDatas

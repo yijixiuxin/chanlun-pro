@@ -6,7 +6,7 @@ import pandas as pd
 import talib
 
 from chanlun.backtesting.base import MarketDatas, Strategy
-from chanlun.cl_interface import BI, Config
+from chanlun.core.cl_interface import BI, Config
 from chanlun.cl_utils import (
     bi_qk_num,
     cal_klines_macd_infos,

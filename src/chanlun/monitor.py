@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 from chanlun import config, fun, kcharts
 from chanlun.backtesting.base import Strategy
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.cl_utils import bi_td, web_batch_get_cl_datas
 from chanlun.db import db
 from chanlun.exchange import Market, get_exchange
@@ -409,7 +409,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
 
 
 if __name__ == "__main__":
-    from chanlun import cl
+    from chanlun.core import cl
     from chanlun.cl_utils import query_cl_chart_config
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 

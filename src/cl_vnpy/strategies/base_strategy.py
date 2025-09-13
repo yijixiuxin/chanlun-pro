@@ -1,4 +1,3 @@
-import pytz
 from vnpy.trader.constant import Interval
 from vnpy_ctastrategy import (
     CtaTemplate,
@@ -10,11 +9,9 @@ from vnpy_ctastrategy import (
     BarGenerator,
 )
 
-from chanlun import cl
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.base import *
 from chanlun.strategy.strategy_demo import StrategyDemo
-from chanlun import fun
 
 
 class VNPYTrader(BackTestTrader):

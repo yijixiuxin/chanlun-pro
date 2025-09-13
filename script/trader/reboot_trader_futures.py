@@ -3,7 +3,7 @@ import time
 import traceback
 
 from chanlun import fun, zixuan
-from chanlun.cl_interface import Config
+from chanlun.core.cl_interface import Config
 from chanlun.exchange.exchange_tq import ExchangeTq
 from chanlun.strategy import strategy_demo
 from chanlun.trader.online_market_datas import OnlineMarketDatas
