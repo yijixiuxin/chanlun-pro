@@ -21,7 +21,7 @@ import pandas as pd
 import numpy as np
 from talib import abstract
 
-from chanlun.cl_interface import (
+from chanlun.core.cl_interface import (
     ICL, Kline, CLKline, FX, BI, XD, ZS,
     Config, LINE, compare_ld_beichi
 )

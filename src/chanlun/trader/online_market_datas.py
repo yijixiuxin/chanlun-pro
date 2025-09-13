@@ -7,7 +7,7 @@ from typing import List, Dict
 import pandas as pd
 
 from chanlun.backtesting.base import MarketDatas
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.exchange.exchange import Exchange
 from chanlun.file_db import FileCacheDB
 

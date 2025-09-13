@@ -1,12 +1,8 @@
-import time
 from typing import Union
-import MyTT
-import numpy as np
 import openai
 import requests
-import talib
 
-from chanlun.cl_interface import BI, ICL, XD
+from chanlun.core.cl_interface import BI, ICL, XD
 from chanlun.exchange import get_exchange, Market
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from chanlun import config, fun

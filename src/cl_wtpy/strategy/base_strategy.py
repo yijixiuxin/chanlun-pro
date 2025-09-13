@@ -1,11 +1,9 @@
 from pandas.core.api import DataFrame as DataFrame
-from chanlun.cl_interface import ICL, List
 from wtpy import BaseCtaStrategy, WtBarRecords
 from wtpy import CtaContext
 
-from chanlun import cl
 from chanlun.backtesting.base import *
-from chanlun.cl_interface import *
+from chanlun.core.cl_interface import *
 from chanlun.cl_utils import query_cl_chart_config
 
 

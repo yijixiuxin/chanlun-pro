@@ -14,9 +14,10 @@ import numpy as np
 from dtaidistance import dtw_ndim
 from tqdm.auto import tqdm
 
-from chanlun import cl, fun
+from chanlun import fun
+from chanlun.core import cl
 from chanlun.base import Market
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from chanlun.exchange import get_exchange
 

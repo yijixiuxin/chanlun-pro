@@ -1,5 +1,5 @@
 from chanlun.backtesting.base import *
-from chanlun.cl_interface import *
+from chanlun.core.cl_interface import *
 
 
 class StrategyXDMMD(Strategy):
