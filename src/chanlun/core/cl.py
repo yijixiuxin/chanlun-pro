@@ -147,7 +147,7 @@ class CL(ICL):
         # 计算走势段和趋势段
         # self.zsds, self.qsds = calculate_trends(self.xds)
         # 计算中枢
-        self.xd_zss = calculate_zss(self.xds, self.config)
+        self.xd_zss = calculate_zss(self.xds)
         # 计算买卖点和背驰
         calculate_line_signals(self, self.bis, self.bi_zss)
         calculate_line_signals(self, self.xds, self.xd_zss)
