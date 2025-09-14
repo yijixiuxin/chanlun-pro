@@ -4,12 +4,12 @@
 在当前实现中，该模块作为占位符，直接将线段作为走势段和趋势段。
 未来可以扩展此模块以实现更复杂的走势升级逻辑。
 """
-from typing import List, Tuple
+from typing import List, Dict
 
-from chanlun.core.cl_interface import XD
+from chanlun.core.cl_interface import XD, ZS
 
 
-def calculate_trends(xds: List[XD]) -> Tuple[List[XD], List[XD]]:
+def calculate_trends(xd_zss: Dict[str, List[ZS]]) -> List[XD]:
     """
     计算走势段和趋势段
 
@@ -19,7 +19,4 @@ def calculate_trends(xds: List[XD]) -> Tuple[List[XD], List[XD]]:
     Returns:
         一个元组，包含 (走势段列表, 趋势段列表)
     """
-    # 暂时简化：走势段和趋势段等同于线段
-    zsds = xds.copy()
-    qsds = xds.copy()
-    return zsds, qsds
+    xd_zss = xd_zss.copy()
