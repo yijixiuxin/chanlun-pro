@@ -139,18 +139,19 @@ class CL(ICL):
         # 计算技术指标
         self.idx = calculate_indicators(self.cl_klines)
         # 识别分型
-        self.fxs = identify_fractals(self.cl_klines)
+        # self.fxs = identify_fractals(self.cl_klines)
         # 计算笔
-        self.bis = calculate_bis(self.fxs)
+        self.bis, self.fxs  = calculate_bis(self.cl_klines)
+        # self.bis = calculate_bis(self.fxs)
         # 计算线段
         self.xds = calculate_xds(self.bis, self.config)
-        # 计算走势段和趋势段
-        # self.zsds, self.qsds = calculate_trends(self.xds)
         # 计算中枢
         self.xd_zss = calculate_zss(self.xds)
         # 计算买卖点和背驰
-        calculate_line_signals(self, self.bis, self.bi_zss)
-        calculate_line_signals(self, self.xds, self.xd_zss)
+        # calculate_line_signals(self, self.xds, self.xd_zss)
+
+        # 计算走势段
+        calculate_trends(self.xd_zss)
 
         return self
 
