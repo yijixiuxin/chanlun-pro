@@ -200,6 +200,42 @@ def _get_extremum_bi_from_cs(cs_bi: dict) -> BI:
     return original_bis[0] if original_bis else cs_bi['bi']
 
 
+def calculate_segment_high_low(current_segment: Dict) -> (float, float):
+    """
+    根据 current_segment 的类型计算其高点和低点
+    :param current_segment: 包含 'type' 和 'bis' 键的字典
+    :return: 一个包含 (segment_high, segment_low) 的元组
+    """
+    segment_high = 0.0
+    segment_low = 0.0
+
+    bis_objects = current_segment.get('bis', [])
+
+    if not bis_objects:
+        print("警告: 'bis' 列表为空, 无法计算高点和低点。")
+        return segment_high, segment_low
+
+    first_bi = bis_objects[0]
+    last_bi = bis_objects[-1]
+    segment_type = current_segment.get('type')
+
+    if segment_type == 'up':
+        # 当类型为 'up' 时:
+        # 高点 = 最后一笔的终点值
+        # 低点 = 第一笔的起点值
+        segment_high = last_bi.end.val
+        segment_low = first_bi.start.val
+    elif segment_type == 'down':
+        # 当类型为 'down' 时:
+        # 高点 = 第一笔的起点值
+        # 低点 = 最后一笔的终点值
+        segment_high = first_bi.start.val
+        segment_low = last_bi.end.val
+    else:
+        print(f"警告: 未知的 segment type '{segment_type}'。")
+
+    return segment_high, segment_low
+
 # --- 主函数 ---
 def calculate_xds(bis: List[BI], config: Dict) -> List[XD]:
     """根据笔列表计算线段"""
@@ -264,15 +300,15 @@ def calculate_xds(bis: List[BI], config: Dict) -> List[XD]:
         break_info = None
 
         while next_check_idx + 1 < len(all_bis):
-            segment_high = max(_get_bi_high(bi) for bi in current_segment['bis'])
-            segment_low = min(_get_bi_low(bi) for bi in current_segment['bis'])
+
+            segment_high, segment_low = calculate_segment_high_low(current_segment)
 
             bi_for_fractal_check = all_bis[next_check_idx]
             bi_for_extension_check = all_bis[next_check_idx + 1]
 
             # 处理上升线段
             if current_segment['type'] == 'up':
-                if _get_bi_high(bi_for_extension_check) > segment_high:
+                if _get_bi_high(bi_for_extension_check) >= segment_high:
                     current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                     next_check_idx += 2
                     continue
@@ -348,7 +384,7 @@ def calculate_xds(bis: List[BI], config: Dict) -> List[XD]:
 
             # 处理下降线段（逻辑对称）
             elif current_segment['type'] == 'down':
-                if _get_bi_low(bi_for_extension_check) < segment_low:
+                if _get_bi_low(bi_for_extension_check) <= segment_low:
                     current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                     next_check_idx += 2
                     continue
