@@ -230,7 +230,7 @@ class XdCalculator:
             LogUtil.warning(f"警告: 未知的 segment type '{segment_type}'。")
         return segment_high, segment_low
 
-    def calculate(self, bis: List[BI]):
+    def calculate(self, bis: List[BI]) -> List[XD]:
         """
         根据笔列表计算线段。
         此方法支持全量和增量计算。
@@ -240,10 +240,13 @@ class XdCalculator:
         LogUtil.info("开始划分线段")
         all_bis = bis
 
+        is_incremental = bool(self.xds)
+        start_index_for_delta = 0
+
         # 优化：如果输入数据没有新笔，则不重新计算
         if self.xds and all_bis and self.xds[-1].end_line == all_bis[-1]:
             LogUtil.info("输入数据无新笔，跳过线段计算。")
-            return
+            return []
 
         # --- 状态处理：确定本次计算的起点 ---
         start_bi_index = 0
@@ -251,6 +254,7 @@ class XdCalculator:
             # 增量更新模式
             LogUtil.info("增量模式：重新评估最近的线段。")
             last_xd = self.xds.pop()  # 弹出最后一个线段（可能是未完成的），准备重新计算
+            start_index_for_delta = len(self.xds)  # 记录pop后的数量，用于返回增量
 
             # 在新的 all_bis 列表中定位旧的起点
             found = False
@@ -265,17 +269,22 @@ class XdCalculator:
             if not found:
                 LogUtil.warning("无法在'bis'列表中定位上一线段的起点，将执行全量计算。")
                 self.xds.clear()
+                is_incremental = False
                 start_bi_index = self._find_critical_bi_and_truncate(all_bis)
         else:
             # 全量计算模式
             self.xds.clear()
+            is_incremental = False
             start_bi_index = self._find_critical_bi_and_truncate(all_bis)
 
         current_list_index = start_bi_index
 
         if len(all_bis) < 3:
             LogUtil.warning("笔的数量少于3，无法形成线段。")
-            return
+            if is_incremental:
+                return []  # 增量模式下，如果没有新线段形成，返回空列表
+            else:
+                return self.xds  # 全量模式下返回空列表
 
         next_segment_builder = None
         while current_list_index <= len(all_bis) - 3:
@@ -532,3 +541,8 @@ class XdCalculator:
                     self.xds.append(pending_xd)
                 break
         LogUtil.info(f"线段划分结束，完成 {len(self.xds)} 个线段。")
+        if is_incremental:
+            return self.xds[start_index_for_delta:]
+        else:
+            return self.xds
+
