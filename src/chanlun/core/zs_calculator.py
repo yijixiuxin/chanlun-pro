@@ -2,6 +2,7 @@
 """
 中枢计算模块
 负责根据笔或线段列表，识别和构建中枢。
+该模块已被重构，以确保增量计算的逻辑与标准的全量计算逻辑一致。
 """
 from typing import List, Tuple, Optional, Dict
 
@@ -13,7 +14,7 @@ class ZsCalculator:
     """
     中枢计算器
     负责根据笔或线段列表，识别和构建中枢。
-    能够处理全量及增量数据。
+    能够处理全量及增量数据，并确保计算逻辑的正确性。
     """
 
     def __init__(self, config: dict):
@@ -21,25 +22,33 @@ class ZsCalculator:
         初始化
         """
         self.config = config
+        zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
         # 存储所有已完成的中枢
-        self.zss: Dict[str, List[ZS]] = {Config.ZS_TYPE_BZ.value: []}
+        self.zss: Dict[str, List[ZS]] = {zs_type: []}
         # 存储当前正在进行中，尚未完成的中枢
-        self.pending_zs: Dict[str, Optional[ZS]] = {Config.ZS_TYPE_BZ.value: None}
+        self.pending_zs: Dict[str, Optional[ZS]] = {zs_type: None}
         # 存储接收到的所有线段
         self.all_lines: List[LINE] = []
         # 记录下一次开始搜索新中枢的起始索引
         self._search_start_index: int = 0
 
-    def get_zss(self) -> Dict[str, List[ZS]]:
-        """获取所有计算的中枢"""
+    def get_zss(self) -> List[ZS]:
+        """
+        获取所有计算的中枢（已完成 + 进行中）。
+        返回的是一个列表的拷贝。
+        """
         zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
-        return self.zss.get(zs_type)
+        completed_zss = self.zss.get(zs_type, [])
+        pending = self.pending_zs.get(zs_type)
+
+        all_zss = completed_zss.copy()
+        if pending:
+            all_zss.append(pending)
+        return all_zss
 
     def calculate(self, lines: List[LINE]):
         """
-        计算所有类型的中枢。
-        此方法可处理增量数据。传入的 lines 为新增的线段列表。
-        对于增量更新，此方法会尝试延续当前进行中的中枢，或寻找新的中枢。
+        根据新增的线段列表，增量计算所有类型的中枢。
         """
         if not lines:
             LogUtil.info("传入的线段列表为空，不进行计算。")
@@ -48,11 +57,11 @@ class ZsCalculator:
         LogUtil.info(f"接收到 {len(lines)} 条新线段，开始增量计算中枢...")
         self.all_lines.extend(lines)
 
-        # 目前只实现标准中枢的增量计算
-        self._create_xd_zs_incremental(Config.ZS_TYPE_BZ.value, self.all_lines)
+        zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
+        self._create_xd_zs_incremental(zs_type)
 
-        LogUtil.info(f"中枢增量计算完成。已完成中枢: {len(self.zss.get(Config.ZS_TYPE_BZ.value, []))} 个, "
-                     f"进行中中枢: {'是' if self.pending_zs.get(Config.ZS_TYPE_BZ.value) else '否'}")
+        LogUtil.info(f"中枢增量计算完成。已完成中枢: {len(self.zss.get(zs_type, []))} 个, "
+                     f"进行中中枢: {'是' if self.pending_zs.get(zs_type) else '否'}")
 
     @staticmethod
     def _get_line_high_low(line: 'LINE') -> Tuple[Optional[float], Optional[float]]:
@@ -67,14 +76,14 @@ class ZsCalculator:
 
         return max(start_price, end_price), min(start_price, end_price)
 
-    def _create_xd_zs_incremental(self, zs_type: str, lines: List['LINE']):
+    def _create_xd_zs_incremental(self, zs_type: str):
         """
         创建段内中枢 (增量更新版本)
         该方法会更新 self.zss 和 self.pending_zs 状态。
         1. 检查并更新进行中的中枢 (pending_zs)。
-        2. 如果没有进行中的中枢，从上次结束的位置开始寻找新的中枢。
+        2. 如果没有进行中的中枢，或进行中枢完成后，从上次结束的位置继续寻找新的中枢。
         """
-        # 步骤 1: 处理进行中的中枢
+        # 步骤 1: 优先处理进行中的中枢
         pending = self.pending_zs.get(zs_type)
         if pending:
             LogUtil.info(f"检查进行中的中枢 (开始于 {pending.start.start.k.date})...")
@@ -99,12 +108,12 @@ class ZsCalculator:
                     # 进行中的中枢消耗了所有新线段，直接返回，等待下一次增量数据
                     return
 
-        # 步骤 2: 从上次记录的索引开始，寻找新的中枢
+        # 步骤 2: 从上次记录的索引开始，循环寻找新的中枢
         i = self._search_start_index
-        while i <= len(lines) - 4:
-            LogUtil.info(f"尝试从第 {i} 条线段构建中枢...")
-            entry_seg = lines[i]
-            seg_a, seg_b, seg_c = lines[i + 1], lines[i + 2], lines[i + 3]
+        while i <= len(self.all_lines) - 4:
+            # 尝试以 lines[i] 作为进入段来构建中枢
+            entry_seg = self.all_lines[i]
+            seg_a, seg_b, seg_c = self.all_lines[i + 1], self.all_lines[i + 2], self.all_lines[i + 3]
 
             if not (hasattr(entry_seg, 'type') and hasattr(seg_a, 'type') and hasattr(seg_b, 'type') and hasattr(seg_c,
                                                                                                                  'type') and
@@ -112,6 +121,7 @@ class ZsCalculator:
                 i += 1
                 continue
 
+            # 计算初始中枢区间 [ZD, ZG]
             g_a, d_a = self._get_line_high_low(seg_a)
             g_b, d_b = self._get_line_high_low(seg_b)
             g_c, d_c = self._get_line_high_low(seg_c)
@@ -120,32 +130,25 @@ class ZsCalculator:
                 i += 1
                 continue
 
-            LogUtil.info(f"找到潜在中枢核心段: {i + 1}, {i + 2}, {i + 3}。")
             zg, zd = min(g_a, g_b, g_c), max(d_a, d_b, d_c)
 
             if zd >= zg:
-                LogUtil.info(f"核心段无重叠区间 (zd: {zd} >= zg: {zg})，无法构成中枢。")
                 i += 1
                 continue
-            LogUtil.info(f"计算出初始中枢区间为: zd={zd}, zg={zg}")
 
+            # 验证进入段是否有效
             entry_high, entry_low = self._get_line_high_low(entry_seg)
-            if entry_high is None or entry_low is None:
+            if entry_high is None or entry_low is None or (entry_low > zg or entry_high < zd):
                 i += 1
                 continue
 
-            if entry_low > zg or entry_high < zd:
-                LogUtil.info(f"进入段 {i} (low: {entry_low}, high: {entry_high}) 未进入中枢区间，跳过。")
-                i += 1
-                continue
-
-            LogUtil.info(f"第 {i} 条线段确认为有效进入段。开始检查中枢延伸...")
+            # 找到了有效的中枢起点，创建中枢对象并开始延伸检查
+            LogUtil.info(f"在索引 {i} 处找到潜在中枢，进入段: {i}，核心段: {i + 1}, {i + 2}, {i + 3}。")
             core_lines = [seg_a, seg_b, seg_c]
             center = ZS(zs_type=zs_type, start=entry_seg, _type=seg_b.type, level=0)
             center.lines, center.line_num = core_lines, len(core_lines)
             center.zg, center.zd = zg, zd
-
-            center.gg, center.dd = max(g_a, g_b, g_c), min(d_a, d_b, d_c)
+            center.gg, center.dd = max(g_a, g_c), min(d_a, d_c)  # gg/dd 由同向的 a, c 初始化
             center.real = True
 
             completed, next_search_start = self._extend_and_check_complete(center, i + 4)
@@ -157,13 +160,15 @@ class ZsCalculator:
             else:
                 LogUtil.info(f"新发现的中枢成为进行时: 从 {center.start.start.k.date} 开始")
                 self.pending_zs[zs_type] = center
-                i = len(lines)
+                # 成为进行时意味着消耗了所有后续线段，结束本次循环
+                i = len(self.all_lines)
 
         self._search_start_index = i
 
     def _extend_and_check_complete(self, center: ZS, start_j: int) -> Tuple[bool, int]:
         """
         从中枢核心的下一根线段开始，检查中枢的延伸或完成。
+        这是修正后的核心逻辑，参考了全量计算方法。
         :param center: 当前中枢对象 (可能是 pending_zs 或新发现的)
         :param start_j: 在 self.all_lines 中开始检查的索引
         :return: (是否完成: bool, 下一个搜索起始索引: int)
@@ -173,24 +178,59 @@ class ZsCalculator:
 
         j = start_j
         while j < len(lines):
-            current_seg = lines[j]
-            curr_high, curr_low = self._get_line_high_low(current_seg)
-            if curr_high is None or curr_low is None:
+            # 至少需要 j+1 根线段才能判断 j 是否为离开段
+            if j + 1 >= len(lines):
+                # 没有足够的线段来判断，当前线段 j 只能是延伸
+                current_seg = lines[j]
+                curr_high, curr_low = self._get_line_high_low(current_seg)
+                if curr_low is not None and (curr_low > zg or curr_high < zd):
+                    # 如果最后一根线段自身就离开了中枢，则中枢在 j-1 处结束
+                    center.end = lines[j - 1]
+                    center.done = True
+                    return True, j
+                # 否则，作为延伸并保持未完成状态
                 break
 
-            if curr_low > zg or curr_high < zd:
-                center.end = lines[j - 1]
-                center.done = True
-                LogUtil.info(f"线段 {j} (H:{curr_high}, L:{curr_low}) 与中枢 (ZG:{zg}, ZD:{zd}) 出现缺口，中枢完成。")
-                return True, j
+            current_seg = lines[j]  # 潜在的离开段
+            successor_seg = lines[j + 1]  # 用于判断离开的后续段
 
+            curr_high, curr_low = self._get_line_high_low(current_seg)
+            succ_high, succ_low = self._get_line_high_low(successor_seg)
+
+            if any(p is None for p in [curr_high, curr_low, succ_high, succ_low]):
+                # 数据无效，无法判断，暂时中断
+                break
+
+                # 核心判断：如果后继段与中枢区间无重叠，则当前段为离开段
+            is_leave = (succ_low > zg or succ_high < zd)
+
+            if is_leave:
+                # 确认离开段本身必须与中枢有交集
+                if curr_low > zg or curr_high < zd:
+                    # 离开段无效，说明中枢在 j-1 处已经被破坏
+                    center.end = lines[j - 1]
+                    center.done = True
+                    # 下次从 j-1 开始重新寻找，因为它可能是一个新中枢的进入段
+                    return True, j - 1
+                else:
+                    # 找到有效的离开段，中枢完成
+                    center.end = current_seg
+                    center.done = True
+                    # 下次从中枢的离开段开始寻找新中枢
+                    return True, j
+
+            # 如果不是离开，则为延伸
             LogUtil.info(f"线段 {j} 延伸中枢。")
             center.lines.append(current_seg)
             center.line_num += 1
-            center.gg = max(center.gg, curr_high)
-            center.dd = min(center.dd, curr_low)
+            # 更新 gg/dd (中枢内同向段的最高/最低点)
+            # center.lines[0] 是 seg_a
+            if current_seg.type == center.lines[0].type:
+                center.gg = max(center.gg, curr_high)
+                center.dd = min(center.dd, curr_low)
             j += 1
 
-        center.end = lines[-1]
+        # 循环结束，说明所有线段都被作为延伸处理，中枢仍未完成
+        center.end = lines[-1] if lines else center.start
         center.done = False
         return False, len(lines)
