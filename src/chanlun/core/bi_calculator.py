@@ -59,18 +59,18 @@ class BiCalculator:
 
         return True
 
-    def calculate(self, cl_klines: List[CLKline]) -> Tuple[List[BI], List[FX]]:
+    def calculate(self, cl_klines: List[CLKline]) -> List[BI]:
         """
         在识别分型的过程中同步判断笔的形成。
         支持全量和增量数据。当传入增量数据时，返回增量结果。
         """
         # --- 1. 数据和状态初始化 ---
         if not cl_klines:
-            return [], []
+            return []
 
         is_incremental = bool(self.cl_klines)
         if is_incremental and cl_klines[-1].index <= self.cl_klines[-1].index:
-            return [], []
+            return []
 
         new_bis: List[BI] = []
         new_fxs: List[FX] = []
@@ -90,7 +90,7 @@ class BiCalculator:
                 start_index = self.fxs[-1].k.index
             start_index = max(1, start_index)
         else:
-            LogUtil.info(f"开始全量笔计算，共 {len(self.cl_klines)} 根处理后K线。")
+            LogUtil.info(f"开始笔计算 (全量)，共 {len(self.cl_klines)} 根处理后K线。")
             self.bis, self.fxs, self.pending_bi, self.bi_index = [], [], None, 0
 
         # --- 2. 核心计算循环 ---
@@ -154,11 +154,11 @@ class BiCalculator:
 
         # --- 4. 返回结果 ---
         if is_incremental:
-            LogUtil.info(f"笔计算完成 (增量)。新增 {len(new_bis)} 笔, {len(new_fxs)} 个分型。")
-            return new_bis, new_fxs
+            LogUtil.info(f"笔计算完成 (增量)。新增 {len(new_bis)} 笔。")
+            return new_bis
         else:
-            LogUtil.info(f"笔计算完成 (全量)。共找到 {len(self.bis)} 笔, {len(self.fxs)} 个分型。")
-            return self.bis, self.fxs
+            LogUtil.info(f"笔计算完成 (全量)。共找到 {len(self.bis)} 笔。")
+            return self.bis
 
     def _find_fractal(self, k1: CLKline, k2: CLKline, k3: CLKline) -> Optional[FX]:
         """

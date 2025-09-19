@@ -10,6 +10,7 @@ class KlineDataProcessor:
     K线数据处理器
     封装了K线数据的存储、预处理和增量更新的全部逻辑。
     """
+
     def __init__(self, start_datetime: datetime.datetime = None):
         """
         初始化K线数据处理器
@@ -20,21 +21,26 @@ class KlineDataProcessor:
         self.klines: List[Kline] = []
         self.start_datetime = start_datetime
 
-    def update(self, klines_df: pd.DataFrame):
+    def process_kline(self, klines_df: pd.DataFrame) -> List[Kline]:
         """
         接收DataFrame并更新内部的K线数据列表。
         这是该类唯一的公共入口点。
 
         Args:
             klines_df (pd.DataFrame): 包含新K线数据的DataFrame。
+
+        Returns:
+            List[Kline]: 返回增量更新或新增的K线数据列表。
         """
         if klines_df is None or klines_df.empty:
             LogUtil.warning("输入的K线数据为空，不进行处理。")
-            return
+            return []
 
         processed_df = self._preprocess(klines_df)
         new_klines = self._convert(processed_df)
-        self._update_internal_klines(new_klines)
+
+        # 调用更新方法，并返回其返回的增量数据
+        return self._update_internal_klines(new_klines)
 
     def _preprocess(self, klines_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -76,6 +82,7 @@ class KlineDataProcessor:
             List[Kline]: Kline对象列表。
         """
         klines = []
+        # 注意：这里的 index 是临时的，最终会在 _update_internal_klines 中被修正
         start_index = len(self.klines)
         for i, row in df.iterrows():
             kline = Kline(
@@ -90,19 +97,25 @@ class KlineDataProcessor:
             klines.append(kline)
         return klines
 
-
-    def _update_internal_klines(self, new_klines: List[Kline]):
+    def _update_internal_klines(self, new_klines: List[Kline]) -> List[Kline]:
         """
         执行K线数据的核心增量更新逻辑。
         如果现有数据为空，则直接替换；否则，进行增量更新。
         此方法可以正确处理重叠和新增的K线数据。
+
+        Returns:
+            List[Kline]: 返回增量更新或新增的K线数据列表。
         """
         if not new_klines:
-            return
+            return []
+
+        # 用于存储增量数据的列表
+        increment_klines: List[Kline] = []
 
         if not self.klines:
             # 首次加载
             self.klines = new_klines
+            increment_klines = new_klines
         else:
             last_date = self.klines[-1].date
 
@@ -116,7 +129,10 @@ class KlineDataProcessor:
             # 如果没有找到，说明所有新数据都是旧的
             if start_index == -1:
                 LogUtil.info("输入的新K线数据均为旧数据，未进行更新。")
-                return
+                return []
+
+            # 从找到的位置开始，都是增量数据
+            increment_klines = new_klines[start_index:]
 
             # 根据找到的K线时间，判断是更新还是追加
             if new_klines[start_index].date == last_date:
@@ -131,3 +147,6 @@ class KlineDataProcessor:
         # 最终，重新计算所有K线的索引以确保其连续和正确
         for i, k in enumerate(self.klines):
             k.index = i
+
+        # 返回增量数据，此时其 index 已经过修正
+        return increment_klines
