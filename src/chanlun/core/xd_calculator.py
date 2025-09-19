@@ -292,6 +292,7 @@ class XdCalculator:
                 LogUtil.debug(f"主循环: 使用 builder 构建新线段")
                 start_bi = next_segment_builder['start_bi']
                 end_bi = next_segment_builder['end_bi']
+
                 start_idx = start_bi.index
                 end_idx = end_bi.index
 
@@ -355,6 +356,7 @@ class XdCalculator:
 
                         # 第一种情况：特征序列出现顶分型
                         if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
+                            cs_existing_raw = self._process_inclusion(cs_existing_raw, 'down')
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
                             new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
                             processed_cs_new = self._process_inclusion(new_cs_down_raw, 'up')
@@ -426,6 +428,7 @@ class XdCalculator:
 
                         # 第一种情况：特征序列出现底分型
                         if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
+                            cs_existing_raw = self._process_inclusion(cs_existing_raw, 'up')
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
                             new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
                             processed_cs_new = self._process_inclusion(new_cs_up_raw, 'down')

@@ -73,7 +73,6 @@ class BiCalculator:
             return []
 
         new_bis: List[BI] = []
-        new_fxs: List[FX] = []
         self.cl_klines = cl_klines
 
         start_index = 1
@@ -98,39 +97,38 @@ class BiCalculator:
         while i < len(self.cl_klines) - 1:
             current_fx = self._find_fractal(self.cl_klines[i - 1], self.cl_klines[i], self.cl_klines[i + 1])
 
-            if current_fx:
-                if self.fxs and self.fxs[-1].k.index >= current_fx.k.index:
-                    i += 1
-                    continue
+            if not current_fx:
+                i += 1
+                continue  # 未找到分型，继续遍历
 
-                LogUtil.info(f"在K线索引 {current_fx.k.index} 找到潜在分型: {current_fx.type} (值: {current_fx.val})")
-                self.fxs.append(current_fx)
-                new_fxs.append(current_fx)
+            LogUtil.info(f"在K线索引 {current_fx.k.index} 找到潜在分型: {current_fx.type} (值: {current_fx.val})")
+            self.fxs.append(current_fx)
 
-                if not self.pending_bi:
-                    if len(self.fxs) >= 2:
-                        start_fx = self.fxs[-2]
-                        if self._check_stroke_validity(start_fx, current_fx):
-                            bi_type = 'up' if start_fx.type == 'di' else 'down'
-                            self.pending_bi = BI(start=start_fx, end=current_fx, _type=bi_type, index=self.bi_index)
-                            self.bi_index += 1
-                            LogUtil.info(f"创建新待定笔 ({self.pending_bi.type}): {start_fx.k.index} -> {current_fx.k.index}")
-                            i += 3
-                        else:
-                            i += 1
-                    else:
+            if not self.pending_bi:
+                if len(self.fxs) >= 2:
+                    start_fx = self.fxs[-2]
+                    if self._check_stroke_validity(start_fx, current_fx):
+                        bi_type = 'up' if start_fx.type == 'di' else 'down'
+                        self.pending_bi = BI(start=start_fx, end=current_fx, _type=bi_type, index=self.bi_index)
+                        self.bi_index += 1
+                        LogUtil.info(f"创建新待定笔 ({self.pending_bi.type}): {start_fx.k.index} -> {current_fx.k.index}")
                         i += 3
+                    else:
+                        i += 1
                 else:
-                    end_fx_of_pending = self.pending_bi.end
-                    if current_fx.type == end_fx_of_pending.type:
-                        if (end_fx_of_pending.type == 'ding' and current_fx.val > end_fx_of_pending.val) or \
-                           (end_fx_of_pending.type == 'di' and current_fx.val < end_fx_of_pending.val):
-                            LogUtil.info(f"延伸待定笔 ({self.pending_bi.type}) 至新分型在 {current_fx.k.index}")
-                            self.pending_bi.end = current_fx
-                            i += 3
-                        else:
-                            i += 1
-                    elif self._check_stroke_validity(end_fx_of_pending, current_fx):
+                    i += 3
+            else:
+                end_fx_of_pending = self.pending_bi.end
+                if current_fx.type == end_fx_of_pending.type:
+                    if (end_fx_of_pending.type == 'ding' and current_fx.val > end_fx_of_pending.val) or \
+                       (end_fx_of_pending.type == 'di' and current_fx.val < end_fx_of_pending.val):
+                        LogUtil.info(f"延伸待定笔 ({self.pending_bi.type}) 至新分型在 {current_fx.k.index}")
+                        self.pending_bi.end = current_fx
+                        i += 3
+                    else:
+                        i += 1
+                else:
+                    if self._check_stroke_validity(end_fx_of_pending, current_fx):
                         LogUtil.info(f"完成笔 #{self.pending_bi.index}，结束于 {end_fx_of_pending.k.index}")
                         self.pending_bi.end.done = True
                         self.bis.append(self.pending_bi)
@@ -143,13 +141,11 @@ class BiCalculator:
                         i += 3
                     else:
                         i += 1
-            i += 1
         # --- 3. 循环结束后，处理最后一个待定笔 ---
         if self.pending_bi:
             self.pending_bi.end.done = False
             self.bis.append(self.pending_bi)
-            if any(fx for fx in new_fxs if fx == self.pending_bi.end):
-                new_bis.append(self.pending_bi)
+            new_bis.append(self.pending_bi)
             LogUtil.info(f"将最后一笔 (待定) #{self.pending_bi.index} 添加到列表。")
 
         # --- 4. 返回结果 ---
