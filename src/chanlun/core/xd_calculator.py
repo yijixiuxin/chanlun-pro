@@ -12,10 +12,15 @@ from chanlun.tools.log_util import LogUtil
 class XdCalculator:
     """
     线段计算器
-    负责将笔合并且划分为线段。这是缠论中较为复杂的部分。
+    负责将笔（BI）合并并划分为线段（XD）。这是缠论中较为复杂的部分。
+    该计算器支持全量计算和增量计算。
     """
 
     def __init__(self, config: dict):
+        """
+        初始化线段计算器。
+        :param config: 配置字典。
+        """
         self.config = config
         self.xds: List[XD] = []
 
@@ -38,7 +43,10 @@ class XdCalculator:
         return max(low1, low2) < min(high1, high2)
 
     def _find_critical_bi_and_truncate(self, all_bis: List[BI]) -> int:
-        """找到一个关键的笔作为分析起点，并返回其索引"""
+        """
+        找到一个关键的笔作为分析起点，并返回其索引。
+        这主要用于首次全量计算时，尝试找到一个明确的趋势转折点。
+        """
         if len(all_bis) < 5:
             return 0
 
@@ -76,7 +84,7 @@ class XdCalculator:
         return [bi for bi in segment_bis if bi.type == cs_type]
 
     def _bi_to_dict(self, bi: BI) -> dict:
-        """将BI对象转换为字典格式"""
+        """将BI对象转换为包含高低点的字典格式，方便处理"""
         return {
             'bi': bi,
             'high': self._get_bi_high(bi),
@@ -115,9 +123,11 @@ class XdCalculator:
                 high2, low2 = bi2['high'], bi2['low']
 
                 if direction == 'down':
+                    # 向下笔的包含处理，高点取低，低点取低
                     new_low = min(low1, low2)
                     new_high = min(high1, high2)
-                else:
+                else:  # 'up'
+                    # 向上笔的包含处理，高点取高，低点取高
                     new_high = max(high1, high2)
                     new_low = max(low1, low2)
 
@@ -162,12 +172,12 @@ class XdCalculator:
         return False, None, None
 
     def _get_segment_end_bi_from_middle_cs(self, middle_cs: dict, all_bis: List[BI]) -> Optional[BI]:
-        """根据分型的中间笔确定线段的结束笔 - 优化版本"""
+        """根据分型的中间笔确定线段的结束笔"""
         target_bi = None
         if middle_cs.get('is_merged') and 'original_bis' in middle_cs:
             original_bis = middle_cs.get('original_bis', [])
             if original_bis:
-                target_bi = original_bis[0]
+                target_bi = original_bis[0]  # 使用合并前的第一笔来定位
             else:
                 LogUtil.warning("中间笔为合并笔，但其 'original_bis' 为空。")
                 return None
@@ -179,8 +189,9 @@ class XdCalculator:
             return None
 
         try:
+            # 找到目标特征序列笔对应的主序列笔，其前一笔就是线段的结束笔
             idx = target_bi.index
-            LogUtil.info(f"根据分型的中间笔确定线段的结束笔，idx:{idx}")
+            LogUtil.info(f"根据分型的中间笔确定线段的结束笔，特征序列笔索引:{idx}")
             if idx > 0:
                 return all_bis[idx - 1]
             else:
@@ -191,7 +202,7 @@ class XdCalculator:
             return None
 
     def _get_extremum_bi_from_cs(self, cs_bi: dict) -> BI:
-        """从特征序列笔中获取关键的原始笔"""
+        """从特征序列笔中获取关键的原始笔（用于构建下一线段）"""
         original_bis = cs_bi.get('original_bis', [cs_bi['bi']])
         return original_bis[0] if original_bis else cs_bi['bi']
 
@@ -220,12 +231,47 @@ class XdCalculator:
         return segment_high, segment_low
 
     def calculate(self, bis: List[BI]):
-        """根据笔列表计算线段"""
+        """
+        根据笔列表计算线段。
+        此方法支持全量和增量计算。
+        - 全量计算：当内部线段列表为空时，从头开始计算。
+        - 增量计算：当有新笔数据传入时，会从最后一个线段开始回溯，重新评估并延续计算。
+        """
         LogUtil.info("开始划分线段")
-        self.xds.clear()
-
         all_bis = bis
-        current_list_index = self._find_critical_bi_and_truncate(all_bis)
+
+        # 优化：如果输入数据没有新笔，则不重新计算
+        if self.xds and all_bis and self.xds[-1].end_line == all_bis[-1]:
+            LogUtil.info("输入数据无新笔，跳过线段计算。")
+            return
+
+        # --- 状态处理：确定本次计算的起点 ---
+        start_bi_index = 0
+        if self.xds:
+            # 增量更新模式
+            LogUtil.info("增量模式：重新评估最近的线段。")
+            last_xd = self.xds.pop()  # 弹出最后一个线段（可能是未完成的），准备重新计算
+
+            # 在新的 all_bis 列表中定位旧的起点
+            found = False
+            for i, bi in enumerate(all_bis):
+                if (bi.start.k.date == last_xd.start_line.start.k.date and
+                        bi.end.k.date == last_xd.start_line.end.k.date and
+                        bi.type == last_xd.start_line.type):
+                    start_bi_index = i
+                    found = True
+                    break
+
+            if not found:
+                LogUtil.warning("无法在'bis'列表中定位上一线段的起点，将执行全量计算。")
+                self.xds.clear()
+                start_bi_index = self._find_critical_bi_and_truncate(all_bis)
+        else:
+            # 全量计算模式
+            self.xds.clear()
+            start_bi_index = self._find_critical_bi_and_truncate(all_bis)
+
+        current_list_index = start_bi_index
 
         if len(all_bis) < 3:
             LogUtil.warning("笔的数量少于3，无法形成线段。")
@@ -267,17 +313,21 @@ class XdCalculator:
             is_completed = False
             break_info = None
 
+            # --- 线段延伸与结束判断循环 ---
             while next_check_idx + 1 < len(all_bis):
                 segment_high, segment_low = self._calculate_segment_high_low(current_segment)
                 bi_for_fractal_check = all_bis[next_check_idx]
                 bi_for_extension_check = all_bis[next_check_idx + 1]
 
+                # --- 处理上涨线段 ---
                 if current_segment['type'] == 'up':
                     if self._get_bi_high(bi_for_extension_check) >= segment_high:
+                        # 出现新高，线段延伸
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
                         continue
                     else:
+                        # 未创新高，检查是否出现顶分型导致线段结束
                         cs_existing_raw = self._get_characteristic_sequence(current_segment['bis'], 'up')
                         if not cs_existing_raw:
                             current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
@@ -286,6 +336,7 @@ class XdCalculator:
 
                         last_cs_bi = self._process_inclusion(cs_existing_raw, 'up')[-1]
                         last_cs_original_bi = last_cs_bi['bi']
+
                         lookahead_bis = all_bis[next_check_idx:]
                         bounded_lookahead_bis = []
                         for bi in lookahead_bis:
@@ -293,6 +344,7 @@ class XdCalculator:
                             if bi.type == 'up' and self._get_bi_high(bi) > segment_high:
                                 break
 
+                        # 第一种情况：特征序列出现顶分型
                         if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
                             new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
@@ -341,10 +393,12 @@ class XdCalculator:
                                 continue
                 elif current_segment['type'] == 'down':
                     if self._get_bi_low(bi_for_extension_check) <= segment_low:
+                        # 出现新低，线段延伸
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
                         continue
                     else:
+                        # 未创新低，检查是否出现底分型
                         cs_existing_raw = self._get_characteristic_sequence(current_segment['bis'], 'down')
                         if not cs_existing_raw:
                             current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
@@ -353,6 +407,7 @@ class XdCalculator:
 
                         last_cs_bi = self._process_inclusion(cs_existing_raw, 'down')[-1]
                         last_cs_original_bi = last_cs_bi['bi']
+
                         lookahead_bis = all_bis[next_check_idx:]
                         bounded_lookahead_bis = []
                         for bi in lookahead_bis:
@@ -360,6 +415,7 @@ class XdCalculator:
                             if bi.type == 'down' and self._get_bi_low(bi) < segment_low:
                                 break
 
+                        # 第一种情况：特征序列出现底分型
                         if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
                             processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
                             new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
@@ -453,19 +509,23 @@ class XdCalculator:
                         current_list_index = final_bi_index + 1
                     break
 
+            # --- 处理最后一个未完成的线段 ---
             if not is_completed and next_check_idx >= len(all_bis) - 1:
                 if current_segment and current_segment.get('bis'):
+                    pending_bis = all_bis[current_list_index:]
+                    if not pending_bis:
+                        break
                     pending_xd = XD(
-                        start=all_bis[current_list_index].start,
-                        end=all_bis[-1].end,
-                        start_line=all_bis[current_list_index],
-                        end_line=all_bis[-1],
+                        start=pending_bis[0].start,
+                        end=pending_bis[-1].end,
+                        start_line=pending_bis[0],
+                        end_line=pending_bis[-1],
                         _type=current_segment['type'],
                         index=len(self.xds),
                         default_zs_type=self.config.get('zs_type_xd', None)
                     )
-                    pending_xd.high = max(self._get_bi_high(bi) for bi in current_segment['bis'])
-                    pending_xd.low = min(self._get_bi_low(bi) for bi in current_segment['bis'])
+                    pending_xd.high = max(self._get_bi_high(bi) for bi in pending_bis)
+                    pending_xd.low = min(self._get_bi_low(bi) for bi in pending_bis)
                     pending_xd.zs_high = pending_xd.high
                     pending_xd.zs_low = pending_xd.low
                     pending_xd.done = False
