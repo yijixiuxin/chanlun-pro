@@ -6,23 +6,17 @@
 """
 
 import datetime
-from typing import Dict, Union, List, Tuple
+from typing import Dict, Union, List, Tuple, Any
 import pandas as pd
-import logging
-
 from chanlun.core.calculate_bis import calculate_bis
-from chanlun.core.calculate_indicators import calculate_indicators
-from chanlun.core.calculate_line_signals import calculate_line_signals
 from chanlun.core.calculate_trends import calculate_trends
 from chanlun.core.calculate_xds import calculate_xds
 from chanlun.core.calculate_zss import calculate_zss, create_xd_zs
 from chanlun.core.cl_interface import ICL, Kline, CLKline, FX, BI, XD, ZS, Config, LINE, compare_ld_beichi
-from chanlun.core.identify_fractals import identify_fractals
-from chanlun.core.process_cl_klines import process_cl_klines
-
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from chanlun.core.cl_kline_process import CL_Kline_Process
+from chanlun.core.kline_data_processor import KlineDataProcessor
+from chanlun.core.macd import MACD
+from chanlun.tools.log_util import LogUtil
 
 
 class CL(ICL):
@@ -55,10 +49,14 @@ class CL(ICL):
         # 设置默认配置
         self._init_default_config()
 
+        # 实例化K线数据处理器，将K线管理委托给它
+        self.kline_processor = KlineDataProcessor(self.start_datetime)
+        # 实例化缠论K线处理器，用于处理包含关系
+        self.cl_kline_processor = CL_Kline_Process()
+        # 实例化MACD计算器
+        self.macd_calculator = MACD()
+
         # 存储各级别数据
-        self.src_klines: List[Kline] = []  # 原始K线
-        self.cl_klines: List[CLKline] = []  # 缠论K线、包含关系处理后的K线
-        self.idx: Dict = {'macd': {'dif': [], 'dea': [], 'hist': []}}  # 技术指标
         self.fxs: List[FX] = []  # 分型列表
         self.bis: List[BI] = []  # 笔列表
         self.xds: List[XD] = []  # 线段列表
@@ -116,33 +114,19 @@ class CL(ICL):
         处理K线数据，计算缠论分析结果
         支持增量更新：通过对比K线数量和最后一根K线状态，避免不必要的重复计算。
         """
-        if klines is None or len(klines) == 0:
-            return self
+        # 返回增量更新或新增的K线数据列表
+        src_klines: List[Kline] = self.kline_processor.process_kline(klines)
+        if not src_klines:
+            LogUtil.info("No source klines to process.")
+            return
+        # 使用MACD计算器更新指标
+        self.macd_calculator.process_macd(self.get_src_klines())
 
-        # 数据预处理
-        klines = self._preprocess_klines(klines)
+        cl_klines = self.cl_kline_processor.process_cl_klines(src_klines)
 
-        # 转换为内部格式
-        new_klines = self._convert_to_klines(klines)
-
-        # 增量处理：只处理新增的K线
-        if len(new_klines) == 0:
-            return self
-
-        # 更新原始K线数据
-        self._update_src_klines(new_klines)
-
-        # --- 步骤 1: 外部模块处理缠论K线（包含处理） ---
-        self.cl_klines = process_cl_klines(self.src_klines)
-
-        # --- 步骤 2: 调用独立模块进行计算 ---
-        # 计算技术指标
-        self.idx = calculate_indicators(self.cl_klines)
-        # 识别分型
-        # self.fxs = identify_fractals(self.cl_klines)
         # 计算笔
-        self.bis, self.fxs  = calculate_bis(self.cl_klines)
-        # self.bis = calculate_bis(self.fxs)
+        self.bis, self.fxs = calculate_bis(cl_klines)
+
         # 计算线段
         self.xds = calculate_xds(self.bis, self.config)
         # 计算中枢
@@ -154,72 +138,6 @@ class CL(ICL):
         calculate_trends(self.xd_zss)
 
         return self
-
-    def _preprocess_klines(self, klines: pd.DataFrame) -> pd.DataFrame:
-        """预处理K线数据"""
-        klines = klines.copy()
-
-        # 确保date列是datetime类型
-        if 'date' in klines.columns and not pd.api.types.is_datetime64_any_dtype(klines['date']):
-            klines['date'] = pd.to_datetime(klines['date'])
-
-        # 确保数值列是float类型
-        numeric_cols = ['high', 'low', 'open', 'close', 'volume']
-        for col in numeric_cols:
-            if col in klines.columns:
-                klines[col] = pd.to_numeric(klines[col], errors='coerce')
-
-        # 排序
-        klines = klines.sort_values('date').reset_index(drop=True)
-
-        # 过滤开始时间
-        if self.start_datetime:
-            klines = klines[klines['date'] >= self.start_datetime]
-
-        return klines
-
-    def _convert_to_klines(self, df: pd.DataFrame) -> List[Kline]:
-        """将DataFrame转换为Kline对象列表"""
-        klines = []
-        start_index = len(self.src_klines)
-
-        for i, row in df.iterrows():
-            kline = Kline(
-                index=start_index + i,
-                date=row['date'],
-                h=float(row['high']),
-                l=float(row['low']),
-                o=float(row['open']),
-                c=float(row['close']),
-                a=float(row['volume']) if 'volume' in row else 0.0
-            )
-            klines.append(kline)
-
-        return klines
-
-    def _update_src_klines(self, new_klines: List[Kline]):
-        """更新原始K线数据"""
-        if len(new_klines) == 0:
-            return
-
-        # 如果有重叠，更新最后一根K线，添加新的K线
-        if len(self.src_klines) > 0:
-            # 检查是否有重叠
-            last_date = self.src_klines[-1].date
-            for i, kline in enumerate(new_klines):
-                if kline.date == last_date:
-                    # 更新最后一根K线
-                    self.src_klines[-1] = kline
-                    # 添加后续新K线
-                    self.src_klines.extend(new_klines[i + 1:])
-                    break
-                elif kline.date > last_date:
-                    # 添加所有新K线
-                    self.src_klines.extend(new_klines[i:])
-                    break
-        else:
-            # 第一次处理
-            self.src_klines = new_klines
 
     # --- ICL 接口实现 ---
     def get_code(self) -> str:
@@ -236,26 +154,23 @@ class CL(ICL):
 
     def get_src_klines(self) -> List[Kline]:
         """返回原始K线列表"""
-        return self.src_klines
+        return self.kline_processor.klines
 
-    def get_klines(self) -> List[Kline]:
+    def get_klines(self) -> List[Any]:
         """返回K线列表"""
         if self.config.get('kline_type') == Config.KLINE_TYPE_CHANLUN.value:
-            # 返回缠论K线对应的原始K线
-            result = []
-            for cl_k in self.cl_klines:
-                result.append(cl_k)
-            return result
+            return self.cl_kline_processor.cl_klines
         else:
-            return self.src_klines
+            return self.get_src_klines()
 
     def get_cl_klines(self) -> List[CLKline]:
         """返回缠论K线列表"""
-        return self.cl_klines
+        return self.cl_kline_processor.cl_klines
 
     def get_idx(self) -> dict:
         """返回技术指标数据"""
-        return self.idx
+        # 从MACD计算器获取结果
+        return self.macd_calculator.get_results()
 
     def get_fxs(self) -> List[FX]:
         """返回分型列表"""
@@ -322,7 +237,6 @@ class CL(ICL):
             self._last_xd_zs = zss[-1] if zss else None
 
         return self._last_xd_zs
-
 
     def beichi_pz(self, zs: ZS, now_line: LINE) -> Tuple[bool, Union[LINE, None]]:
         """
