@@ -5,7 +5,7 @@ import math
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Any
 
 import numpy as np
 import pandas as pd
@@ -1330,7 +1330,7 @@ class ICL(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_klines(self) -> List[Kline]:
+    def get_klines(self) -> List[Any]:
         """
         返回K线列表
         如果 kline_type == kline_default 则返回原始 K 线数据

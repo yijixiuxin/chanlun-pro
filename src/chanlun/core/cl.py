@@ -1,21 +1,16 @@
 # -*- coding: utf-8 -*-
-"""
-缠论分析核心实现 (重构版)
-该文件包含缠论分析的主类 CL，负责协调整个分析流程。
-它导入并调用其他模块来执行具体的计算任务，如分型识别、笔计算、中枢构建等。
-"""
-
 import datetime
 from typing import Dict, Union, List, Tuple, Any
 import pandas as pd
-from chanlun.core.calculate_bis import calculate_bis
-from chanlun.core.calculate_trends import calculate_trends
-from chanlun.core.calculate_xds import calculate_xds
+
+from chanlun.core.bi_calculator import BiCalculator
 from chanlun.core.calculate_zss import calculate_zss, create_xd_zs
 from chanlun.core.cl_interface import ICL, Kline, CLKline, FX, BI, XD, ZS, Config, LINE, compare_ld_beichi
 from chanlun.core.cl_kline_process import CL_Kline_Process
 from chanlun.core.kline_data_processor import KlineDataProcessor
 from chanlun.core.macd import MACD
+from chanlun.core.xd_calculator import XdCalculator
+from chanlun.core.zs_calculator import ZsCalculator
 from chanlun.tools.log_util import LogUtil
 
 
@@ -55,16 +50,18 @@ class CL(ICL):
         self.cl_kline_processor = CL_Kline_Process()
         # 实例化MACD计算器
         self.macd_calculator = MACD()
+        # 实例化笔计算器
+        self.bi_calculator = BiCalculator()
+        # 实例化线段计算器
+        self.xd_calculator = XdCalculator(self.config)
+
+        self.zss_calculator = ZsCalculator(self.config)
 
         # 存储各级别数据
-        self.fxs: List[FX] = []  # 分型列表
-        self.bis: List[BI] = []  # 笔列表
-        self.xds: List[XD] = []  # 线段列表
         self.zsds: List[XD] = []  # 走势段列表
         self.qsds: List[XD] = []  # 趋势段列表
         # 中枢数据
         self.bi_zss: Dict[str, List[ZS]] = {}  # 笔中枢
-        self.xd_zss: Dict[str, List[ZS]] = {}  # 线段中枢
         self.zsd_zss: List[ZS] = []  # 走势段中枢
         self.qsd_zss: List[ZS] = []  # 趋势段中枢
 
@@ -96,8 +93,8 @@ class CL(ICL):
             'xd_bi_pohuai': Config.XD_BI_POHUAI_NO.value,
 
             # 中枢配置
-            'zs_type_bi': Config.ZS_TYPE_DN.value,
-            'zs_type_xd': Config.ZS_TYPE_DN.value,
+            'zs_type_bi': Config.ZS_TYPE_BZ.value,
+            'zs_type_xd': Config.ZS_TYPE_BZ.value,
             'zs_qj': Config.ZS_QJ_DD.value,
             'zs_cd': Config.ZS_CD_THREE.value,
             'zs_wzgx': Config.ZS_WZGX_ZGGDD.value,
@@ -117,26 +114,26 @@ class CL(ICL):
         # 返回增量更新或新增的K线数据列表
         src_klines: List[Kline] = self.kline_processor.process_kline(klines)
         if not src_klines:
-            LogUtil.info("No source klines to process.")
+            LogUtil.info("没有新的源K线需要处理。")
             return
+
+        LogUtil.info(f"为 {self.code}@{self.frequency} 处理 {len(src_klines)} 根新增/更新的K线")
         # 使用MACD计算器更新指标
         self.macd_calculator.process_macd(self.get_src_klines())
 
         cl_klines = self.cl_kline_processor.process_cl_klines(src_klines)
+        LogUtil.info(f"包含关系处理后，生成 {len(cl_klines)} 根缠论K线。")
 
-        # 计算笔
-        self.bis, self.fxs = calculate_bis(cl_klines)
+        # 计算笔和分型
+        bis = self.bi_calculator.calculate(cl_klines)
 
         # 计算线段
-        self.xds = calculate_xds(self.bis, self.config)
+        xds = self.xd_calculator.calculate(bis)
+
         # 计算中枢
-        self.xd_zss = calculate_zss(self.xds)
+        self.zss_calculator.calculate(xds)
         # 计算买卖点和背驰
         # calculate_line_signals(self, self.xds, self.xd_zss)
-
-        # 计算走势段
-        calculate_trends(self.xd_zss)
-
         return self
 
     # --- ICL 接口实现 ---
@@ -174,15 +171,15 @@ class CL(ICL):
 
     def get_fxs(self) -> List[FX]:
         """返回分型列表"""
-        return self.fxs
+        return self.bi_calculator.fxs
 
     def get_bis(self) -> List[BI]:
         """返回笔列表"""
-        return self.bis
+        return self.bi_calculator.bis
 
     def get_xds(self) -> List[XD]:
         """返回线段列表"""
-        return self.xds
+        return self.xd_calculator.xds
 
     def get_zsds(self) -> List[XD]:
         """返回走势段列表"""
@@ -199,10 +196,8 @@ class CL(ICL):
         return self.bi_zss.get(zs_type, [])
 
     def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
-        """返回线段中枢列表"""
-        if zs_type is None:
-            zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_DN.value)
-        return self.xd_zss.get(zs_type, [])
+        """返回线段中枢字典"""
+        return self.zss_calculator.get_zss()
 
     def get_zsd_zss(self) -> List[ZS]:
         """返回走势段中枢列表"""
