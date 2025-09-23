@@ -29,15 +29,32 @@ class AlertTasks(object):
         for _t in task_list:
             # print(al)
             if _t.is_run == 1:
-                _job = self.scheduler.add_job(
-                    func=self.alert_run,
-                    trigger="cron",
-                    args={_t.id},
-                    id=str(_t.id),
-                    name=f"监控-{_t.task_name}",
-                    minute=f"*/{_t.interval_minutes}",
-                    second="0",
-                )
+                # 根据interval_minutes设置定时任务
+                if _t.interval_minutes < 60:
+                    # 60分钟以下，按分钟运行
+                    _job = self.scheduler.add_job(
+                        func=self.alert_run,
+                        trigger="cron",
+                        args={_t.id},
+                        id=str(_t.id),
+                        name=f"监控-{_t.task_name}",
+                        minute=f"*/{_t.interval_minutes}",
+                        second="0",
+                    )
+                else:
+                    # 60分钟及以上，按小时运行
+                    hours = _t.interval_minutes // 60
+                    _job = self.scheduler.add_job(
+                        func=self.alert_run,
+                        trigger="cron",
+                        args={_t.id},
+                        id=str(_t.id),
+                        name=f"监控-{_t.task_name}",
+                        hour=f"*/{hours}",
+                        minute="0",
+                        second="0",
+                    )
+
                 self.task_ids.append(_job.id)
         return True
 

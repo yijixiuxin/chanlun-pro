@@ -45,12 +45,21 @@
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">运行间隔(分钟)</label>
-            <div class="layui-input-block" title="设置每几分钟检测一次">
+            <div class="layui-input-block" title="设置每几分钟检测一次（1-1380分钟，60分钟以上必须是60的整数倍，表示小时数）">
                 <label for="interval_minutes">
                     <input type="text" name="interval_minutes" value="{{ interval_minutes }}"
-                        placeholder="设置每几分钟检测一次（小于60）" lay-filter="alert_config" lay-verify="required|number"
+                        placeholder="设置每几分钟检测一次（1-1380分钟，60分钟以上必须是60的整数倍，表示小时数）" lay-filter="alert_config" lay-verify="required|number"
                         class="layui-input" />
                 </label>
+                <div class="layui-form-mid layui-word-aux" style="margin-top: 5px; color: #999; font-size: 12px;">
+                    <div>运行间隔说明：</div>
+                    <div>• 1-59分钟：任意分钟数，如设置30表示每30分钟运行一次</div>
+                    <div>• 60分钟以上：必须是60的整数倍，如设置120表示每2小时运行一次</div>
+                    <div>• 最大不超过1380分钟（23小时）</div>
+                    <div style="margin-top: 5px; color: #666;">
+                        <strong>示例：</strong>30分钟、60分钟(1小时)、120分钟(2小时)、180分钟(3小时)、240分钟(4小时)...
+                    </div>
+                </div>
             </div>
         </div>
         <div class="layui-form-item">
@@ -247,8 +256,14 @@
                     }
                     alert_config[_name] = _val
                 });
-                if (alert_config['interval_minutes'] >= 60) {
-                    layer.msg('运行间隔(分钟)必须小于60分钟');
+                // 验证运行间隔
+                let interval = parseInt(alert_config['interval_minutes']);
+                if (isNaN(interval) || interval < 1 || interval > 1380) {
+                    layer.msg('运行间隔必须在1-1380分钟之间');
+                    return false;
+                }
+                if (interval >= 60 && interval % 60 !== 0) {
+                    layer.msg('运行间隔60分钟以上必须是60的整数倍（表示小时数）');
                     return false;
                 }
                 if (alert_config['check_bi_bc'] === '' && alert_config['check_bi_mmd'] === '' && alert_config['check_xd_bc'] === '' && alert_config['check_xd_mmd'] === '') {
