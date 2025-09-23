@@ -350,6 +350,22 @@ class ExchangeQMT(Exchange):
         xtdata.subscribe_whole_quote(["SH", "SZ", "BJ"], on_tick)
         xtdata.run()
 
+    def subscribe_stocks_quotes(self, codes: List[str], callback):
+        """
+        订阅股票行情
+        """
+        qmt_codes = [self.code_to_qmt(_c) for _c in codes]
+
+        def on_tick(_ticks):
+            for _code, _tick in _ticks.items():
+                _tdx_code = self.code_to_tdx(_code)
+                if _tdx_code not in codes:
+                    continue
+                callback(_tdx_code, _tick)
+
+        xtdata.subscribe_whole_quote(qmt_codes, on_tick)
+        xtdata.run()
+
     def now_trading(self):
         """
         返回当前是否是交易时间
