@@ -77,5 +77,3 @@ if __name__ == "__main__":
 
         if is_wpf_launcher is False:
             input("出现异常，按回车键退出")
-        if is_wpf_launcher is False:
-            input("出现异常，按回车键退出")

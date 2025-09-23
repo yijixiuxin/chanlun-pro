@@ -69,10 +69,7 @@ UV 和 Conda 任选一个自己喜欢的就行
       cd \你的项目代码路径\chanlun-pro
       
       uv venv --python=3.11 .venv
-      .venv\Scripts\activate
-      uv pip install package/pytdx-1.72r2-py3-none-any.whl
-      uv pip install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
-      uv pip install -r requirements.txt
+      uv sync
 
       # 检查环境
       uv run check_env.py
