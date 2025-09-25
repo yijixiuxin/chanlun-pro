@@ -35,33 +35,77 @@ class ZsCalculator:
     def get_zss(self) -> List[ZS]:
         """
         获取所有计算的中枢（已完成 + 进行中）。
-        返回的是一个列表的拷贝。
+        返回的是一个列表的拷贝，主要用于获取任意时间点的全量状态。
         """
         zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
         completed_zss = self.zss.get(zs_type, [])
-        pending = self.pending_zs.get(zs_type)
 
         all_zss = completed_zss.copy()
+        pending = self.pending_zs.get(zs_type)
         if pending:
             all_zss.append(pending)
         return all_zss
 
-    def calculate(self, lines: List[LINE]):
+    def calculate(self, lines: List[LINE]) -> List[ZS]:
         """
         根据新增的线段列表，增量计算所有类型的中枢。
+
+        该方法现在会返回本次调用中所有发生变化的中枢列表。
+        - 如果是首次（全量）计算，它会返回所有找到的已完成中枢和当前进行中的中枢。
+        - 如果是后续（增量）计算，它会返回新完成的中枢，以及被更新（延伸或新创建）的进行中中枢。
+
+        :param lines: 新的线段列表
+        :return: 本次调用中新完成的或状态更新的中枢列表
         """
         if not lines:
             LogUtil.info("传入的线段列表为空，不进行计算。")
-            return
+            return []
 
         LogUtil.info(f"接收到 {len(lines)} 条新线段，开始增量计算中枢...")
         self.all_lines.extend(lines)
 
         zs_type = self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
+
+        # 记录计算前的状态
+        num_completed_before = len(self.zss.get(zs_type, []))
+        pending_zs_before = self.pending_zs.get(zs_type)
+        # 记录原进行中枢的线段数，用于判断是否延伸
+        pending_lines_count_before = len(pending_zs_before.lines) if pending_zs_before else 0
+
         self._create_xd_zs_incremental(zs_type)
 
-        LogUtil.info(f"中枢增量计算完成。已完成中枢: {len(self.zss.get(zs_type, []))} 个, "
+        # --- 根据状态变化，确定返回值 ---
+
+        # 1. 获取新完成的中枢
+        newly_completed_zss = self.zss[zs_type][num_completed_before:]
+
+        # 2. 检查进行中中枢的变化
+        updated_pending_zs_list = []
+        pending_zs_after = self.pending_zs.get(zs_type)
+        if pending_zs_after:
+            # Case A: 新创建了一个进行中枢
+            is_new_pending = not pending_zs_before
+            # Case B: 原有的进行中枢被延伸了
+            is_extended_pending = (
+                    pending_zs_before and
+                    pending_zs_after is pending_zs_before and
+                    len(pending_zs_after.lines) > pending_lines_count_before
+            )
+            if is_new_pending or is_extended_pending:
+                updated_pending_zs_list.append(pending_zs_after)
+
+        # 组合结果并返回
+        result = newly_completed_zss + updated_pending_zs_list
+
+        # --- 日志记录 ---
+        num_completed_after = len(self.zss.get(zs_type, []))
+        LogUtil.info(f"中枢增量计算完成。已完成中枢: {num_completed_after} 个, "
                      f"进行中中枢: {'是' if self.pending_zs.get(zs_type) else '否'}")
+
+        if result:
+            LogUtil.info(f"本次调用返回 {len(result)} 个已更新或新完成的中枢。")
+
+        return result
 
     @staticmethod
     def _get_line_high_low(line: 'LINE') -> Tuple[Optional[float], Optional[float]]:
