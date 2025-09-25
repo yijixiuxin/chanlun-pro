@@ -159,6 +159,7 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
     """
     # 直接使用 pandas 的 resample 方法进行合并周期
     period_maps = {
+        "1m": "1min",
         "2m": "2min",
         "5m": "5min",
         "10m": "10min",
