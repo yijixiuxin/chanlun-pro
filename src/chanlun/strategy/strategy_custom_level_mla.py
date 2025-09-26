@@ -1,4 +1,6 @@
-from chanlun.backtesting.base import *
+from typing import Dict, List, Union
+
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
 from chanlun.backtesting.klines_generator import KlinesGenerator
 from chanlun.cl_analyse import MultiLevelAnalyse
 

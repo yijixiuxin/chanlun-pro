@@ -477,10 +477,10 @@ class StrategyADMMDTest(Strategy):
 
 
 if __name__ == "__main__":
-    from chanlun.backtesting import backtest
-    from chanlun.cl_utils import query_cl_chart_config
     import pandas as pd
 
+    from chanlun.backtesting import backtest
+    from chanlun.cl_utils import query_cl_chart_config
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     # 获取所有股票代码

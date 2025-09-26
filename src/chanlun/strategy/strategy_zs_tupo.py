@@ -1,6 +1,9 @@
+from typing import List, Union
+
+import numpy as np
 import talib as ta
 
-from chanlun.backtesting.base import *
+from chanlun.backtesting.base import POSITION, Dict, MarketDatas, Operation, Strategy
 
 
 class StrategyZSTupo(Strategy):
@@ -289,8 +292,8 @@ class StrategyZSTupo(Strategy):
 
 
 if __name__ == "__main__":
-    from chanlun.cl_utils import query_cl_chart_config
     from chanlun.backtesting.backtest_klines import BackTestKlines
+    from chanlun.cl_utils import query_cl_chart_config
 
     market = "us"
     freqs = ["d", "60m"]

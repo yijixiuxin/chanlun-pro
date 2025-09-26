@@ -1,5 +1,6 @@
 from chanlun.backtesting.base import *
 from chanlun.cl_analyse import MultiLevelAnalyse
+from chanlun.cl_interface import Config
 from chanlun.cl_utils import cal_zs_macd_infos
 
 

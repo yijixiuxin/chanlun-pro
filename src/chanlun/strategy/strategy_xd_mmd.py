@@ -1,3 +1,4 @@
+from typing import Dict, List, Union
 from chanlun.backtesting.base import *
 from chanlun.core.cl_interface import *
 
