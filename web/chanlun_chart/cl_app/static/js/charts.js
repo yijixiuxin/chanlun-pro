@@ -200,6 +200,12 @@ class ChartManager {
       user_id: "999",
       load_last_chart: true,
       custom_indicators_getter: this.getCustomIndicators,
+
+      // --- 缩放设置 ---
+      time_scale: {
+        min_bar_spacing: 0.05,
+        max_bar_spacing: 800,
+      },
     });
 
     this.setupEventListeners();
@@ -276,6 +282,16 @@ class ChartManager {
         console.error("Failed to get active chart");
         return;
       }
+
+      // 应用K线颜色
+      this.chart.applyOverrides({
+        "mainSeriesProperties.candleStyle.upColor": "#ef5350",
+        "mainSeriesProperties.candleStyle.downColor": "#26a69a",
+        "mainSeriesProperties.candleStyle.borderUpColor": "#ef5350",
+        "mainSeriesProperties.candleStyle.borderDownColor": "#26a69a",
+        "mainSeriesProperties.candleStyle.wickUpColor": "#ef5350",
+        "mainSeriesProperties.candleStyle.wickDownColor": "#26a69a",
+      });
 
       // 订阅事件
       this.chart
