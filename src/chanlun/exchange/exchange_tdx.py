@@ -1,6 +1,5 @@
 import copy
 import datetime
-import time
 import traceback
 import warnings
 from typing import Dict, List, Union
@@ -363,10 +362,12 @@ class ExchangeTDX(Exchange):
         if len(codes) == 0:
             return ticks
         query_stocks = []
+        stock_types = {}
         for _c in codes:
             _m, _c, _t = self.to_tdx_code(_c)
             if _m is not None:
                 query_stocks.append((_m, _c))
+                stock_types[_c] = _t
         client = TdxHq_API(raise_exception=True, auto_retry=True)
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             # 获取总数据量
@@ -410,6 +411,15 @@ class ExchangeTDX(Exchange):
                     if len(_code) == 0:
                         continue
                     _code = _code[0]
+                # 如果 stock_type == etf_cn , 则价格需要 / 10
+                if stock_types[_q["code"]] == "etf_cn":
+                    _q["price"] /= 10
+                    _q["bid1"] /= 10
+                    _q["ask1"] /= 10
+                    _q["low"] /= 10
+                    _q["high"] /= 10
+                    _q["open"] /= 10
+                    _q["last_close"] /= 10
                 ticks[_code] = Tick(
                     code=_code,
                     last=_q["price"],
@@ -704,16 +714,15 @@ class ExchangeTDX(Exchange):
 
 
 if __name__ == "__main__":
-    from tqdm.auto import tqdm
 
     ex = ExchangeTDX()
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
 
-    klines = ex.klines("SZ.000001", "5m")
-    print(klines.head(5))
-    print(klines.tail(10))
-    print(len(klines))
+    # klines = ex.klines("SZ.000001", "5m")
+    # print(klines.head(5))
+    # print(klines.tail(10))
+    # print(len(klines))
 
     # print("use time : ", time.time() - s_time)
     # 207735
@@ -721,8 +730,9 @@ if __name__ == "__main__":
     # klines = ex.klines("SH.600498", "60m")
     # print(klines.tail(20))
 
-    # ticks = ex.ticks(["SH.000001", "SZ.000001"])
-    # print(ticks)
+    ticks = ex.ticks(["SH.515880", "SZ.000001", "SH.000001"])
+    for _c, _t in ticks.items():
+        print(_c, _t)
 
     # 获取复权相关信息
     # code = "SZ.002165"

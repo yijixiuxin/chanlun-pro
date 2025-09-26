@@ -12,7 +12,12 @@ echo 1. uv 目录
 set "UV_DIR=%ROOT_DIR%script\bin\uv.exe"
 echo UV_DIR: %UV_DIR%
 
-echo 2. 获取机器信息
+echo 2. 创建虚拟环境
+%UV_DIR% python install 3.11
+%UV_DIR% venv --python=3.11 .venv
+%UV_DIR% sync
+
+echo 3. 获取机器信息
 %UV_DIR% run -m pyarmor.cli.hdinfo
 
 echo 复制以上信息，发送给作者，用于生成授权码

@@ -1,4 +1,7 @@
-from chanlun.backtesting.base import *
+from typing import Dict, List, Union
+
+from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy
+from chanlun.cl_interface import BI
 from chanlun.cl_utils import cal_zs_macd_infos
 from chanlun.config import get_data_path
 
@@ -407,9 +410,6 @@ class StrategyASingleAllMmd(Strategy):
 if __name__ == "__main__":
     from chanlun.backtesting import backtest
     from chanlun.cl_utils import query_cl_chart_config
-    import pandas as pd
-
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     # 获取所有股票代码
     # ex = ExchangeTDX()
