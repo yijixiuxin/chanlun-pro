@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import talib
 
-from chanlun.cl_interface import BI, ICL, XD, ZS
+from chanlun.core.cl_interface import BI, ICL, XD, ZS
 from chanlun.cl_utils import cal_zs_macd_infos
 from chanlun.fun import get_logger
 
@@ -1086,7 +1086,7 @@ def fee_us(opt: str, price: float, amlunt: float):
 
 
 if __name__ == "__main__":
-    from chanlun import cl
+    from chanlun.core import cl
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     ex = ExchangeTDX()
