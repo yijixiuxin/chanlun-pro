@@ -505,8 +505,15 @@ class XdCalculator:
                     )
                     xd.high = max(self._get_bi_high(bi) for bi in final_segment_bis)
                     xd.low = min(self._get_bi_low(bi) for bi in final_segment_bis)
-                    xd.zs_high = xd.high
-                    xd.zs_low = xd.low
+
+                    start_bi_val = final_segment_bis[0].start.val
+                    end_bi_val = final_end_bi.end.val
+                    if start_bi_val > end_bi_val:
+                        xd.zs_high = start_bi_val
+                        xd.zs_low = end_bi_val
+                    else:
+                        xd.zs_high = end_bi_val
+                        xd.zs_low = start_bi_val
                     xd.done = True
                     self.xds.append(xd)
                     LogUtil.debug(f"完成 {current_segment['type']} 线段，结束于索引:{final_bi_index}")
