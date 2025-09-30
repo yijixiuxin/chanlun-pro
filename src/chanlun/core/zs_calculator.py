@@ -10,10 +10,9 @@ from typing import List, Tuple, Optional, Dict, Union
 from chanlun.core.cl_interface import ZS, Config, LINE, FX, Kline
 from chanlun.tools.log_util import LogUtil
 
-
 class ZsCalculator:
     """
-    标准中枢计算器 (Standard Center Calculator)
+    标准中枢计算器
     功能：根据输入的线段列表，识别和构建本级别的所有中枢。
     """
 
@@ -26,11 +25,11 @@ class ZsCalculator:
     def calculate(self, lines: List[LINE]) -> List[ZS]:
         """
         全量计算中枢。在多级别分析的场景下，每一级别都是一次全量计算。
-        :param lines: 当前级别的所有线段 (All line segments of the current level)
-        :return: 计算出的所有中枢（已完成 + 进行中）(All calculated centers (completed + pending))
+        :param lines: 当前级别的所有线段
+        :return: 计算出的所有中枢（已完成 + 进行中）
         """
-        if len(lines) < 4:  # 至少需要1进入段+3核心段
-            LogUtil.info("线段数量不足4条，无法形成中枢。")
+        if len(lines) < 5:  # 至少需要1进入段+3核心段+1离开段
+            LogUtil.info("线段数量不足5条，无法形成完整中枢。")
             return []
 
         self.all_lines = lines
@@ -48,128 +47,145 @@ class ZsCalculator:
         """
         核心函数：全量扫描并创建所有中枢
         """
-        i = 1  # 从索引1开始，因为索引0的线段是第一个潜在中枢的进入段
-        while i <= len(self.all_lines) - 3:
-            # 尝试从索引 i 处的线段开始，寻找一个三段重叠的中枢核心
-            entry_seg = self.all_lines[i - 1]
-            seg_a, seg_b, seg_c = self.all_lines[i], self.all_lines[i + 1], self.all_lines[i + 2]
+        # entry_idx 指向潜在的"进入段"
+        entry_idx = 0
+        # 必须保证进入段后至少有3条核心段+1条离开段
+        while entry_idx <= len(self.all_lines) - 5:
+            # 规则: 中枢由"进入段"和后续至少三条"核心段"构成
+            entry_seg = self.all_lines[entry_idx]
 
-            # 检查核心三段的方向是否交替 (Check if the directions of the three core segments alternate)
+            # 核心段从进入段的下一条开始
+            core_start_idx = entry_idx + 1
+            seg_a, seg_b, seg_c = self.all_lines[core_start_idx], self.all_lines[core_start_idx + 1], self.all_lines[
+                core_start_idx + 2]
+
+            # 确保三根核心线段方向交替
             if not (seg_a.type != seg_b.type and seg_b.type != seg_c.type):
-                i += 1
+                entry_idx += 1  # 从下一根线段开始重新寻找
                 continue
 
-            # ** 优化点2: 中枢的区间是前三个线段的高点中的低点和低点中的高点组成 **
-            zg = min(seg_a.high, seg_b.high, seg_c.high)
-            zd = max(seg_a.low, seg_b.low, seg_c.low)
+            # 规则: 中枢区间由核心三段的重叠部分决定
+            zg = min(seg_a.zs_high, seg_b.zs_high, seg_c.zs_high)
+            zd = max(seg_a.zs_low, seg_b.zs_low, seg_c.zs_low)
 
             if zd >= zg:  # 没有重叠区间，不是有效中枢
-                i += 1
+                entry_idx += 1  # 从下一根线段开始重新寻找
+                continue
+
+            # 新增逻辑: 检查进入段是否与核心三段构成的中枢区间有重叠
+            if not (max(entry_seg.zs_low, zd) < min(entry_seg.zs_high, zg)):
+                LogUtil.info(
+                    f"进入段 {entry_idx} 与中枢区间 [{zd:.2f}, {zg:.2f}] 无重叠，跳过。(Entry segment {entry_idx} does not overlap with center range [{zd:.2f}, {zg:.2f}], skipping.)")
+                entry_idx += 1  # 进入段不重叠，从下一根线段开始重新寻找
                 continue
 
             # 找到了一个有效的三段重叠，形成中枢核心
             LogUtil.info(
-                f"在索引 {i} 处找到潜在中枢核心，线段: {i}, {i + 1}, {i + 2}。(Found potential center core at index {i}, segments: {i}, {i + 1}, {i + 2}.)")
+                f"以线段 {entry_idx} 为进入段，找到潜在中枢核心: {core_start_idx}, {core_start_idx + 1}, {core_start_idx + 2}.")
             core_lines = [seg_a, seg_b, seg_c]
 
-            # ** 优化点3: 中枢的GG/DD点是中枢区间内所有线段的最高/最低点 **
-            gg = max(seg.high for seg in core_lines)
-            dd = min(seg.low for seg in core_lines)
-
-            # 创建中枢对象 (Create the center object)
             center = ZS(zs_type='xd', start=seg_a, _type=seg_b.type, level=0)
-            center.lines, center.line_num = core_lines, len(core_lines)
+            center.lines = core_lines
+            center.line_num = len(core_lines)
             center.zg, center.zd = zg, zd
-            center.gg, center.dd = gg, dd
-            # ** 优化点1: 记录进入段 **
+            center.gg = max(seg.zs_high for seg in core_lines)
+            center.dd = min(seg.zs_low for seg in core_lines)
             center.entry = entry_seg
 
-            # 从第4根核心线段开始，检查中枢的延伸、完成或破坏
-            completed, next_search_start = self._extend_and_check_complete(center, i + 3)
+            # 从第4根核心线段开始，检查中枢的延伸或完成
+            completed, exit_seg_idx = self._extend_and_check_complete(center, core_start_idx + 3)
+
+            # 更新中枢的结束线段 (中枢的最后一条线段)
+            if center.lines:
+                center.end = center.lines[-1]
 
             if completed:
-                LogUtil.info(
-                    f"中枢完成: 从 {center.start.start.k.date} 到 {center.end.end.k.date} (Center completed: From {center.start.start.k.date} to {center.end.end.k.date})")
-                center.index = len(self.zss)
-                self.zss.append(center)
+                # 检查完成的中枢是否满足最低要求：至少5段（进入段+3核心段+离开段）
+                # center.lines 包含核心段和离开段，至少需要4段（3个中枢区间线段+1个离开段，不含进入段）
+                # 而且需要确认有明确的离开动作
+                if center.line_num >= 4 and center.exit is not None:
+                    LogUtil.info(
+                        f"中枢完成: 从 {center.start.start.k.date} 到 {center.end.end.k.date}, 共 {center.line_num + 1} 段（含进入段）。中枢区间线段数: {center.line_num - 1}（不含离开段）。")
+                    center.index = len(self.zss)
+                    self.zss.append(center)
+                    # 修正：下一个中枢的进入段从离开段（exit_seg_idx）开始寻找
+                    entry_idx = exit_seg_idx
+                else:
+                    LogUtil.info(
+                        f"中枢未满足最低要求（至少需要进入段+3中枢区间线段+离开段=5段），当前只有 {center.line_num + 1} 段，跳过。")
+                    entry_idx += 1
             else:
-                LogUtil.info(
-                    f"中枢成为进行时: 从 {center.start.start.k.date} 开始 (Center becomes pending: Starting from {center.start.start.k.date})")
-                self.pending_zs = center
-
-            i = next_search_start
+                # 中枢成为进行时，需要检查是否满足最低段数要求
+                # 进行时的中枢至少需要：进入段 + 3中枢区间线段 = 4段（center.lines至少3段）
+                if center.line_num >= 3:
+                    LogUtil.info(
+                        f"中枢成为进行时: 从 {center.start.start.k.date} 开始，共 {center.line_num + 1} 段（含进入段）。中枢区间线段数: {center.line_num}。")
+                    self.pending_zs = center
+                else:
+                    LogUtil.info(
+                        f"进行时中枢未满足最低要求（至少需要进入段+3中枢区间线段=4段），当前只有 {center.line_num + 1} 段，跳过。")
+                break  # 结束循环
 
     def _extend_and_check_complete(self, center: ZS, start_j: int) -> Tuple[bool, int]:
         """
-        检查中枢的延伸或完成
-        (Checks for the extension or completion of the center)
+        检查中枢的延伸或完成。
         :param center: 当前中枢对象 (The current center object)
         :param start_j: 开始检查的线段索引 (The starting segment index for the check)
-        :return: (是否完成: bool, 下一个搜索起始索引: int) ((Is completed: bool, Next search starting index: int))
+        :return: (是否完成: bool, 离开段的索引: int) ((Is completed: bool, Index of the exit segment (j-1): int))
         """
         j = start_j
         while j < len(self.all_lines):
             current_seg = self.all_lines[j]
-
-            # 判断是否为延伸：当前段与中枢区间 [zd, zg] 有重叠
-            is_extending = max(current_seg.low, center.zd) < min(current_seg.high, center.zg)
+            # 判断当前线段是否与中枢区间有重叠
+            is_extending = max(current_seg.zs_low, center.zd) < min(current_seg.zs_high, center.zg)
 
             if is_extending:
                 LogUtil.info(f"线段 {j} 延伸中枢。(Segment {j} extends the center.)")
                 center.lines.append(current_seg)
                 center.line_num += 1
-                # **修正1: zg/zd在延伸中不应改变, GG/DD应更新为所有核心线段的最高/最低点**
-                center.gg = max(center.gg, current_seg.high)
-                center.dd = min(center.dd, current_seg.low)
+                center.gg = max(center.gg, current_seg.zs_high)
+                center.dd = min(center.dd, current_seg.zs_low)
                 j += 1
+                continue
+
+            # -- 当线段 j 未与中枢重叠，说明发生了离开动作 --
+            # 线段 j-1 是中枢的最后一段（离开段），线段 j 是真正离开中枢的段
+
+            # 如果离开动作(线段j)后没有更多线段了，则中枢完成
+            if j + 1 >= len(self.all_lines):
+                center.exit = self.all_lines[j - 1]
+                center.done = True
+                LogUtil.info(
+                    f"线段 {j} 离开中枢且是最后一段，中枢完成。离开段索引: {j - 1}。")
+                # 返回离开段的索引（j-1），下一个中枢从离开段开始识别
+                return True, j - 1
+
+            # 检查下一段(j+1)是否回拉入中枢区间
+            next_seg = self.all_lines[j + 1]
+            re_enters = max(next_seg.zs_low, center.zd) < min(next_seg.zs_high, center.zg)
+
+            if not re_enters:
+                # 下一段没有回拉，离开被确认，中枢完成
+                center.exit = self.all_lines[j - 1]
+                center.done = True
+                LogUtil.info(
+                    f"线段 {j} 离开，下一段 {j + 1} 未返回，中枢完成。离开段索引: {j - 1}。")
+                # 返回离开段的索引（j-1），下一个中枢从离开段开始识别
+                return True, j - 1
             else:
-                # 找到了一个离开段（潜在的），需要检查下一段是否回拉
-                exit_candidate = current_seg
+                # 下一段回拉，中枢延伸。离开动作(j)和回拉段(j+1)都成为中枢的一部分。
+                LogUtil.info(
+                    f"线段 {j} 暂时离开但下一段 {j + 1} 返回，中枢延伸。")
+                center.lines.extend([current_seg, next_seg])
+                center.line_num += 2
+                center.gg = max(center.gg, current_seg.zs_high, next_seg.zs_high)
+                center.dd = min(center.dd, current_seg.zs_low, next_seg.zs_low)
+                j += 2
 
-                # 如果没有下一段了，那么当前离开段就是确认的离开段
-                if j + 1 >= len(self.all_lines):
-                    center.end = self.all_lines[j - 1]
-                    center.done = True
-                    center.exit = exit_candidate
-                    LogUtil.info(
-                        f"线段 {j} 离开中枢且是最后一段，中枢完成。(Segment {j} leaves the center and is the last one, center completed.)")
-                    return True, j
-
-                # 检查下一段是否回拉
-                next_seg = self.all_lines[j + 1]
-                re_enters = max(next_seg.low, center.zd) < min(next_seg.high, center.zg)
-
-                if not re_enters:
-                    # 下一段没有回拉，中枢确认完成
-                    center.end = self.all_lines[j - 1]
-                    center.done = True
-                    center.exit = exit_candidate
-                    LogUtil.info(
-                        f"线段 {j} 离开中枢，下一段 {j + 1} 未返回，中枢完成。(Segment {j} leaves, next segment {j + 1} does not return, center completed.)")
-                    return True, j
-                else:
-                    # 下一段回拉了，中枢没有完成，将离开和回拉的两段都视为延伸
-                    LogUtil.info(
-                        f"线段 {j} 暂时离开但下一段 {j + 1} 返回，中枢延伸。(Segment {j} temporarily leaves but the next one {j + 1} returns, center extends.)")
-
-                    # 将离开段和回拉段都加入核心线段
-                    center.lines.append(current_seg)
-                    center.line_num += 1
-                    center.gg = max(center.gg, current_seg.high)
-                    center.dd = min(center.dd, current_seg.low)
-
-                    center.lines.append(next_seg)
-                    center.line_num += 1
-                    center.gg = max(center.gg, next_seg.high)
-                    center.dd = min(center.dd, next_seg.low)
-
-                    # 从下下个位置继续寻找离开段
-                    j += 2
-
-        # 循环结束，所有后续线段都构成了延伸，中枢是“进行时”状态
-        center.end = self.all_lines[-1]
+        # 循环结束，所有后续线段都构成了延伸，中枢是"进行时"状态
         center.done = False
-        return False, len(self.all_lines)
+        return False, len(self.all_lines) - 1
+
 
 class MultiLevelAnalyzer:
     """
@@ -331,14 +347,14 @@ class MultiLevelAnalyzer:
         group2 = groups[1]
         group3 = groups[2]
 
-        g1 = max(l.high for l in group1)
-        d1 = min(l.low for l in group1)
+        g1 = max(l.zs_high for l in group1)
+        d1 = min(l.zs_low for l in group1)
 
-        g2 = max(l.high for l in group2)
-        d2 = min(l.low for l in group2)
+        g2 = max(l.zs_high for l in group2)
+        d2 = min(l.zs_low for l in group2)
 
-        g3 = max(l.high for l in group3)
-        d3 = min(l.low for l in group3)
+        g3 = max(l.zs_high for l in group3)
+        d3 = min(l.zs_low for l in group3)
 
         # 新中枢的ZG/ZD是三组高点中的最低点和三组低点中的最高点
         zg = min(g1, g2, g3)
@@ -347,8 +363,8 @@ class MultiLevelAnalyzer:
         promoted = ZS(zs_type=base_zs.zs_type, start=lines[0], _type=base_zs._type, level=level)
         promoted.zg, promoted.zd = zg, zd
         # GG/DD的计算可以有多种方式，这里简化为取所有段的极值
-        promoted.gg = max(l.high for l in lines)
-        promoted.dd = min(l.low for l in lines)
+        promoted.gg = max(l.zs_high for l in lines)
+        promoted.dd = min(l.zs_low for l in lines)
         promoted.lines = lines
         promoted.line_num = len(lines)
         promoted.done = True
