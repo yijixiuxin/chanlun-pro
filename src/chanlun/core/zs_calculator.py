@@ -33,15 +33,13 @@ class ZsCalculator:
             return []
 
         self.all_lines = lines
-        self.zss = []
         self.pending_zs = None
 
         self._create_zs_full()
 
-        all_zss = self.zss.copy()
         if self.pending_zs:
-            all_zss.append(self.pending_zs)
-        return all_zss
+            self.zss.append(self.pending_zs)
+        return self.zss
 
     def _create_zs_full(self):
         """
@@ -153,15 +151,28 @@ class ZsCalculator:
 
             # 如果离开动作(线段j)后没有更多线段了，则中枢完成
             if j + 1 >= len(self.all_lines):
-                center.exit = self.all_lines[j - 1]
-                center.done = True
-                LogUtil.info(
-                    f"线段 {j} 离开中枢且是最后一段，中枢完成。离开段索引: {j - 1}。")
-                # 返回离开段的索引（j-1），下一个中枢从离开段开始识别
-                return True, j - 1
+                LogUtil.info(f"线段 {j} 离开中枢，但已是最后一段，中枢保持进行时。(Segment {j} leaves the center, but it's the last segment. Center remains ongoing.)")
+                center.lines.append(current_seg)  # Include the leaving segment
+                center.line_num += 1
+                center.gg = max(center.gg, current_seg.zs_high)
+                center.dd = min(center.dd, current_seg.zs_low)
+                center.done = False
+                break # Break the loop, the function will return False at the end.
 
             # 检查下一段(j+1)是否回拉入中枢区间
             next_seg = self.all_lines[j + 1]
+
+            if hasattr(next_seg, 'done') and not next_seg.done:
+                # The state of the pullback is uncertain, so the center's completion is also uncertain.
+                LogUtil.info(f"线段 {j} 离开，但下一段 {j+1} 未完成，中枢保持进行时。(Segment {j} leaves, but the next segment {j+1} is not yet complete. Center remains ongoing.)")
+                center.lines.append(current_seg)  # Include the leaving segment
+                center.line_num += 1
+                center.gg = max(center.gg, current_seg.zs_high)
+                center.dd = min(center.dd, current_seg.zs_low)
+                center.done = False
+                break # Break the loop as we've reached the end of finalized data.
+
+            # Case 3: The next segment is complete, check if it re-enters.
             re_enters = max(next_seg.zs_low, center.zd) < min(next_seg.zs_high, center.zg)
 
             if not re_enters:
