@@ -908,9 +908,9 @@ class XD(LINE):
 
     def __init__(
         self,
-        start: FX,
-        end: FX,
-        start_line: LINE,
+        start: FX = None,
+        end: FX = None,
+        start_line: LINE = None,
         end_line: LINE = None,
         _type: str = None,
         ding_fx: XLFX = None,
