@@ -425,6 +425,9 @@ class ZS:
     中枢对象（笔中枢，线段中枢）
     """
 
+    entry: LINE = None
+    exit: LINE = None
+
     def __init__(
         self,
         zs_type: str,
@@ -1115,6 +1118,126 @@ class XD(LINE):
         })
         return data
 
+class ZSLXLevel(Enum):
+    """
+    走势类型级别枚举
+    """
+    M1 = "1分钟"
+    M5 = "5分钟"
+    M15 = "15分钟"
+    M30 = "30分钟"
+    H1 = "60分钟"
+    D1 = "日线"
+    W1 = "周线"
+    MN1 = "月线"
+
+class ZSLX:
+    """
+    走势类型对象
+    """
+
+    def __init__(self, lines: List[Union[XD]], zslx_level: ZSLXLevel, index: int = 0, done: bool = False):
+        """
+        初始化走势类型对象
+        :param lines: 组成走势类型的线段列表
+        :param zslx_level: 走势类型的级别
+        :param index: 索引
+        :param done: 标记该走势类型是否已完成
+        """
+        # 线段的组成
+        self.lines: List[Union[XD]] = lines
+        # 中枢列表
+        self.zss: List[ZS] = []
+        # 走势类型的级别
+        self.zslx_level: ZSLXLevel = zslx_level
+        self.index: int = index
+        self.done: bool = done
+
+        # 走势的起始和结束线段
+        self.start: Union[XD, None] = self.lines[0] if self.lines else None
+        self.end: Union[XD, None] = self.lines[-1] if self.lines else None
+
+        # 走势类型的类型, 默认为盘整
+        self.zslx_type: str = "盘整"
+
+    @property
+    def high(self) -> float:
+        """走势的最高点"""
+        if not self.lines:
+            return 0.0
+        return max(line.high for line in self.lines)
+
+    @property
+    def low(self) -> float:
+        """走势的最低点"""
+        if not self.lines:
+            return 0.0
+        return min(line.low for line in self.lines)
+
+    def _update_type(self):
+        """
+        根据中枢列表更新走势类型。
+        - 1个中枢：盘整
+        - 2个及以上中枢：根据中枢位置关系判断上涨或下跌
+        """
+        if len(self.zss) < 2:
+            self.zslx_type = "盘整"
+            return
+
+        first_zs = self.zss[0]
+        last_zs = self.zss[-1]
+
+        # 后一个中枢区间整体高于前一个，定义为上涨
+        if last_zs.zd > first_zs.zg:
+            self.zslx_type = "上涨"
+        # 后一个中枢区间整体低于前一个，定义为下跌
+        elif last_zs.zg < first_zs.zd:
+            self.zslx_type = "下跌"
+        else:
+            # 如果中枢有重叠，仍然视为盘整的延续
+            self.zslx_type = "盘整"
+
+    def add_zs(self, zs: ZS):
+        """
+        向走势类型中添加一个新的中枢
+        """
+        if zs not in self.zss:
+            self.zss.append(zs)
+            self._update_type()
+
+    def is_done(self) -> bool:
+        """
+        检查此走势类型是否已标记为完成
+        """
+        return self.done
+
+    def to_dict(self) -> dict:
+        """
+        将ZSLX对象转换为字典
+        """
+        return {
+            "zslx_level": self.zslx_level.value,
+            "zslx_type": self.zslx_type,
+            "index": self.index,
+            "done": self.done,
+            "high": self.high,
+            "low": self.low,
+            "lines": [line.to_dict() for line in self.lines],
+            "zss": [zs.to_dict() for zs in self.zss],
+            "start": self.start.to_dict() if self.start else None,
+            "end": self.end.to_dict() if self.end else None,
+        }
+
+    def __repr__(self) -> str:
+        return (
+            f"ZSLX(level={self.zslx_level.value}, type={self.zslx_type}, zss_count={len(self.zss)})"
+        )
+
+    def __str__(self) -> str:
+        """以JSON格式显示所有属性"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
+
 @dataclass
 class LOW_LEVEL_QS:
     zss: List[ZS]  # 低级别线构成的中枢列表
@@ -1128,9 +1251,6 @@ class LOW_LEVEL_QS:
     line_bc: bool = False  # 是否形成（笔、线段）背驰
     qs_bc: bool = False  # 是否趋势背驰
     pz_bc: bool = False  # 是否盘整背驰
-
-    # def __str__(self):
-    #     return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
 
     def to_dict(self):
         """将LOW_LEVEL_QS对象转换为字典"""
@@ -1196,19 +1316,6 @@ class LINE_FORM_INFOS:
     # 其他信息
     infos: dict = None
 
-    # def __str__(self):
-    #     msg = f'{"向上" if self.direction == "up" else "向下"} {self.form_type} ({self.form_level}) {"进入背驰段" if self.is_bc_line else "无背驰"}'
-    #     if self.infos is not None:
-    #         if "zs_pre_line_num" in self.infos.keys():
-    #             msg += f'  中枢前 {self.infos["zs_pre_line_num"]} 段 / '
-    #         if "zs_next_line_num" in self.infos.keys():
-    #             msg += f'  中枢后 {self.infos["zs_next_line_num"]} 段 / '
-    #         if "zs_pre_level" in self.infos.keys():
-    #             msg += f'  前中枢 {self.infos["zs_pre_level"]} 级别 / '
-    #         if "zs_next_level" in self.infos.keys():
-    #             msg += f'  后中枢 {self.infos["zs_next_level"]} 级别 / '
-    #     return msg.strip(" / ")
-
     def to_dict(self):
         """将LINE_FORM_INFOS对象转换为字典"""
         return {
@@ -1242,9 +1349,6 @@ class BW_LINE_QS_INFOS:
     zss_str = ""
     # 走势类型描述
     zoushi_type_str = ""
-
-    # def __str__(self):
-    #     return f"低级别信息：中枢 {self.zs_num} 线 {self.line_num} 趋势 {self.qs} 盘整 {self.pz} 线背驰 {self.line_bc} 盘整背驰 {self.pz_bc} 趋势背驰 {self.qs_bc}"
 
     def to_dict(self):
         """将BW_LINE_QS_INFOS对象转换为字典"""
