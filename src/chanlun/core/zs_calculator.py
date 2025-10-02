@@ -4,10 +4,9 @@
 负责根据笔或线段列表，识别和构建中枢。
 该模块已被重构，以确保增量计算的逻辑与标准的全量计算逻辑一致。
 """
-import math
 from typing import List, Tuple, Optional, Dict, Union
 
-from chanlun.core.cl_interface import ZS, Config, LINE, FX, Kline
+from chanlun.core.cl_interface import ZS, LINE, FX, Level, ZSLX
 from chanlun.tools.log_util import LogUtil
 
 class ZsCalculator:
@@ -16,8 +15,7 @@ class ZsCalculator:
     功能：根据输入的线段列表，识别和构建本级别的所有中枢。
     """
 
-    def __init__(self, config: dict):
-        self.config = config
+    def __init__(self):
         self.all_lines: List[LINE] = []
         self.zss: List[ZS] = []
         self.pending_zs: Optional[ZS] = None
@@ -127,9 +125,9 @@ class ZsCalculator:
     def _extend_and_check_complete(self, center: ZS, start_j: int) -> Tuple[bool, int]:
         """
         检查中枢的延伸或完成。
-        :param center: 当前中枢对象 (The current center object)
-        :param start_j: 开始检查的线段索引 (The starting segment index for the check)
-        :return: (是否完成: bool, 离开段的索引: int) ((Is completed: bool, Index of the exit segment (j-1): int))
+        :param center: 当前中枢对象
+        :param start_j: 开始检查的线段索引
+        :return: (是否完成: bool, 离开段的索引: int)
         """
         j = start_j
         while j < len(self.all_lines):
@@ -151,28 +149,28 @@ class ZsCalculator:
 
             # 如果离开动作(线段j)后没有更多线段了，则中枢完成
             if j + 1 >= len(self.all_lines):
-                LogUtil.info(f"线段 {j} 离开中枢，但已是最后一段，中枢保持进行时。(Segment {j} leaves the center, but it's the last segment. Center remains ongoing.)")
-                center.lines.append(current_seg)  # Include the leaving segment
+                LogUtil.info(
+                    f"线段 {j} 离开中枢，但已是最后一段，中枢保持进行时。")
+                center.lines.append(current_seg)
                 center.line_num += 1
                 center.gg = max(center.gg, current_seg.zs_high)
                 center.dd = min(center.dd, current_seg.zs_low)
                 center.done = False
-                break # Break the loop, the function will return False at the end.
+                break
 
             # 检查下一段(j+1)是否回拉入中枢区间
             next_seg = self.all_lines[j + 1]
 
             if hasattr(next_seg, 'done') and not next_seg.done:
-                # The state of the pullback is uncertain, so the center's completion is also uncertain.
-                LogUtil.info(f"线段 {j} 离开，但下一段 {j+1} 未完成，中枢保持进行时。(Segment {j} leaves, but the next segment {j+1} is not yet complete. Center remains ongoing.)")
-                center.lines.append(current_seg)  # Include the leaving segment
+                LogUtil.info(
+                    f"线段 {j} 离开，但下一段 {j + 1} 未完成，中枢保持进行时。(Segment {j} leaves, but the next segment {j + 1} is not yet complete. Center remains ongoing.)")
+                center.lines.append(current_seg)
                 center.line_num += 1
                 center.gg = max(center.gg, current_seg.zs_high)
                 center.dd = min(center.dd, current_seg.zs_low)
                 center.done = False
-                break # Break the loop as we've reached the end of finalized data.
+                break
 
-            # Case 3: The next segment is complete, check if it re-enters.
             re_enters = max(next_seg.zs_low, center.zd) < min(next_seg.zs_high, center.zg)
 
             if not re_enters:
@@ -198,187 +196,307 @@ class ZsCalculator:
         return False, len(self.all_lines) - 1
 
 
-class MultiLevelAnalyzer:
+class ChanlunStructureAnalyzer:
     """
-    多级别走势分析器
+    多级别缠论结构分析器
+
+    从基础级别线段开始，逐级向上推导和分析高维度的走势结构。
     """
 
-    def __init__(self, config: dict):
-        self.config = config
-        self.levels = self.config.get('levels', ['1m', '5m', '30m', 'D'])
-        self.results: Dict[str, Dict[str, Union[List[LINE], List[ZS]]]] = {}
+    def __init__(
+            self,
+            levels: Optional[List['Level']] = None,
+            zs_calculator: Optional['ZsCalculator'] = None
+    ):
+        """
+        初始化分析器
 
-    def run(self, base_lines: List[LINE]):
+        Args:
+            levels: 分析级别列表（从低到高）
+            zs_calculator: 中枢计算器实例
         """
-        从最底层的线段开始，执行多级别分析
-        :param base_lines: 最原始、最低级别的线段列表 (例如，1分钟周期的笔构成的线段)
+        self.levels: List[Level] = levels or [Level.M1, Level.M5, Level.M30, Level.D1]
+        self.zs_calculator = zs_calculator or ZsCalculator()
+
+        # 存储各级别分析结果
+        self.structures_by_level: Dict[str, Dict[str, Union[List[ZSLX], List[ZS]]]] = {}
+
+        # 配置参数
+        self.min_lines_for_analysis = 4  # 最少需要的线段数
+        self.extension_threshold = 9  # 延伸升级的段数阈值
+        self.grouping_size = 3  # 升级时的分组大小
+
+    def calculate(self, base_lines: List[LINE]) -> Dict:
         """
+        执行多级别分析
+
+        Args:
+            base_lines: 最低级别的线段列表
+
+        Returns:
+            各级别的分析结果
+        """
+        if not base_lines:
+            LogUtil.warning("输入线段为空，无法进行分析")
+            return {}
+
         current_lines = base_lines
-        level_index = 0
 
-        while level_index < len(self.levels):
-            level_name = self.levels[level_index]
-            LogUtil.info(f"\n{'=' * 20} Analyzing Level: {level_name} (Level Index: {level_index}) {'=' * 20}")
+        for level_index, level in enumerate(self.levels):
+            LogUtil.info(f"分析级别: {level.value}")
 
-            if len(current_lines) < 3:
-                LogUtil.info(f"线段数量不足 ({len(current_lines)})，无法分析 {level_name} 级别。分析结束。")
+            # 检查线段数量
+            if len(current_lines) < self.min_lines_for_analysis:
+                LogUtil.info(
+                    f"线段数量不足 ({len(current_lines)} < {self.min_lines_for_analysis})，"
+                    f"无法分析 {level.value} 级别"
+                )
                 break
 
-            # 1. 计算当前级别的中枢
-            zs_calculator = ZsCalculator(self.config)
-            level_zss = zs_calculator.calculate(current_lines)
-            for zs in level_zss:
-                zs.level = level_index
-            LogUtil.info(f"在 {level_name} 级别找到 {len(level_zss)} 个中枢。")
+            # 分析当前级别，传入 level_index
+            level_result = self._analyze_level(
+                current_lines,
+                level,
+                level_index
+            )
 
-            # 2. 识别中枢升级（延伸/扩展）并生成当前级别的走势类型
-            next_level_index = level_index + 1
-            promoted_zss, trend_lines = self._promote_and_generate_trends(level_zss, level_index, next_level_index)
+            # 存储结果
+            self.structures_by_level[level.value] = level_result
 
-            LogUtil.info(f"为下一级别生成了 {len(promoted_zss)} 个升级中枢。")
-            LogUtil.info(f"在 {level_name} 级别生成了 {len(trend_lines)} 个走势类型。")
+            # 准备下一级别的输入
+            trend_lines = level_result.get("trend_lines", [])
+            if not trend_lines:
+                LogUtil.info(f"{level.value} 级别未生成走势类型，分析结束")
+                break
 
-            # 3. 存储当前级别的结果
-            self.results[level_name] = {
-                "zss": level_zss,
-                "trend_lines": trend_lines
-            }
-            # 将升级的中枢添加到下一级别的中枢列表中
-            if promoted_zss:
-                next_level_name = self.levels[next_level_index] if next_level_index < len(self.levels) else "Promoted"
-                if next_level_name not in self.results:
-                    self.results[next_level_name] = {"zss": [], "trend_lines": []}
-                self.results[next_level_name]["zss"].extend(promoted_zss)
-
-            # 4. 准备下一次循环：当前级别生成的走势类型成为下一级别分析的“线段”
             current_lines = trend_lines
-            level_index += 1
 
-        return self.results
+        return self.structures_by_level
 
-    def _promote_and_generate_trends(self, zss: List[ZS], current_level: int, next_level: int) -> Tuple[
-        List[ZS], List[LINE]]:
+    def _analyze_level(
+            self,
+            lines: List[LINE],
+            level: Level,
+            level_index: int
+    ) -> Dict:
         """
-        核心逻辑：处理中枢的延伸、扩展，并生成走势类型
-        :param zss: 当前级别已识别的中枢列表
-        :return: (推广生成的高级别中枢列表, 当前级别的走势类型列表)
+        分析单个级别
+
+        Returns:
+            包含中枢和走势类型的字典
         """
-        promoted_zss: List[ZS] = []
-        trend_lines: List[LINE] = []
+        # 1. 计算当前级别中枢
+        zss = self._calculate_level_zss(lines, level)
+        LogUtil.info(f"识别到 {len(zss)} 个中枢")
 
-        i = 0
-        while i < len(zss):
-            current_zs = zss[i]
+        # 2. 处理中枢升级和生成走势类型，传入 level_index
+        promoted_zss, trend_lines = self._process_zs_and_generate_trends(
+            zss,
+            level_index
+        )
 
-            # 跳过未完成的中枢，因为它无法参与升级或趋势构建
-            if not current_zs.done:
-                i += 1
+        LogUtil.info(f"生成 {len(promoted_zss)} 个升级中枢")
+        LogUtil.info(f"生成 {len(trend_lines)} 个走势类型")
+
+        # 3. 将升级中枢添加到下一级别
+        if promoted_zss:
+            self._add_promoted_zss(promoted_zss, level_index + 1)
+
+        return {
+            "zss": zss,
+            "trend_lines": trend_lines,
+            "promoted_zss": promoted_zss
+        }
+
+    def _calculate_level_zss(self, lines: List[LINE], level: Level) -> List[ZS]:
+        """计算当前级别的中枢"""
+        zss = self.zs_calculator.calculate(lines)
+        for zs in zss:
+            zs.level = level
+        return zss
+
+    def _process_zs_and_generate_trends(
+            self,
+            zss: List[ZS],
+            current_level_index: int
+    ) -> Tuple[List[ZS], List[LINE]]:
+        """
+        处理中枢升级（延伸/扩展）并生成走势类型
+
+        Returns:
+            (升级中枢列表, 走势类型列表)
+        """
+        promoted_zss = []
+        trend_lines = []
+        processed_indices = set()
+
+        # 检查是否存在下一级别，用于升级
+        next_level: Optional[Level] = None
+        if current_level_index + 1 < len(self.levels):
+            next_level = self.levels[current_level_index + 1]
+
+        for i, current_zs in enumerate(zss):
+            if i in processed_indices:
                 continue
 
-            # --- 规则1: 中枢延伸 (9段及以上升级) ---
-            # 规则：大于等于27段小于81段，升级到30m (跳2级)
-            # 规则：大于等于9段小于27段，升级到5m (跳1级)
-            promoted = None
-            if 27 <= current_zs.line_num < 81:
-                LogUtil.info(f"发生【中枢延伸】: ZS {i} (段数: {current_zs.line_num}) 升级到 Level {current_level + 2}")
-                # 升级逻辑：按每9段为一组进行处理
-                promoted = self._create_promoted_zs(current_zs, current_zs.lines, current_level + 2, 9)
-            elif 9 <= current_zs.line_num < 27:
-                LogUtil.info(f"发生【中枢延伸】: ZS {i} (段数: {current_zs.line_num}) 升级到 Level {next_level}")
-                # 升级逻辑：按每3段为一组进行处理
-                promoted = self._create_promoted_zs(current_zs, current_zs.lines, next_level, 3)
+            # 只有存在更高级别时，才尝试升级
+            if next_level:
+                # 尝试处理延伸
+                if current_zs.is_extension_candidate(self.extension_threshold):
+                    promoted = self._handle_extension(current_zs, next_level)
+                    if promoted:
+                        promoted_zss.append(promoted)
+                        processed_indices.add(i)
+                        LogUtil.info(
+                            f"中枢 {i} 发生延伸升级 (段数: {current_zs.line_num})"
+                        )
+                        continue
 
-            if promoted:
-                promoted_zss.append(promoted)
-                i += 1  # 处理完当前中枢，继续下一个
-                continue
+                # 尝试处理扩展
+                if i + 1 < len(zss):
+                    next_zs = zss[i + 1]
+                    if current_zs.can_expand_with(next_zs):
+                        promoted = self._handle_expansion(
+                            current_zs, next_zs, next_level
+                        )
+                        if promoted:
+                            promoted_zss.append(promoted)
+                            processed_indices.update([i, i + 1])
+                            LogUtil.info(f"中枢 {i} 和 {i + 1} 发生扩展合并")
+                            continue
 
-            # --- 规则2: 中枢扩展 ---
-            if i + 1 < len(zss):
-                next_zs = zss[i + 1]
-                if next_zs.done and max(current_zs.dd, next_zs.dd) <= min(current_zs.gg, next_zs.gg):
-                    LogUtil.info(f"发生【中枢扩展】: ZS {i} 和 ZS {i + 1} 合并升级到 Level {next_level}")
-
-                    # 扩展合并的线段包括两个中枢的所有线段以及它们之间的连接段
-                    # 这里简化处理，假设两个中枢的线段是连续的
-                    start_idx = current_zs.start.index
-                    end_idx = next_zs.end.index
-                    combined_lines = self.all_lines[start_idx: end_idx + 1]
-
-                    promoted = self._create_promoted_zs(current_zs, combined_lines, next_level, 3)
-                    promoted_zss.append(promoted)
-                    i += 2  # 跳过两个已合并的中枢
-                    continue
-
-            # --- 规则3: 无升级，生成普通走势类型 ---
-            if i + 1 < len(zss):
-                next_zs = zss[i + 1]
-                start_fx, end_fx = None, None
-                trend_type = ''
-
-                # 判断是上涨趋势还是下跌趋势
-                # 下一个中枢的低点 > 当前中枢的高点 -> 上涨
-                if next_zs.dd > current_zs.gg:
-                    start_fx = FX(_type='di', val=current_zs.dd, k=current_zs.start.start.k)
-                    end_fx = FX(_type='ding', val=next_zs.gg, k=next_zs.end.end.k)
-                    trend_type = 'up'
-                # 下一个中枢的高点 < 当前中枢的低点 -> 下跌
-                elif next_zs.gg < current_zs.dd:
-                    start_fx = FX(_type='ding', val=current_zs.gg, k=current_zs.start.start.k)
-                    end_fx = FX(_type='di', val=next_zs.dd, k=next_zs.end.end.k)
-                    trend_type = 'down'
-
-                if trend_type:
-                    LogUtil.info(f"生成 {trend_type} 走势: 从 ZS {i} 到 ZS {i + 1}")
-                    trend = LINE(start=start_fx, end=end_fx, type=trend_type, index=len(trend_lines))
+            # 生成走势类型
+            if i + 1 < len(zss) and (i + 1) not in processed_indices:
+                trend = self._generate_trend_line(current_zs, zss[i + 1], len(trend_lines))
+                if trend:
                     trend_lines.append(trend)
-
-            i += 1
+                    LogUtil.info(f"生成 {trend.type} 走势: 中枢 {i} → {i + 1}")
 
         return promoted_zss, trend_lines
 
-    def _create_promoted_zs(self, base_zs: ZS, lines: List[LINE], level: int, group_size: int) -> ZS:
-        """
-        根据给定的线段和分组规则，创建升级后的高级别中枢
-        :param base_zs: 升级前的基础中枢 (用于获取元数据)
-        :param lines: 用于构建新中枢的所有线段
-        :param level: 新中枢的目标级别
-        :param group_size: 分组大小 (例如，9段延伸按3段分组)
-        :return: 新的、更高级别的中枢对象
-        """
-        if len(lines) < group_size * 3:
-            LogUtil.info(f"线段数量 {len(lines)} 不足以按 {group_size * 3} 进行分组升级，跳过。")
+    def _handle_extension(self, zs: ZS, target_level: Level) -> Optional[ZS]:
+        """处理中枢延伸升级"""
+        if len(zs.lines) < self.grouping_size * 3:
             return None
 
-        # 将所有线段按 group_size 分成若干组
-        groups = [lines[i:i + group_size] for i in range(0, len(lines), group_size)]
+        # 取前9段进行升级
+        lines_for_promotion = zs.lines[:self.grouping_size * 3]
+        return self._create_promoted_zs(
+            base_zs=zs,
+            lines=lines_for_promotion,
+            level=target_level,
+            promotion_type="延伸"
+        )
 
-        # 这里严格按照您描述的“取前9段”的逻辑，即只用前三组来定义ZG/ZD
-        group1 = groups[0]
-        group2 = groups[1]
-        group3 = groups[2]
+    def _handle_expansion(
+            self,
+            zs1: ZS,
+            zs2: ZS,
+            target_level: Level
+    ) -> Optional[ZS]:
+        """处理中枢扩展合并"""
+        # 合并两个中枢的所有线段
+        combined_lines = zs1.lines + zs2.lines
+        return self._create_promoted_zs(
+            base_zs=zs1,
+            lines=combined_lines,
+            level=target_level,
+            promotion_type="扩展"
+        )
 
-        g1 = max(l.zs_high for l in group1)
-        d1 = min(l.zs_low for l in group1)
+    def _create_promoted_zs(
+            self,
+            base_zs: ZS,
+            lines: List[LINE],
+            level: Level,
+            promotion_type: str = "升级"
+    ) -> Optional[ZS]:
+        """
+        创建升级后的高级别中枢
+        """
+        if len(lines) < self.grouping_size * 3:
+            LogUtil.warning(
+                f"线段数量不足 ({len(lines)} < {self.grouping_size * 3})，"
+                f"无法进行{promotion_type}"
+            )
+            return None
 
-        g2 = max(l.zs_high for l in group2)
-        d2 = min(l.zs_low for l in group2)
+        # 分组计算
+        groups = []
+        for i in range(0, min(len(lines), self.grouping_size * 3), self.grouping_size):
+            group = lines[i:i + self.grouping_size]
+            if group:
+                groups.append(group)
 
-        g3 = max(l.zs_high for l in group3)
-        d3 = min(l.zs_low for l in group3)
+        if len(groups) < 3:
+            return None
 
-        # 新中枢的ZG/ZD是三组高点中的最低点和三组低点中的最高点
-        zg = min(g1, g2, g3)
-        zd = max(d1, d2, d3)
+        # 计算每组的高低点
+        group_highs = [max(l.zs_high for l in g) for g in groups[:3]]
+        group_lows = [min(l.zs_low for l in g) for g in groups[:3]]
 
-        promoted = ZS(zs_type=base_zs.zs_type, start=lines[0], _type=base_zs._type, level=level)
-        promoted.zg, promoted.zd = zg, zd
-        # GG/DD的计算可以有多种方式，这里简化为取所有段的极值
-        promoted.gg = max(l.zs_high for l in lines)
-        promoted.dd = min(l.zs_low for l in lines)
+        # 新中枢的ZG/ZD
+        zg = min(group_highs)
+        zd = max(group_lows)
+
+        # 创建升级中枢
+        promoted = ZS(
+            zs_type=f"{base_zs.zs_type}_promoted",
+            start=lines[0],
+            end=lines[-1],
+            zg=zg,
+            zd=zd,
+            gg=max(l.zs_high for l in lines),
+            dd=min(l.zs_low for l in lines),
+            _type=base_zs._type,
+            level=level,
+            line_num=len(lines)
+        )
         promoted.lines = lines
-        promoted.line_num = len(lines)
         promoted.done = True
-        promoted.end = lines[-1]
 
         return promoted
+
+    def _generate_trend_line(
+            self,
+            zs1: ZS,
+            zs2: ZS,
+            index: int
+    ) -> Optional[LINE]:
+        """根据两个中枢生成走势类型线段"""
+        # 判断趋势方向
+        if zs2.dd > zs1.gg:  # 上涨
+            start_fx = FX(_type='di', val=zs1.dd, k=zs1.start.start)
+            end_fx = FX(_type='ding', val=zs2.gg, k=zs2.end.end)
+            trend_type = 'up'
+        elif zs2.gg < zs1.dd:  # 下跌
+            start_fx = FX(_type='ding', val=zs1.gg, k=zs1.start.start)
+            end_fx = FX(_type='di', val=zs2.dd, k=zs2.end.end)
+            trend_type = 'down'
+        else:
+            return None  # 中枢重叠，不生成走势
+
+        return LINE(
+            start=start_fx,
+            end=end_fx,
+            _type=trend_type,
+            index=index
+        )
+
+    def _add_promoted_zss(self, promoted_zss: List[ZS], level_index: int):
+        """将升级中枢添加到下一级别"""
+        if level_index >= len(self.levels):
+            return
+
+        next_level_name = self.levels[level_index].value
+        if next_level_name not in self.structures_by_level:
+            self.structures_by_level[next_level_name] = {
+                "zss": [],
+                "trend_lines": [],
+                "promoted_zss": []
+            }
+
+        # 使用 setdefault 确保 "promoted_zss" 键存在
+        self.structures_by_level[next_level_name].setdefault("promoted_zss", []).extend(
+            promoted_zss
+        )
