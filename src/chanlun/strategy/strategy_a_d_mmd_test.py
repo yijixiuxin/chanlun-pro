@@ -1,9 +1,8 @@
 import datetime
-from typing import Dict, List, Union
-
-import pandas as pd
+from typing import Union
 
 from chanlun.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
+from chanlun.core.cl_interface import Dict, List
 from chanlun.config import get_data_path
 
 
