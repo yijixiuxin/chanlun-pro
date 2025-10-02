@@ -5,7 +5,7 @@ import math
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import Dict, List, Tuple, Union, Any
+from typing import Dict, List, Tuple, Union, Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -83,6 +83,16 @@ class Config(Enum):
     ZS_WZGX_ZGGDD = "zs_wzgx_zggdd"
     ZS_WZGX_GD = "zs_wzgx_gd"  # 判断两个中枢的位置关系，比较方式，gg与dd 严格比较
 
+class Level(Enum):
+    """走势类型级别枚举"""
+    M1 = "1分钟"
+    M5 = "5分钟"
+    M15 = "15分钟"
+    M30 = "30分钟"
+    H1 = "60分钟"
+    D1 = "日线"
+    W1 = "周线"
+    MN1 = "月线"
 
 class Kline:
     """
@@ -338,8 +348,7 @@ class LINE:
     """
     线的基本定义，笔和线段继承此对象
     """
-
-    def __init__(self, start: FX, end: FX, _type: str, index: int):
+    def __init__(self, start: FX = None, end: FX = None, _type: str = None, index: int = 0):
         self.start: FX = start  # 线的起始位置，以分型来记录
         self.end: FX = end  # 线的结束位置，以分型来记录
 
@@ -421,45 +430,61 @@ class LINE:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 class ZS:
-    """
-    中枢对象（笔中枢，线段中枢）
-    """
-
-    entry: LINE = None
-    exit: LINE = None
+    """中枢对象"""
 
     def __init__(
-        self,
-        zs_type: str,
-        start: LINE,
-        end: LINE = None,
-        zg: float = None,
-        zd: float = None,
-        gg: float = None,
-        dd: float = None,
-        _type: str = None,
-        index: int = 0,
-        line_num: int = 0,
-        level: int = 0,
+            self,
+            zs_type: str,
+            start: LINE,
+            end: Optional[LINE] = None,
+            zg: Optional[float] = None,
+            zd: Optional[float] = None,
+            gg: Optional[float] = None,
+            dd: Optional[float] = None,
+            _type: Optional[str] = None,
+            index: int = 0,
+            line_num: int = 0,
+            level: Level = Level.M1,
     ):
-        self.zs_type: str = zs_type  # 标记中枢类型 bi 笔中枢 xd 线段中枢 zsd 走势段中枢
-        self.start: LINE = start
-        self.lines: List[Union[BI, XD, LINE]] = (
-            []
-        )  # 中枢，记录中枢的线（笔 or 线段）对象
-        self.end: LINE = end
+        self.zs_type = zs_type  # 'bi' 笔中枢, 'xd' 线段中枢, 'zsd' 走势段中枢
+        self.start = start
+        self.end = end
+        self.lines: List[LINE] = []  # 构成中枢的线段
 
-        self.zg: float = zg
-        self.zd: float = zd
-        self.gg: float = gg
-        self.dd: float = dd
-        self.type: str = _type  # 中枢类型（up 上涨中枢  down 下跌中枢  zd 震荡中枢）
-        self.index: int = index
-        self.line_num: int = line_num  # 中枢包含的 笔或线段 个数
-        self.level: int = level  # 中枢级别 0 本级别 1 上一级别 ...
+        self.zg = zg  # 中枢高点
+        self.zd = zd  # 中枢低点
+        self.gg = gg  # 中枢最高点（包括延伸）
+        self.dd = dd  # 中枢最低点（包括延伸）
 
-        self.done = False  # 记录中枢是否完成
-        self.real = True  # 记录是否是有效中枢
+        self._type = _type  # 'up' 上涨中枢, 'down' 下跌中枢, 'zd' 震荡中枢
+        self.index = index
+        self.line_num = line_num  # 包含的线段数
+        self.level:Level = level  # 中枢级别
+
+        self.done = False  # 是否完成
+        self.real = True  # 是否有效
+
+        self.entry: Optional[LINE] = None  # 进入段
+        self.exit: Optional[LINE] = None  # 离开段
+
+    def update_boundaries(self):
+        """更新中枢边界值"""
+        if self.lines:
+            self.gg = max(line.high for line in self.lines)
+            self.dd = min(line.low for line in self.lines)
+            self.line_num = len(self.lines)
+            self.end = self.lines[-1] if self.lines else None
+
+    def is_extension_candidate(self, min_segments: int = 9) -> bool:
+        """判断是否符合延伸条件"""
+        return self.line_num >= min_segments
+
+    def can_expand_with(self, other: 'ZS') -> bool:
+        """判断是否可以与另一个中枢扩展合并"""
+        if not other or not other.done:
+            return False
+        # 两个中枢有价格重叠区间
+        return max(self.dd, other.dd) <= min(self.gg, other.gg)
 
     def add_line(self, line: LINE) -> bool:
         """
@@ -1118,68 +1143,58 @@ class XD(LINE):
         })
         return data
 
-class ZSLXLevel(Enum):
-    """
-    走势类型级别枚举
-    """
-    M1 = "1分钟"
-    M5 = "5分钟"
-    M15 = "15分钟"
-    M30 = "30分钟"
-    H1 = "60分钟"
-    D1 = "日线"
-    W1 = "周线"
-    MN1 = "月线"
+class ZSLX(LINE):
+    """走势类型对象"""
 
-class ZSLX:
-    """
-    走势类型对象
-    """
+    def __init__(
+            self,
+            lines: List[LINE],
+            zslx_level: Level,
+            index: int = 0,
+            done: bool = False
+    ):
+        if not lines:
+            raise ValueError("走势类型(ZSLX)的'lines'列表不能为空")
+        # 1. 确定走势类型的宏观属性以初始化父类LINE
+        zslx_start = lines[0].start
+        zslx_end = lines[-1].end
+        # 假设FX对象有一个'val'属性用于比较大小
+        zslx_direction = 'up' if zslx_end.val >= zslx_start.val else 'down'
 
-    def __init__(self, lines: List[Union[XD]], zslx_level: ZSLXLevel, index: int = 0, done: bool = False):
-        """
-        初始化走势类型对象
-        :param lines: 组成走势类型的线段列表
-        :param zslx_level: 走势类型的级别
-        :param index: 索引
-        :param done: 标记该走势类型是否已完成
-        """
-        # 线段的组成
-        self.lines: List[Union[XD]] = lines
-        # 中枢列表
-        self.zss: List[ZS] = []
-        # 走势类型的级别
-        self.zslx_level: ZSLXLevel = zslx_level
-        self.index: int = index
-        self.done: bool = done
+        # 2. 调用父类LINE的构造函数
+        super().__init__(start=None, end=None, _type=zslx_direction, index=index)
 
-        # 走势的起始和结束线段
-        self.start: Union[XD, None] = self.lines[0] if self.lines else None
-        self.end: Union[XD, None] = self.lines[-1] if self.lines else None
+        # 3. 初始化ZSLX特有的属性
+        self.lines = lines      # 组成走势类型的线段
+        self.zss: List[ZS] = [] # 包含的中枢
+        self.zslx_level = zslx_level
+        self.done = done
+        self.zslx_type = "盘整"  # 默认类型
 
-        # 走势类型的类型, 默认为盘整
-        self.zslx_type: str = "盘整"
+        # 4. 计算并设置整个走势类型期间的最高和最低点
+        self.high = max(line.high for line in self.lines)
+        self.low = min(line.low for line in self.lines)
+        self.zs_high = max(line.zs_high for line in self.lines if line.zs_high > 0)
+        self.zs_low = min(line.zs_low for line in self.lines if line.zs_low > 0)
 
     @property
     def high(self) -> float:
-        """走势的最高点"""
-        if not self.lines:
-            return 0.0
-        return max(line.high for line in self.lines)
+        """走势最高点"""
+        return max((line.high for line in self.lines), default=0.0)
 
     @property
     def low(self) -> float:
-        """走势的最低点"""
-        if not self.lines:
-            return 0.0
-        return min(line.low for line in self.lines)
+        """走势最低点"""
+        return min((line.low for line in self.lines), default=0.0)
+
+    def add_zs(self, zs: ZS):
+        """添加中枢并更新走势类型"""
+        if zs not in self.zss:
+            self.zss.append(zs)
+            self._update_type()
 
     def _update_type(self):
-        """
-        根据中枢列表更新走势类型。
-        - 1个中枢：盘整
-        - 2个及以上中枢：根据中枢位置关系判断上涨或下跌
-        """
+        """根据中枢关系更新走势类型"""
         if len(self.zss) < 2:
             self.zslx_type = "盘整"
             return
@@ -1187,23 +1202,13 @@ class ZSLX:
         first_zs = self.zss[0]
         last_zs = self.zss[-1]
 
-        # 后一个中枢区间整体高于前一个，定义为上涨
+        # 判断趋势方向
         if last_zs.zd > first_zs.zg:
             self.zslx_type = "上涨"
-        # 后一个中枢区间整体低于前一个，定义为下跌
         elif last_zs.zg < first_zs.zd:
             self.zslx_type = "下跌"
         else:
-            # 如果中枢有重叠，仍然视为盘整的延续
             self.zslx_type = "盘整"
-
-    def add_zs(self, zs: ZS):
-        """
-        向走势类型中添加一个新的中枢
-        """
-        if zs not in self.zss:
-            self.zss.append(zs)
-            self._update_type()
 
     def is_done(self) -> bool:
         """
@@ -1236,6 +1241,14 @@ class ZSLX:
     def __str__(self) -> str:
         """以JSON格式显示所有属性"""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
+    @high.setter
+    def high(self, value):
+        self._high = value
+
+    @low.setter
+    def low(self, value):
+        self._low = value
 
 
 @dataclass
