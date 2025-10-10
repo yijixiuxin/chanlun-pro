@@ -366,6 +366,8 @@ class ExchangeTDX(Exchange):
         for _c in codes:
             _m, _c, _t = self.to_tdx_code(_c)
             if _m is not None:
+                if _m == 2:
+                    continue
                 query_stocks.append((_m, _c))
                 stock_types[_c] = _t
         client = TdxHq_API(raise_exception=True, auto_retry=True)
@@ -727,12 +729,12 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    # klines = ex.klines("SH.600498", "60m")
-    # print(klines.tail(20))
+    klines = ex.klines("BJ.837592", "60m")
+    print(klines.tail(20))
 
-    ticks = ex.ticks(["SH.515880", "SZ.000001", "SH.000001"])
-    for _c, _t in ticks.items():
-        print(_c, _t)
+    # ticks = ex.ticks(["SH.000001", "BJ.837592"])
+    # for _c, _t in ticks.items():
+    #     print(_c, _t)
 
     # 获取复权相关信息
     # code = "SZ.002165"
