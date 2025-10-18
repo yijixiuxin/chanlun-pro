@@ -120,17 +120,10 @@ class ZsCalculator:
 
             if next_overlaps:
                 # 情况1: 下一线段与中枢重叠 -> 中枢延伸
-                # 无论当前线段是否重叠（暂时离开），都将其视为核心的一部分
                 center.lines.append(current_seg)
                 center.update_boundaries()
                 j += 1  # 处理完当前线段，继续下一轮循环
             else:
-                # # 情况2: 下一线段不与中枢重叠 -> 中枢完成
-                # center.update_boundaries()
-                # # 下一线段是离开段
-                # center.end = current_seg
-                # center.done = True
-                # return True, j
 
                 # 情况2: 下一线段不与中枢重叠 -> 中枢完成
                 current_overlaps = max(current_seg.zs_low, center.zd) < min(current_seg.zs_high, center.zg)
@@ -145,7 +138,8 @@ class ZsCalculator:
                     # 当前线段就是离开段
                     center.end = current_seg
                     center.done = True
-                    return True, j-1
+                    return True, j - 1
+
 
 class ChanlunStructureAnalyzer:
     """
@@ -264,21 +258,95 @@ class ChanlunStructureAnalyzer:
     def _create_upgraded_trends(
             self,
             lines: List[LINE],
-            current_level: Level
+            current_level: Level,
+            trend_lines: List[ZSLX],
+            current_zs: ZS
     ) -> List[ZSLX]:
         """
-        根据“3+3+3”规则为延伸或扩展的中枢创建升级后的走势类型。
-        这里的逻辑假设，构成升级的线段本身就自然地形成了交替的方向。
+        根据“3+3+3”规则和后续的延续逻辑，为延伸或扩展的中枢创建升级后的走势类型。
+
+        参数:
+            lines: 用于组合成更高级别走势的基础级别线段列表。
+            current_level: 正在创建的新走势类型的级别。
+            trend_lines: 已存在的走势类型列表，用于提供上下文（可以为空）。
+            current_zs: 当前中枢，用于确定初始方向。
+
+        返回:
+            一个新的、升级后的ZSLX走势类型列表。
         """
         upgraded_trends = []
-        chunk_size = 3
-        for i in range(0, len(lines), chunk_size):
-            chunk = lines[i:i + chunk_size]
-            if len(chunk) < chunk_size:
-                break  # 剩余线段不足以构成新的走势类型
+        i = 0
 
-            trend = ZSLX(lines=chunk, zslx_level=current_level)
-            upgraded_trends.append(trend)
+        # 1. 确定要创建的第一个走势类型的方向。
+        # 新走势类型的方向与参考方向相反。
+        if trend_lines:
+            # 如果存在之前的走势类型，则使用最后一个作为参考。
+            reference_direction = trend_lines[-1].type
+        else:
+            # 否则，使用进入当前中枢的线的方向。
+            reference_direction = current_zs.start.type
+
+        current_direction = 'down' if reference_direction == 'up' else 'up'
+
+        while i < len(lines):
+            # 一个新的走势类型至少需要3段线。
+            if len(lines) - i < 3:
+                break
+
+            # 基本情况是由3段线组成的走势类型。
+            end_index = i + 3
+
+            # 2. 处理完前9段线（即3个走势类型）后，应用延续规则。
+            if len(upgraded_trends) >= 3:
+                if current_direction == 'up':
+                    # 对于上涨走势，检查是否连续创出更高的高点和低点。
+                    for j in range(end_index, len(lines)):
+                        if lines[j].high > lines[j - 1].high and lines[j].low > lines[j - 1].low:
+                            end_index = j + 1  # 延伸走势
+                        else:
+                            break  # 模式被破坏
+                else:  # current_direction == 'down'
+                    # 对于下跌走势，检查是否连续创出更低的高点和低点。
+                    for j in range(end_index, len(lines)):
+                        if lines[j].high < lines[j - 1].high and lines[j].low < lines[j - 1].low:
+                            end_index = j + 1  # 延伸走势
+                        else:
+                            break  # 模式被破坏
+
+            # 构成此走势的最终线段集合。
+            trend_chunk = lines[i:end_index]
+
+            # 从构成线段中计算其高点和低点。
+            trend_high = max(line.high for line in trend_chunk)
+            trend_low = min(line.low for line in trend_chunk)
+
+            start: FX = trend_chunk[0].start
+            end: FX = trend_chunk[-1].end
+            if current_direction == 'down':
+                start.val = trend_high
+                end.val = trend_low
+            else:
+                start.val = trend_low
+                end.val = trend_high
+            # 创建新的走势类型 (ZSLX) 对象。
+            new_trend = ZSLX(
+                zslx_level=current_level,
+                _type=current_direction,
+                start_line=trend_chunk[0],
+                end_line=trend_chunk[-1],
+                start=start,
+                end=end
+            )
+            new_trend.high = trend_high
+            new_trend.low = trend_low
+
+            upgraded_trends.append(new_trend)
+
+            # 为下一次迭代做准备。
+            i = end_index
+            # 下一个走势类型的方向将相反。
+            current_direction = 'down' if current_direction == 'up' else 'up'
+
         return upgraded_trends
 
     def _generate_trends(
@@ -307,46 +375,32 @@ class ChanlunStructureAnalyzer:
 
             # 规则 1: 尝试处理延伸升级（单个中枢9段以上）
             if next_level and current_zs.is_extension_candidate(self.extension_threshold):
-                new_trends = self._create_upgraded_trends(current_zs.lines, next_level)
+                new_trends = self._create_upgraded_trends(current_zs.lines, next_level, trend_lines, current_zs)
                 if new_trends:
                     trend_lines.extend(new_trends)
                     LogUtil.info(f"生成延伸走势: 从中枢 {i} 生成 {len(new_trends)} 个高级别走势")
                 i += 1
                 continue
 
-            # 规则 2: 尝试处理扩展升级（相邻中枢有重叠）
+            next_zs = zss[i + 1]
+            # 规则 2: 尝试处理扩展升级
             if next_level and i + 1 < len(zss):
                 # 查找所有连续可扩展的中枢
-                expand_end_index = i + 1
-                if expand_end_index < len(zss) and zss[expand_end_index - 1].can_expand_with(zss[expand_end_index]):
-                    expandable_zss = zss[i:expand_end_index + 1]
 
-                    start_index = expandable_zss[0].start.index
-                    end_index = expandable_zss[1].end.index
+                if current_zs.can_expand_with(next_zs):
+                    start_index = current_zs.start.index
+                    end_index = next_zs.end.index
 
-                    all_lines = lines[start_index:end_index+1]
+                    all_lines = lines[start_index:end_index + 1]
 
-                    new_trends = self._create_upgraded_trends(all_lines, current_level)
+                    new_trends = self._create_upgraded_trends(all_lines, current_level, trend_lines, current_zs)
                     if new_trends:
                         trend_lines.extend(new_trends)
                         LogUtil.info(
-                            f"生成扩展走势 (Pivots Upgraded): 从中枢 {i} 到 {expand_end_index - 1} 生成 {len(new_trends)} 个高级别走势")
+                            f"生成扩展走势 (Pivots Upgraded): 从中枢 {i} 到 {end_index - 1} 生成 {len(new_trends)} 个高级别走势")
 
-                    i = expand_end_index
+                    i = end_index
                     continue
-
-            # 规则 3: 处理常规趋势（无升级）
-            # 如果是最后一个中枢，它自身构成一个盘整
-            if i + 1 >= len(zss):
-                trend = ZSLX(lines=current_zs.lines, zslx_level=current_level)
-                trend.add_zs(current_zs)
-                trend_lines.append(trend)
-                LogUtil.info(f"生成常规走势: 最后一个中枢 {i} 形成盘整")
-                break
-
-            # 查看后续中枢，判断是上涨、下跌还是盘整
-            next_zs = zss[i + 1]
-
             # 判断为上涨趋势 (下一个中枢的低点 > 当前中枢的高点)
             if next_zs.zd > current_zs.zg:
                 trend_end_index = i + 1
