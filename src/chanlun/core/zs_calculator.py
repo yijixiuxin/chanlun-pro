@@ -328,8 +328,10 @@ class ChanlunStructureAnalyzer:
             else:
                 start.val = trend_low
                 end.val = trend_high
+
             # 创建新的走势类型 (ZSLX) 对象。
             new_trend = ZSLX(
+                index=len(trend_lines) + len(upgraded_trends),
                 zslx_level=current_level,
                 _type=current_direction,
                 start_line=trend_chunk[0],
@@ -401,47 +403,5 @@ class ChanlunStructureAnalyzer:
 
                     i = end_index
                     continue
-            # 判断为上涨趋势 (下一个中枢的低点 > 当前中枢的高点)
-            if next_zs.zd > current_zs.zg:
-                trend_end_index = i + 1
-                while (trend_end_index + 1 < len(zss) and
-                       zss[trend_end_index + 1].zd > zss[trend_end_index].zg):
-                    trend_end_index += 1
-
-                trend_zss = zss[i: trend_end_index + 1]
-                all_lines = [line for zs_ in trend_zss for line in zs_.lines]
-                trend = ZSLX(lines=all_lines, zslx_level=current_level)
-                for zs_ in trend_zss:
-                    trend.add_zs(zs_)
-                trend_lines.append(trend)
-                LogUtil.info(f"生成常规走势: 从中枢 {i} 到 {trend_end_index} 形成上涨")
-                i = trend_end_index + 1
-                continue
-
-            # 判断为下跌趋势 (下一个中枢的高点 < 当前中枢的低点)
-            elif next_zs.zg < current_zs.zd:
-                trend_end_index = i + 1
-                while (trend_end_index + 1 < len(zss) and
-                       zss[trend_end_index + 1].zg < zss[trend_end_index].zd):
-                    trend_end_index += 1
-
-                trend_zss = zss[i: trend_end_index + 1]
-                all_lines = [line for zs_ in trend_zss for line in zs_.lines]
-                trend = ZSLX(lines=all_lines, zslx_level=current_level)
-                for zs_ in trend_zss:
-                    trend.add_zs(zs_)
-                trend_lines.append(trend)
-                LogUtil.info(f"生成常规走势: 从中枢 {i} 到 {trend_end_index} 形成下跌")
-                i = trend_end_index + 1
-                continue
-
-            # 如果以上都不是，则当前中枢自己形成一个盘整
-            else:
-                trend = ZSLX(lines=current_zs.lines, zslx_level=current_level)
-                trend.add_zs(current_zs)
-                trend_lines.append(trend)
-                LogUtil.info(f"生成常规走势: 中枢 {i} 自身形成盘整")
-                i += 1
-                continue
 
         return trend_lines
