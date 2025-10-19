@@ -274,29 +274,27 @@ class ChanlunStructureAnalyzer:
         返回:
             一个新的、升级后的ZSLX走势类型列表。
         """
-        upgraded_trends = []
+        upgraded_trends: List[ZSLX] = []
         i = 0
 
-        # 1. 确定要创建的第一个走势类型的方向。
-        # 新走势类型的方向与参考方向相反。
+        # 1. 确定要创建的第一个走势类型的方向
         if trend_lines:
-            # 如果存在之前的走势类型，则使用最后一个作为参考。
+            # 如果存在之前的走势，则新走势的方向与最后一个走势相反
             reference_direction = trend_lines[-1].type
         else:
-            # 否则，使用进入当前中枢的线的方向。
+            # 否则，使用进入参考中枢的线段的方向
             reference_direction = current_zs.start.type
-
         current_direction = 'down' if reference_direction == 'up' else 'up'
 
         while i < len(lines):
-            # 一个新的走势类型至少需要3段线。
+            # 一个新的走势类型至少需要3段线段
             if len(lines) - i < 3:
                 break
 
-            # 基本情况是由3段线组成的走势类型。
+            # 基础组合是3段线段
             end_index = i + 3
 
-            # 2. 处理完前9段线（即3个走势类型）后，应用延续规则。
+            # 2. 延续规则：当已形成至少3个高级别走势后，检查后续线段是否延续当前趋势
             if len(upgraded_trends) >= 3:
                 if current_direction == 'up':
                     # 对于上涨走势，检查是否连续创出更高的高点和低点。
@@ -316,7 +314,7 @@ class ChanlunStructureAnalyzer:
             # 构成此走势的最终线段集合。
             trend_chunk = lines[i:end_index]
 
-            # 从构成线段中计算其高点和低点。
+            # 计算新走势的最高点和最低点
             trend_high = max(line.high for line in trend_chunk)
             trend_low = min(line.low for line in trend_chunk)
 
@@ -344,9 +342,9 @@ class ChanlunStructureAnalyzer:
 
             upgraded_trends.append(new_trend)
 
-            # 为下一次迭代做准备。
+            # 为下一次迭代做准备
             i = end_index
-            # 下一个走势类型的方向将相反。
+            # 下一个走势类型的方向将相反
             current_direction = 'down' if current_direction == 'up' else 'up'
 
         return upgraded_trends
@@ -385,7 +383,7 @@ class ChanlunStructureAnalyzer:
                 continue
 
             next_zs = zss[i + 1]
-            # 规则 2: 尝试处理扩展升级
+            # 规则 2: 处理扩展升级
             if next_level and i + 1 < len(zss):
                 # 查找所有连续可扩展的中枢
 
@@ -403,5 +401,11 @@ class ChanlunStructureAnalyzer:
 
                     i = end_index
                     continue
+
+            # 规则 3: 当前中枢既不延伸也不扩展，不进行升级处理。
+            # 在这种情况下，我们必须显式地将循环向前推进，以避免无限循环。
+            # 这里的具体逻辑取决于系统需求，例如，可以将其作为本级别走势处理。
+            # LogUtil.info(f"中枢 {i} 未发生升级，跳过。")
+            i += 1
 
         return trend_lines
