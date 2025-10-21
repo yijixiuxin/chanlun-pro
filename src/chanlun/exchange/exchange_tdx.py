@@ -694,7 +694,7 @@ class ExchangeTDX(Exchange):
             )
             # ohlc 数据进行复权计算
             for col in ["open", "high", "low", "close"]:
-                data[col] = round(data[col] * data["adj"], 2)
+                data[col] = round(data[col] * data["adj"], 3)
 
         # 后复权
         if fq_type == "hfq":
@@ -706,7 +706,7 @@ class ExchangeTDX(Exchange):
             )
             # ohlc 数据进行复权计算
             for col in ["open", "high", "low", "close"]:
-                data[col] = round(data[col] / data["adj"], 2)
+                data[col] = round(data[col] / data["adj"], 3)
 
         # data['volume'] = data['volume'] / data['adj'] if 'volume' in data.columns else data['vol'] / data['adj']
 
@@ -729,8 +729,11 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("BJ.837592", "60m")
+    klines = ex.klines("SH.510720", "d")
     print(klines.tail(20))
+
+    stock = ex.stock_info("SH.510720")
+    print(stock)
 
     # ticks = ex.ticks(["SH.000001", "BJ.837592"])
     # for _c, _t in ticks.items():
