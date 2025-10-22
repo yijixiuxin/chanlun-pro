@@ -3,7 +3,7 @@ import time
 import traceback
 
 from chanlun import fun
-from chanlun.cl_interface import *
+from chanlun.core.cl_interface import *
 from chanlun.exchange.exchange_tdx import ExchangeTDX
 from chanlun.strategy.strategy_xd_mmd import StrategyXDMMD
 from chanlun.trader.online_market_datas import OnlineMarketDatas

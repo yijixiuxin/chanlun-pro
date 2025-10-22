@@ -20,14 +20,15 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Grid, Line
 from tqdm.auto import tqdm
 
-from chanlun import cl, fun, kcharts
+from chanlun import fun, kcharts
+from chanlun.core import cl
 from chanlun.backtesting import futures_contracts
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.backtest_trader import BackTestTrader
 from chanlun.backtesting.base import POSITION, Strategy
 from chanlun.backtesting.klines_generator import KlinesGenerator
 from chanlun.backtesting.optimize import OptimizationSetting
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.exchange.exchange import (
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,

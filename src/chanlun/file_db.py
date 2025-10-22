@@ -10,9 +10,10 @@ from typing import Union
 import pandas as pd
 import pytz
 
-from chanlun import cl, fun
+from chanlun import fun
+from chanlun.core import cl
 from chanlun.base import Market
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import Exchange
