@@ -629,6 +629,50 @@ class ExchangeTDX(Exchange):
         """
         if len(xdxr_data) == 0:
             return fq_klines
+
+        # 先处理扩缩股数据 (category==11)
+        suogu_info = copy.deepcopy(xdxr_data.query("category==11"))
+        if len(suogu_info) > 0:
+            # 处理扩缩股数据，对日期之前的行情数据进行缩股处理
+            suogu_info.loc[:, "idx_date"] = (
+                suogu_info["date"].dt.tz_localize(self.tz).dt.tz_convert("UTC")
+            )
+            suogu_info.set_index("idx_date", inplace=True)
+
+            fq_klines = fq_klines.assign(if_trade=1)
+            fq_klines.loc[:, "idx_date"] = fq_klines["date"].dt.tz_convert("UTC")
+            fq_klines.set_index("idx_date", inplace=True)
+
+            # 对每个扩缩股事件，将日期之前的行情数据除以suogu值
+            for idx, row in suogu_info.iterrows():
+                if "suogu" in row and row["suogu"] > 0:
+                    # 找到该日期之前的所有K线数据
+                    before_data = fq_klines.loc[fq_klines.index < idx]
+                    if len(before_data) > 0:
+                        # 对价格数据进行缩股处理
+                        for col in ["open", "high", "low", "close"]:
+                            if col in before_data.columns:
+                                fq_klines.loc[fq_klines.index < idx, col] = (
+                                    fq_klines.loc[fq_klines.index < idx, col]
+                                    / row["suogu"]
+                                )
+                        # 对成交量数据进行扩股处理（成交量应该乘以suogu）
+                        if "volume" in before_data.columns:
+                            fq_klines.loc[fq_klines.index < idx, "volume"] = (
+                                fq_klines.loc[fq_klines.index < idx, "volume"]
+                                * row["suogu"]
+                            )
+                        elif "vol" in before_data.columns:
+                            fq_klines.loc[fq_klines.index < idx, "vol"] = (
+                                fq_klines.loc[fq_klines.index < idx, "vol"]
+                                * row["suogu"]
+                            )
+
+            # 重置索引，准备后续处理
+            fq_klines = fq_klines.reset_index(drop=True)
+            fq_klines = fq_klines.drop(columns=["idx_date"], errors="ignore")
+
+        # 再处理除权除息数据 (category==1)
         info = copy.deepcopy(xdxr_data.query("category==1"))
         if len(info) == 0:
             return fq_klines
@@ -637,9 +681,11 @@ class ExchangeTDX(Exchange):
         )
         info.set_index("idx_date", inplace=True)
 
-        fq_klines = fq_klines.assign(if_trade=1)
-        fq_klines.loc[:, "idx_date"] = fq_klines["date"].dt.tz_convert("UTC")
-        fq_klines.set_index("idx_date", inplace=True)
+        # 如果之前没有处理扩缩股，需要重新设置索引
+        if "idx_date" not in fq_klines.columns:
+            fq_klines = fq_klines.assign(if_trade=1)
+            fq_klines.loc[:, "idx_date"] = fq_klines["date"].dt.tz_convert("UTC")
+            fq_klines.set_index("idx_date", inplace=True)
 
         if len(info) > 0:
             # 有除权数据
@@ -729,11 +775,11 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.510720", "d")
+    klines = ex.klines("SH.512800", "d")
     print(klines.tail(20))
 
-    stock = ex.stock_info("SH.510720")
-    print(stock)
+    # stock = ex.stock_info("SH.512800")
+    # print(stock)
 
     # ticks = ex.ticks(["SH.000001", "BJ.837592"])
     # for _c, _t in ticks.items():
