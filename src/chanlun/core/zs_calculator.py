@@ -9,6 +9,7 @@ from typing import List, Tuple, Optional, Dict, Union
 from chanlun.core.cl_interface import ZS, LINE, FX, Level, ZSLX
 from chanlun.tools.log_util import LogUtil
 
+
 class ZsCalculator:
     """
     标准中枢计算器
@@ -27,6 +28,7 @@ class ZsCalculator:
         :param lines: 当前级别的所有线段
         :return: 计算出的所有中枢（已完成 + 进行中）
         """
+        self.zss = []
         self.pending_zs = None
         self.all_lines = lines
 
@@ -61,29 +63,57 @@ class ZsCalculator:
             zg = min(seg_a.zs_high, seg_b.zs_high, seg_c.zs_high)
             zd = max(seg_a.zs_low, seg_b.zs_low, seg_c.zs_low)
 
-            if zd >= zg or not (max(entry_seg.zs_low, zd) < min(entry_seg.zs_high, zg)):
+            # 1. 检查三段核心是否有重叠
+            if zd >= zg:
+                entry_idx += 1
+                continue
+
+            # 2. 检查进入段是否与三段核心的重叠区有重叠
+            if not (max(entry_seg.zs_low, zd) < min(entry_seg.zs_high, zg)):
                 entry_idx += 1
                 continue
 
             # 找到了一个有效的三段核心。
+            # 注意：seg_c 此时被假定为核心，如果它稍后被证明是离开段，
+            # _extend_and_check_complete 将负责将其移除。
             LogUtil.info(f"以线段 {entry_idx} 为进入段，找到潜在中枢。")
             core_lines = [seg_a, seg_b, seg_c]
 
             center = ZS(zs_type='xd', start=entry_seg, _type=seg_b.type)
             center.lines = core_lines
             center.zg, center.zd = zg, zd
-            center.update_boundaries()
+            center.update_boundaries()  # 初始更新zg, zd
 
             is_completed, exit_idx = self._extend_and_check_complete(center, core_start_idx + 3)
 
             if is_completed:
-                if center.end is not None and len(center.lines) >= 3:
-                    LogUtil.info(f"中枢完成。核心线段数: {len(center.lines)}.")
+                # ----------------------------------------------------
+                # ** 核心验证逻辑 (Core Validation Logic) **
+                # 根据您的要求，一个有效的中枢必须满足所有条件：
+                # 1. 具有进入段 (center.start is not None)
+                # 2. 具有离开段 (center.end is not None)
+                # 3. 至少有3个核心线段 (len(center.lines) >= 3)
+                # ----------------------------------------------------
+
+                is_valid_center = (
+                        center.start is not None and
+                        center.end is not None and
+                        len(center.lines) >= 3
+                )
+
+                if is_valid_center:
+                    # ** 有效中枢：添加并前进到离开段 **
+                    LogUtil.info(f"中枢完成 (有效)。核心线段数: {len(center.lines)}.")
                     center.index = len(self.zss)
                     self.zss.append(center)
                     # 下一个中枢的寻找从离开段开始。
                     entry_idx = exit_idx
                 else:
+                    # ** 无效中枢：丢弃并从下一个线段开始尝试 **
+                    LogUtil.info(f"中枢完成 (无效，len={len(center.lines)})。丢弃并从 {entry_idx + 1} 尝试。")
+                    # 丢弃这个无效的中枢，entry_idx 增加 1，
+                    # 从下一个线段 (self.all_lines[entry_idx + 1])
+                    # 重新开始寻找新的“进入段”。
                     entry_idx += 1
             else:
                 if len(center.lines) >= 3:
@@ -92,7 +122,7 @@ class ZsCalculator:
                 # 这是最后一个可能的中枢，所以我们跳出循环。
                 break
 
-    def _extend_and_check_complete(self, center: ZS, start_j: int) -> tuple[bool, int] | None:
+    def _extend_and_check_complete(self, center: ZS, start_j: int) -> tuple[bool, int]:
         """
         检查中枢的延伸或完成。
 
@@ -102,43 +132,71 @@ class ZsCalculator:
         """
         j = start_j
         while j < len(self.all_lines):
-            # 如果是最后一个线段，则无法预读，中枢保持“进行时”
-            if j == len(self.all_lines) - 1:
-                current_seg = self.all_lines[j]
-                is_extending = max(current_seg.zs_low, center.zd) < min(current_seg.zs_high, center.zg)
-                if is_extending:
+            current_seg = self.all_lines[j]
+
+            # 核心逻辑：首先检查当前线段(current_seg)是否与中枢重叠
+            current_overlaps = max(current_seg.zs_low, center.zd) < min(current_seg.zs_high, center.zg)
+
+            if current_overlaps:
+                # --- 情况 1: 当前线段(j)重叠 ---
+                # 它*可能*是核心，也*可能*是离开段。我们必须检查 j+1。
+
+                # 1.1 检查是否是最后一条线段
+                if j == len(self.all_lines) - 1:
+                    # 这是最后一条线段，它重叠了，必须是核心成员
                     center.lines.append(current_seg)
                     center.update_boundaries()
-                return False, j
+                    LogUtil.info(f"中枢延伸至结尾，加入线段 {j}。")
+                    return False, j
 
-            # 标准情况：有当前线段和下一线段可供分析
-            current_seg = self.all_lines[j]
-            next_seg = self.all_lines[j + 1]
+                # 1.2 预读下一条线段 (next_seg) 以判断是否完成
+                next_seg = self.all_lines[j + 1]
+                next_overlaps = max(next_seg.zs_low, center.zd) < min(next_seg.zs_high, center.zg)
 
-            # 判断中枢是否延伸，主要取决于下一线段的行为
-            next_overlaps = max(next_seg.zs_low, center.zd) < min(next_seg.zs_high, center.zg)
-
-            if next_overlaps:
-                # 情况1: 下一线段与中枢重叠 -> 中枢延伸
-                center.lines.append(current_seg)
-                center.update_boundaries()
-                j += 1  # 处理完当前线段，继续下一轮循环
-            else:
-
-                # 情况2: 下一线段不与中枢重叠 -> 中枢完成
-                current_overlaps = max(current_seg.zs_low, center.zd) < min(current_seg.zs_high, center.zg)
-                if current_overlaps:
-                    # 情况2.1: 当前线段重叠，下一线段不重叠
-                    # 当前线段是最后一个核心成员
-                    center.end = current_seg
-                    center.done = True
-                    return True, j
+                if next_overlaps:
+                    # 下一线段(j+1)也重叠
+                    # 这证明 current_seg(j) *不是* 离开段，它 *是* 核心成员
+                    center.lines.append(current_seg)
+                    center.update_boundaries()
+                    LogUtil.info(f"中枢延伸，加入线段 {j}。核心线段数: {len(center.lines)}。")
+                    j += 1
+                    continue
                 else:
-                    # 情况2.2: 当前和下一线段都连续不重叠
-                    # 当前线段就是离开段
-                    center.end = current_seg
+                    # 下一线段(j+1)不重叠
+                    # 根据定义:
+                    # - "不进入中枢范围的线段" = next_seg (j+1)
+                    # - "离开段" = "前一个线段" = current_seg (j)
+
+                    # *** 修正点 ***:
+                    # current_seg(j) 是离开段，*不要* 将它加入 center.lines
+
+                    center.end = current_seg  # 离开段是 current_seg (j)
                     center.done = True
-                    return True, j - 1
+                    LogUtil.info(f"中枢完成。离开段为线段 {j}。")
+                    return True, j  # 下一个中枢的入口是 j
+
+            else:
+                # --- 情况 2: 当前线段(j)不重叠 ---
+                # 2.1 它就是第一个不进入中枢范围的线段
+                # 根据定义:
+                # - "不进入中枢范围的线段" = current_seg (j)
+                # - "离开段" = "前一个线段" = self.all_lines[j-1]
+
+                center.end = self.all_lines[j - 1]  # 离开段是 j-1
+                center.done = True
+
+                # *** 修正点 (使用 'is' 进行严格的对象身份检查) ***:
+                # 检查 self.all_lines[j-1] (即离开段)
+                # 是否 *就是* center.lines 的末尾 (例如初始的 seg_c)。
+                if center.lines and center.lines[-1] is center.end:
+                    LogUtil.info(f"将线段 {j - 1} (离开段) 从核心 {center.lines} 中移除。")
+                    center.lines.pop()
+
+                LogUtil.info(f"中枢完成。离开段为线段 {j - 1}。")
+                return True, j - 1  # 下一个中枢的入口是 j-1
+
+        # 循环正常结束
+        return False, j - 1
 
 
 class ChanlunStructureAnalyzer:
