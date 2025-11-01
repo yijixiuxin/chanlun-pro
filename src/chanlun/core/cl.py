@@ -10,7 +10,7 @@ from chanlun.core.cl_kline_process import CL_Kline_Process
 from chanlun.core.kline_data_processor import KlineDataProcessor
 from chanlun.core.macd import MACD
 from chanlun.core.xd_calculator import XdCalculator
-from chanlun.core.zs_calculator import ZsCalculator
+from chanlun.core.zs_calculator import ZsCalculator, ChanlunStructureAnalyzer
 from chanlun.tools.log_util import LogUtil
 
 
@@ -44,7 +44,7 @@ class CL(ICL):
         # 设置默认配置
         self._init_default_config()
 
-        # 实例化K线数据处理器，将K线管理委托给它
+        # 实例化K线数据处理器
         self.kline_processor = KlineDataProcessor(self.start_datetime)
         # 实例化缠论K线处理器，用于处理包含关系
         self.cl_kline_processor = CL_Kline_Process()
@@ -55,11 +55,13 @@ class CL(ICL):
         # 实例化线段计算器
         self.xd_calculator = XdCalculator(self.config)
 
-        self.zss_calculator = ZsCalculator(self.config)
+        self.zss_calculator = ZsCalculator()
+
+        self.chanlun_structure_analyzer = ChanlunStructureAnalyzer()
 
         # 存储各级别数据
-        self.zsds: List[XD] = []  # 走势段列表
-        self.qsds: List[XD] = []  # 趋势段列表
+        # self.zsds: List[XD] = []  # 走势段列表
+        # self.qsds: List[XD] = []  # 趋势段列表
         # 中枢数据
         self.bi_zss: Dict[str, List[ZS]] = {}  # 笔中枢
         self.zsd_zss: List[ZS] = []  # 走势段中枢
@@ -131,7 +133,9 @@ class CL(ICL):
         xds = self.xd_calculator.calculate(bis)
 
         # 计算中枢
-        self.zss_calculator.calculate(xds)
+        zss = self.zss_calculator.calculate(xds)
+
+        # results = self.chanlun_structure_analyzer.calculate(xds)
         # 计算买卖点和背驰
         # calculate_line_signals(self, self.xds, self.xd_zss)
         return self
@@ -183,11 +187,11 @@ class CL(ICL):
 
     def get_zsds(self) -> List[XD]:
         """返回走势段列表"""
-        return self.zsds
+        return []
 
     def get_qsds(self) -> List[XD]:
         """返回趋势段列表"""
-        return self.qsds
+        return []
 
     def get_bi_zss(self, zs_type: str = None) -> List[ZS]:
         """返回笔中枢列表"""
@@ -197,7 +201,7 @@ class CL(ICL):
 
     def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
         """返回线段中枢字典"""
-        return self.zss_calculator.get_zss()
+        return self.zss_calculator.zss
 
     def get_zsd_zss(self) -> List[ZS]:
         """返回走势段中枢列表"""
@@ -352,4 +356,4 @@ class CL(ICL):
         max_line_num: int = 999,
         zs_include_last_line=True,
     ) -> List[ZS]:
-        create_xd_zs(zs_type, lines)
+        return create_xd_zs(zs_type, lines)
