@@ -382,30 +382,102 @@ class ChanlunStructureAnalyzer:
                 i += 1
                 continue
 
-            next_zs = zss[i + 1]
             # 规则 2: 处理扩展升级
             if next_level and i + 1 < len(zss):
-                # 查找所有连续可扩展的中枢
-
+                next_zs = zss[i + 1]
                 if current_zs.can_expand_with(next_zs):
                     start_index = current_zs.start.index
                     end_index = next_zs.end.index
-
                     all_lines = lines[start_index:end_index + 1]
 
                     new_trends = self._create_upgraded_trends(all_lines, current_level, trend_lines, current_zs)
                     if new_trends:
                         trend_lines.extend(new_trends)
                         LogUtil.info(
-                            f"生成扩展走势 (Pivots Upgraded): 从中枢 {i} 到 {end_index - 1} 生成 {len(new_trends)} 个高级别走势")
-
-                    i = end_index
+                            f"生成扩展走势 (Pivots Upgraded): 从中枢 {i} 到 {i+1} 生成 {len(new_trends)} 个高级别走势")
+                    # 扩展消耗了两个中枢
+                    i += 2
                     continue
 
-            # 规则 3: 当前中枢既不延伸也不扩展，不进行升级处理。
-            # 在这种情况下，我们必须显式地将循环向前推进，以避免无限循环。
-            # 这里的具体逻辑取决于系统需求，例如，可以将其作为本级别走势处理。
-            # LogUtil.info(f"中枢 {i} 未发生升级，跳过。")
-            i += 1
+            # 规则 3: 当前中枢既不延伸也不扩展，调用函数处理普通走势类型构建。
+            previous_zs = zss[i - 1] if i > 0 else None
+            new_trend = self._handle_non_upgraded_trend(current_zs, previous_zs, current_level, trend_lines)
+            if new_trend:
+                trend_lines.append(new_trend)
 
+            i += 1
         return trend_lines
+
+    def _handle_non_upgraded_trend(
+            self,
+            current_zs: ZS,
+            previous_zs: Optional[ZS],
+            current_level: Level,
+            trend_lines: List[ZSLX]
+    ) -> Optional[ZSLX]:
+        """
+        处理普通走势的构建，此逻辑根据您的注释要求实现。
+
+        Args:
+            current_zs: 当前正在处理的中枢。
+            previous_zs: 前一个中枢，用于比较位置以确定趋势。
+            current_level: 当前的走势级别。
+            trend_lines: 已生成的走势列表。
+
+        Returns:
+            如果成功构建了新的走势类型，则返回 ZSLX 对象，否则返回 None。
+        """
+        # 规则 1: "如果之前没有走势类型，那么就以当前中枢的开始走势作为走势类型的类型"
+        if not trend_lines:
+            # 这是第一个被处理的普通中枢，我们将其定义为一个初始的“盘整”走势。
+            direction = current_zs.start.type
+            start_line = current_zs.start
+            end_line = current_zs.end
+
+            # 盘整走势的范围由其自身决定
+            start_point = min(start_line.start, end_line.end)
+            end_point = max(start_line.start, end_line.end)
+
+            new_trend = ZSLX(
+                zslx_level=current_level,
+                start=start_point,
+                end=end_point,
+                _type=direction,  # 走势类型由进入线段决定
+                start_line=start_line,
+                end_line=end_line,
+            )
+            LogUtil.info(f"生成初始盘整走势: 基于中枢 starting at line {current_zs.start.index}")
+            return new_trend
+
+        # 规则 2: "如果存在走势类型...根据前一个中枢和当前中枢比较位置确定当前的走势类型。"
+        # 必须有前一个中枢才能进行比较来确定趋势方向。
+        if not previous_zs:
+            return None
+
+        direction = None
+        # 定义上涨趋势：当前中枢的高低点都高于前一个中枢
+        if current_zs.zg > previous_zs.zg and current_zs.zd > previous_zs.zd:
+            direction = 'up'
+        # 定义下跌趋势：当前中枢的高低点都低于前一个中枢
+        elif current_zs.zg < previous_zs.zg and current_zs.zd < previous_zs.zd:
+            direction = 'down'
+        else:
+            # 两个中枢存在重叠，不构成严格的上涨或下跌趋势，因此不生成新的走势类型。
+            return None
+
+        # 确定走势的起点和终点
+        # 走势的起点是前一个中枢的终点
+        start_point = previous_zs.zg if direction == 'down' else previous_zs.zd
+        # 走势的终点是当前中枢的终点
+        end_point = current_zs.zg if direction == 'up' else current_zs.zd
+
+        new_trend = ZSLX(
+            zslx_level=current_level,
+            start=start_point,
+            end=end_point,
+            _type=direction,
+            start_line=previous_zs.end, # 走势从前一个中枢的离开线开始
+            end_line=current_zs.end,    # 走势到当前中枢的离开线结束
+        )
+        LogUtil.info(f"生成普通走势 ({direction}): 从中枢 at line {previous_zs.start.index} 到 {current_zs.start.index}")
+        return new_trend
