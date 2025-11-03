@@ -201,7 +201,10 @@ class CL(ICL):
 
     def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
         """返回线段中枢字典"""
-        return self.zss_calculator.zss
+        zss = self.zss_calculator.zss
+        if self.zss_calculator.pending_zs:
+            zss.append(self.zss_calculator.pending_zs)
+        return zss
 
     def get_zsd_zss(self) -> List[ZS]:
         """返回走势段中枢列表"""

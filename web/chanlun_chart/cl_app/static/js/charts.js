@@ -167,7 +167,7 @@ class ChartManager {
 
   // 初始化图表
   init() {
-    this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 30000);
+    this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 300000);
     this.widget = window.tvWidget = new TradingView.widget({
       debug: false,
       autosize: true,
@@ -377,7 +377,8 @@ class ChartManager {
   // 处理tick事件
   handleTick() {
     console.log("数据更新");
-    this.clear_draw_chanlun("last");
+    // 正确：调用全量清除
+    this.clear_draw_chanlun();
     this.debouncedDrawChanlun();
   }
 

@@ -349,17 +349,70 @@ class LINE:
     线的基本定义，笔和线段继承此对象
     """
     def __init__(self, start: FX = None, end: FX = None, _type: str = None, index: int = 0):
-        self.start: FX = start  # 线的起始位置，以分型来记录
-        self.end: FX = end  # 线的结束位置，以分型来记录
+        self._start: FX = start  # 线的起始位置，以分型来记录
+        self._end: FX = end  # 线的结束位置，以分型来记录
+        self._type: str = _type  # 线的方向类型 （up 上涨  down 下跌）
+        self.index: int = index  # 线的索引，后续查找方便
 
-        # 根据缠论配置（笔/段区间），得来的高低点（顶底高低 或 缠论K线高低 或 原始K线高低）
+        # 根据缠论配置（笔/段区间），得来的高低点
         self.high: float = 0
         self.low: float = 0
-        # 根据缠论配置（中枢区间），得来的高低点（zs_qj_dd ZS_QJ_CK ZS_QJ_K）
+
+        # 初始化时调用一次，设置初始的 high/low
+        self.update_high_low()
+
+        # 根据缠论配置（中枢区间），得来的高低点
         self.zs_high: float = 0
         self.zs_low: float = 0
-        self.type: str = _type  # 线的方向类型 （up 上涨  down 下跌）
-        self.index: int = index  # 线的索引，后续查找方便
+
+
+    def update_high_low(self):
+        """
+        根据 start, end, 和 type 更新 high 和 low 属性.
+        使用 _start, _end, _type 访问私有属性以避免 setter 递归.
+        """
+        start_val = self._start.val if self._start else None
+        end_val = self._end.val if self._end else None
+
+        if self._type == "up" and start_val is not None and end_val is not None:
+            self.high = end_val
+            self.low = start_val
+        elif self._type == "down" and start_val is not None and end_val is not None:
+            self.high = start_val
+            self.low = end_val
+
+    @property
+    def start(self) -> FX:
+        """获取线的起始位置"""
+        return self._start
+
+    @start.setter
+    def start(self, value: FX):
+        """设置线的起始位置并更新 high/low"""
+        self._start = value
+        self.update_high_low()
+
+    @property
+    def end(self) -> FX:
+        """获取线的结束位置"""
+        return self._end
+
+    @end.setter
+    def end(self, value: FX):
+        """设置线的结束位置并更新 high/low"""
+        self._end = value
+        self.update_high_low()
+
+    @property
+    def type(self) -> str:
+        """获取线的方向类型"""
+        return self._type
+
+    @type.setter
+    def type(self, value: str):
+        """设置线的方向类型并更新 high/low"""
+        self._type = value
+        self.update_high_low()
 
     @abstractmethod
     def is_done(self):
