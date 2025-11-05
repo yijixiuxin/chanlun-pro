@@ -1,4 +1,3 @@
-import datetime
 import json
 import pathlib
 import time
@@ -6,7 +5,6 @@ import webbrowser
 from typing import Dict, List, Union
 
 import akshare as ak
-import pandas as pd
 from tqdm.auto import tqdm
 
 from chanlun import config, fun
@@ -289,56 +287,6 @@ class StocksBKGN(object):
             return bkgn_infos["gn_codes"][gn_name]
 
         return []
-
-    def get_index_klines(self, bk_name, source="dfcf"):
-        """
-        获取板块的K线数据
-        source: dfcf 东方财富 ths 同花顺
-        """
-        end_dt = datetime.datetime.now() + datetime.timedelta(days=1)
-        end_dt = end_dt.strftime("%Y%m%d")
-        code = f"SH.0000_HY_{bk_name}"
-        if source == "dfcf":
-            klines = ak.stock_board_industry_hist_em(
-                symbol=bk_name,
-                start_date="20000101",
-                end_date=end_dt,
-                period="日k",
-                adjust="qfq",
-            )
-            klines = klines.rename(
-                columns={
-                    "日期": "date",
-                    "开盘": "open",
-                    "收盘": "close",
-                    "最低": "low",
-                    "最高": "high",
-                    "成交量": "volume",
-                }
-            )
-        else:
-            klines = ak.stock_board_industry_index_ths(
-                symbol=bk_name, start_date="20000101", end_date=end_dt
-            )
-            klines = klines.rename(
-                columns={
-                    "日期": "date",
-                    "开盘价": "open",
-                    "收盘价": "close",
-                    "最低价": "low",
-                    "最高价": "high",
-                    "成交量": "volume",
-                }
-            )
-        klines["code"] = code
-        klines["date"] = pd.to_datetime(klines["date"])
-        klines["date"] = klines["date"].apply(lambda _d: _d.replace(hour=15, minute=0))
-        klines = klines.dropna()
-        # 将 close/low/high/open/volume 转换为float
-        klines[["open", "close", "low", "high", "volume"]] = klines[
-            ["open", "close", "low", "high", "volume"]
-        ].astype(float)
-        return klines[["code", "date", "open", "close", "low", "high", "volume"]]
 
     @staticmethod
     def ths_to_tdx_codes(_codes):
