@@ -141,6 +141,7 @@ src/chanlun_ai
 src/chanlun_strategy
 src/core
 web/chanlun_kcm
+src/Kronos
 
 .idea
 .virtual_documents
