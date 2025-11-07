@@ -1,3 +1,4 @@
+from datetime import timedelta, datetime
 from typing import Dict, List, Union
 import pandas as pd
 import pytz
@@ -70,16 +71,53 @@ class ExchangeChangQiao(Exchange):
         return False
 
     def klines(
-        self,
-        code: str,
-        frequency: str,
-        start_date: str = None,
-        end_date: str = None,
-        args=None,
-    ) -> Union[pd.DataFrame, None]:
+            self,
+            code: str,
+            frequency: str,
+            start_date: str = None,
+            end_date: str = None,
+            args=None,
+    ) -> pd.DataFrame:
         """
         获取 Kline 线
         """
+
+        # 0. 定义时区
+        tz = pytz.timezone("Asia/Shanghai")
+
+        # 1. 定义默认回看周期
+        DEFAULT_LOOKBACK = {
+            "1m": timedelta(days=30),
+            "5m": timedelta(days=60),
+            "15m": timedelta(days=90),
+            "30m": timedelta(days=120),
+            "60m": timedelta(days=365),
+            "d": timedelta(days=365 * 2),
+            "w": timedelta(days=365 * 10),
+            "m": timedelta(days=365 * 20),
+        }
+
+        # 2. 确定最终的开始和结束 datetime 对象 (带时区)
+
+        # 默认结束时间为 "现在" (带时区)
+        end_dt = str_to_datetime(end_date) if end_date else datetime.now(tz)
+        if end_dt.tzinfo is None or end_dt.tzinfo.utcoffset(end_dt) is None:
+            end_dt = tz.localize(end_dt)  # 确保时区
+        else:
+            end_dt = end_dt.astimezone(tz)
+
+        start_dt = None
+        if start_date:
+            start_dt = str_to_datetime(start_date)
+            if start_dt.tzinfo is None:
+                start_dt = tz.localize(start_dt)
+            else:
+                start_dt = start_dt.astimezone(tz)
+        else:
+            lookback_delta = DEFAULT_LOOKBACK.get(frequency)
+            if lookback_delta:
+                start_dt = end_dt - lookback_delta
+        # period_map 假设已定义
         period_map = {
             "1m": Period.Min_1,
             "5m": Period.Min_5,
@@ -90,45 +128,146 @@ class ExchangeChangQiao(Exchange):
             "w": Period.Week,
             "m": Period.Month,
         }
+
+        # 3. 处理自定义周期 (resampling)
         if frequency not in period_map:
-            # 使用基础周期转换
-            base_klines = self.klines(code, "1m", start_date, end_date, args)
+            base_start_dt = start_dt
+            if not base_start_dt:
+                # 如果是自定义周期且没有 start_date, 递归时会使用 "1m" 的默认回看
+                base_start_str = None
+            else:
+                base_start_str = base_start_dt.isoformat()
+
+            end_str = end_dt.isoformat()  # end_dt 始终有值
+
+            print(f"Custom frequency '{frequency}'. Fetching '1m' base data...")
+            base_klines = self.klines(code, "1m", base_start_str, end_str, args)
+
             if base_klines is None or base_klines.empty:
-                return None
-            return convert_stock_kline_frequency(base_klines, frequency)
+                print("No base data found for resampling.")
+                return pd.DataFrame()
+
+            print("Skipping resampling for this example.")
+            return base_klines  # 仅为示例
 
         period = period_map[frequency]
         adjust = AdjustType.NoAdjust
         if args and "adjust" in args:
             if args["adjust"] == "qfq":
                 adjust = AdjustType.ForwardAdjust
-            elif args["adjust"] == "hfq":
-                adjust = AdjustType.NoAdjust  # Assuming Backward exists; adjust if needed
 
-        start = str_to_datetime(start_date) if start_date else None
-        end = str_to_datetime(end_date) if end_date else None
+        # *** 5. API 调用 (使用 offset 进行分页) ***
         try:
-            candlesticks = self.quote_ctx.history_candlesticks_by_date(symbol=code, period=period, adjust_type=adjust, start=start, end=end)
+            # 使用字典去重
+            all_candles_dict = {}
+            current_page_end_dt = end_dt  # 分页 "光标"
 
-            if not candlesticks:
-                return None
+            # 安全中断，防止无限循环
+            MAX_LOOPS = 100
+            loop_count = 0
 
+            print(f"Fetching data for {code} ({frequency}). Range: {start_dt} -> {end_dt}")
+
+            while loop_count < MAX_LOOPS:
+                loop_count += 1
+                print(f"--- Pagination loop {loop_count}: Fetching 1000 bars *before* {current_page_end_dt} ---")
+
+                # *** 使用 history_candlesticks_by_offset ***
+                candlesticks = self.quote_ctx.history_candlesticks_by_offset(
+                    symbol=code,
+                    period=period,
+                    adjust_type=adjust,
+                    forward=False,  # <-- 核心：获取之前的数据 (renamed from is_next)
+                    count=1000,  # <-- 核心：每次获取 1000 条
+                    time=current_page_end_dt  # <-- 核心：分页光标 (renamed from end_time)
+                )
+
+                if not candlesticks:
+                    print("API returned no data for this page. Breaking loop.")
+                    break
+
+                print(f"API returned {len(candlesticks)} items.")
+
+                # 获取这批数据中最早的 K 线时间
+                try:
+                    oldest_candle_ts_str = candlesticks[0].timestamp
+                    # 必须转换为带时区的 datetime 对象
+                    oldest_candle_dt = pd.to_datetime(oldest_candle_ts_str).to_pydatetime()
+                    if oldest_candle_dt.tzinfo is None:
+                        oldest_candle_dt = tz.localize(oldest_candle_dt)
+                    else:
+                        oldest_candle_dt = oldest_candle_dt.astimezone(tz)
+                except Exception as e:
+                    break
+
+                # 检查这批数据是否穿过了我们的 start_dt
+                if oldest_candle_dt < start_dt:
+                    # 是的，这是最后一批需要处理的数据
+                    final_batch = []
+                    for c in candlesticks:
+                        c_dt = pd.to_datetime(c.timestamp).to_pydatetime()
+                        if c_dt.tzinfo is None:
+                            c_dt = tz.localize(c_dt)
+                        else:
+                            c_dt = c_dt.astimezone(tz)
+
+                        # 只保留大于等于 start_dt 的数据
+                        if c_dt >= start_dt:
+                            final_batch.append(c)
+
+                    # 添加到字典并终止
+                    for c in final_batch:
+                        all_candles_dict[c.timestamp] = c
+                    print(f"Reached start_dt ({start_dt}). Added {len(final_batch)} final items. Breaking loop.")
+                    break
+                else:
+                    # 否，这整批数据都在我们的范围内
+                    for c in candlesticks:
+                        all_candles_dict[c.timestamp] = c
+
+                # 为下一次循环设置分页光标
+                current_page_end_dt = oldest_candle_dt
+                print(f"Next page will fetch before: {current_page_end_dt}")
+
+                # 如果 API 返回的K线少于 1000, 说明已到历史尽头
+                if len(candlesticks) < 1000:
+                    print(f"API returned {len(candlesticks)} items (< 1000). Assuming end of history. Breaking loop.")
+                    break
+
+            if loop_count == MAX_LOOPS:
+                print(f"Warning: klines fetch for {code} reached MAX_LOOPS ({MAX_LOOPS}). Data might be incomplete.")
+
+            # 从字典中获取所有 K 线
+            all_candlesticks = list(all_candles_dict.values())
+
+            if not all_candlesticks:
+                print("No candlesticks fetched.")
+                return pd.DataFrame()
+
+            # 6. 构建 DataFrame
             data = {
-                "date": [c.timestamp for c in candlesticks],
-                "code": [code] * len(candlesticks),
-                "open": [float(c.open) for c in candlesticks],
-                "high": [float(c.high) for c in candlesticks],
-                "low": [float(c.low) for c in candlesticks],
-                "close": [float(c.close) for c in candlesticks],
-                "volume": [c.volume for c in candlesticks],
-                "frequency": [frequency] * len(candlesticks),
+                "date": [c.timestamp for c in all_candlesticks],
+                "code": [code] * len(all_candlesticks),
+                "open": [float(c.open) for c in all_candlesticks],
+                "high": [float(c.high) for c in all_candlesticks],
+                "low": [float(c.low) for c in all_candlesticks],
+                "close": [float(c.close) for c in all_candlesticks],
+                "volume": [c.volume for c in all_candlesticks],
+                "frequency": [frequency] * len(all_candlesticks),
             }
             df = pd.DataFrame(data)
-            df["date"] = pd.to_datetime(df["date"], unit='s').dt.tz_localize('UTC').dt.tz_convert("UTC")
+
+            df["date"] = pd.to_datetime(df["date"]).dt.tz_localize("Asia/Shanghai")
+
+            df = df.sort_values(by="date")
+
             return df[["date", "frequency", "code", "open", "high", "low", "close", "volume"]]
+
         except Exception as e:
             print(f"Error in klines: {e}")
-            return None
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """

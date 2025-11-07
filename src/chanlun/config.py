@@ -46,7 +46,7 @@ EXCHANGE_FUTURES = "tdx_futures"  # 期货市场
 EXCHANGE_NY_FUTURES = "tdx_ny_futures"  # 纽约期货市场
 EXCHANGE_CURRENCY = "binance"  # 数字货币（合约）
 EXCHANGE_CURRENCY_SPOT = "binance_spot"  # 数字货币（现货）
-EXCHANGE_US = "tdx_us"  # 美股市场
+EXCHANGE_US = "cq"  # 美股市场
 EXCHANGE_FX = "tdx_fx"  # 外汇市场
 
 
