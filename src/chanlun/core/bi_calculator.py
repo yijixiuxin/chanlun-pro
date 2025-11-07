@@ -37,15 +37,11 @@ class BiCalculator:
             LogUtil.info(f"无效笔尝试 (K线太近): K线索引 {fx1.k.index} to {fx2.k.index}")
             return False
 
-        h1 = max(k.h for k in fx1.klines)
-        l1 = min(k.l for k in fx1.klines)
-        h2 = max(k.h for k in fx2.klines)
-        l2 = min(k.l for k in fx2.klines)
+        h1 = fx1.k.h
+        l1 = fx1.k.l
+        h2 = fx2.k.h
+        l2 =fx2.k.l
 
-        # 规则3: 分型区间不能有包含关系
-        if (h1 >= h2 and l1 <= l2) or (h2 >= h1 and l2 <= l1):
-            LogUtil.info(f"无效笔尝试 (分型间包含): K线索引 {fx1.k.index} to {fx2.k.index}")
-            return False
 
         # 规则 5: 新笔的高低点必须突破前一分型
         if fx1.type == 'ding':  # fx2 必须是底分型
