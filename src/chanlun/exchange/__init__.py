@@ -1,6 +1,7 @@
 from chanlun import config
 from chanlun.base import Market
 from chanlun.exchange.exchange import Exchange
+from chanlun.exchange.exchange_cq import ExchangeChangQiao
 
 # 全局保存交易所对象，避免创建多个交易所对象
 g_exchange_obj = {}
@@ -141,6 +142,8 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.US.value)
+        elif config.EXCHANGE_US == "cq":
+            g_exchange_obj[market.value] = ExchangeChangQiao()
         else:
             raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")
 
