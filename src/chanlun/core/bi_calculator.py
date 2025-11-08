@@ -3,7 +3,7 @@
 笔计算模块 (重构为类)
 负责根据缠论K线，识别分型并连接成笔。
 """
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 from chanlun.core.cl_interface import FX, BI, CLKline
 from chanlun.tools.log_util import LogUtil
@@ -29,12 +29,12 @@ class BiCalculator:
         """
         # 规则1: 必须是顶底分型相连
         if fx1.type == fx2.type:
-            LogUtil.info(f"无效笔尝试 (同类分型): K线索引 {fx1.k.index} ({fx1.type}) to {fx2.k.index} ({fx2.type})")
+            LogUtil.warning(f"无效笔尝试 (同类分型): K线索引 {fx1.k.index} ({fx1.type}) to {fx2.k.index} ({fx2.type})")
             return False
 
         # 规则2: 分型之间必须至少有1根不属于分型的K线
         if abs(fx2.k.index - fx1.k.index) < 4:
-            LogUtil.info(f"无效笔尝试 (K线太近): K线索引 {fx1.k.index} to {fx2.k.index}")
+            LogUtil.warning(f"无效笔尝试 (K线太近): K线索引 {fx1.k.index} to {fx2.k.index}")
             return False
 
         h1 = fx1.k.h
@@ -46,11 +46,11 @@ class BiCalculator:
         # 规则 5: 新笔的高低点必须突破前一分型
         if fx1.type == 'ding':  # fx2 必须是底分型
             if l2 >= l1:
-                LogUtil.info(f"无效笔尝试 (向下笔但fx2.low >= fx1.low): K线索引 {fx1.k.index} to {fx2.k.index}")
+                LogUtil.warning(f"无效笔尝试 (向下笔但fx2.low >= fx1.low): K线索引 {fx1.k.index} to {fx2.k.index}")
                 return False
         else:  # fx1.type == 'di', fx2 必须是顶分型
             if h2 <= h1:
-                LogUtil.info(f"无效笔尝试 (向上笔但fx2.high <= fx1.high): K线索引 {fx1.k.index} to {fx2.k.index}")
+                LogUtil.warning(f"无效笔尝试 (向上笔但fx2.high <= fx1.high): K线索引 {fx1.k.index} to {fx2.k.index}")
                 return False
 
         return True

@@ -4,7 +4,7 @@ from typing import Dict, Union, List, Tuple, Any
 import pandas as pd
 
 from chanlun.core.bi_calculator import BiCalculator
-from chanlun.core.calculate_zss import calculate_zss, create_xd_zs
+from chanlun.core.calculate_zss import create_xd_zs
 from chanlun.core.cl_interface import ICL, Kline, CLKline, FX, BI, XD, ZS, Config, LINE, compare_ld_beichi
 from chanlun.core.cl_kline_process import CL_Kline_Process
 from chanlun.core.kline_data_processor import KlineDataProcessor

@@ -74,6 +74,7 @@ class KlineDataProcessor:
     def _convert(self, df: pd.DataFrame) -> List[Kline]:
         """
         将DataFrame转换为Kline对象列表。
+        (使用 to_dict('records') 代替 iterrows，性能更高)
 
         Args:
             df (pd.DataFrame): 预处理后的数据。
@@ -82,17 +83,18 @@ class KlineDataProcessor:
             List[Kline]: Kline对象列表。
         """
         klines = []
-        # 注意：这里的 index 是临时的，最终会在 _update_internal_klines 中被修正
-        start_index = len(self.klines)
-        for i, row in df.iterrows():
+        # .to_dict('records') 比 iterrows 快得多
+        # index 暂时设置为 0, 稍后在 _update_internal_klines 中修正
+        for row in df.to_dict('records'):
             kline = Kline(
-                index=start_index + i,
+                index=0,  # 占位符，将在 _update_internal_klines 中被修正
                 date=row['date'],
                 h=float(row['high']),
                 l=float(row['low']),
                 o=float(row['open']),
                 c=float(row['close']),
-                a=float(row['volume']) if 'volume' in row else 0.0
+                # 使用 .get() 并确保 or 0.0 来处理 volume 可能不存在或为None的情况
+                a=float(row.get('volume') or 0.0)
             )
             klines.append(kline)
         return klines
@@ -100,8 +102,7 @@ class KlineDataProcessor:
     def _update_internal_klines(self, new_klines: List[Kline]) -> List[Kline]:
         """
         执行K线数据的核心增量更新逻辑。
-        如果现有数据为空，则直接替换；否则，进行增量更新。
-        此方法可以正确处理重叠和新增的K线数据。
+        (优化：避免在增量更新时全量重新计算索引，只为新数据设置索引)
 
         Returns:
             List[Kline]: 返回增量更新或新增的K线数据列表。
@@ -113,40 +114,56 @@ class KlineDataProcessor:
         increment_klines: List[Kline] = []
 
         if not self.klines:
-            # 首次加载
+            # --- 首次加载 ---
+            # 这是唯一需要全量设置索引的地方
+            for i, k in enumerate(new_klines):
+                k.index = i
             self.klines = new_klines
             increment_klines = new_klines
+            # 首次加载，所有 new_klines 都是增量
+            return increment_klines
+
+        # --- 增量更新逻辑 ---
+        last_date = self.klines[-1].date
+        # 获取最后一个K线的索引
+        last_index = self.klines[-1].index
+
+        # 找到新数据中，第一个时间大于或等于最后一根K线的K线索引
+        start_index = -1
+        for i, k in enumerate(new_klines):
+            if k.date >= last_date:
+                start_index = i
+                break
+
+        # 如果没有找到 (所有新数据都是旧的)
+        if start_index == -1:
+            LogUtil.info("输入的新K线数据均为旧数据，未进行更新。")
+            return []
+
+        # 从找到的位置开始，都是增量数据
+        increment_klines = new_klines[start_index:]
+
+        # 根据找到的K线时间，判断是更新还是追加
+        if new_klines[start_index].date == last_date:
+            # --- 更新最后一根K线 ---
+            update_kline = new_klines[start_index]
+            update_kline.index = last_index  # 修正索引
+            self.klines[-1] = update_kline
+
+            # --- 追加剩余的新K线 ---
+            klines_to_append = new_klines[start_index + 1:]
+            for i, k in enumerate(klines_to_append):
+                # 从 last_index + 1 开始设置新索引
+                k.index = last_index + 1 + i
+            self.klines.extend(klines_to_append)
+
         else:
-            last_date = self.klines[-1].date
-
-            # 找到新数据中，第一个时间大于或等于最后一根K线的K线索引
-            start_index = -1
-            for i, k in enumerate(new_klines):
-                if k.date >= last_date:
-                    start_index = i
-                    break
-
-            # 如果没有找到，说明所有新数据都是旧的
-            if start_index == -1:
-                LogUtil.info("输入的新K线数据均为旧数据，未进行更新。")
-                return []
-
-            # 从找到的位置开始，都是增量数据
-            increment_klines = new_klines[start_index:]
-
-            # 根据找到的K线时间，判断是更新还是追加
-            if new_klines[start_index].date == last_date:
-                # 更新最后一根K线
-                self.klines[-1] = new_klines[start_index]
-                # 追加剩余的新K线
-                self.klines.extend(new_klines[start_index + 1:])
-            else:  # new_klines[start_index].date > last_date
-                # 直接追加所有找到的新K线及之后的部分
-                self.klines.extend(new_klines[start_index:])
-
-        # 最终，重新计算所有K线的索引以确保其连续和正确
-        for i, k in enumerate(self.klines):
-            k.index = i
+            # --- 直接追加所有找到的新K线及之后的部分 ---
+            klines_to_append = increment_klines
+            for i, k in enumerate(klines_to_append):
+                # 从 last_index + 1 开始设置新索引
+                k.index = last_index + 1 + i
+            self.klines.extend(klines_to_append)
 
         # 返回增量数据，此时其 index 已经过修正
         return increment_klines
