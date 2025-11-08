@@ -24,23 +24,12 @@ class XdCalculator:
         self.config = config
         self.xds: List[XD] = []
 
-    def _get_bi_high(self, bi: BI) -> float:
-        """获取笔的最高价"""
-        if bi.high:
-            return bi.high
-        return max(bi.start.val, bi.end.val)
-
-    def _get_bi_low(self, bi: BI) -> float:
-        """获取笔的最低价"""
-        if bi.low:
-            return bi.low
-        return min(bi.start.val, bi.end.val)
-
     def _check_bi_overlap(self, bi1: BI, bi2: BI) -> bool:
-        """检查两笔的价格区间是否有重叠"""
-        low1, high1 = self._get_bi_low(bi1), self._get_bi_high(bi1)
-        low2, high2 = self._get_bi_low(bi2), self._get_bi_high(bi2)
-        return max(low1, low2) <= min(high1, high2)
+        """
+        检查两笔的价格区间是否有重叠
+        直接访问 bi.low 和 bi.high
+        """
+        return max(bi1.low, bi2.low) <= min(bi1.high, bi2.high)
 
     def _find_critical_bi_and_truncate(self, all_bis: List[BI]) -> int:
         """
@@ -56,18 +45,19 @@ class XdCalculator:
             bi_i_plus_4 = all_bis[i + 4]
             is_critical = False
 
+            # 优化：直接使用 bi.high 和 bi.low
             if bi_i.type == 'down':
-                is_start_higher = (self._get_bi_high(bi_i) > self._get_bi_high(bi_i_plus_2) and
-                                   self._get_bi_high(bi_i) > self._get_bi_high(bi_i_plus_4))
-                is_end_higher = (self._get_bi_low(bi_i) > self._get_bi_low(bi_i_plus_2) and
-                                 self._get_bi_low(bi_i) > self._get_bi_low(bi_i_plus_4))
+                is_start_higher = (bi_i.high > bi_i_plus_2.high and
+                                   bi_i.high > bi_i_plus_4.high)
+                is_end_higher = (bi_i.low > bi_i_plus_2.low and
+                                 bi_i.low > bi_i_plus_4.low)
                 if is_start_higher and is_end_higher:
                     is_critical = True
             elif bi_i.type == 'up':
-                is_start_lower = (self._get_bi_low(bi_i) < self._get_bi_low(bi_i_plus_2) and
-                                  self._get_bi_low(bi_i) < self._get_bi_low(bi_i_plus_4))
-                is_end_lower = (self._get_bi_high(bi_i) < self._get_bi_high(bi_i_plus_2) and
-                                self._get_bi_high(bi_i) < self._get_bi_high(bi_i_plus_4))
+                is_start_lower = (bi_i.low < bi_i_plus_2.low and
+                                  bi_i.low < bi_i_plus_4.low)
+                is_end_lower = (bi_i.high < bi_i_plus_2.high and
+                              bi_i.high < bi_i_plus_4.high)
                 if is_start_lower and is_end_lower:
                     is_critical = True
 
@@ -83,19 +73,12 @@ class XdCalculator:
         cs_type = 'down' if segment_type == 'up' else 'up'
         return [bi for bi in segment_bis if bi.type == cs_type]
 
-    def _bi_to_dict(self, bi: BI) -> dict:
-        """将BI对象转换为包含高低点的字典格式，方便处理"""
-        return {
-            'bi': bi,
-            'high': self._get_bi_high(bi),
-            'low': self._get_bi_low(bi),
-            'type': bi.type
-        }
-
     def _check_inclusion_dict(self, bi1: dict, bi2: dict, direction: str) -> bool:
         """检查字典格式的两笔是否存在包含关系"""
         high1, low1 = bi1.get('high'), bi1.get('low')
         high2, low2 = bi2.get('high'), bi2.get('low')
+        # 缠论的定义是 高点>=高点 且 低点<=低点 (而不是 bi1.high > bi2.high and bi1.low < bi2.low)
+        # 注意：这里保持了原有的 >= 和 <= 逻辑，这似乎是标准定义
         return high1 >= high2 and low1 <= low2
 
     def _process_inclusion(self, bis: Union[List[BI], List[dict]], direction: str) -> List[dict]:
@@ -115,7 +98,10 @@ class XdCalculator:
             # 假设 bis 已经是 List[dict]
             processed = bis
         else:
-            processed = [self._bi_to_dict(bi) for bi in bis]
+            # 内联 _bi_to_dict 并直接使用 bi.high/low
+            # 此时 bis 确定为 List[BI]
+            processed = [{'bi': bi, 'high': bi.high, 'low': bi.low, 'type': bi.type}
+                         for bi in bis]
 
         if len(processed) < 2:
             return processed
@@ -218,6 +204,9 @@ class XdCalculator:
                 return None
         except ValueError:
             LogUtil.error("目标笔在 all_bis 列表中未找到。")
+            return None
+        except AttributeError:
+            LogUtil.error(f"目标笔 {target_bi} 没有 'index' 属性。")
             return None
 
     def _get_extremum_bi_from_cs(self, cs_bi: dict) -> BI:
@@ -350,7 +339,7 @@ class XdCalculator:
 
                 # --- 处理上涨线段 ---
                 if current_segment['type'] == 'up':
-                    if self._get_bi_high(bi_for_extension_check) >= segment_high:
+                    if bi_for_extension_check.high >= segment_high:
                         # 出现新高，线段延伸
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
@@ -370,7 +359,7 @@ class XdCalculator:
                         bounded_lookahead_bis = []
                         for bi in lookahead_bis:
                             bounded_lookahead_bis.append(bi)
-                            if bi.type == 'up' and self._get_bi_high(bi) > segment_high:
+                            if bi.type == 'up' and bi.high > segment_high:
                                 break
 
                         # 第一种情况：特征序列出现顶分型
@@ -389,7 +378,7 @@ class XdCalculator:
                                     is_completed = True
                                     peak_bi = self._get_extremum_bi_from_cs(cs_middle)
                                     right_bi = self._get_extremum_bi_from_cs(cs_right)
-                                    break_info = {'reason': 'top_fractal', 'next_segment_type': 'down',
+                                    break_info = {'next_segment_type': 'down',
                                                   'start_bi': peak_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
                             else:
@@ -414,15 +403,16 @@ class XdCalculator:
                                     is_completed = True
                                     peak_bi = self._get_extremum_bi_from_cs(cs_middle_top)
                                     right_bi_for_builder = self._get_extremum_bi_from_cs(cs_right_top)
-                                    break_info = {'reason': 'dual_condition_up_break', 'next_segment_type': 'down',
+                                    break_info = {'next_segment_type': 'down',
                                                   'start_bi': peak_bi, 'end_bi': right_bi_for_builder,
                                                   'segment_end_bi': segment_end_bi}
                             else:
                                 current_segment['bis'].extend(bounded_lookahead_bis)
                                 next_check_idx += len(bounded_lookahead_bis)
                                 continue
+                # --- 处理下跌线段 ---
                 elif current_segment['type'] == 'down':
-                    if self._get_bi_low(bi_for_extension_check) <= segment_low:
+                    if bi_for_extension_check.low <= segment_low:
                         # 出现新低，线段延伸
                         current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
                         next_check_idx += 2
@@ -442,7 +432,7 @@ class XdCalculator:
                         bounded_lookahead_bis = []
                         for bi in lookahead_bis:
                             bounded_lookahead_bis.append(bi)
-                            if bi.type == 'down' and self._get_bi_low(bi) < segment_low:
+                            if bi.type == 'down' and bi.low < segment_low:
                                 break
 
                         # 第一种情况：特征序列出现底分型
@@ -461,7 +451,7 @@ class XdCalculator:
                                     is_completed = True
                                     trough_bi = self._get_extremum_bi_from_cs(cs_middle)
                                     right_bi = self._get_extremum_bi_from_cs(cs_right)
-                                    break_info = {'reason': 'bottom_fractal', 'next_segment_type': 'up',
+                                    break_info = {'next_segment_type': 'up',
                                                   'start_bi': trough_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
                             else:
@@ -486,7 +476,7 @@ class XdCalculator:
                                     is_completed = True
                                     trough_bi = self._get_extremum_bi_from_cs(cs_middle_bottom)
                                     right_bi_for_builder = self._get_extremum_bi_from_cs(cs_right_bottom)
-                                    break_info = {'reason': 'dual_condition_down_break', 'next_segment_type': 'up',
+                                    break_info = {'next_segment_type': 'up',
                                                   'start_bi': trough_bi, 'end_bi': right_bi_for_builder,
                                                   'segment_end_bi': segment_end_bi}
                             else:
@@ -522,8 +512,8 @@ class XdCalculator:
                         index=len(self.xds),
                         default_zs_type=self.config.get('zs_type_xd', None)
                     )
-                    xd.high = max(self._get_bi_high(bi) for bi in final_segment_bis)
-                    xd.low = min(self._get_bi_low(bi) for bi in final_segment_bis)
+                    xd.high = max(bi.high for bi in final_segment_bis)
+                    xd.low = min(bi.low for bi in final_segment_bis)
 
                     start_bi_val = final_segment_bis[0].start.val
                     end_bi_val = final_end_bi.end.val
@@ -562,8 +552,8 @@ class XdCalculator:
                         index=len(self.xds),
                         default_zs_type=self.config.get('zs_type_xd', None)
                     )
-                    pending_xd.high = max(self._get_bi_high(bi) for bi in pending_bis)
-                    pending_xd.low = min(self._get_bi_low(bi) for bi in pending_bis)
+                    pending_xd.high = max(bi.high for bi in pending_bis)
+                    pending_xd.low = min(bi.low for bi in pending_bis)
                     pending_xd.zs_high = pending_xd.high
                     pending_xd.zs_low = pending_xd.low
                     pending_xd.done = False
