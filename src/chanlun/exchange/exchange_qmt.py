@@ -345,7 +345,7 @@ class ExchangeQMT(Exchange):
                 _tdx_code = self.code_to_tdx(_code)
                 if _tdx_code not in all_codes:
                     continue
-                callback(_code, _tick)
+                callback(_tdx_code, _tick)
 
         xtdata.subscribe_whole_quote(["SH", "SZ", "BJ"], on_tick)
         xtdata.run()
