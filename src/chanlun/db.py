@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
     create_engine,
     func,
 )
@@ -65,6 +66,7 @@ class DB(object):
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
+                connect_args={"check_same_thread": False},
             )
         elif config.DB_TYPE == "mysql":
             self.engine = create_engine(
@@ -80,11 +82,14 @@ class DB(object):
         else:
             raise Exception("DB_TYPE 配置错误")
 
-        self.Session = sessionmaker(bind=self.engine)
+        # 避免提交后对象过期导致二次加载，提高查询性能
+        self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
 
         Base.metadata.create_all(self.engine)
 
         self.__cache_tables = {}
+        # 轻量级缓存：最后一根K线时间，降低重复查询成本
+        self._last_dt_cache = {}
 
     def klines_tables(self, market: str, stock_code: str):
         stock_code = (
@@ -119,6 +124,9 @@ class DB(object):
             __tablename__ = table_name
             __table_args__ = (
                 UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
+                # 频繁的 (code,f,dt) 查询与排序，建立复合索引
+                Index("idx_code_f_dt", "code", "f", "dt"),
+                {"mysql_collate": "utf8mb4_general_ci"},
             )
             # 表结构
             code = Column(String(20), primary_key=True, comment="标的代码")
@@ -129,10 +137,7 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
-            # 添加配置设置编码
-            __table_args__ = {
-                "mysql_collate": "utf8mb4_general_ci",
-            }
+            # 注意：__table_args__ 已在上方统一声明，避免覆盖
 
         if market == Market.FUTURES.value:
             # 期货市场，添加持仓列
@@ -188,6 +193,11 @@ class DB(object):
         :param frequency:
         :return:
         """
+        # 命中轻量级缓存，减少数据库查询
+        _cache_key = (market, code, frequency)
+        if _cache_key in self._last_dt_cache:
+            return self._last_dt_cache[_cache_key]
+
         with self.Session() as session:
             table = self.klines_tables(market, code)
             last_date = (
@@ -200,9 +210,13 @@ class DB(object):
             if last_date is None:
                 return None
             if market == "a":
-                return last_date[0].strftime("%Y-%m-%d")
+                _res = last_date[0].strftime("%Y-%m-%d")
             else:
-                return last_date[0].strftime("%Y-%m-%d %H:%M:%S")
+                _res = last_date[0].strftime("%Y-%m-%d %H:%M:%S")
+
+        # 写入缓存
+        self._last_dt_cache[_cache_key] = _res
+        return _res
 
     def klines_insert(
         self, market: str, code: str, frequency: str, klines: pd.DataFrame
@@ -251,6 +265,8 @@ class DB(object):
                             table.dt == _in_k["dt"],
                         ).update(_in_k)
                 session.commit()
+                # 失效缓存（新增数据可能更新最后时间）
+                self._last_dt_cache.pop((market, code, frequency), None)
                 return True
 
             # 将 klines 数据拆分为每 500 条一组，批量插入
@@ -285,6 +301,8 @@ class DB(object):
                 upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
                 session.execute(upsert_stmt)
                 session.commit()
+            # 失效缓存（新增数据可能更新最后时间）
+            self._last_dt_cache.pop((market, code, frequency), None)
 
         return True
 
@@ -312,6 +330,9 @@ class DB(object):
                 q = q.filter(table.dt == dt)
             q.delete()
             session.commit()
+        # 删除后失效缓存
+        if frequency is not None:
+            self._last_dt_cache.pop((market, code, frequency), None)
 
         return True
 

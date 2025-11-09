@@ -22,19 +22,23 @@ class OrderDB:
         order_time: Union[str, datetime.datetime],
     ):
         with self.Session() as session:
-            # 保存订单
-            order = TableByOrder(
-                market=market,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                order_type=order_type,
-                order_price=order_price,
-                order_amount=order_amount,
-                order_memo=order_memo,
-                dt=order_time,
-            )
-            session.add(order)
-            session.commit()
+            try:
+                # 保存订单
+                order = TableByOrder(
+                    market=market,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    order_type=order_type,
+                    order_price=order_price,
+                    order_amount=order_amount,
+                    order_memo=order_memo,
+                    dt=order_time,
+                )
+                session.add(order)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -71,10 +75,14 @@ class OrderDB:
 
     def order_clear_by_code(self, market: str, stock_code: str):
         with self.Session() as session:
-            # 清除 market 下 stock_code 的所有订单
-            session.query(TableByOrder).filter(TableByOrder.market == market).filter(
-                TableByOrder.stock_code == stock_code
-            ).delete()
-            session.commit()
+            try:
+                # 清除 market 下 stock_code 的所有订单
+                session.query(TableByOrder).filter(TableByOrder.market == market).filter(
+                    TableByOrder.stock_code == stock_code
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
