@@ -1,10 +1,4 @@
 import datetime
-import json
-import os
-import time
-import traceback
-
-import pinyin
 import pytz
 from apscheduler.events import (
     EVENT_ALL,
@@ -23,32 +17,12 @@ from apscheduler.events import (
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request
 from flask_login import LoginManager, UserMixin, login_required, login_user
-from tzlocal import get_localzone
-
 from chanlun import config, fun
-from chanlun.base import Market
-from chanlun.cl_utils import (
-    cl_data_to_tv_chart,
-    del_cl_chart_config,
-    kcharts_frequency_h_l_map,
-    query_cl_chart_config,
-    set_cl_chart_config,
-    web_batch_get_cl_datas,
-)
-from chanlun.config import get_data_path
-from chanlun.db import db
-from chanlun.exchange import get_exchange
-from chanlun.exchange.stocks_bkgn import StocksBKGN
-from chanlun.tools.ai_analyse import AIAnalyse
-from chanlun.zixuan import ZiXuan
-
 from .alert_tasks import AlertTasks
 from .other_tasks import OtherTasks
 from .xuangu_tasks import XuanguTasks
-
-# Only export app factory at package level
 __all__ = ["create_app"]
 
 
@@ -117,7 +91,7 @@ def create_app(test_config=None):
 
     _xuangu_tasks = XuanguTasks(scheduler)
 
-    # _other_tasks = OtherTasks(scheduler)
+    _other_tasks = OtherTasks(scheduler)
 
     __log = fun.get_logger()
 
@@ -205,5 +179,5 @@ def create_app(test_config=None):
     app.extensions["scheduler"] = scheduler
     app.extensions["alert_tasks"] = _alert_tasks
     app.extensions["xuangu_tasks"] = _xuangu_tasks
-    # app.extensions["other_tasks"] = _other_tasks
+    app.extensions["other_tasks"] = _other_tasks
     return app
