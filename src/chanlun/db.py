@@ -30,182 +30,23 @@ warnings.filterwarnings("ignore")
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+from chanlun.db_models.alert_record import TableByAlertRecord
+from chanlun.db_models.alert_task import TableByAlertTask
+from chanlun.db_models.cache import TableByCache
+from chanlun.db_models.order import TableByOrder
+from chanlun.db_models.tv_charts import TableByTVCharts
+from chanlun.db_models.tv_marks import TableByTVMarks
+from chanlun.db_models.tv_marks_price import TableByTVMarksPrice
+from chanlun.db_models.zixuan import TableByZixuan
+from chanlun.db_models.zixuan_group import TableByZxGroup
+frequency = Column(String(10), comment="分析周期")
+dt = Column(DateTime, comment="分析时间")
+model = Column(String(100), comment="分析模型")
+prompt = Column(Text, comment="缠论当下说明")
+msg = Column(Text, comment="分析结果")
 
-
-class TableByCache(Base):
-    # 各种乱七八杂的信息
-    __tablename__ = "cl_cache"
-    k = Column(String(100), unique=True, primary_key=True)  # 唯一值
-    v = Column(Text, comment="存储内容")  # 存储内容
-    expire = Column(
-        Integer, default=0, comment="过期时间戳，0为永不过期"
-    )  # 过期时间戳，0为永不过期
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByZxGroup(Base):
-    # 自选组列表
-    __tablename__ = "cl_zixuan_groups"
-    __table_args__ = (
-        UniqueConstraint("market", "zx_group", name="table_market_group_unique"),
-    )
-    market = Column(String(20), primary_key=True, comment="市场")
-    zx_group = Column(String(20), primary_key=True, comment="自选组名称")
-    add_dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByZixuan(Base):
-    # 自选表
-    __tablename__ = "cl_zixuan_watchlist"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    zx_group = Column(String(20), comment="自选组")  # 自选组
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    position = Column(Integer, comment="位置")  # 位置
-    add_datetime = Column(DateTime, comment="添加时间")  # 添加时间
-    stock_color = Column(String(20), comment="自选颜色")  # 自选颜色
-    stock_memo = Column(String(100), comment="附加信息")  # 附加信息
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAlertTask(Base):
-    # 提醒任务
-    __tablename__ = "cl_alert_task"
-    __table_args__ = (
-        UniqueConstraint("market", "task_name", name="table_market_task_name_unique"),
-    )
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    task_name = Column(String(100), comment="任务名称")  # 任务名称
-    zx_group = Column(String(20), comment="自选组")  # 自选组
-    frequency = Column(String(20), comment="检查周期")  # 检查周期
-    interval_minutes = Column(Integer, comment="检查间隔分钟")  # 检查间隔分钟
-    check_bi_type = Column(String(20), comment="检查笔的类型")  # 检查笔的类型
-    check_bi_beichi = Column(String(200), comment="检查笔的背驰")  # 检查笔的背驰
-    check_bi_mmd = Column(String(200), comment="检查笔的买卖点")  # 检查笔的买卖点
-    check_xd_type = Column(String(20), comment="检查线段的类型")  # 检查线段的类型
-    check_xd_beichi = Column(String(200), comment="检查线段的背驰")  # 检查线段的背驰
-    check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
-    check_idx_ma_info = Column(String(200), comment="检查指数的均线")
-    check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
-    is_run = Column(Integer, comment="是否运行")  # 是否运行
-    is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
-    dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAlertRecord(Base):
-    # 提醒记录
-    __tablename__ = "cl_alert_record"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    task_name = Column(String(100), comment="任务名称")  # 任务名称
-    stock_code = Column(String(20), comment="标的")  # 标的
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), comment="提醒周期")  # 提醒周期
-    line_type = Column(String(5), comment="提醒线段的类型")  # 提醒线段的类型
-    alert_msg = Column(Text, comment="提醒消息")  # 提醒消息
-    bi_is_done = Column(
-        String(10), comment="笔是否完成,如果是指标，则记录上穿或下穿"
-    )  # 笔是否完成
-    bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
-    line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
-    alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVMarks(Base):
-    # TV 图表的 mark 标记 (在时间轴上的标记)
-    __tablename__ = "cl_tv_marks"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
-    mark_time = Column(Integer, comment="标签时间戳")  # 标签时间戳
-    mark_label = Column(String(2), comment="标签")  # 标签
-    mark_tooltip = Column(String(100), comment="提示")  # 提示
-    mark_shape = Column(String(20), comment="形状")  # 形状
-    mark_color = Column(String(20), comment="颜色")  # 颜色
-    dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVMarksPrice(Base):
-    # TV 图表的 mark 标记 (在价格主图的标记)
-    __tablename__ = "cl_tv_marks_price"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
-    mark_time = Column(Integer, comment="标签时间戳")  # 标签时间戳
-    mark_color = Column(String(20), comment="颜色")  # 颜色
-    mark_text = Column(String(100), comment="提示")  # 提示
-    mark_label = Column(String(2), comment="标签")  # 标签
-    mark_label_font_color = Column(String(20), comment="标签字体颜色")  # 标签字体颜色
-    mark_min_size = Column(Integer, comment="最小尺寸")  # 最小尺寸
-
-    dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByOrder(Base):
-    # 订单
-    __tablename__ = "cl_order"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    order_type = Column(String(20), comment="订单类型")  # 订单类型
-    order_price = Column(Float, comment="订单价格")  # 订单价格
-    order_amount = Column(Float, comment="订单数量")  # 订单数量
-    order_memo = Column(String(200), comment="订单备注")  # 订单备注
-    dt = Column(DateTime, comment="添加时间")  # 添加时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVCharts(Base):
-    # TV 图表的布局
-    __tablename__ = "cl_tv_charts"
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
-    client_id = Column(String(50), comment="客户端id")
-    user_id = Column(Integer, comment="用户id")
-    chart_type = Column(String(20), comment="布局类型")
-    symbol = Column(String(50), comment="标的")
-    resolution = Column(String(20), comment="周期")
-    content = Column(Text, comment="布局内容")
-    timestamp = Column(Integer, comment="时间戳")
-    name = Column(String(50), comment="布局名称")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAIAnalyse(Base):
-    # AI 分析结果记录
-    __tablename__ = "cl_ai_analyses"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的")  # 标的
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), comment="分析周期")
-    dt = Column(DateTime, comment="分析时间")
-    model = Column(String(100), comment="分析模型")
-    prompt = Column(Text, comment="缠论当下说明")
-    msg = Column(Text, comment="分析结果")
-
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+# 添加配置设置编码
+__table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 @fun.singleton

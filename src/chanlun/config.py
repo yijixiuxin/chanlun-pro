@@ -8,7 +8,7 @@ import pathlib
 WEB_HOST = '0.0.0.0'
 
 # WEB 登录密码，为空则无需进行登录
-LOGIN_PWD = ''
+LOGIN_PWD = '111'
 
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
 DATA_PATH = ".chanlun_pro"
