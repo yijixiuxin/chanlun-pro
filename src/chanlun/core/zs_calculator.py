@@ -32,6 +32,8 @@ class ZsCalculator:
         :param lines: 当前级别的所有线段
         :return: 计算出的所有中枢（已完成 + 进行中）
         """
+        if not lines:
+            return []
         # 1. 初始化状态
         self.zss = []
         self.pending_zs = None

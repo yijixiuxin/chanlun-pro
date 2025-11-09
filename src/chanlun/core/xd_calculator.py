@@ -259,6 +259,9 @@ class XdCalculator:
         # --- 状态处理：确定本次计算的起点 ---
         start_bi_index = 0
         if self.xds:
+            # --- 1. 数据和状态初始化 ---
+            if not all_bis:
+                return []
             # 增量更新模式
             LogUtil.info("增量模式：重新评估最近的线段。")
             last_xd = self.xds.pop()  # 弹出最后一个线段（可能是未完成的），准备重新计算

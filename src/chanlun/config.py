@@ -11,7 +11,7 @@ WEB_HOST = '0.0.0.0'
 LOGIN_PWD = '111'
 
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
-DATA_PATH = ".chanlun_pro"
+DATA_PATH = "D:/chanlun_pro"
 
 # 代理服务器配置
 PROXY_HOST = '127.0.0.1'
