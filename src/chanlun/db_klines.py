@@ -13,6 +13,8 @@ class KlinesDB:
     def __init__(self, session: sessionmaker, engine):
         self.Session = session
         self.engine = engine
+        # 缓存已定义的表类，避免重复创建 Base/类带来的开销
+        self._tables_cache = {}
 
     def klines_tables(self, market: str, code: str):
         """
@@ -26,9 +28,9 @@ class KlinesDB:
         Base = declarative_base()
 
         table_name = f"{market.lower()}_{code.lower().replace('.', '_')}"
-        if self.engine.dialect.has_table(self.engine.connect(), table_name) is True:
-            # print(f'Table {table_name} is exists')
-            return self.engine.classes[table_name]
+        # 命中缓存直接返回
+        if table_name in self._tables_cache:
+            return self._tables_cache[table_name]
 
         class TableByKlines(Base):
             __tablename__ = table_name
@@ -42,9 +44,12 @@ class KlinesDB:
             v = Column(Float)
             p = Column(Float, default=None)
 
-            __table_args__ = (Index("__table_args_code_f_dt_index", "code", "f", "dt"),)
+            __table_args__ = (
+                Index("idx_code_f_dt", "code", "f", "dt"),
+            )
 
         Base.metadata.create_all(self.engine)
+        self._tables_cache[table_name] = TableByKlines
         return TableByKlines
 
     def klines_query(
@@ -136,37 +141,41 @@ class KlinesDB:
 
             # 如果是 sqlite ，则慢慢更新吧
             if config.DB_TYPE == "sqlite":
-                for _, _k in klines.iterrows():
-                    _in_k = {
-                        "code": code,
-                        "f": frequency,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if "position" in _k.keys():
-                        _in_k["p"] = _k["position"]
-                    db_k = (
-                        session.query(table)
-                        .filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
+                try:
+                    for _, _k in klines.iterrows():
+                        _in_k = {
+                            "code": code,
+                            "f": frequency,
+                            "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
+                            "o": _k["open"],
+                            "c": _k["close"],
+                            "h": _k["high"],
+                            "l": _k["low"],
+                            "v": _k["volume"],
+                        }
+                        if "position" in _k.keys():
+                            _in_k["p"] = _k["position"]
+                        db_k = (
+                            session.query(table)
+                            .filter(
+                                table.code == code,
+                                table.f == frequency,
+                                table.dt == _in_k["dt"],
+                            )
+                            .first()
                         )
-                        .first()
-                    )
-                    if db_k is None:
-                        session.add(table(**_in_k))
-                    else:
-                        session.query(table).filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
-                        ).update(_in_k)
-                session.commit()
+                        if db_k is None:
+                            session.add(table(**_in_k))
+                        else:
+                            session.query(table).filter(
+                                table.code == code,
+                                table.f == frequency,
+                                table.dt == _in_k["dt"],
+                            ).update(_in_k)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
                 return True
 
             # 将 klines 数据拆分为每 500 条一组，批量插入
@@ -176,31 +185,35 @@ class KlinesDB:
             ]
             in_position = "position" in klines.columns
             for g_klines in groups:
-                insert_klines = []
-                for _, _k in g_glines.iterrows():
-                    _insert_k = {
-                        "code": code,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
+                try:
+                    insert_klines = []
+                    for _, _k in g_klines.iterrows():
+                        _insert_k = {
+                            "code": code,
+                            "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
+                            "f": frequency,
+                            "o": _k["open"],
+                            "c": _k["close"],
+                            "h": _k["high"],
+                            "l": _k["low"],
+                            "v": _k["volume"],
+                        }
+                        if in_position:
+                            _insert_k["p"] = _k["position"]
+                        insert_klines.append(_insert_k)
+                    insert_stmt = insert(table).values(insert_klines)
+                    update_keys = ["o", "c", "h", "l", "v"]
                     if in_position:
-                        _insert_k["p"] = _k["position"]
-                    insert_klines.append(_insert_k)
-                insert_stmt = insert(table).values(insert_klines)
-                update_keys = ["o", "c", "h", "l", "v"]
-                if in_position:
-                    update_keys.append("p")
-                update_columns = {
-                    x.name: x for x in insert_stmt.inserted if x.name in update_keys
-                }
-                upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-                session.execute(upsert_stmt)
-                session.commit()
+                        update_keys.append("p")
+                    update_columns = {
+                        x.name: x for x in insert_stmt.inserted if x.name in update_keys
+                    }
+                    upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
+                    session.execute(upsert_stmt)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
 
         return True
 
@@ -226,7 +239,11 @@ class KlinesDB:
                 q = q.filter(table.f == frequency)
             if dt is not None:
                 q = q.filter(table.dt == dt)
-            q.delete()
-            session.commit()
+            try:
+                q.delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True

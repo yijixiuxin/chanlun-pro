@@ -1,4 +1,5 @@
 import datetime
+import os
 import hashlib
 import pathlib
 import pickle
@@ -30,26 +31,19 @@ class FileCacheDB(object):
         """
         self.home_path = pathlib.Path.home()
         self.project_path = get_data_path()
-        if self.project_path.is_dir() is False:
-            self.project_path.mkdir()
+        # 更健壮的目录创建方式（支持多级）
+        self.project_path.mkdir(parents=True, exist_ok=True)
         self.cl_data_path = self.project_path / "cl_data"
-        if self.cl_data_path.is_dir() is False:
-            self.cl_data_path.mkdir()
+        self.cl_data_path.mkdir(parents=True, exist_ok=True)
         self.klines_path = self.project_path / "klines"
-        if self.klines_path.is_dir() is False:
-            self.klines_path.mkdir()
+        self.klines_path.mkdir(parents=True, exist_ok=True)
         self.cache_pkl_path = self.project_path / "cache_pkl"
-        if self.cache_pkl_path.is_dir() is False:
-            self.cache_pkl_path.mkdir()
+        self.cache_pkl_path.mkdir(parents=True, exist_ok=True)
 
         # 遍历 enum 中的值
         for market in Market:
-            market_cl_data_path = self.cl_data_path / market.value
-            if market_cl_data_path.is_dir() is False:
-                market_cl_data_path.mkdir()
-            market_klines_path = self.klines_path / market.value
-            if market_klines_path.is_dir() is False:
-                market_klines_path.mkdir()
+            (self.cl_data_path / market.value).mkdir(parents=True, exist_ok=True)
+            (self.klines_path / market.value).mkdir(parents=True, exist_ok=True)
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -106,6 +100,37 @@ class FileCacheDB(object):
             db.cache_set("__cl_update_date", self.cl_update_date)
             self.clear_all_cl_data()
 
+    def _config_md5(self, cl_config: dict) -> str:
+        """
+        生成稳定的配置 MD5：严格按照 self.config_keys 顺序生成，避免 dict 插入顺序差异。
+        列表类型做字符串化处理以保持一致性。
+        """
+        parts = []
+        for k in self.config_keys:
+            v = cl_config.get(k, "0")
+            if isinstance(v, list):
+                v = ",".join(v)
+            parts.append(f"{k}:{v}")
+        unique_str = "|".join(parts)
+        return hashlib.md5(unique_str.encode("UTF-8")).hexdigest()
+
+    def _atomic_write_pickle(self, path: pathlib.Path, obj: object):
+        """
+        原子化写入 pickle，避免并发读到半写入文件。
+        """
+        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        with open(tmp, "wb") as fp:
+            pickle.dump(obj, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, path)
+
+    def _atomic_write_csv(self, path: pathlib.Path, df: pd.DataFrame):
+        """
+        原子化写入 CSV，先写入临时文件再替换，保证读侧一致性。
+        """
+        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        df.to_csv(tmp, index=False)
+        os.replace(tmp, path)
+
     def get_tdx_klines(
         self, market: str, code: str, frequency: str
     ) -> Union[None, pd.DataFrame]:
@@ -118,12 +143,11 @@ class FileCacheDB(object):
         if file_pathname.is_file() is False:
             return None
         try:
-            _klines = pd.read_csv(file_pathname)
+            _klines = pd.read_csv(file_pathname, parse_dates=["date"])  # 直接解析日期列
         except Exception:
             file_pathname.unlink()
             return None
         if len(_klines) > 0:
-            _klines["date"] = pd.to_datetime(_klines["date"])
             # 如果 date 有 Nan 则返回 None
             if _klines["date"].isnull().any():
                 return None
@@ -144,7 +168,7 @@ class FileCacheDB(object):
         file_pathname = (
             self.klines_path / market / f"{code.replace('.', '_')}_{frequency}.csv"
         )
-        kline.to_csv(file_pathname, index=False)
+        self._atomic_write_csv(file_pathname, kline)
         return True
 
     def clear_tdx_old_klines(self, market):
@@ -173,10 +197,7 @@ class FileCacheDB(object):
         """
         获取web缓存的的缠论数据对象
         """
-        unique_md5_str = (
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'
-        )
-        key = hashlib.md5(unique_md5_str.encode("UTF-8")).hexdigest()
+        key = self._config_md5(cl_config)
 
         file_pathname = (
             self.cl_data_path
@@ -187,17 +208,16 @@ class FileCacheDB(object):
         try:
             if file_pathname.is_file():
                 # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
-                try_num = 0
-                while True:
+                try:
+                    with open(file_pathname, "rb") as fp:
+                        cd = pickle.load(fp)
+                except Exception:
+                    # 读取失败（可能并发写入未完成），清理损坏文件后走全量重算
                     try:
-                        with open(file_pathname, "rb") as fp:
-                            cd = pickle.load(fp)
-                        break
-                    except Exception as e:
-                        try_num += 1
-                        time.sleep(0.5)
-                        if try_num > 5:
-                            raise e
+                        file_pathname.unlink()
+                    except Exception:
+                        pass
+                    cd = cl.CL(code, frequency, cl_config)
                 # 判断缓存中的最后k线是否大于给定的最新一根k线时间，如果小于说明直接有断档，不连续，重新全量重新计算
                 if (
                     len(cd.get_src_klines()) > 0
@@ -263,8 +283,7 @@ class FileCacheDB(object):
         cd.process_klines(klines)
 
         try:
-            with open(file_pathname, "wb") as fp:
-                pickle.dump(cd, fp)
+            self._atomic_write_pickle(file_pathname, cd)
         except Exception as e:
             print(f"写入缓存异常 {market} {code} {frequency} - {e}")
 
@@ -326,11 +345,7 @@ class FileCacheDB(object):
         建议定时频繁的进行读取，保持更新，避免太多时间不读取，后续造成数据缺失情况
         """
 
-        key = hashlib.md5(
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'.encode(
-                "UTF-8"
-            )
-        ).hexdigest()
+        key = self._config_md5(cl_config)
         filename = (
             self.cl_data_path
             / f'{market}_{code.replace("/", "_")}_{frequency}_{key}.pkl'
@@ -346,16 +361,14 @@ class FileCacheDB(object):
             limit = 1000
         klines = db_ex.klines(code, frequency, args={"limit": limit})
         cd.process_klines(klines)
-        with open(filename, "wb") as fp:
-            pickle.dump(cd, fp)
+        self._atomic_write_pickle(filename, cd)
         return cd
 
     def cache_pkl_to_file(self, filename: str, data: object):
         """
         将缓存数据持久化到文件中
         """
-        with open(self.cache_pkl_path / filename, "wb") as fp:
-            pickle.dump(data, fp)
+        self._atomic_write_pickle(self.cache_pkl_path / filename, data)
 
     def cache_pkl_from_file(self, filename: str) -> object:
         """
