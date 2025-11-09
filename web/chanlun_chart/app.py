@@ -1,3 +1,11 @@
+"""
+WSGI entrypoint for the TradingView web application.
+
+Adds project `src` and web server path to `sys.path`, supports a WPF
+launcher mode that wraps stdio into GBK to avoid encoding issues, and
+bootstraps the Flask/Tornado server.
+"""
+
 import pathlib
 import sys
 
@@ -9,12 +17,13 @@ sys.path.append(str(src_path))
 web_server_path = pathlib.Path(__file__).parent
 sys.path.append(str(web_server_path))
 
-is_wpf_launcher = False
-# WPF 启动，每次 print 都 flush，并且将字符编码转为 GBK（避免乱码）
-if "wpf_launcher" in sys.argv:
-    is_wpf_launcher = True
+def _wrap_stdio_gbk() -> None:
+    """
+    Wrap stdin/stdout/stderr to GBK encoding for WPF launcher mode.
+    Ensures print flushes and converts unicode to GBK safely.
+    """
 
-    class filter:
+    class _Filter:
         def __init__(self, target):
             self.target = target
 
@@ -28,9 +37,9 @@ if "wpf_launcher" in sys.argv:
         def close(self):
             self.target.close()
 
-    sys.stdin = filter(sys.stdin)
-    sys.stdout = filter(sys.stdout)
-    sys.stderr = filter(sys.stderr)
+    sys.stdin = _Filter(sys.stdin)
+    sys.stdout = _Filter(sys.stdout)
+    sys.stderr = _Filter(sys.stderr)
 
 
 import traceback
@@ -42,7 +51,13 @@ from tornado.wsgi import WSGIContainer
 from chanlun import config
 from cl_app import create_app
 
-if __name__ == "__main__":
+def main() -> None:
+    """Start the Tornado HTTP server hosting the Flask app."""
+    is_wpf_launcher = "wpf_launcher" in sys.argv
+    # WPF 启动，每次 print 都 flush，并且将字符编码转为 GBK（避免乱码）
+    if is_wpf_launcher:
+        _wrap_stdio_gbk()
+
     try:
         app = create_app()
 
@@ -58,7 +73,11 @@ if __name__ == "__main__":
             webbrowser.open("http://127.0.0.1:9900")
         IOLoop.instance().start()
 
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         if is_wpf_launcher is False:
             input("出现异常，按回车键退出")
+
+
+if __name__ == "__main__":
+    main()
