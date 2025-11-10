@@ -17,7 +17,8 @@ TradingView相关接口蓝图。
 
 import datetime
 import time
-
+from cachetools import TTLCache
+from threading import RLock
 from flask import Blueprint, render_template, request
 from flask_login import login_required
 import pinyin
@@ -46,6 +47,11 @@ from ..services.state import history_req_counter as __history_req_counter
 
 tv_bp = Blueprint("tv", __name__)
 
+# maxsize=100：最多缓存100个交易所的数据
+# ttl=3600：数据在缓存中保留1小时（3600秒）
+# RLock 用于确保线程安全，防止多个请求同时穿透缓存
+stock_cache = TTLCache(maxsize=100, ttl=3600)
+cache_lock = RLock()
 
 @tv_bp.route("/tv/config")
 @login_required
@@ -188,33 +194,110 @@ def tv_symbols():
     return info
 
 
+def _process_stock_list(all_stocks):
+    """
+    （核心优化）对股票列表进行一次性预处理。
+    """
+    processed_list = []
+    for stock in all_stocks:
+        # 为了不修改原始数据，我们拷贝一份
+        stock_copy = stock.copy()
+
+        # 2. 预先转为小写，搜索时不再需要转换
+        stock_copy['code_lower'] = stock['code'].lower()
+        stock_copy['name_lower'] = stock['name'].lower()
+
+        # 3. （核心优化）预先计算拼音，这是最耗时的部分
+        try:
+            stock_copy['pinyin_initials'] = "".join([
+                pinyin.get_initial(_p)[0] for _p in stock["name"]
+            ]).lower()
+        except Exception:
+            # 处理可能的拼音转换异常
+            stock_copy['pinyin_initials'] = ""
+
+        processed_list.append(stock_copy)
+    return processed_list
+
+
+def get_cached_processed_stocks(exchange):
+    """
+    获取预处理过的股票列表，如果缓存中没有，则抓取、处理并存入缓存。
+    """
+    try:
+        # 快速路径：缓存命中
+        return stock_cache[exchange]
+    except KeyError:
+        # 缓存未命中，需要抓取数据
+        pass
+
+    # 4. 使用锁来防止“缓存击穿”
+    with cache_lock:
+        try:
+            # 双重检查，可能在等待锁的时候，其他线程已经处理完了
+            return stock_cache[exchange]
+        except KeyError:
+            # 确认缓存中没有，我们来处理
+            ex = get_exchange(Market(exchange))
+
+            # 5. （只在缓存失效时执行一次 I/O）
+            all_stocks = ex.all_stocks()
+
+            # 6. （只在缓存失效时执行一次 CPU 密集操作）
+            processed_stocks = _process_stock_list(all_stocks)
+
+            # 7. 存入缓存
+            stock_cache[exchange] = processed_stocks
+            return processed_stocks
+
+
 @tv_bp.route("/tv/search")
 @login_required
 def tv_search():
-    """商品检索"""
+    """商品检索（已优化）"""
     query = request.args.get("query")
-    type = request.args.get("type")
+    type_ = request.args.get("type")  # 避免与Python关键字'type'冲突
     exchange = request.args.get("exchange")
-    limit = request.args.get("limit")
+    limit_str = request.args.get("limit", "10")  # 提供一个默认值
+    limit = int(limit_str)
 
-    ex = get_exchange(Market(exchange))
-    all_stocks = ex.all_stocks()
+    # 1. 获取预处理和缓存过的股票列表
+    try:
+        processed_stocks = get_cached_processed_stocks(exchange)
+    except Exception as e:
+        # 最好在这里记录日志
+        return {"error": f"Failed to get stocks for {exchange}: {e}"}, 500
 
-    if exchange in ["currency", "currency_spot"]:
-        res_stocks = [
-            stock for stock in all_stocks if query.lower() in stock["code"].lower()
-        ]
-    else:
-        res_stocks = [
-            stock
-            for stock in all_stocks
-            if query.lower() in stock["code"].lower()
-            or query.lower() in stock["name"].lower()
-            or query.lower()
-            in "".join([pinyin.get_initial(_p)[0] for _p in stock["name"]]).lower()
-        ]
-    res_stocks = res_stocks[0 : int(limit)]
+    # 2. 只需要转换一次查询字符串
+    query_lower = query.lower()
+    res_stocks = []
+    is_currency = exchange in ["currency", "currency_spot"]
 
+    # 3. （核心优化）使用for循环并提前退出
+    for stock in processed_stocks:
+        if is_currency:
+            # 直接使用预处理过的字段
+            if query_lower in stock['code_lower']:
+                res_stocks.append(stock)
+        else:
+            # 直接使用预处理过的字段
+            if (query_lower in stock['code_lower'] or
+                    query_lower in stock['name_lower'] or
+                    query_lower in stock['pinyin_initials']):
+                res_stocks.append(stock)
+
+        # 4. （核心优化）达到数量限制后立即停止遍历
+        if len(res_stocks) >= limit:
+            break
+
+    # 5. （次要优化）在循环外计算一次即可
+    supported_resolutions = [
+        v
+        for k, v in frequency_maps.items()
+        if k in market_frequencys[exchange]
+    ]
+
+    # 6. 组装结果
     infos = []
     for stock in res_stocks:
         infos.append(
@@ -225,16 +308,13 @@ def tv_search():
                 "description": stock["name"],
                 "exchange": exchange,
                 "ticker": f"{exchange}:{stock['code']}",
-                "type": type,
+                "type": type_,  # 使用 'type_'
                 "session": market_session[exchange],
                 "timezone": market_timezone[exchange],
-                "supported_resolutions": [
-                    v
-                    for k, v in frequency_maps.items()
-                    if k in market_frequencys[exchange]
-                ],
+                "supported_resolutions": supported_resolutions,  # 使用预先计算的列表
             }
         )
+
     return infos
 
 
