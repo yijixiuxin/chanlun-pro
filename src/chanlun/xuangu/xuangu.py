@@ -613,6 +613,42 @@ def xg_single_bi_1buy_next_l3buy_mmd(
     return None
 
 
+def xg_single_find_qs_by_zhuanzhe_zs(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+):
+    """
+    找趋势转折后的第一个中枢
+    周期：单周期
+    使用市场：沪深A股
+    作者：WX
+    """
+    opt_direction, opt_mmd = get_opt_types(opt_type)
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+    if len(cd.get_bis()) <= 5 or len(cd.get_xds()) < 2 or len(cd.get_bi_zss()) < 3:
+        return None
+    zss = cd.get_bi_zss()
+    # 比较最后两个中枢的位置关系
+    zs_qs = cd.zss_is_qs(zss[-3], zss[-2])
+    if zs_qs not in opt_direction:
+        return None
+
+    if zss[-2].lines[0].index - zss[-3].lines[-1].index >= 3:
+        return None
+    # 最新的中枢
+    zs = zss[-1]
+    # 最新的中枢其实笔，要与中枢趋势不同
+    if zs.lines[0].type == zs_qs:
+        return None
+    # 当前中枢进行时
+    bi = cd.get_bis()[-1]
+    if zs.lines[-1].index != bi.index:
+        return None
+    # 两个中枢不能离得太远
+    if zs.lines[0].index - zss[-2].lines[-1].index >= 5:
+        return None
+    return {"code": cd.get_code(), "msg": "出现趋势转折的第一个中枢了"}
+
+
 def xg_single_xdzs_bimmdbc(code: str, mk_datas: MarketDatas, opt_type: list = []):
     deviation_rate = 0.08
     cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
@@ -752,12 +788,12 @@ if __name__ == "__main__":
     from chanlun.trader.online_market_datas import OnlineMarketDatas
 
     market = "a"
-    code = "SZ.000551"
+    code = "SZ.000028"
     freqs = ["d"]
 
     ex = ExchangeTDX()
     cl_config = query_cl_chart_config(market, code)
     mkd = OnlineMarketDatas(market, freqs, ex, cl_config)
 
-    res = xg_single_bi_1buy_next_l3buy_mmd(code, mkd)
+    res = xg_single_find_qs_by_zhuanzhe_zs(code, mkd)
     print(res)
