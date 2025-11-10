@@ -781,7 +781,7 @@ def cl_data_to_tv_chart(
                                 "price": zs.zg,
                             },
                             {
-                                "time": fun.datetime_to_int(zs.end.start.k.date) if zs.end else None,
+                                "time": fun.datetime_to_int(zs.end.start.k.date) if zs.end else fun.datetime_to_int(zs.lines[-1].end.k.date),
                                 "price": zs.zd,
                             },
                         ],
