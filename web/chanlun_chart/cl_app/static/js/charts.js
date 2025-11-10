@@ -32,6 +32,68 @@ const CHART_CONFIG = {
   ],
 };
 
+// 默认颜色配置 (回退用)
+const DEFAULT_COLORS = {
+  bis: CHART_CONFIG.COLORS.BI,
+  xds: CHART_CONFIG.COLORS.XD,
+  zsds: CHART_CONFIG.COLORS.ZSD,
+  bi_zss: CHART_CONFIG.COLORS.BI_ZSS,
+  xd_zss: CHART_CONFIG.COLORS.XD_ZSS,
+  zsd_zss: CHART_CONFIG.COLORS.ZSD_ZSS,
+};
+
+// 基于周期的动态颜色配置
+// "1" = 1分钟, "5" = 5分钟, "30" = 30分钟, "1D" = 日线
+const DYNAMIC_CHART_COLORS = {
+  "1": {
+    // 1F 分钟图
+    ...DEFAULT_COLORS,
+    bis: "#FFA500", // 橙色 笔
+    xds: "#DAA520", // 黄色 (GoldenRod)
+    xd_zss: "#ADD8E6", // 蓝色(稍浅蓝色) 线段中枢
+  },
+  "5": {
+    // 5F 分钟图
+    ...DEFAULT_COLORS,
+    bi_zss: "#ADD8E6", // 浅蓝色 笔中枢 (对应 "一分钟线段形成的中枢")
+    xds: "#ADD8E6", // 浅蓝色 5分钟线段
+    xd_zss: "#FF0000", // 红色 5分钟线段中枢
+    zsds: "#FF0000", // 红色 30分钟线段 (走势段)
+  },
+  "30": {
+    // 30F 分钟图
+    ...DEFAULT_COLORS,
+    xds: "#FF0000", // 红色 30分钟线段
+    xd_zss: "#008000", // 绿色 30分钟线段中枢
+    zsds: "#008000", // 绿色 日线线段 (走势段)
+  },
+  "1D": {
+    // 1D 日线图
+    ...DEFAULT_COLORS,
+    xds: "#008000", // 绿色 日线线段
+    xd_zss: "#00008B", // 深蓝色 日线线段中枢
+    zsds: "#00008B", // 深蓝色 周线线段 (走势段)
+  },
+};
+
+/**
+ * 获取基于周期的动态颜色
+ * @param {string} interval - 当前图表周期 (例如 "1", "5", "1D")
+ * @param {string} elementType - 图表元素类型 (例如 "bis", "xds", "xd_zss")
+ * @returns {string} 颜色值
+ */
+function getDynamicColor(interval, elementType) {
+  // 检查特定周期的配置
+  if (
+    DYNAMIC_CHART_COLORS[interval] &&
+    DYNAMIC_CHART_COLORS[interval][elementType]
+  ) {
+    return DYNAMIC_CHART_COLORS[interval][elementType];
+  }
+  // 回退到默认配置
+  return DEFAULT_COLORS[elementType] || "#FFFFFF"; // 最终回退
+}
+
 // 防抖函数
 function debounce(func, wait) {
   let timeout;
@@ -460,7 +522,7 @@ class ChartManager {
   }
 
   // 绘制图表元素
-  drawChartElements(chartData) {
+  drawChartElements(chartData, currentInterval) {
     const { symbolKey, barsResult, from } = chartData;
     const chartContainer = this.initChartContainer(symbolKey);
 
@@ -495,7 +557,7 @@ class ChartManager {
             time: bi.points[0].time,
             key,
             id: ChartUtils.createLineShape(this.chart, bi, {
-              color: CHART_CONFIG.COLORS.BI,
+              color: getDynamicColor(currentInterval, "bis"), // 动态颜色
               linewidth: 1,
             }),
           });
@@ -514,7 +576,7 @@ class ChartManager {
             time: xd.points[0].time,
             key,
             id: ChartUtils.createLineShape(this.chart, xd, {
-              color: CHART_CONFIG.COLORS.XD,
+              color: getDynamicColor(currentInterval, "xds"), // 动态颜色
               linewidth: 2,
             }),
           });
@@ -533,7 +595,7 @@ class ChartManager {
             time: zsd.points[0].time,
             key,
             id: ChartUtils.createLineShape(this.chart, zsd, {
-              color: CHART_CONFIG.COLORS.ZSD,
+              color: getDynamicColor(currentInterval, "zsds"), // 动态颜色
               linewidth: 3,
             }),
           });
@@ -575,7 +637,7 @@ class ChartManager {
             time: xd_zs.points[0].time,
             key,
             id: ChartUtils.createZhongshuShape(this.chart, xd_zs, {
-              color: CHART_CONFIG.COLORS.XD_ZSS,
+              color: getDynamicColor(currentInterval, "xd_zss"), // 动态颜色
               linewidth: 2,
             }),
           });
@@ -644,10 +706,20 @@ class ChartManager {
     const chartData = this.getChartData();
     if (!chartData) return;
 
-    console.log("Drawing chart for:", chartData.symbolKey);
+    // 获取当前周期
+    const symbolInterval = this.widget.symbolInterval();
+    if (!symbolInterval) return;
+    const currentInterval = symbolInterval.interval;
 
-    // 绘制所有图表元素
-    this.drawChartElements(chartData);
+    console.log(
+      "Drawing chart for:",
+      chartData.symbolKey,
+      "Interval:",
+      currentInterval
+    );
+
+    // 绘制所有图表元素，传入当前周期
+    this.drawChartElements(chartData, currentInterval);
 
     const code_end = performance.now();
     console.log(
