@@ -4,7 +4,7 @@ import {
 	getErrorMessage,
 	logMessage,
 } from './helpers';
-import { IDataPulseProvider, IHistoryProvider, GetBarsResult } from './provider-interfaces';
+import { GetBarsResult, IDataPulseProvider, IHistoryProvider } from './provider-interfaces';
 
 interface DataSubscriber {
 	symbolInfo: LibrarySymbolInfo;
