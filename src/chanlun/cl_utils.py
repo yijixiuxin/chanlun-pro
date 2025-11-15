@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from chanlun import fun
-from chanlun.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
+from chanlun.core.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
 from chanlun.db import db
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
@@ -777,11 +777,11 @@ def cl_data_to_tv_chart(
                     {
                         "points": [
                             {
-                                "time": fun.datetime_to_int(zs.start.k.date),
+                                "time": fun.datetime_to_int(zs.start.end.k.date),
                                 "price": zs.zg,
                             },
                             {
-                                "time": fun.datetime_to_int(zs.end.k.date),
+                                "time": fun.datetime_to_int(zs.end.start.k.date) if zs.end else fun.datetime_to_int(zs.lines[-1].end.k.date),
                                 "price": zs.zd,
                             },
                         ],

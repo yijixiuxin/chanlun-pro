@@ -1,10 +1,19 @@
+"""
+Utilities for external message sending and configuration helpers.
+
+This module centralizes small configuration accessors and wrappers to
+send messages to DingTalk and Feishu, with light caching via the DB
+cache interface. Functions include clear docstrings and type hints,
+and minor fixes to market key mapping.
+"""
+
 import base64
 import hashlib
 import hmac
 import json
 import time
 import urllib.parse
-from typing import Union
+from typing import Dict, Optional, Union
 
 import lark_oapi as lark
 import requests
@@ -18,23 +27,38 @@ from chanlun import config
 from chanlun.db import db
 
 
-def config_get_proxy():
+def config_get_proxy() -> Dict[str, str]:
+    """
+    Get HTTP proxy configuration.
+
+    Priority: DB cache key `req_proxy` overrides defaults if present.
+
+    Returns a dict with `host` and `port`.
+    """
     db_proxy = db.cache_get("req_proxy")
-    if db_proxy is not None and db_proxy["host"] != "" and db_proxy["port"] != "":
+    if db_proxy is not None and db_proxy.get("host") and db_proxy.get("port"):
         return db_proxy
-    return {
-        "host": config.PROXY_HOST,
-        "port": config.PROXY_PORT,
-    }
+    return {"host": config.PROXY_HOST, "port": config.PROXY_PORT}
 
 
-def config_get_dingding_keys(market):
+def config_get_dingding_keys(market: str) -> Optional[Dict[str, str]]:
+    """
+    Return DingTalk robot keys for the given market.
+
+    DB cache `dd_keys` overrides defaults when present and complete.
+    Market mapping:
+    - a -> `config.DINGDING_KEY_A`
+    - hk -> `config.DINGDING_KEY_HK`
+    - us -> `config.DINGDING_KEY_US`
+    - futures -> `config.DINGDING_KEY_FUTURES`
+    - currency -> `config.DINGDING_KEY_CURRENCY`
+    """
     db_dd_key = db.cache_get("dd_keys")
-    if db_dd_key is not None and db_dd_key["token"] != "" and db_dd_key["secret"] != "":
+    if db_dd_key is not None and db_dd_key.get("token") and db_dd_key.get("secret"):
         return db_dd_key
     if market == "a":
         return config.DINGDING_KEY_A
-    if market == "a":
+    if market == "hk":  # fixed wrong duplicate 'a' condition
         return config.DINGDING_KEY_HK
     if market == "us":
         return config.DINGDING_KEY_US
@@ -46,39 +70,42 @@ def config_get_dingding_keys(market):
     return None
 
 
-def config_get_feishu_keys(market):
+def config_get_feishu_keys(market: str) -> Dict[str, str]:
+    """
+    Get Feishu app credentials and target user.
+
+    DB cache `fs_keys` overrides defaults if present and complete.
+    """
     db_fs_key = db.cache_get("fs_keys")
     if (
         db_fs_key is not None
-        and db_fs_key["fs_app_id"] != ""
-        and db_fs_key["fs_app_secret"] != ""
-        and db_fs_key["fs_user_id"] != ""
+        and db_fs_key.get("fs_app_id")
+        and db_fs_key.get("fs_app_secret")
+        and db_fs_key.get("fs_user_id")
     ):
         return {
             "app_id": db_fs_key["fs_app_id"],
             "app_secret": db_fs_key["fs_app_secret"],
             "user_id": db_fs_key["fs_user_id"],
         }
-    keys = config.FEISHU_KEYS["default"]
+    keys = config.FEISHU_KEYS.get("default", {}).copy()
     if market in config.FEISHU_KEYS.keys():
-        keys = config.FEISHU_KEYS[market]
+        keys = config.FEISHU_KEYS[market].copy()
     keys["user_id"] = config.FEISHU_KEYS["user_id"]
     return keys
 
 
 # 旧版的API接口已经下架，不能新增了，后续使用 飞书的 消息接口
-def send_dd_msg(market: str, msg: Union[str, dict]):
+def send_dd_msg(market: str, msg: Union[str, Dict[str, str]]) -> bool:
     """
-    发送钉钉消息
-    https://open.dingtalk.com/document/robots/custom-robot-access
+    发送钉钉消息（自定义机器人）。
 
-    :param market:
-    :param msg: 如果类型是 str 则发送文本消息，dict 发送 markdown 消息 (dict demo {'title': '标题', 'text': 'markdown内容'})
-    :return:
+    - `msg` 为字符串时发送文本消息。
+    - `msg` 为字典时发送 markdown 消息，形如 `{"title": "标题", "text": "markdown内容"}`。
     """
     dd_info = config_get_dingding_keys(market)
     if dd_info is None or dd_info["token"] == "" or dd_info["secret"] == "":
-        return True
+        return True  # no-op when not configured
 
     url = "https://oapi.dingtalk.com/robot/send?access_token=%s&timestamp=%s&sign=%s"
 
@@ -111,9 +138,9 @@ def send_dd_msg(market: str, msg: Union[str, dict]):
     return True
 
 
-def send_fs_msg(market, title, contents: Union[str, list]):
+def send_fs_msg(market: str, title: str, contents: Union[str, list]) -> bool:
     """
-    发送飞书消息
+    发送飞书消息（富文本 post）。
     """
     fs_key = config_get_feishu_keys(market)
     if (
@@ -122,7 +149,7 @@ def send_fs_msg(market, title, contents: Union[str, list]):
         or fs_key["app_secret"] == ""
         or fs_key["user_id"] == ""
     ):
-        return True
+        return True  # no-op when not configured
     # 创建client
     client = (
         lark.Client.builder()

@@ -5,7 +5,8 @@ redis
 prettytable
 pymysql
 chardet
-
+longport
+cachetools
 pyecharts==2.0.8
 dbutils
 apscheduler
