@@ -1,4 +1,4 @@
-import { RequestParams, UdfResponse, UdfErrorResponse, logMessage } from './helpers';
+import { RequestParams, UdfErrorResponse, UdfResponse, logMessage } from './helpers';
 import { IRequester } from './irequester';
 
 export class Requester implements IRequester {

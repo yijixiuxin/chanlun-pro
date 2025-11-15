@@ -9,6 +9,5 @@ export interface UdfQuotesResponse extends UdfOkResponse {
 }
 
 export interface IQuotesProvider {
-	// tslint:disable-next-line:variable-name tv-variable-name
 	getQuotes(symbols: string[]): Promise<QuoteData[]>;
 }
