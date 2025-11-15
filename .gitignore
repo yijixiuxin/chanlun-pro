@@ -141,6 +141,7 @@ src/chanlun_ai
 src/chanlun_strategy
 src/core
 web/chanlun_kcm
+web/chanlun_chart/cl_app/static/datafeeds/udf/node_modules
 src/Kronos
 
 .idea
