@@ -1,7 +1,7 @@
-import { UDFCompatibleDatafeedBase } from './udf-compatible-datafeed-base';
+import { LimitedResponseConfiguration } from './history-provider';
 import { QuotesProvider } from './quotes-provider';
 import { Requester } from './requester';
-import { LimitedResponseConfiguration } from './history-provider';
+import { UDFCompatibleDatafeedBase } from './udf-compatible-datafeed-base';
 
 export class UDFCompatibleDatafeed extends UDFCompatibleDatafeedBase {
 	public constructor(
