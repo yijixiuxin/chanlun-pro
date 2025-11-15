@@ -413,7 +413,7 @@ if __name__ == "__main__":
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    klines = ex.klines("SPXC", "60m")
+    klines = ex.klines("AAPL", "30m")
     print(klines.tail(20))
 
     # ticks = ex.ticks([ex.default_code()])

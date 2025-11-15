@@ -153,7 +153,7 @@ def create_app(test_config=None):
         "a": "24x7",
         "hk": "24x7",
         "fx": "24x7",
-        "us": "0400-0931,0930-1631,1600-2001",
+        "us": "24x7",
         "futures": "24x7",
         "ny_futures": "24x7",
         "currency": "24x7",
