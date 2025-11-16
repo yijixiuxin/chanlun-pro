@@ -197,99 +197,236 @@ class FileCacheDB(object):
         """
         获取web缓存的的缠论数据对象
         """
-        key = self._config_md5(cl_config)
-
-        file_pathname = (
-            self.cl_data_path
-            / market
-            / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
-        )
+        # key = self._config_md5(cl_config)
+        #
+        # file_pathname = (
+        #     self.cl_data_path
+        #     / market
+        #     / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
+        # )
         cd: ICL = cl.CL(code, frequency, cl_config)
-        try:
-            if file_pathname.is_file():
-                # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
-                try:
-                    with open(file_pathname, "rb") as fp:
-                        cd = pickle.load(fp)
-                except Exception:
-                    # 读取失败（可能并发写入未完成），清理损坏文件后走全量重算
-                    try:
-                        file_pathname.unlink()
-                    except Exception:
-                        pass
-                    cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的最后k线是否大于给定的最新一根k线时间，如果小于说明直接有断档，不连续，重新全量重新计算
-                if (
-                    len(cd.get_src_klines()) > 0
-                    and len(klines) > 0
-                    and (
-                        cd.get_src_klines()[-1].date < klines.iloc[0]["date"]
-                        or cd.get_src_klines()[0].date > klines.iloc[0]["date"]
-                    )
-                ):
-                    # print(
-                    #     f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
-                    # )
-                    cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的数据，与给定的K线数据是否有差异，有则表示数据有变（比如复权会产生变化），则重新全量计算
-                if len(cd.get_src_klines()) >= 2 and len(klines) >= 2:
-                    cd_pre_kline = cd.get_src_klines()[-2]
-                    src_klines = klines[klines["date"] == cd_pre_kline.date]
-                    # 计算后的数据没有最开始的日期或者 开高低收其中有不同的，则重新计算
-                    if (
-                        len(src_klines) == 0
-                        or Decimal(src_klines.iloc[0]["close"])
-                        != Decimal(cd_pre_kline.c)
-                        or Decimal(src_klines.iloc[0]["high"])
-                        != Decimal(cd_pre_kline.h)
-                        or Decimal(src_klines.iloc[0]["low"]) != Decimal(cd_pre_kline.l)
-                        or Decimal(src_klines.iloc[0]["open"])
-                        != Decimal(cd_pre_kline.o)
-                        or Decimal(src_klines.iloc[0]["volume"])
-                        != Decimal(cd_pre_kline.a)
-                    ):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key}",
-                        #     cd_pre_kline,
-                        #     src_klines.iloc[0].to_dict(),
-                        # )
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
-                        # )
-                        # print(cd_pre_kline, src_klines)
-                        cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的最近一百根时间范围内的数量是否一致
-                if len(cd.get_src_klines()) >= 100 and len(klines) >= 100:
-                    _valid_cd_klines = cd.get_src_klines()[-100:]
-                    _valid_src_klines = klines[
-                        (klines["date"] >= _valid_cd_klines[0].date)
-                        & (klines["date"] <= _valid_cd_klines[-1].date)
-                    ]
-                    if len(_valid_cd_klines) != len(_valid_src_klines):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
-                        # )
-                        cd = cl.CL(code, frequency, cl_config)
-        except Exception:
-            if file_pathname.is_file():
-                # print(
-                #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
-                # )
-                try:
-                    file_pathname.unlink()
-                except Exception:
-                    pass
+        # try:
+        #     if file_pathname.is_file():
+        #         # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
+        #         try:
+        #             with open(file_pathname, "rb") as fp:
+        #                 cd = pickle.load(fp)
+        #         except Exception:
+        #             # 读取失败（可能并发写入未完成），清理损坏文件后走全量重算
+        #             try:
+        #                 file_pathname.unlink()
+        #             except Exception:
+        #                 pass
+        #             cd = cl.CL(code, frequency, cl_config)
+        #         # 判断缓存中的最后k线是否大于给定的最新一根k线时间，如果小于说明直接有断档，不连续，重新全量重新计算
+        #         if (
+        #             len(cd.get_src_klines()) > 0
+        #             and len(klines) > 0
+        #             and (
+        #                 cd.get_src_klines()[-1].date < klines.iloc[0]["date"]
+        #                 or cd.get_src_klines()[0].date > klines.iloc[0]["date"]
+        #             )
+        #         ):
+        #             # print(
+        #             #     f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
+        #             # )
+        #             cd = cl.CL(code, frequency, cl_config)
+        #         # 判断缓存中的数据，与给定的K线数据是否有差异，有则表示数据有变（比如复权会产生变化），则重新全量计算
+        #         if len(cd.get_src_klines()) >= 2 and len(klines) >= 2:
+        #             cd_pre_kline = cd.get_src_klines()[-2]
+        #             src_klines = klines[klines["date"] == cd_pre_kline.date]
+        #             # 计算后的数据没有最开始的日期或者 开高低收其中有不同的，则重新计算
+        #             if (
+        #                 len(src_klines) == 0
+        #                 or Decimal(src_klines.iloc[0]["close"])
+        #                 != Decimal(cd_pre_kline.c)
+        #                 or Decimal(src_klines.iloc[0]["high"])
+        #                 != Decimal(cd_pre_kline.h)
+        #                 or Decimal(src_klines.iloc[0]["low"]) != Decimal(cd_pre_kline.l)
+        #                 or Decimal(src_klines.iloc[0]["open"])
+        #                 != Decimal(cd_pre_kline.o)
+        #                 or Decimal(src_klines.iloc[0]["volume"])
+        #                 != Decimal(cd_pre_kline.a)
+        #             ):
+        #                 # print(
+        #                 #     f"{market}--{code}--{frequency} {key}",
+        #                 #     cd_pre_kline,
+        #                 #     src_klines.iloc[0].to_dict(),
+        #                 # )
+        #                 # print(
+        #                 #     f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
+        #                 # )
+        #                 # print(cd_pre_kline, src_klines)
+        #                 cd = cl.CL(code, frequency, cl_config)
+        #         # 判断缓存中的最近一百根时间范围内的数量是否一致
+        #         if len(cd.get_src_klines()) >= 100 and len(klines) >= 100:
+        #             _valid_cd_klines = cd.get_src_klines()[-100:]
+        #             _valid_src_klines = klines[
+        #                 (klines["date"] >= _valid_cd_klines[0].date)
+        #                 & (klines["date"] <= _valid_cd_klines[-1].date)
+        #             ]
+        #             if len(_valid_cd_klines) != len(_valid_src_klines):
+        #                 # print(
+        #                 #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
+        #                 # )
+        #                 cd = cl.CL(code, frequency, cl_config)
+        # except Exception:
+        #     if file_pathname.is_file():
+        #         # print(
+        #         #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
+        #         # )
+        #         try:
+        #             file_pathname.unlink()
+        #         except Exception:
+        #             pass
 
         cd.process_klines(klines)
 
-        try:
-            self._atomic_write_pickle(file_pathname, cd)
-        except Exception as e:
-            print(f"写入缓存异常 {market} {code} {frequency} - {e}")
+        import logging
+        import pandas as pd
+        import types
 
-        # 加一个随机概率，去清理历史的缓存，避免太多占用空间
-        if random.randint(0, 1000) <= 5:
-            self.clear_old_web_cl_data()
+        # --- V6 版日志配置 ---
+        # 确保文件句柄使用 UTF-8
+        logging.basicConfig(
+            level=logging.INFO,  # 捕捉 INFO 级别及以上的日志
+            format='%(message)s',  # 日志格式
+            handlers=[
+                logging.FileHandler("debug_cd.log", mode='w', encoding='utf-8'),  # 显式使用 UTF-8
+                logging.StreamHandler()  # 继续输出到控制台
+            ]
+        )
+
+        def log_instance_details(obj,
+                                 max_str_len=100,
+                                 indent=0,
+                                 max_depth=8,
+                                 _current_depth=0):
+            """
+            递归地将一个实例的属性记录到 logging.info()。
+
+            - V6 (修复版):
+              - 移除了 ✅ (U+2705) emoji，替换为 '+'，以防止 gbk 编码错误。
+              - 字典 (dict): 记录所有键值对并递归。
+              - 列表 (list): 记录第1个和最后1个元素作为样本并递归。
+            """
+
+            indent_str = "  " * indent
+
+            # --- 0. 检查递归深度 ---
+            if _current_depth >= max_depth:
+                logging.info(f"{indent_str}<{type(obj).__name__} at {hex(id(obj))}, 已达最大深度 {max_depth}>")
+                return
+
+            # --- 1. 处理 "基础" 类型 ---
+            if isinstance(obj, (int, float, bool, type(None))):
+                logging.info(f"{indent_str}{repr(obj)}")
+                return
+            if isinstance(obj, str):
+                if len(obj) > max_str_len:
+                    logging.info(f"{indent_str}'{obj[:max_str_len]}...' (len {len(obj)})")
+                else:
+                    logging.info(f"{indent_str}{repr(obj)}")
+                return
+            if isinstance(obj, (types.ModuleType, types.FunctionType, types.MethodType)):
+                logging.info(f"{indent_str}{repr(obj)}")
+                return
+
+            # --- 2. 处理容器: list / tuple / set ---
+            if isinstance(obj, (list, tuple, set)):
+                count = len(obj)
+                logging.info(f"{indent_str}({type(obj).__name__}, 共 {count} 个):")
+
+                if count == 0:
+                    logging.info(f"{indent_str}  (空)")
+                elif count == 1:
+                    logging.info(f"{indent_str}  [0]:")
+                    try:
+                        first_item = list(obj)[0]
+                        log_instance_details(first_item, max_str_len, indent + 2, max_depth, _current_depth + 1)
+                    except Exception as e:
+                        logging.warning(f"{indent_str}  (获取元素失败: {e})")
+                elif count >= 2:
+                    logging.info(f"{indent_str}  [0]:")
+                    try:
+                        first_item = list(obj)[0]
+                        log_instance_details(first_item, max_str_len, indent + 2, max_depth, _current_depth + 1)
+                    except Exception as e:
+                        logging.warning(f"{indent_str}  (获取第1个元素失败: {e})")
+
+                    logging.info(f"{indent_str}  [-1]:")
+                    try:
+                        last_item = list(obj)[-1]
+                        log_instance_details(last_item, max_str_len, indent + 2, max_depth, _current_depth + 1)
+                    except Exception as e:
+                        logging.warning(f"{indent_str}  (获取最后1个元素失败: {e})")
+
+                    if count > 2:
+                        logging.info(f"{indent_str}  ... (中间还有 {count - 2} 个)")
+                return
+
+            # --- 3. 处理容器: dict ---
+            if isinstance(obj, dict):
+                count = len(obj)
+                logging.info(f"{indent_str}({type(obj).__name__}, 共 {count} 个键):")
+
+                if count == 0:
+                    logging.info(f"{indent_str}  {{}} (空)")
+                    return
+
+                for key, value in obj.items():
+                    logging.info(f"{indent_str}  ['{key}']:")
+                    log_instance_details(value, max_str_len, indent + 2, max_depth, _current_depth + 1)
+                return
+
+            # --- 4. 处理 Pandas ---
+            if "pandas" in str(type(obj)):
+                if isinstance(obj, pd.DataFrame):
+                    logging.info(f"{indent_str}(DataFrame, 形状: {obj.shape}):")
+                    df_str = obj.head(3).to_string(max_colwidth=50)
+                    for line in df_str.split('\n'):
+                        logging.info(f"{indent_str}  {line}")
+                    return
+                if isinstance(obj, pd.Series):
+                    logging.info(f"{indent_str}(Series, 形状: {obj.shape}):")
+                    series_str = obj.head(3).to_string(max_colwidth=50)
+                    for line in series_str.split('\n'):
+                        logging.info(f"{indent_str}  {line}")
+                    return
+
+            # --- 5. 处理自定义类实例 (核心修复) ---
+            if hasattr(obj, '__dict__'):
+                logging.info(f"{indent_str}<{type(obj).__module__}.{type(obj).__name__} at {hex(id(obj))}>")
+
+                attributes = vars(obj)
+                if not attributes:
+                    logging.info(f"{indent_str}  (没有 __dict__ 属性)")
+                    return
+
+                for attr_name, attr_value in attributes.items():
+                    if attr_name.startswith('_'):
+                        continue
+
+                    # 修复点：移除了 ✅ emoji，替换为 '+'
+                    logging.info(f"{indent_str}  + {attr_name}:")
+                    log_instance_details(attr_value, max_str_len, indent + 2, max_depth, _current_depth + 1)
+                return
+
+            # --- 6. 所有其他类型 ---
+            logging.info(f"{indent_str}{repr(obj)}")
+
+        log_instance_details(cd)
+        logging.info('end')
+
+        #
+        # try:
+        #     self._atomic_write_pickle(file_pathname, cd)
+        # except Exception as e:
+        #     print(f"写入缓存异常 {market} {code} {frequency} - {e}")
+        #
+        # # 加一个随机概率，去清理历史的缓存，避免太多占用空间
+        # if random.randint(0, 1000) <= 5:
+        #     self.clear_old_web_cl_data()
 
         return cd
 
