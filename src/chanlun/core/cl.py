@@ -71,9 +71,15 @@ class CL(ICL):
         self._last_bi_zs: Union[ZS, None] = None
         self._last_xd_zs: Union[ZS, None] = None
 
+        # 兼容运行时期望字段
+        self.debug: bool = False
+        self.use_time: dict = {}
+
     def _init_default_config(self):
         """初始化默认配置参数"""
         default_config = {
+            # 运行时兼容标识
+            'config_use_type': 'common',
             # K线类型配置
             'kline_type': Config.KLINE_TYPE_DEFAULT.value,
             'kline_qk': Config.KLINE_QK_NONE.value,
@@ -358,5 +364,99 @@ class CL(ICL):
         lines: List[LINE],
         max_line_num: int = 999,
         zs_include_last_line=True,
-    ) -> List[ZS]:
+        ) -> List[ZS]:
         return create_xd_zs(zs_type, lines)
+
+    # --- 兼容属性与方法 ---
+    @property
+    def idx(self) -> dict:
+        return self.macd_calculator.get_results()
+
+    @property
+    def src_klines(self) -> List[Kline]:
+        return self.kline_processor.klines
+
+    @property
+    def cl_klines(self) -> List[CLKline]:
+        return self.cl_kline_processor.cl_klines
+
+    @property
+    def fxs(self) -> List[FX]:
+        return self.bi_calculator.fxs
+
+    @property
+    def bis(self) -> List[BI]:
+        return self.bi_calculator.bis
+
+    @property
+    def xds(self) -> List[XD]:
+        return self.xd_calculator.xds
+
+    @property
+    def zsds(self) -> List[XD]:
+        return self.get_zsds()
+
+    @property
+    def qsds(self) -> List[XD]:
+        return self.get_qsds()
+
+    @property
+    def last_bi_zs(self) -> Union[ZS, None]:
+        return self.get_last_bi_zs()
+
+    @property
+    def last_xd_zs(self) -> Union[ZS, None]:
+        return self.get_last_xd_zs()
+
+    @property
+    def type_bi_zss(self) -> dict:
+        return {Config.ZS_TYPE_BZ.value: self.get_bi_zss(Config.ZS_TYPE_BZ.value)}
+
+    @property
+    def type_xd_zss(self) -> dict:
+        return {Config.ZS_TYPE_BZ.value: self.get_xd_zss(Config.ZS_TYPE_BZ.value)}
+
+    @property
+    def type_zsd_zss(self) -> dict:
+        return {Config.ZS_TYPE_BZ.value: self.get_zsd_zss()}
+
+    def default_bi_zs_type(self) -> str:
+        return self.config.get('zs_type_bi', Config.ZS_TYPE_BZ.value)
+
+    def default_xd_zs_type(self) -> str:
+        return self.config.get('zs_type_xd', Config.ZS_TYPE_BZ.value)
+
+    def write_debug_log(self, msg: str):
+        if self.debug:
+            LogUtil.debug(msg)
+
+    def _add_time(self, key: str, value: float):
+        self.use_time[key] = value
+
+    def process_idx(self):
+        self.macd_calculator.process_macd(self.get_src_klines())
+        return self
+
+    def process_fx(self):
+        # 通过计算器生成 fxs
+        self.bi_calculator.calculate(self.get_cl_klines())
+        return self
+
+    def process_bi(self):
+        # 通过计算器生成 bis
+        self.bi_calculator.calculate(self.get_cl_klines())
+        return self
+
+    def process_up_line(self):
+        # 通过计算器生成 xds
+        self.xd_calculator.calculate(self.get_bis())
+        return self
+
+    def process_zs(self):
+        # 通过计算器生成中枢
+        self.zss_calculator.calculate(self.get_xds())
+        return self
+
+    def process_mmd(self):
+        # 占位：买卖点计算在各线对象中维护
+        return self

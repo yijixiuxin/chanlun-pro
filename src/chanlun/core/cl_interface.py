@@ -509,7 +509,7 @@ class ZS:
         self.gg = gg  # 中枢最高点（包括延伸）
         self.dd = dd  # 中枢最低点（包括延伸）
 
-        self._type = _type  # 'up' 上涨中枢, 'down' 下跌中枢, 'zd' 震荡中枢
+        self.type: str = _type  # 中枢类型（up 上涨中枢  down 下跌中枢  zd 震荡中枢）
         self.index = index
         self.line_num = line_num  # 包含的线段数
         self.level:Level = level  # 中枢级别
@@ -519,6 +519,14 @@ class ZS:
 
         self.entry: Optional[LINE] = None  # 进入段
         self.exit: Optional[LINE] = None  # 离开段
+
+    @property
+    def type(self) -> Optional[str]:
+        return self._type
+
+    @type.setter
+    def type(self, value: Optional[str]):
+        self._type = value
 
     def update_boundaries(self):
         """根据核心线段更新中枢的边界值"""

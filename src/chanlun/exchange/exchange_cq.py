@@ -1,15 +1,15 @@
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from typing import Dict, List, Union
 import pandas as pd
 import pytz
 from decimal import Decimal
 
-from longport.openapi import Config, QuoteContext, TradeContext, Market, TradeSession, Period, \
-    AdjustType, OrderSide, OrderType, TimeInForceType
+from longport.openapi import Config, QuoteContext, TradeContext, Market, Period, \
+    AdjustType, OrderSide, OrderType, TimeInForceType, SecurityListCategory, TradeSessions
 
 from chanlun import fun
 from chanlun.exchange import Exchange
-from chanlun.exchange.exchange import convert_stock_kline_frequency, Tick
+from chanlun.exchange.exchange import Tick
 from chanlun.fun import str_to_datetime
 
 # 统一时区设置
@@ -25,6 +25,7 @@ class ExchangeChangQiao(Exchange):
         self.config = Config.from_env()
         self.quote_ctx = QuoteContext(self.config)
         self.trade_ctx = TradeContext(self.config)
+        self.stock_list_cache = None
 
     def default_code(self) -> str:
         """
@@ -52,23 +53,84 @@ class ExchangeChangQiao(Exchange):
         """
         获取支持的所有股票列表
         """
-        # 获取 CN 市场所有股票（可扩展到其他市场）
+        if self.stock_list_cache is not None:
+            print("Returning from cache...")
+            return self.stock_list_cache
         try:
-            resp = self.quote_ctx.security_list(Market.US)
-            return [{"code": info.symbol, "name": info.name_cn} for info in resp]
+            resp = self.quote_ctx.security_list(Market.US, SecurityListCategory.Overnight)
+            self.stock_list_cache = [{"code": info.symbol, "name": info.name_en} for info in resp]
+            return self.stock_list_cache
         except Exception as e:
             print(f"Error in all_stocks: {e}")
             return []
 
     def now_trading(self):
         """
-        返回当前是否可交易
+        返回当前是否可交易 (检查美股的所有交易时段：盘前、盘中、盘后)
+
+        标准: 检查当前时间(ET)是否落在任一交易时段 (Pre, Intraday, Post) 的 [begin_time, end_time) 内。
+        假设:
+        1. begin_time 和 end_time 是以 "H:M:S" 格式提供的字符串 (例如 "4:0:0" 或 "16:0:0")。
+        2. 这些时间代表美国东部时间 (ET / 'America/New_York')。
+        3. 'Market' 枚举已在 'self' 上下文中可用。
         """
-        sessions = self.quote_ctx.trading_session()
-        for session in sessions:
-            if session.market == Market.US and session.trade_sessions == TradeSession.Intraday:
-                return True
-        return False
+        if pytz is None:
+            print("Error: pytz library is required for accurate timezone conversion. Cannot check trading time.")
+            return False
+
+        try:
+            # 1. 获取美国东部时间的当前时间 (例如: 纽约时间)
+            et_timezone = pytz.timezone('America/New_York')
+            now_et = datetime.now(et_timezone).time()
+            sessions = self.quote_ctx.trading_session()
+
+            # 遍历市场交易时段列表 (例如 US, HK, CN, SG)
+            for session in sessions:
+
+                # 2. 只关心美国市场
+                if session.market == Market.US:
+
+                    # 3. 遍历该市场的所有具体交易时段 (Pre, Intraday, Post)
+                    for trade_info in session.trade_sessions:
+
+                        # 4. 检查当前时间是否在 [begin_time, end_time) 区间内
+                        try:
+                            # 5. 直接获取 time 对象 (根据您的提示)
+                            start_time = trade_info.begin_time
+                            end_time = trade_info.end_time
+
+                            # 确保它们确实是 time 对象
+                            if not isinstance(start_time, time) or not isinstance(end_time, time):
+                                print(f"Warning: Skipping trade session, attributes are not datetime.time objects.")
+                                continue
+
+                            # 6. 比较当前时间
+                            # 假设交易时间是左闭右开区间 [start_time, end_time)
+
+                            # 检查跨午夜的情况 (例如 20:00 - 04:00)
+                            if start_time > end_time:
+                                # 跨午夜：(当前时间 >= 开始时间) 或 (当前时间 < 结束时间)
+                                if now_et >= start_time or now_et < end_time:
+                                    # (根据您的示例数据 4:00-20:00，美股时段并不跨午夜)
+                                    return True
+                            else:
+                                # 正常情况 (例如 09:30 - 16:00)
+                                if start_time <= now_et and now_et < end_time:
+                                    return True
+
+                        except AttributeError:
+                            # 捕获万一 trade_info 没有 begin_time 或 end_time 属性
+                            print(f"Warning: TradeSessionInfo object structure unexpected. Skipping.")
+                            continue
+                    return False
+
+            print("Warning: Market.US not found in trading sessions response.")
+            return False
+
+        except Exception as e:
+            # 捕获其他潜在异常 (例如 self.quote_ctx 调用失败)
+            print(f"Error checking trading session: {e}")
+            return False
 
     def klines(
             self,
@@ -295,7 +357,10 @@ class ExchangeChangQiao(Exchange):
         获取股票的基本信息
         """
         try:
-            symbol = code + '.US'
+            if code.endswith('.US'):
+                symbol = code
+            else:
+                symbol = code + '.US'
             infos = self.quote_ctx.static_info([symbol])
             if not infos:
                 return None

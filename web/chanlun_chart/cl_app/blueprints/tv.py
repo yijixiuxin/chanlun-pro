@@ -19,7 +19,7 @@ import datetime
 import time
 from cachetools import TTLCache
 from threading import RLock
-from flask import Blueprint, render_template, request
+from flask import Blueprint, request
 from flask_login import login_required
 import pinyin
 
@@ -33,6 +33,7 @@ from chanlun.cl_utils import (
 )
 from chanlun.db import db
 from chanlun.exchange import get_exchange
+from chanlun.tools.log_util import LogUtil
 
 from ..services.constants import (
     frequency_maps,
@@ -410,15 +411,16 @@ def tv_history():
         _h = cl_chart_data["h"][-10:]
         _l = cl_chart_data["l"][-10:]
         _v = cl_chart_data["v"][-10:]
-        _fxs = cl_chart_data["fxs"][-5:]
-        _bis = cl_chart_data["bis"][-5:]
-        _xds = cl_chart_data["xds"][-5:]
-        _zsds = cl_chart_data["zsds"][-5:]
-        _bi_zss = cl_chart_data["bi_zss"][-5:]
-        _xd_zss = cl_chart_data["xd_zss"][-5:]
-        _zsd_zss = cl_chart_data["zsd_zss"][-5:]
-        _bcs = cl_chart_data["bcs"][-5:]
-        _mmds = cl_chart_data["mmds"][-5:]
+        _fxs = cl_chart_data.get("fxs", [])[-5:]
+        _bis = cl_chart_data.get("bis", [])[-5:]
+        _xds = cl_chart_data.get("xds", [])[-5:]
+        _zsds = cl_chart_data.get("zsds", [])[-5:]
+        _bi_zss = cl_chart_data.get("bi_zss", [])[-5:]
+        _xd_zss = cl_chart_data.get("xd_zss", [])[-5:]
+        _zsd_zss = cl_chart_data.get("zsd_zss", [])[-5:]
+        _bcs = cl_chart_data.get("bcs", [])[-5:]
+        _mmds = cl_chart_data.get("mmds", [])[-5:]
+        LogUtil.info(f"[tv_history] Returning incremental update: {len(_t)} bars")
     else:
         _t = cl_chart_data["t"]
         _c = cl_chart_data["c"]
@@ -426,16 +428,16 @@ def tv_history():
         _h = cl_chart_data["h"]
         _l = cl_chart_data["l"]
         _v = cl_chart_data["v"]
-        _fxs = cl_chart_data["fxs"]
-        _bis = cl_chart_data["bis"]
-        _xds = cl_chart_data["xds"]
-        _zsds = cl_chart_data["zsds"]
-        _bi_zss = cl_chart_data["bi_zss"]
-        _xd_zss = cl_chart_data["xd_zss"]
-        _zsd_zss = cl_chart_data["zsd_zss"]
-        _bcs = cl_chart_data["bcs"]
-        _mmds = cl_chart_data["mmds"]
-
+        _fxs = cl_chart_data.get("fxs", [])
+        _bis = cl_chart_data.get("bis", [])
+        _xds = cl_chart_data.get("xds", [])
+        _zsds = cl_chart_data.get("zsds", [])
+        _bi_zss = cl_chart_data.get("bi_zss", [])
+        _xd_zss = cl_chart_data.get("xd_zss", [])
+        _zsd_zss = cl_chart_data.get("zsd_zss", [])
+        _bcs = cl_chart_data.get("bcs", [])
+        _mmds = cl_chart_data.get("mmds", [])
+        LogUtil.info(f"[tv_history] Returning full data: {len(_t)} bars")
     info = {
         "s": s,
         "t": _t,
