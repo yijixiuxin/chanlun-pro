@@ -87,15 +87,32 @@ class AIAnalyse:
 
         return {"ok": True, "msg": analyse_res["msg"]}
 
-    def analyse_records(self, limit: int = 20):
+    def analyse_records(self, page: int = 1, limit: int = 20):
         """
-        返回市场中历史的分析记录
+        返回市场中历史的分析记录（支持分页）
+
+        Args:
+            page: 页码，从1开始
+            limit: 每页记录数
+
+        Returns:
+            tuple: (记录列表, 总记录数)
         """
         with db.Session() as session:
+            # 查询总记录数
+            total = (
+                session.query(TableByAIAnalyse)
+                .filter(TableByAIAnalyse.market == self.market)
+                .count()
+            )
+
+            # 分页查询记录
+            offset = (page - 1) * limit
             records = (
                 session.query(TableByAIAnalyse)
                 .filter(TableByAIAnalyse.market == self.market)
                 .order_by(TableByAIAnalyse.dt.desc())
+                .offset(offset)
                 .limit(limit)
                 .all()
             )
@@ -109,7 +126,7 @@ class AIAnalyse:
             # 时间转换
             _dr["dt"] = fun.datetime_to_str(_dr["dt"])
             record_dicts.append(_dr)
-        return record_dicts
+        return record_dicts, total
 
     def get_line_mmds(self, line: Union[BI, XD]):
         mmds = list(set(line.line_mmds("|")))
