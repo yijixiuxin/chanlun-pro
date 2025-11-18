@@ -1,4 +1,7 @@
 var AI = (function () {
+  var tableInstanceId = "table_ai_analysis"; // 表格实例 ID（与配置中的 id 保持一致）
+  var isTableRendered = false; // 标记表格是否已渲染
+
   return {
     get_ai_analyse_records: function () {
       function stripMarkdownCodeBlock(md) {
@@ -20,12 +23,26 @@ var AI = (function () {
         let table = layui.table;
         var element = layui.element;
 
+        // 如果表格已渲染，则重载数据；否则创建新实例
+        if (isTableRendered) {
+          table.reload(tableInstanceId, {
+            url: "/ai/analyse_records/" + Utils.get_market(),
+            page: {
+              curr: 1, // 重新从第 1 页开始
+            },
+          });
+          return;
+        }
+
         // 创建AI分析列表渲染实例
         table.render({
           elem: "#table_ai_analysis",
+          id: tableInstanceId, // 设置表格实例 ID
           defaultContextmenu: false,
           url: "/ai/analyse_records/" + Utils.get_market(),
-          page: false,
+          page: true, // 开启分页
+          limit: 10, // 每页显示数量
+          limits: [10, 20, 30, 50, 100], // 每页条数的选择项
           className: "layui-font-12",
           size: "sm",
           maxHeight: 750,
@@ -38,6 +55,7 @@ var AI = (function () {
             ],
           ],
         });
+        isTableRendered = true; // 标记表格已渲染
         // 点击AI分析结果，弹框展示内容
         table.on("row(table_ai_analysis)", function (obj) {
           let data = obj.data; // 获取当前行数据
@@ -107,6 +125,7 @@ var AI = (function () {
           success: function (res) {
             if (res["ok"] === true) {
               layer.msg("分析成功");
+              // 重载表格数据
               AI.get_ai_analyse_records();
             } else {
               layer.msg(res["msg"]);
