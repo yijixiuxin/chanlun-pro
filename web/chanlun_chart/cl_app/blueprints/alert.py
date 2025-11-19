@@ -128,8 +128,11 @@ def alert_edit(market, id):
                 "is_run": _alert_config.is_run,
             }
 
+    # 获取自选组
     zx = ZiXuan(market)
     zixuan_groups = zx.zixuan_list
+
+    # 交易所支持周期
     frequencys = get_exchange(Market(market)).support_frequencys()
 
     return render_template(
@@ -147,32 +150,48 @@ def alert_save():
     check_idx_ma_infos = json.dumps(
         {
             "enable": (
-                int(request.form["check_idx_ma_info_enable"]) if request.form["check_idx_ma_info_enable"] else 0
+                int(request.form["check_idx_ma_info_enable"])
+                if request.form["check_idx_ma_info_enable"]
+                else 0
             ),
             "slow": (
-                int(request.form["check_idx_ma_info_slow"]) if request.form["check_idx_ma_info_slow"] else 0
+                int(request.form["check_idx_ma_info_slow"])
+                if request.form["check_idx_ma_info_slow"]
+                else 0
             ),
             "fast": (
-                int(request.form["check_idx_ma_info_fast"]) if request.form["check_idx_ma_info_fast"] else 0
+                int(request.form["check_idx_ma_info_fast"])
+                if request.form["check_idx_ma_info_fast"]
+                else 0
             ),
             "cross_up": (
-                int(request.form["check_idx_ma_info_cross_up"]) if request.form["check_idx_ma_info_cross_up"] else 0
+                int(request.form["check_idx_ma_info_cross_up"])
+                if request.form["check_idx_ma_info_cross_up"]
+                else 0
             ),
             "cross_down": (
-                int(request.form["check_idx_ma_info_cross_down"]) if request.form["check_idx_ma_info_cross_down"] else 0
+                int(request.form["check_idx_ma_info_cross_down"])
+                if request.form["check_idx_ma_info_cross_down"]
+                else 0
             ),
         }
     )
     check_idx_macd_infos = json.dumps(
         {
             "enable": (
-                int(request.form["check_idx_macd_info_enable"]) if request.form["check_idx_macd_info_enable"] else 0
+                int(request.form["check_idx_macd_info_enable"])
+                if request.form["check_idx_macd_info_enable"]
+                else 0
             ),
             "cross_up": (
-                int(request.form["check_idx_macd_info_cross_up"]) if request.form["check_idx_macd_info_cross_up"] else 0
+                int(request.form["check_idx_macd_info_cross_up"])
+                if request.form["check_idx_macd_info_cross_up"]
+                else 0
             ),
             "cross_down": (
-                int(request.form["check_idx_macd_info_cross_down"]) if request.form["check_idx_macd_info_cross_down"] else 0
+                int(request.form["check_idx_macd_info_cross_down"])
+                if request.form["check_idx_macd_info_cross_down"]
+                else 0
             ),
         }
     )
@@ -225,7 +244,12 @@ def alert_records(market):
         }
         for _r in records
     ]
-    return {"code": 0, "msg": "", "count": len(rls), "data": rls}
+    return {
+        "code": 0,
+        "msg": "",
+        "count": len(rls),
+        "data": rls,
+    }
 
 
 @alert_bp.route("/jobs")

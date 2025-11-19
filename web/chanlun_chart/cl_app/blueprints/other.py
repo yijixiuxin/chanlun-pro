@@ -21,7 +21,8 @@ other_bp = Blueprint("other", __name__)
 @login_required
 def ticks():
     market = request.form["market"]
-    codes = json.loads(request.form["codes"])
+    codes = request.form["codes"]
+    codes = json.loads(codes)
     ex = get_exchange(Market(market))
     stock_ticks = ex.ticks(codes)
     try:

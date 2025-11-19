@@ -110,6 +110,7 @@ def set_cl_config():
             cl_config[_k] = cl_config[_k].split(",")
         if cl_config[_k] == "":
             cl_config[_k] = "0"
+        # print(f"{_k} : {cl_config[_k]}")
 
     res = set_cl_chart_config(market, code, cl_config)
     return {"ok": res}

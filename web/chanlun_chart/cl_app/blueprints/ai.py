@@ -29,5 +29,17 @@ def ai_analyse():
 @ai_bp.route("/ai/analyse_records/<market>", methods=["GET"])
 @login_required
 def ai_analyse_records(market: str = "a"):
-    ai_analyse_records = AIAnalyse(market=market).analyse_records(30)
-    return {"code": 0, "msg": "", "count": len(ai_analyse_records), "data": ai_analyse_records}
+    # 获取分页参数
+    page = request.args.get("page", 1, type=int)
+    limit = request.args.get("limit", 10, type=int)
+
+    # 调用分页查询
+    ai_analyse_records, total = AIAnalyse(market=market).analyse_records(
+        page=page, limit=limit
+    )
+    return {
+        "code": 0,
+        "msg": "",
+        "count": total,
+        "data": ai_analyse_records,
+    }
