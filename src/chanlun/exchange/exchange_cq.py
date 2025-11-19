@@ -149,10 +149,10 @@ class ExchangeChangQiao(Exchange):
 
         # 1. 定义默认回看周期
         DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=30),
-            "5m": timedelta(days=60),
+            "1m": timedelta(days=60),
+            "5m": timedelta(days=120),
             "15m": timedelta(days=90),
-            "30m": timedelta(days=120),
+            "30m": timedelta(days=240),
             "60m": timedelta(days=365),
             "d": timedelta(days=365 * 2),
             "w": timedelta(days=365 * 10),
