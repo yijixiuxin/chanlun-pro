@@ -1,66 +1,78 @@
+// -----------------------------------------------------------------------
+// 文件名: chart_idx_macd_backend.js
+// 版本: V5 (智能语义对齐版)
+// 功能: 解决 TV 前端(OpenTime) 与 后端(CloseTime) 时间戳不一致导致的指标丢失问题
+// -----------------------------------------------------------------------
+console.log("%c[SYSTEM] MACD Backend V5 (Smart-Align) Loaded", "color: #2196F3; font-weight: bold;");
+
 var TvIdxMACDBackend = (function () {
-  // 二分查找辅助函数：在有序数组 times 中查找 target 时间对应的索引
-  function binarySearch(arr, target) {
+
+  /**
+   * 智能查找函数
+   * @param {Array} times - 有序的时间戳数组 (后端数据)
+   * @param {Number} target - 目标时间戳 (前端图表时间)
+   * @returns {Number} 匹配到的索引，未找到返回 -1
+   */
+  function smartSearch(times, target) {
     let left = 0;
-    let right = arr.length - 1;
+    let right = times.length - 1;
+    let resultIndex = -1;
+
+    // 1. 二分查找：寻找 >= target 的第一个元素 (Lower Bound)
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
-      if (arr[mid] === target) return mid;
-      if (arr[mid] < target) left = mid + 1;
-      else right = mid - 1;
+      if (times[mid] >= target) {
+        resultIndex = mid;
+        right = mid - 1; // 继续向左找更小的符合条件的
+      } else {
+        left = mid + 1;
+      }
     }
+
+    // 2. 验证匹配结果
+    if (resultIndex !== -1) {
+        const foundTime = times[resultIndex];
+
+        // 情况 A: 精确匹配 (完美对齐)
+        // 适用于分钟线、小时线等
+        if (foundTime === target) {
+            return resultIndex;
+        }
+
+        // 情况 B: 模糊匹配 (处理日线 Open vs Close 问题)
+        // 如果找到的时间 比 目标时间 大，但相差在 24 小时以内
+        // 说明这是同一天的 K 线 (一个是0点，一个是15点)
+        const diff = foundTime - target;
+        // 允许误差范围：16小时 (57600000ms)
+        // A股收盘是15:00，差异是15小时，所以在允许范围内。
+        // 同时也避免了匹配到第二天的数据 (24h+)
+        if (diff > 0 && diff <= 57600000) {
+            return resultIndex;
+        }
+    }
+
     return -1;
   }
 
   return {
     idx: function (PineJS) {
       return {
-        name: "MACD",
+        name: "macd_backend",
         metainfo: {
           _metainfoVersion: 53,
-          id: "CustomIndicatorsMACD@tv-basicstudies-1",
-          name: "MACD",
-          description: "MACD",
-          shortDescription: "MACD",
+          id: "macd_backend@tv-basicstudies-1",
+          name: "macd_backend",
+          description: "macd_backend",
+          shortDescription: "macd_backend",
           is_price_study: false,
           isCustomIndicator: true,
-          // 定义绘图输出
           plots: [
-            // 0. 直方图数值
-            {
-              id: "plot_hist",
-              type: "line",
-              target: "plot_macd_pane",
-            },
-            // 1. 直方图颜色 (Colorer)
-            {
-              id: "plot_hist_color",
-              type: "colorer",
-              target: "plot_hist",
-              palette: "paletteHist",
-            },
-            // 2. DIF线
-            {
-              id: "plot_dif",
-              type: "line",
-              target: "plot_macd_pane",
-            },
-            // 3. DEA线
-            {
-              id: "plot_dea",
-              type: "line",
-              target: "plot_macd_pane",
-            },
-            // 4. 面积数值 (Area)
-            // 我们将其定义为 line，但在样式中隐藏线条，仅用于显示数值
-            {
-              id: "plot_area",
-              type: "line",
-              target: "plot_macd_pane",
-            },
+            { id: "plot_hist", type: "line", target: "plot_macd_pane" },
+            { id: "plot_hist_color", type: "colorer", target: "plot_hist", palette: "paletteHist" },
+            { id: "plot_dif", type: "line", target: "plot_macd_pane" },
+            { id: "plot_dea", type: "line", target: "plot_macd_pane" },
+            { id: "plot_area", type: "line", target: "plot_macd_pane" },
           ],
-
-          // 调色板结构
           palettes: {
             paletteHist: {
               colors: {
@@ -71,58 +83,23 @@ var TvIdxMACDBackend = (function () {
               }
             },
           },
-
           defaults: {
             styles: {
-              plot_hist: {
-                linestyle: 0,
-                linewidth: 1,
-                plottype: 5, // Columns (列状图)
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-              },
-              plot_dif: {
-                linestyle: 0,
-                linewidth: 1,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#2962FF", // 蓝色
-              },
-              plot_dea: {
-                linestyle: 0,
-                linewidth: 1,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#FF6D00", // 橙色
-              },
-              plot_area: {
-                linestyle: 0,
-                linewidth: 0,   // 线宽为0，不显示线条
-                plottype: 0,
-                trackPrice: false,
-                transparency: 100, // 完全透明
-                visible: true,  // 必须为 true，否则状态栏不显示数值
-                title: "Area"   // 显示名称
-              },
+              plot_hist: { linestyle: 0, linewidth: 1, plottype: 5, trackPrice: false, transparency: 0, visible: true },
+              plot_dif: { linestyle: 0, linewidth: 1, plottype: 0, trackPrice: false, transparency: 0, visible: true, color: "#2962FF" },
+              plot_dea: { linestyle: 0, linewidth: 1, plottype: 0, trackPrice: false, transparency: 0, visible: true, color: "#FF6D00" },
+              plot_area: { linestyle: 0, linewidth: 0, plottype: 0, trackPrice: false, transparency: 100, visible: true, title: "Area" },
             },
-
-            // 调色板默认颜色
             palettes: {
               paletteHist: {
                 colors: {
-                  0: { color: "#26a69a", width: 1, style: 1 }, // 深绿
-                  1: { color: "#b2dfdb", width: 1, style: 1 }, // 浅绿
-                  2: { color: "#ffcdd2", width: 1, style: 1 }, // 浅红
-                  3: { color: "#ef5350", width: 1, style: 1 }, // 深红
+                  0: { color: "#26a69a", width: 1, style: 1 },
+                  1: { color: "#b2dfdb", width: 1, style: 1 },
+                  2: { color: "#ffcdd2", width: 1, style: 1 },
+                  3: { color: "#ef5350", width: 1, style: 1 },
                 }
               }
             },
-
             inputs: {},
           },
           styles: {
@@ -132,10 +109,7 @@ var TvIdxMACDBackend = (function () {
             plot_area: { title: "Area", histogramBase: 0 },
           },
           inputs: [],
-          format: {
-            type: "price",
-            precision: 4,
-          },
+          format: { type: "price", precision: 4 },
         },
         constructor: function () {
           this.init = function (context, inputCallback) {};
@@ -151,90 +125,74 @@ var TvIdxMACDBackend = (function () {
             let prev_hist = 0;
 
             try {
-              // 使用时间戳而不是索引
               const currentTime = context.symbol.time;
 
-              if (window.tvWidget && window.tvWidget._options && window.tvWidget._options.datafeed) {
-                const symbolInfo = window.tvWidget.symbolInterval();
-                if (symbolInfo) {
-                  const key = symbolInfo.symbol.toString().toLowerCase() + symbolInfo.interval.toString().toLowerCase();
-                  const datafeed = window.tvWidget._options.datafeed;
-                  if (datafeed._historyProvider && datafeed._historyProvider.bars_result) {
-                    const barsResult = datafeed._historyProvider.bars_result.get(key);
+              // 1. 基础检查：数据源是否存在
+              if (window.tvDatafeed && window.tvDatafeed._historyProvider && window.tvDatafeed._historyProvider.bars_result) {
+                  const symbolInfo = window.tvWidget ? window.tvWidget.symbolInterval() : null;
 
-                    // 确保我们有时间数组和 MACD 数据
-                    if (barsResult && barsResult.macd_dif && barsResult.times) {
-                      // [核心逻辑] 通过二分查找，在 barsResult.times 中找到 currentTime 对应的索引
-                      // 此时 barsResult.times 在 bundle.js 中已被强制转换为毫秒并排序
-                      const alignedIndex = binarySearch(barsResult.times, currentTime);
+                  if (symbolInfo) {
+                    // 2. 构建 Key
+                    const rawSymbol = symbolInfo.symbol.toString().toLowerCase();
+                    const interval = symbolInfo.interval.toString().toLowerCase();
+                    let key = rawSymbol + interval;
+                    const barsMap = window.tvDatafeed._historyProvider.bars_result;
+                    let barsResult = barsMap.get(key);
 
-                      if (alignedIndex !== -1) {
-                        v_dif = barsResult.macd_dif[alignedIndex];
-                        v_dea = barsResult.macd_dea[alignedIndex];
-                        v_hist = barsResult.macd_hist[alignedIndex];
+                    // 3. 容错 Key 查找 (处理 "a:sz..." 前缀)
+                    if (!barsResult && rawSymbol.indexOf(':') !== -1) {
+                         key = rawSymbol.split(':')[1] + interval;
+                         barsResult = barsMap.get(key);
+                    }
 
-                        // 优先使用后端返回的 macd_area
-                        if (barsResult.macd_area) {
-                            v_area = barsResult.macd_area[alignedIndex];
-                        }
+                    // 4. 获取数据
+                    if (barsResult && barsResult.times && barsResult.macd_dif) {
 
-                        if (alignedIndex > 0) {
-                            prev_hist = barsResult.macd_hist[alignedIndex - 1];
-                        }
+                          // [核心变更] 使用 smartSearch 替代 binarySearch
+                          // 既能处理精确时间，也能自动兼容 00:00 vs 15:00 的偏移
+                          const alignedIndex = smartSearch(barsResult.times, currentTime);
 
-                        // 兜底逻辑：如果后端没有返回 area，或者是 NaN，我们在前端实时计算
-                        // 注意：这里的回溯也依赖于缓存数组的连续性
-                        if ((v_area === undefined || v_area === null || isNaN(v_area)) && !isNaN(v_hist)) {
-                            let current_sum = 0;
-                            let i = alignedIndex;
-                            // 当前柱子的方向（>=0 为正，<0 为负）
-                            const isPositive = v_hist >= 0;
+                          if (alignedIndex !== -1) {
+                            v_dif = Number(barsResult.macd_dif[alignedIndex]);
+                            v_dea = Number(barsResult.macd_dea[alignedIndex]);
+                            v_hist = Number(barsResult.macd_hist[alignedIndex]);
 
-                            // 向前回溯
-                            while (i >= 0) {
-                                let h = barsResult.macd_hist[i];
-                                if (h === undefined || h === null || isNaN(h)) break;
+                            if (barsResult.macd_area) v_area = Number(barsResult.macd_area[alignedIndex]);
+                            if (alignedIndex > 0) prev_hist = Number(barsResult.macd_hist[alignedIndex - 1]);
 
-                                // 检查方向是否一致
-                                const hPositive = h >= 0;
-                                if (hPositive !== isPositive) {
-                                    break; // 遇到反向柱子，停止累加
+                            // Area 前端实时计算 (兜底策略)
+                            // 如果后端没算 Area，前端根据 Hist 的红绿柱连续性自己累加
+                            if ((v_area === undefined || v_area === null || isNaN(v_area)) && !isNaN(v_hist)) {
+                                let current_sum = 0;
+                                let i = alignedIndex;
+                                const isPositive = v_hist >= 0;
+                                while (i >= 0) {
+                                    let h = Number(barsResult.macd_hist[i]);
+                                    if (isNaN(h)) break;
+                                    if ((h >= 0) !== isPositive) break;
+                                    current_sum += h;
+                                    i--;
                                 }
-
-                                current_sum += h;
-                                i--;
+                                v_area = current_sum;
                             }
-                            v_area = current_sum;
-                        }
-                      }
-
-                      // 处理未找到数据的情况（保持 NaN）
-                      if (v_dif === null) v_dif = NaN;
-                      if (v_dea === null) v_dea = NaN;
-                      if (v_hist === null) v_hist = NaN;
-                      if (v_area === null) v_area = NaN;
-                      if (prev_hist === null) prev_hist = 0;
+                          }
                     }
                   }
-                }
               }
             } catch (e) {
-                console.error("MACD calc error:", e);
+                // 生产环境静默，避免控制台报错干扰
             }
 
-            // 颜色逻辑
+            // 5. 计算颜色
             let colorIndex = 0;
             if (!isNaN(v_hist)) {
                 if (v_hist >= 0) {
-                    // 正值区域
                     colorIndex = (v_hist >= prev_hist) ? 0 : 1;
                 } else {
-                    // 负值区域
                     colorIndex = (v_hist > prev_hist) ? 2 : 3;
                 }
             }
 
-            // 返回数组：[直方图, 颜色索引, DIF, DEA, 面积]
             return [v_hist, colorIndex, v_dif, v_dea, v_area];
           };
         },
