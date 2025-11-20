@@ -1,9 +1,9 @@
 // -----------------------------------------------------------------------
 // 文件名: chart_idx_macd_backend.js
-// 版本: V5 (智能语义对齐版)
-// 功能: 解决 TV 前端(OpenTime) 与 后端(CloseTime) 时间戳不一致导致的指标丢失问题
+// 版本: V6 (Area Peak Annotation)
+// 功能: MACD后端对齐 + 区域面积峰值标注
 // -----------------------------------------------------------------------
-console.log("%c[SYSTEM] MACD Backend V5 (Smart-Align) Loaded", "color: #2196F3; font-weight: bold;");
+console.log("%c[SYSTEM] MACD Backend V6 (Area-Peak) Loaded", "color: #2196F3; font-weight: bold;");
 
 var TvIdxMACDBackend = (function () {
 
@@ -18,12 +18,12 @@ var TvIdxMACDBackend = (function () {
     let right = times.length - 1;
     let resultIndex = -1;
 
-    // 1. 二分查找：寻找 >= target 的第一个元素 (Lower Bound)
+    // 1. 二分查找
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
       if (times[mid] >= target) {
         resultIndex = mid;
-        right = mid - 1; // 继续向左找更小的符合条件的
+        right = mid - 1;
       } else {
         left = mid + 1;
       }
@@ -32,25 +32,15 @@ var TvIdxMACDBackend = (function () {
     // 2. 验证匹配结果
     if (resultIndex !== -1) {
         const foundTime = times[resultIndex];
-
-        // 情况 A: 精确匹配 (完美对齐)
-        // 适用于分钟线、小时线等
         if (foundTime === target) {
             return resultIndex;
         }
-
-        // 情况 B: 模糊匹配 (处理日线 Open vs Close 问题)
-        // 如果找到的时间 比 目标时间 大，但相差在 24 小时以内
-        // 说明这是同一天的 K 线 (一个是0点，一个是15点)
         const diff = foundTime - target;
-        // 允许误差范围：16小时 (57600000ms)
-        // A股收盘是15:00，差异是15小时，所以在允许范围内。
-        // 同时也避免了匹配到第二天的数据 (24h+)
+        // 允许 16小时 误差 (兼容日线 Open/Close 差异)
         if (diff > 0 && diff <= 57600000) {
             return resultIndex;
         }
     }
-
     return -1;
   }
 
@@ -71,6 +61,7 @@ var TvIdxMACDBackend = (function () {
             { id: "plot_hist_color", type: "colorer", target: "plot_hist", palette: "paletteHist" },
             { id: "plot_dif", type: "line", target: "plot_macd_pane" },
             { id: "plot_dea", type: "line", target: "plot_macd_pane" },
+            // Area 修改为圆点显示，以便观察孤立的数值
             { id: "plot_area", type: "line", target: "plot_macd_pane" },
           ],
           palettes: {
@@ -88,7 +79,8 @@ var TvIdxMACDBackend = (function () {
               plot_hist: { linestyle: 0, linewidth: 1, plottype: 5, trackPrice: false, transparency: 0, visible: true },
               plot_dif: { linestyle: 0, linewidth: 1, plottype: 0, trackPrice: false, transparency: 0, visible: true, color: "#2962FF" },
               plot_dea: { linestyle: 0, linewidth: 1, plottype: 0, trackPrice: false, transparency: 0, visible: true, color: "#FF6D00" },
-              plot_area: { linestyle: 0, linewidth: 0, plottype: 0, trackPrice: false, transparency: 100, visible: true, title: "Area" },
+              // Area 样式修改：可见(transparency:0)，线宽加大，颜色醒目
+              plot_area: { linestyle: 0, linewidth: 2, plottype: 0, trackPrice: true, transparency: 0, visible: true, title: "Region Area", color: "#9C27B0" },
             },
             palettes: {
               paletteHist: {
@@ -106,7 +98,7 @@ var TvIdxMACDBackend = (function () {
             plot_hist: { title: "直方图", histogramBase: 0 },
             plot_dif: { title: "MACD", histogramBase: 0 },
             plot_dea: { title: "信号", histogramBase: 0 },
-            plot_area: { title: "Area", histogramBase: 0 },
+            plot_area: { title: "区域面积", histogramBase: 0 },
           },
           inputs: [],
           format: { type: "price", precision: 4 },
@@ -121,69 +113,92 @@ var TvIdxMACDBackend = (function () {
             let v_dif = NaN;
             let v_dea = NaN;
             let v_hist = NaN;
-            let v_area = NaN;
+            let v_area = NaN; // 默认为 NaN，只在峰值处有值
             let prev_hist = 0;
 
             try {
               const currentTime = context.symbol.time;
 
-              // 1. 基础检查：数据源是否存在
               if (window.tvDatafeed && window.tvDatafeed._historyProvider && window.tvDatafeed._historyProvider.bars_result) {
                   const symbolInfo = window.tvWidget ? window.tvWidget.symbolInterval() : null;
 
                   if (symbolInfo) {
-                    // 2. 构建 Key
                     const rawSymbol = symbolInfo.symbol.toString().toLowerCase();
                     const interval = symbolInfo.interval.toString().toLowerCase();
                     let key = rawSymbol + interval;
                     const barsMap = window.tvDatafeed._historyProvider.bars_result;
                     let barsResult = barsMap.get(key);
 
-                    // 3. 容错 Key 查找 (处理 "a:sz..." 前缀)
                     if (!barsResult && rawSymbol.indexOf(':') !== -1) {
                          key = rawSymbol.split(':')[1] + interval;
                          barsResult = barsMap.get(key);
                     }
 
-                    // 4. 获取数据
                     if (barsResult && barsResult.times && barsResult.macd_dif) {
-
-                          // [核心变更] 使用 smartSearch 替代 binarySearch
-                          // 既能处理精确时间，也能自动兼容 00:00 vs 15:00 的偏移
                           const alignedIndex = smartSearch(barsResult.times, currentTime);
 
                           if (alignedIndex !== -1) {
                             v_dif = Number(barsResult.macd_dif[alignedIndex]);
                             v_dea = Number(barsResult.macd_dea[alignedIndex]);
                             v_hist = Number(barsResult.macd_hist[alignedIndex]);
-
-                            if (barsResult.macd_area) v_area = Number(barsResult.macd_area[alignedIndex]);
                             if (alignedIndex > 0) prev_hist = Number(barsResult.macd_hist[alignedIndex - 1]);
 
-                            // Area 前端实时计算 (兜底策略)
-                            // 如果后端没算 Area，前端根据 Hist 的红绿柱连续性自己累加
-                            if ((v_area === undefined || v_area === null || isNaN(v_area)) && !isNaN(v_hist)) {
-                                let current_sum = 0;
-                                let i = alignedIndex;
-                                const isPositive = v_hist >= 0;
-                                while (i >= 0) {
-                                    let h = Number(barsResult.macd_hist[i]);
-                                    if (isNaN(h)) break;
-                                    if ((h >= 0) !== isPositive) break;
-                                    current_sum += h;
-                                    i--;
+                            // -----------------------------------------------------
+                            // [核心逻辑修改] 计算连续区域面积，并只在最长柱子上显示
+                            // -----------------------------------------------------
+                            if (!isNaN(v_hist) && v_hist !== 0) {
+                                const hists = barsResult.macd_hist;
+                                const len = hists.length;
+                                const isPositive = v_hist > 0;
+
+                                // 1. 向左寻找起点 (Start)
+                                let start = alignedIndex;
+                                while (start > 0) {
+                                    const p = Number(hists[start - 1]);
+                                    if (isNaN(p) || p === 0 || (p > 0 !== isPositive)) break;
+                                    start--;
                                 }
-                                v_area = current_sum;
+
+                                // 2. 向右寻找终点 (End)
+                                let end = alignedIndex;
+                                while (end < len - 1) {
+                                    const n = Number(hists[end + 1]);
+                                    if (isNaN(n) || n === 0 || (n > 0 !== isPositive)) break;
+                                    end++;
+                                }
+
+                                // 3. 计算区域总和 & 寻找峰值索引
+                                let regionSum = 0;
+                                let maxAbsVal = -1;
+                                let maxIdx = -1;
+
+                                for (let i = start; i <= end; i++) {
+                                    const val = Number(hists[i]);
+                                    regionSum += val;
+                                    const absVal = Math.abs(val);
+
+                                    // 寻找绝对值最大的柱子
+                                    // 使用 >= 是为了在有多个相同峰值时，标记在靠后的位置(或根据需求调整)
+                                    // 这里使用 > ，遇到相同值保留第一个
+                                    if (absVal > maxAbsVal) {
+                                        maxAbsVal = absVal;
+                                        maxIdx = i;
+                                    }
+                                }
+
+                                // 4. 只有当前是峰值柱子时，才输出 Area
+                                if (alignedIndex === maxIdx) {
+                                    v_area = regionSum;
+                                }
                             }
+                            // -----------------------------------------------------
                           }
                     }
                   }
               }
-            } catch (e) {
-                // 生产环境静默，避免控制台报错干扰
-            }
+            } catch (e) {}
 
-            // 5. 计算颜色
+            // 计算颜色
             let colorIndex = 0;
             if (!isNaN(v_hist)) {
                 if (v_hist >= 0) {
