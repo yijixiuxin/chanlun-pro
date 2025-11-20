@@ -4,18 +4,10 @@
     (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Datafeeds = {}));
 })(this, (function (exports) { 'use strict';
 
-    /**
-     * If you want to enable logs from datafeed set it to `true`
-     */
-    function logMessage(message) {
-    }
+    function logMessage(message) {}
     function getErrorMessage(error) {
-        if (error === undefined) {
-            return '';
-        }
-        else if (typeof error === 'string') {
-            return error;
-        }
+        if (error === undefined) return '';
+        else if (typeof error === 'string') return error;
         return error.message;
     }
 
@@ -28,16 +20,10 @@
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'quotes', { symbols: symbols })
                     .then((response) => {
-                    if (response.s === 'ok') {
-                        resolve(response.d);
-                    }
-                    else {
-                        reject(response.errmsg);
-                    }
-                })
-                    .catch((error) => {
-                    const errorMessage = getErrorMessage(error);
-                    reject(`network error: ${errorMessage}`);
+                    if (response.s === 'ok') resolve(response.d);
+                    else reject(response.errmsg);
+                }).catch((error) => {
+                    reject(`network error: ${getErrorMessage(error)}`);
                 });
             });
         }
@@ -45,24 +31,18 @@
 
     class Requester {
         constructor(headers) {
-            if (headers) {
-                this._headers = headers;
-            }
+            if (headers) this._headers = headers;
         }
         sendRequest(datafeedUrl, urlPath, params) {
             if (params !== undefined) {
                 const paramKeys = Object.keys(params);
-                if (paramKeys.length !== 0) {
-                    urlPath += '?';
-                }
+                if (paramKeys.length !== 0) urlPath += '?';
                 urlPath += paramKeys.map((key) => {
                     return `${encodeURIComponent(key)}=${encodeURIComponent(params[key].toString())}`;
                 }).join('&');
             }
             const options = { credentials: 'same-origin' };
-            if (this._headers !== undefined) {
-                options.headers = this._headers;
-            }
+            if (this._headers !== undefined) options.headers = this._headers;
             return fetch(`${datafeedUrl}/${urlPath}`, options)
                 .then((response) => response.text())
                 .then((responseTest) => JSON.parse(responseTest));
@@ -83,18 +63,10 @@
                 from: periodParams.from,
                 to: periodParams.to,
             };
-            if (periodParams.countBack !== undefined) {
-                requestParams.countback = periodParams.countBack;
-            }
-            if (periodParams.firstDataRequest !== undefined) {
-                requestParams.firstDataRequest = periodParams.firstDataRequest;
-            }
-            if (symbolInfo.currency_code !== undefined) {
-                requestParams.currencyCode = symbolInfo.currency_code;
-            }
-            if (symbolInfo.unit_id !== undefined) {
-                requestParams.unitId = symbolInfo.unit_id;
-            }
+            if (periodParams.countBack !== undefined) requestParams.countback = periodParams.countBack;
+            if (periodParams.firstDataRequest !== undefined) requestParams.firstDataRequest = periodParams.firstDataRequest;
+            if (symbolInfo.currency_code !== undefined) requestParams.currencyCode = symbolInfo.currency_code;
+            if (symbolInfo.unit_id !== undefined) requestParams.unitId = symbolInfo.unit_id;
             return new Promise(async (resolve, reject) => {
                 try {
                     const initialResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
@@ -120,31 +92,20 @@
                     this._limitedServerResponse.maxResponseLength > 0 &&
                     this._limitedServerResponse.maxResponseLength === lastResultLength &&
                     requestParams.from < requestParams.to) {
-                    if (requestParams.countback) {
-                        requestParams.countback =
-                            requestParams.countback - lastResultLength;
-                    }
+                    if (requestParams.countback) requestParams.countback = requestParams.countback - lastResultLength;
                     if (this._limitedServerResponse.expectedOrder === "earliestFirst") {
                         requestParams.from = Math.round(result.bars[result.bars.length - 1].time / 1000);
-                    }
-                    else {
+                    } else {
                         requestParams.to = Math.round(result.bars[0].time / 1000);
                     }
                     const followupResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
                     const followupResult = this._processHistoryResponse(followupResponse, requestParams);
                     lastResultLength = followupResult.bars.length;
                     if (this._limitedServerResponse.expectedOrder === "earliestFirst") {
-                        if (followupResult.bars[0].time ===
-                            result.bars[result.bars.length - 1].time) {
-                            followupResult.bars.shift();
-                        }
+                        if (followupResult.bars[0].time === result.bars[result.bars.length - 1].time) followupResult.bars.shift();
                         result.bars.push(...followupResult.bars);
-                    }
-                    else {
-                        if (followupResult.bars[followupResult.bars.length - 1].time ===
-                            result.bars[0].time) {
-                            followupResult.bars.pop();
-                        }
+                    } else {
+                        if (followupResult.bars[followupResult.bars.length - 1].time === result.bars[0].time) followupResult.bars.pop();
                         result.bars.unshift(...followupResult.bars);
                     }
                 }
@@ -156,24 +117,23 @@
                 }
             }
         }
+        
         _processHistoryResponse(response, requestParams) {
             if (response.s !== "ok" && response.s !== "no_data") {
                 throw new Error(response.errmsg);
             }
             const bars = [];
-            const meta = {
-                noData: false,
-            };
+            const meta = { noData: false };
+            
             if (response.s === "no_data") {
                 meta.noData = true;
                 meta.nextTime = response.nextTime;
-            }
-            else {
+            } else {
                 const volumePresent = response.v !== undefined;
                 const ohlPresent = response.o !== undefined;
                 for (let i = 0; i < response.t.length; ++i) {
                     const barValue = {
-                        time: response.t[i] * 1000,
+                        time: response.t[i] * 1000, // K线强制转毫秒
                         close: response.c[i],
                         open: response.c[i],
                         high: response.c[i],
@@ -189,11 +149,10 @@
                     }
                     bars.push(barValue);
                 }
-                // 设置保存的key
+
                 const res_key = requestParams["symbol"].toString().toLowerCase() +
                     requestParams["resolution"].toString().toLowerCase();
 
-                // 获取现有数据
                 let obj_res = this.bars_result.get(res_key);
 
                 const raw_times = (response.t || []).map(t => t * 1000);
@@ -202,40 +161,28 @@
                 const macd_hist = response.macd_hist || [];
                 const macd_area = response.macd_area || [];
 
-                // --- [DEBUG] 打印后端返回的数据维度，方便诊断 ---
-                console.log(`[Bundle] Backend data recv: Times=${raw_times.length}, MACD=${macd_dif.length}, Key=${res_key}`);
+                // [DEBUG LOG] 1. 打印接收到的原始数据情况
+                const bisLen = response.bis ? response.bis.length : 0;
+                const fxsLen = response.fxs ? response.fxs.length : 0;
+                console.log(`[DEBUG-BUNDLE] <Recv> Key: ${res_key} | Bars: ${bars.length} | Bis: ${bisLen} | Fxs: ${fxsLen}`);
 
-                // ========================================================================
-                // [修复] 通用数据合并/填充逻辑
-                // 目的：确保 macd 等自定义数组永远与 times 数组长度一致，且通过时间 key 对齐
-                // ========================================================================
+                // [DEBUG LOG] 2. 检查 Chanlun 数据的时间戳样例（第一笔）
+                if (bisLen > 0) {
+                    console.log(`[DEBUG-BUNDLE] Sample Bi Time: ${response.bis[0].points[0].time} (Raw)`);
+                }
+
                 const mergeAlignedArrays = (existingTimes = [], existingArr = [], newTimes = [], newArr = []) => {
                     const map = new Map();
-
-                    // 1. 先载入旧数据
                     existingTimes.forEach((t, i) => {
                         map.set(t, existingArr[i] !== undefined ? existingArr[i] : NaN);
                     });
-
-                    // 2. 覆盖新数据 (注意处理空值)
                     newTimes.forEach((t, i) => {
-                        // 如果后端返回的数据比 time 短，或者该位置是 null/undefined，则存入 NaN
-                        // 这样能保证 map 里一定有值
                         let val = NaN;
-                        if (newArr && i < newArr.length) {
-                           val = newArr[i];
-                        }
-                        // 只有当值不是 null/undefined 时才视为有效值，否则 NaN
+                        if (newArr && i < newArr.length) val = newArr[i];
                         if (val === null || val === undefined) val = NaN;
-
                         map.set(t, val);
                     });
-
-                    // 3. 获取所有时间并排序 (Union of times)
-                    // 注意：这里必须和 updateTimes 的逻辑一致，也就是 Set + Sort
                     const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
-
-                    // 4. 按照排序后的时间提取值，生成对齐的数组
                     return {
                         times: allTimes,
                         values: allTimes.map(t => {
@@ -245,106 +192,86 @@
                     };
                 };
 
-                // 第一次初始化
-                if (response.update == false || obj_res == undefined) {
-                    // 即使是初始化，如果后端 macd 数组比 times 短，也需要填充 NaN
-                    // 我们直接复用上面的逻辑，把 existing 设为空即可
+                // 定义合并函数
+                const updateTextPoints = (existingPoints, newPoints) => {
+                    if (!newPoints || newPoints.length === 0) return existingPoints || [];
+                    if (!existingPoints || existingPoints.length === 0) return newPoints;
+                    const combined = [...existingPoints];
+                    for (const p of newPoints) {
+                        const exists = combined.some(ep => JSON.stringify(ep.points) === JSON.stringify(p.points) && ep.text === p.text);
+                        if (!exists) combined.push(p);
+                    }
+                    const getPointTime = (point) => (Array.isArray(point.points) ? point.points[0].time : point.points.time);
+                    return combined.sort((a, b) => getPointTime(a) - getPointTime(b));
+                };
+
+                const updateLineSegments = (existingSegments, newSegments) => {
+                    if (!newSegments || newSegments.length === 0) return existingSegments || [];
+                    if (!existingSegments || existingSegments.length === 0) return newSegments;
+                    const combined = [...existingSegments];
+                    for (const s of newSegments) {
+                        const exists = combined.some(es => JSON.stringify(es.points) === JSON.stringify(s.points));
+                        if (!exists) combined.push(s);
+                    }
+                    return combined.sort((a, b) => {
+                        if (!a.points || a.points.length === 0) return -1;
+                        if (!b.points || b.points.length === 0) return 1;
+                        return a.points[0].time - b.points[0].time;
+                    });
+                };
+
+                if (obj_res === undefined) {
                     const difObj = mergeAlignedArrays([], [], raw_times, macd_dif);
                     const deaObj = mergeAlignedArrays([], [], raw_times, macd_dea);
                     const histObj = mergeAlignedArrays([], [], raw_times, macd_hist);
                     const areaObj = mergeAlignedArrays([], [], raw_times, macd_area);
 
-                    // 此时 difObj.times == deaObj.times == raw_times (如果 raw_times 本身是排序且无重复的)
-                    // 为了保险，我们使用计算出来的 times
-
-                    this.bars_result.set(res_key, {
+                    const newCache = {
                         bars: bars,
                         meta: meta,
-                        // 使用处理过的时间轴，确保和 MACD 数组长度 100% 一致
                         times: difObj.times,
                         macd_dif: difObj.values,
                         macd_dea: deaObj.values,
                         macd_hist: histObj.values,
                         macd_area: areaObj.values,
-
-                        fxs: response.fxs,
-                        bis: response.bis,
-                        xds: response.xds,
-                        zsds: response.zsds,
-                        bi_zss: response.bi_zss,
-                        xd_zss: response.xd_zss,
-                        zsd_zss: response.zsd_zss,
-                        bcs: response.bcs,
-                        mmds: response.mmds,
+                        fxs: response.fxs || [],
+                        bis: response.bis || [],
+                        xds: response.xds || [],
+                        zsds: response.zsds || [],
+                        bi_zss: response.bi_zss || [],
+                        xd_zss: response.xd_zss || [],
+                        zsd_zss: response.zsd_zss || [],
+                        bcs: response.bcs || [],
+                        mmds: response.mmds || [],
                         chart_color: response.chart_color,
-                    });
+                    };
+                    this.bars_result.set(res_key, newCache);
+                    console.log(`[DEBUG-BUNDLE] <Init> Cache created for ${res_key}. Bis: ${newCache.bis.length}`);
                 }
                 else {
-                    // 增量更新逻辑
                     const oldTimes = obj_res.times || [];
 
-                    // 分别合并各个数组
+                    // Bars 合并
+                    const oldBars = obj_res.bars || [];
+                    const barMap = new Map();
+                    oldBars.forEach(b => barMap.set(b.time, b));
+                    bars.forEach(b => barMap.set(b.time, b));
+                    const mergedBars = Array.from(barMap.values()).sort((a, b) => a.time - b.time);
+                    obj_res.bars = mergedBars;
+
+                    // MACD 合并
                     const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);
                     const deaObj = mergeAlignedArrays(oldTimes, obj_res.macd_dea, raw_times, macd_dea);
                     const histObj = mergeAlignedArrays(oldTimes, obj_res.macd_hist, raw_times, macd_hist);
                     const areaObj = mergeAlignedArrays(oldTimes, obj_res.macd_area, raw_times, macd_area);
 
-                    // 更新结果
-                    obj_res.times = difObj.times; // 更新为合并后的时间轴
+                    obj_res.times = difObj.times;
                     obj_res.macd_dif = difObj.values;
                     obj_res.macd_dea = deaObj.values;
                     obj_res.macd_hist = histObj.values;
                     obj_res.macd_area = areaObj.values;
 
-                    // 原有 updateTextPoints / updateLineSegments 逻辑保持不变
-                    const updateTextPoints = (existingPoints, newPoints) => {
-                        if (!newPoints || newPoints.length === 0)
-                            return existingPoints || [];
-                        if (!existingPoints || existingPoints.length === 0)
-                            return newPoints;
-                        const getPointTime = (point) => {
-                            if (Array.isArray(point.points)) {
-                                return point.points[0].time;
-                            }
-                            else {
-                                return point.points.time;
-                            }
-                        };
-                        const minResponseTime = Math.min(...newPoints.map(getPointTime));
-                        const updatedPoints = [];
-                        for (const point of existingPoints) { if (getPointTime(point) < minResponseTime) updatedPoints.push(point); }
-                        for (const point of newPoints) { updatedPoints.push(point); }
-                        return updatedPoints.sort((a, b) => getPointTime(a) - getPointTime(b));
-                    };
-
-                    const updateLineSegments = (existingSegments, newSegments) => {
-                        if (!newSegments || newSegments.length === 0)
-                            return existingSegments || [];
-                        if (!existingSegments || existingSegments.length === 0)
-                            return newSegments;
-                        const minResponseTime = Math.min(...newSegments.map((segment) => segment.points[0].time));
-                        const updatedSegments = [];
-                        for (const segment of existingSegments) {
-                            if (segment.points.length > 0) {
-                                if (segment.points[0].time < minResponseTime) {
-                                    updatedSegments.push(segment);
-                                }
-                            }
-                        }
-                        for (const segment of newSegments) {
-                            updatedSegments.push(segment);
-                        }
-                        return updatedSegments.sort((a, b) => {
-                            if (a.points.length === 0 && b.points.length === 0)
-                                return 0;
-                            if (a.points.length === 0)
-                                return -1;
-                            if (b.points.length === 0)
-                                return 1;
-                            return a.points[0].time - b.points[0].time;
-                        });
-                    };
-
+                    // Chanlun 数据合并
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
                     obj_res.bis = updateLineSegments(obj_res.bis, response.bis);
                     obj_res.xds = updateLineSegments(obj_res.xds, response.xds);
@@ -355,9 +282,12 @@
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
                     obj_res.chart_color = response.chart_color;
+
                     this.bars_result.set(res_key, obj_res);
+                    console.log(`[DEBUG-BUNDLE] <Merge> Cache updated for ${res_key}. Total Bars: ${obj_res.bars.length}, Total Bis: ${obj_res.bis.length}`);
                 }
             }
+
             const result = {
                 bars: bars,
                 meta: meta,
@@ -384,36 +314,25 @@
             setInterval(this._updateData.bind(this), updateFrequency);
         }
         subscribeBars(symbolInfo, resolution, newDataCallback, listenerGuid) {
-            if (this._subscribers.hasOwnProperty(listenerGuid)) {
-                return;
-            }
+            if (this._subscribers.hasOwnProperty(listenerGuid)) return;
             this._subscribers[listenerGuid] = {
                 lastBarTime: null,
                 listener: newDataCallback,
                 resolution: resolution,
                 symbolInfo: symbolInfo,
             };
-            logMessage(`DataPulseProvider: subscribed for #${listenerGuid} - {${symbolInfo.name}, ${resolution}}`);
         }
         unsubscribeBars(listenerGuid) {
             delete this._subscribers[listenerGuid];
         }
         _updateData() {
-            if (this._requestsPending > 0) {
-                return;
-            }
+            if (this._requestsPending > 0) return;
             this._requestsPending = 0;
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending += 1;
                 this._updateDataForSubscriber(listenerGuid)
-                    .then(() => {
-                    this._requestsPending -= 1;
-                    logMessage(`DataPulseProvider: data for #${listenerGuid} updated successfully, pending=${this._requestsPending}`);
-                })
-                    .catch((reason) => {
-                    this._requestsPending -= 1;
-                    logMessage(`DataPulseProvider: data for #${listenerGuid} updated with error=${getErrorMessage(reason)}, pending=${this._requestsPending}`);
-                });
+                    .then(() => { this._requestsPending -= 1; })
+                    .catch((reason) => { this._requestsPending -= 1; });
             }
         }
         _updateDataForSubscriber(listenerGuid) {
@@ -425,29 +344,20 @@
                 to: rangeEndTime,
                 countBack: 2,
                 firstDataRequest: false,
-            })
-                .then((result) => {
+            }).then((result) => {
                 this._onSubscriberDataReceived(listenerGuid, result);
             });
         }
         _onSubscriberDataReceived(listenerGuid, result) {
-            if (!this._subscribers.hasOwnProperty(listenerGuid)) {
-                return;
-            }
+            if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
             const bars = result.bars;
-            if (bars.length === 0) {
-                return;
-            }
+            if (bars.length === 0) return;
             const lastBar = bars[bars.length - 1];
             const subscriptionRecord = this._subscribers[listenerGuid];
-            if (subscriptionRecord.lastBarTime !== null && lastBar.time < subscriptionRecord.lastBarTime) {
-                return;
-            }
+            if (subscriptionRecord.lastBarTime !== null && lastBar.time < subscriptionRecord.lastBarTime) return;
             const isNewBar = subscriptionRecord.lastBarTime !== null && lastBar.time > subscriptionRecord.lastBarTime;
             if (isNewBar) {
-                if (bars.length < 2) {
-                    throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
-                }
+                if (bars.length < 2) throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
                 const previousBar = bars[bars.length - 2];
                 subscriptionRecord.listener(previousBar);
             }
@@ -455,20 +365,13 @@
             subscriptionRecord.listener(lastBar);
         }
     }
+
     function periodLengthSeconds(resolution, requiredPeriodsCount) {
         let daysCount = 0;
-        if (resolution === 'D' || resolution === '1D') {
-            daysCount = requiredPeriodsCount;
-        }
-        else if (resolution === 'M' || resolution === '1M') {
-            daysCount = 31 * requiredPeriodsCount;
-        }
-        else if (resolution === 'W' || resolution === '1W') {
-            daysCount = 7 * requiredPeriodsCount;
-        }
-        else {
-            daysCount = requiredPeriodsCount * parseInt(resolution) / (24 * 60);
-        }
+        if (resolution === 'D' || resolution === '1D') daysCount = requiredPeriodsCount;
+        else if (resolution === 'M' || resolution === '1M') daysCount = 31 * requiredPeriodsCount;
+        else if (resolution === 'W' || resolution === '1W') daysCount = 7 * requiredPeriodsCount;
+        else daysCount = requiredPeriodsCount * parseInt(resolution) / (24 * 60);
         return daysCount * 24 * 60 * 60;
     }
 
@@ -508,43 +411,32 @@
             }
         }
         _updateQuotes(updateType) {
-            if (this._requestsPending > 0) {
-                return;
-            }
+            if (this._requestsPending > 0) return;
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending++;
                 const subscriptionRecord = this._subscribers[listenerGuid];
                 this._quotesProvider.getQuotes(updateType === 1 ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
                     .then((data) => {
                     this._requestsPending--;
-                    if (!this._subscribers.hasOwnProperty(listenerGuid)) {
-                        return;
-                    }
+                    if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
                     subscriptionRecord.listener(data);
-                    logMessage(`QuotesPulseProvider: data for #${listenerGuid} (${updateType}) updated successfully, pending=${this._requestsPending}`);
-                })
-                    .catch((reason) => {
+                }).catch((reason) => {
                     this._requestsPending--;
-                    logMessage(`QuotesPulseProvider: data for #${listenerGuid} (${updateType}) updated with error=${getErrorMessage(reason)}, pending=${this._requestsPending}`);
                 });
             }
         }
     }
 
     function extractField$1(data, field, arrayIndex, valueIsArray) {
-        if (!(field in data)) {
-            console.warn(`Field "${String(field)}" not present in response`);
-            return undefined;
-        }
+        if (!(field in data)) return undefined;
         const value = data[field];
-        if (Array.isArray(value) && (!valueIsArray || Array.isArray(value[0]))) {
-            return value[arrayIndex];
-        }
+        if (Array.isArray(value) && (!valueIsArray || Array.isArray(value[0]))) return value[arrayIndex];
         return value;
     }
     function symbolKey(symbol, currency, unit) {
         return symbol + (currency !== undefined ? '_%|#|%_' + currency : '') + (unit !== undefined ? '_%|#|%_' + unit : '');
     }
+    
     class SymbolsStorage {
         constructor(datafeedUrl, datafeedSupportedResolutions, requester) {
             this._exchangesList = ['NYSE', 'FOREX', 'AMEX'];
@@ -561,9 +453,7 @@
         resolveSymbol(symbolName, currencyCode, unitId) {
             return this._readyPromise.then(() => {
                 const symbolInfo = this._symbolsInfo[symbolKey(symbolName, currencyCode, unitId)];
-                if (symbolInfo === undefined) {
-                    return Promise.reject('invalid symbol');
-                }
+                if (symbolInfo === undefined) return Promise.reject('invalid symbol');
                 return Promise.resolve(symbolInfo);
             });
         }
@@ -574,15 +464,9 @@
                 searchString = searchString.toUpperCase();
                 for (const symbolName of this._symbolsList) {
                     const symbolInfo = this._symbolsInfo[symbolName];
-                    if (symbolInfo === undefined) {
-                        continue;
-                    }
-                    if (symbolType.length > 0 && symbolInfo.type !== symbolType) {
-                        continue;
-                    }
-                    if (exchange && exchange.length > 0 && symbolInfo.exchange !== exchange) {
-                        continue;
-                    }
+                    if (symbolInfo === undefined) continue;
+                    if (symbolType.length > 0 && symbolInfo.type !== symbolType) continue;
+                    if (exchange && exchange.length > 0 && symbolInfo.exchange !== exchange) continue;
                     const positionInName = symbolInfo.name.toUpperCase().indexOf(searchString);
                     const positionInDescription = symbolInfo.description.toUpperCase().indexOf(searchString);
                     if (queryIsEmpty || positionInName >= 0 || positionInDescription >= 0) {
@@ -615,53 +499,32 @@
             const promises = [];
             const alreadyRequestedExchanges = {};
             for (const exchange of this._exchangesList) {
-                if (alreadyRequestedExchanges[exchange]) {
-                    continue;
-                }
+                if (alreadyRequestedExchanges[exchange]) continue;
                 alreadyRequestedExchanges[exchange] = true;
                 promises.push(this._requestExchangeData(exchange));
             }
-            return Promise.all(promises)
-                .then(() => {
-                this._symbolsList.sort();
-            });
+            return Promise.all(promises).then(() => { this._symbolsList.sort(); });
         }
         _requestExchangeData(exchange) {
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'symbol_info', { group: exchange })
                     .then((response) => {
-                    try {
-                        this._onExchangeDataReceived(exchange, response);
-                    }
-                    catch (error) {
-                        reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`));
-                        return;
-                    }
+                    try { this._onExchangeDataReceived(exchange, response); }
+                    catch (error) { reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`)); return; }
                     resolve();
-                })
-                    .catch((reason) => {
-                    logMessage(`SymbolsStorage: Request data for exchange '${exchange}' failed, reason=${getErrorMessage(reason)}`);
-                    resolve();
-                });
+                }).catch((reason) => { resolve(); });
             });
         }
         _onExchangeDataReceived(exchange, data) {
-            let symbolIndex = 0;
-            let fullName;
-            try {
+             let symbolIndex = 0;
+             try {
                 const symbolsCount = data.symbol.length;
                 const tickerPresent = data.ticker !== undefined;
                 for (; symbolIndex < symbolsCount; ++symbolIndex) {
                     const symbolName = data.symbol[symbolIndex];
                     const listedExchange = extractField$1(data, 'exchange-listed', symbolIndex);
                     const tradedExchange = extractField$1(data, 'exchange-traded', symbolIndex);
-                    if (listedExchange !== undefined || tradedExchange !== undefined) {
-                        fullName = tradedExchange + ':' + symbolName;
-                    }
                     const exchangeListedName = extractField$1(data, 'exchange_listed_name', symbolIndex);
-                    if (exchangeListedName !== undefined) {
-                        fullName = exchangeListedName + ':' + symbolName;
-                    }
                     const currencyCode = extractField$1(data, 'currency-code', symbolIndex);
                     const unitId = extractField$1(data, 'unit-id', symbolIndex);
                     const ticker = tickerPresent ? extractField$1(data, 'ticker', symbolIndex) : symbolName;
@@ -698,22 +561,13 @@
                     };
                     this._symbolsInfo[ticker] = symbolInfo;
                     this._symbolsInfo[symbolName] = symbolInfo;
-                    if (fullName !== undefined) {
-                        this._symbolsInfo[fullName] = symbolInfo;
-                    }
                     if (currencyCode !== undefined || unitId !== undefined) {
                         this._symbolsInfo[symbolKey(ticker, currencyCode, unitId)] = symbolInfo;
                         this._symbolsInfo[symbolKey(symbolName, currencyCode, unitId)] = symbolInfo;
-                        if (fullName !== undefined) {
-                            this._symbolsInfo[symbolKey(fullName, currencyCode, unitId)] = symbolInfo;
-                        }
                     }
                     this._symbolsList.push(symbolName);
                 }
-            }
-            catch (error) {
-                throw new Error(`SymbolsStorage: API error when processing exchange ${exchange} symbol #${symbolIndex} (${data.symbol[symbolIndex]}): ${Object(error).message}`);
-            }
+             } catch(error) { throw new Error(`SymbolsStorage: API error: ${Object(error).message}`); }
         }
     }
     function definedValueOrDefault(value, defaultValue) {
@@ -724,6 +578,7 @@
         const value = data[field];
         return Array.isArray(value) ? value[arrayIndex] : value;
     }
+
     class UDFCompatibleDatafeedBase {
         constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse) {
             this._configuration = defaultConfiguration();
@@ -736,16 +591,12 @@
             this._quotesPulseProvider = new QuotesPulseProvider(this._quotesProvider);
             this._configurationReadyPromise = this._requestConfiguration()
                 .then((configuration) => {
-                if (configuration === null) {
-                    configuration = defaultConfiguration();
-                }
+                if (configuration === null) configuration = defaultConfiguration();
                 this._setupWithConfiguration(configuration);
             });
         }
         onReady(callback) {
-            this._configurationReadyPromise.then(() => {
-                callback(this._configuration);
-            });
+            this._configurationReadyPromise.then(() => { callback(this._configuration); });
         }
         getQuotes(symbols, onDataCallback, onErrorCallback) {
             this._quotesProvider.getQuotes(symbols).then(onDataCallback).catch(onErrorCallback);
@@ -757,17 +608,14 @@
             this._quotesPulseProvider.unsubscribeQuotes(listenerGuid);
         }
         getMarks(symbolInfo, from, to, onDataCallback, resolution) {
-            if (!this._configuration.supports_marks) {
-                return;
-            }
+            if (!this._configuration.supports_marks) return;
             const requestParams = {
                 symbol: symbolInfo.ticker || '',
                 from: from,
                 to: to,
                 resolution: resolution,
             };
-            this._send('marks', requestParams)
-                .then((response) => {
+            this._send('marks', requestParams).then((response) => {
                 if (!Array.isArray(response)) {
                     const result = [];
                     for (let i = 0; i < response.id.length; ++i) {
@@ -788,24 +636,17 @@
                     response = result;
                 }
                 onDataCallback(response);
-            })
-                .catch((error) => {
-                logMessage(`UdfCompatibleDatafeed: Request marks failed: ${getErrorMessage(error)}`);
-                onDataCallback([]);
-            });
+            }).catch((error) => { onDataCallback([]); });
         }
         getTimescaleMarks(symbolInfo, from, to, onDataCallback, resolution) {
-            if (!this._configuration.supports_timescale_marks) {
-                return;
-            }
+            if (!this._configuration.supports_timescale_marks) return;
             const requestParams = {
                 symbol: symbolInfo.ticker || '',
                 from: from,
                 to: to,
                 resolution: resolution,
             };
-            this._send('timescale_marks', requestParams)
-                .then((response) => {
+            this._send('timescale_marks', requestParams).then((response) => {
                 if (!Array.isArray(response)) {
                     const result = [];
                     for (let i = 0; i < response.id.length; ++i) {
@@ -822,81 +663,44 @@
                     response = result;
                 }
                 onDataCallback(response);
-            })
-                .catch((error) => {
-                logMessage(`UdfCompatibleDatafeed: Request timescale marks failed: ${getErrorMessage(error)}`);
-                onDataCallback([]);
-            });
+            }).catch((error) => { onDataCallback([]); });
         }
         getServerTime(callback) {
-            if (!this._configuration.supports_time) {
-                return;
-            }
-            this._send('time')
-                .then((response) => {
+            if (!this._configuration.supports_time) return;
+            this._send('time').then((response) => {
                 const time = parseInt(response);
-                if (!isNaN(time)) {
-                    callback(time);
-                }
-            })
-                .catch((error) => {
-                logMessage(`UdfCompatibleDatafeed: Fail to load server time, error=${getErrorMessage(error)}`);
-            });
+                if (!isNaN(time)) callback(time);
+            }).catch((error) => { });
         }
         searchSymbols(userInput, exchange, symbolType, onResult) {
-            if (this._configuration.supports_search) {
+             if (this._configuration.supports_search) {
                 const params = {
                     limit: 30,
                     query: userInput.toUpperCase(),
                     type: symbolType,
                     exchange: exchange,
                 };
-                this._send('search', params)
-                    .then((response) => {
-                    if (response.s !== undefined) {
-                        logMessage(`UdfCompatibleDatafeed: search symbols error=${response.errmsg}`);
-                        onResult([]);
-                        return;
-                    }
+                this._send('search', params).then((response) => {
+                    if (response.s !== undefined) { onResult([]); return; }
                     onResult(response);
-                })
-                    .catch((reason) => {
-                    logMessage(`UdfCompatibleDatafeed: Search symbols for '${userInput}' failed. Error=${getErrorMessage(reason)}`);
-                    onResult([]);
-                });
-            }
-            else {
-                if (this._symbolsStorage === null) {
-                    throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
-                }
-                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30)
-                    .then(onResult)
-                    .catch(onResult.bind(null, []));
+                }).catch((reason) => { onResult([]); });
+            } else {
+                if (this._symbolsStorage === null) throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
+                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30).then(onResult).catch(onResult.bind(null, []));
             }
         }
         resolveSymbol(symbolName, onResolve, onError, extension) {
             const currencyCode = extension && extension.currencyCode;
             const unitId = extension && extension.unitId;
-            function onResultReady(symbolInfo) {
-                onResolve(symbolInfo);
-            }
+            function onResultReady(symbolInfo) { onResolve(symbolInfo); }
             if (!this._configuration.supports_group_request) {
-                const params = {
-                    symbol: symbolName,
-                };
-                if (currencyCode !== undefined) {
-                    params.currencyCode = currencyCode;
-                }
-                if (unitId !== undefined) {
-                    params.unitId = unitId;
-                }
-                this._send('symbols', params)
-                    .then((response) => {
-                    if (response.s !== undefined) {
-                        onError('unknown_symbol');
-                    }
+                const params = { symbol: symbolName };
+                if (currencyCode !== undefined) params.currencyCode = currencyCode;
+                if (unitId !== undefined) params.unitId = unitId;
+                this._send('symbols', params).then((response) => {
+                    if (response.s !== undefined) onError('unknown_symbol');
                     else {
-                        const symbol = response.name;
+                         const symbol = response.name;
                         const listedExchange = response.listed_exchange ?? response['exchange-listed'];
                         const tradedExchange = response.exchange ?? response['exchange-traded'];
                         const result = {
@@ -927,25 +731,16 @@
                         };
                         onResultReady(result);
                     }
-                })
-                    .catch((reason) => {
-                    logMessage(`UdfCompatibleDatafeed: Error resolving symbol: ${getErrorMessage(reason)}`);
-                    onError('unknown_symbol');
-                });
-            }
-            else {
-                if (this._symbolsStorage === null) {
-                    throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
-                }
+                }).catch((reason) => { onError('unknown_symbol'); });
+            } else {
+                if (this._symbolsStorage === null) throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
                 this._symbolsStorage.resolveSymbol(symbolName, currencyCode, unitId).then(onResultReady).catch(onError);
             }
         }
         getBars(symbolInfo, resolution, periodParams, onResult, onError) {
-            this._historyProvider.getBars(symbolInfo, resolution, periodParams)
-                .then((result) => {
+            this._historyProvider.getBars(symbolInfo, resolution, periodParams).then((result) => {
                 onResult(result.bars, result.meta);
-            })
-                .catch(onError);
+            }).catch(onError);
         }
         subscribeBars(symbolInfo, resolution, onTick, listenerGuid, _onResetCacheNeededCallback) {
             this._dataPulseProvider.subscribeBars(symbolInfo, resolution, onTick, listenerGuid);
@@ -954,43 +749,25 @@
             this._dataPulseProvider.unsubscribeBars(listenerGuid);
         }
         _requestConfiguration() {
-            return this._send('config')
-                .catch((reason) => {
-                logMessage(`UdfCompatibleDatafeed: Cannot get datafeed configuration - use default, error=${getErrorMessage(reason)}`);
-                return null;
-            });
+            return this._send('config').catch((reason) => { return null; });
         }
         _send(urlPath, params) {
             return this._requester.sendRequest(this._datafeedURL, urlPath, params);
         }
         _setupWithConfiguration(configurationData) {
             this._configuration = configurationData;
-            if (configurationData.exchanges === undefined) {
-                configurationData.exchanges = [];
-            }
-            if (!configurationData.supports_search && !configurationData.supports_group_request) {
-                throw new Error('Unsupported datafeed configuration. Must either support search, or support group request');
-            }
+            if (configurationData.exchanges === undefined) configurationData.exchanges = [];
+            if (!configurationData.supports_search && !configurationData.supports_group_request) throw new Error('Unsupported datafeed configuration. Must either support search, or support group request');
             if (configurationData.supports_group_request || !configurationData.supports_search) {
                 this._symbolsStorage = new SymbolsStorage(this._datafeedURL, configurationData.supported_resolutions || [], this._requester);
             }
-            logMessage(`UdfCompatibleDatafeed: Initialized with ${JSON.stringify(configurationData)}`);
         }
     }
     function defaultConfiguration() {
         return {
             supports_search: false,
             supports_group_request: true,
-            supported_resolutions: [
-                '1',
-                '5',
-                '15',
-                '30',
-                '60',
-                '1D',
-                '1W',
-                '1M',
-            ],
+            supported_resolutions: ['1', '5', '15', '30', '60', '1D', '1W', '1M'],
             supports_marks: false,
             supports_timescale_marks: false,
         };

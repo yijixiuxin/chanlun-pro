@@ -1,12 +1,6 @@
 // -----------------------------------------------------------------------
 // 文件名: charts.js
-// 版本: V42 (Segment-Wide Envelope Strategy)
-// 修复内容:
-// 1. [深度修复] 解决"异位遮挡"问题。之前的版本只参考柱子峰值时刻的线高，
-//    但DIF/DEA线往往在柱子峰值之后还会继续冲高。
-//    V42 引入"全段扫描"，在计算面积时，会遍历整个红/绿段，
-//    找出这一整段内(柱子+快线+慢线)的"绝对最高点"，确保文字悬浮在整个波段的"屋顶"之上。
-// 2. [优化] 保持 10% 的视觉间距，但在全段扫描的加持下，这已经足够安全。
+// 修复版: V46_Fix_Chart_Ready_Check
 // -----------------------------------------------------------------------
 
 const CHART_CONFIG = {
@@ -55,9 +49,17 @@ const ChartUtils = {
       showInObjectsTree: false, overrides: {},
     };
     const config = { ...defaults, ...options };
-    return config.shape === "trend_line" || config.shape === "rectangle" || config.shape === "circle"
-      ? chart.createMultipointShape(points, config)
-      : chart.createShape(points, config);
+    try {
+        // 再次检查 chart 是否可用
+        if(!chart) return Promise.reject("Chart object is null");
+
+        return config.shape === "trend_line" || config.shape === "rectangle" || config.shape === "circle"
+          ? chart.createMultipointShape(points, config)
+          : chart.createShape(points, config);
+    } catch (e) {
+        console.error("[DEBUG-CHARTS] Shape create failed:", e);
+        return Promise.reject(e);
+    }
   },
   createFxShape(chart, fx, options = {}) {
     const color = fx.text === "ding" ? CHART_CONFIG.COLORS.DING : CHART_CONFIG.COLORS.DI;
@@ -87,7 +89,7 @@ class ChartManager {
     this.widget = null;
     this.udf_datafeed = null;
     this.chart = null;
-    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 1000);
+    this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
     this.macdStudyId = null;
   }
 
@@ -120,7 +122,6 @@ class ChartManager {
 
   getCustomIndicators(PineJS) {
     if (typeof TvIdxMACDBackend === 'undefined') {
-        console.error("[ChartManager] TvIdxMACDBackend is MISSING!");
         return Promise.resolve([]);
     }
     return Promise.resolve([
@@ -165,12 +166,11 @@ class ChartManager {
           const studies = this.chart.getAllStudies();
           const hasMacd = studies.some(s => s.name === 'macd_pro_area');
           if (!hasMacd) {
-              console.log("[ChartManager] Creating MACD study: macd_pro_area");
               this.chart.createStudy('macd_pro_area', false, false)
                   .then(id => {
                       this.macdStudyId = id;
                   })
-                  .catch(e => { console.error("Create study failed:", e); });
+                  .catch(e => { console.log("Create study failed (benign):", e); });
           } else {
               const existing = studies.find(s => s.name === 'macd_pro_area');
               if(existing) this.macdStudyId = existing.id;
@@ -184,7 +184,12 @@ class ChartManager {
       });
       this.chart.onSymbolChanged().subscribe(null, (symbol) => this.handleSymbolChange(symbol));
       this.chart.onIntervalChanged().subscribe(null, (interval) => this.handleIntervalChange(interval));
-      this.chart.onDataLoaded().subscribe(null, () => this.handleDataLoaded(), true);
+      this.chart.onDataLoaded().subscribe(null, () => {
+          // onDataLoaded 时，图表准备好，应该刷新一次
+          this.clear_draw_chanlun();
+          setTimeout(() => this.debouncedDrawChanlun(), 200);
+      }, true);
+
       this.chart.dataReady(() => this.handleDataReady());
       this.widget.subscribe("onTick", () => this.handleTick());
       this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
@@ -204,13 +209,29 @@ class ChartManager {
   handleIntervalChange(interval) {
     if (!interval) return;
     const market = Utils.get_market(); if (!market) return;
+    console.log("[DEBUG-CHARTS] Interval Changed to:", interval);
     Utils.set_local_data(`${market}_interval_${this.id}`, interval);
-    this.clear_draw_chanlun(); this.debouncedDrawChanlun();
+    this.clear_draw_chanlun();
+    // 切换周期时，立即调用可能导致 getVisibleRange 失效，debounce 稍微延后，
+    // 如果此时图表未就绪，getChartData 会返回 null 阻止绘制，直到 onDataLoaded 再次触发
+    this.debouncedDrawChanlun();
   }
-  handleDataLoaded() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
   handleDataReady() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
   handleTick() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
   handleVisibleRangeChange() { this.debouncedDrawChanlun(); }
+
+  safeRemove(entityId) {
+      if (!entityId) return;
+      if (typeof entityId.then === 'function') {
+          entityId.then(id => {
+              if (id) {
+                  try { this.chart.removeEntity(id); } catch (e) {}
+              }
+          }).catch(e => {});
+      } else {
+          try { this.chart.removeEntity(entityId); } catch (e) {}
+      }
+  }
 
   clear_draw_chanlun(clear_type) {
     if (clear_type == "last") {
@@ -220,7 +241,9 @@ class ChartManager {
           const maxTime = Math.max(...this.obj_charts[symbolKey][chartType].map((item) => item.time));
           for (const _i in this.obj_charts[symbolKey][chartType]) {
             const item = this.obj_charts[symbolKey][chartType][_i];
-            if (item.time == maxTime) item.id.then((_id) => this.chart.removeEntity(_id));
+            if (item.time == maxTime) {
+                this.safeRemove(item.id);
+            }
           }
           this.obj_charts[symbolKey][chartType] = this.obj_charts[symbolKey][chartType].filter((item) => item.time != maxTime);
         }
@@ -228,22 +251,39 @@ class ChartManager {
     } else {
       Object.values(this.obj_charts).forEach((symbolData) => {
         Object.values(symbolData).forEach((chartItems) => {
-          chartItems.forEach((item) => { try { item.id.then((_id) => this.chart.removeEntity(_id)); } catch (e) { console.warn("Failed remove:", e); } });
+          chartItems.forEach((item) => {
+              this.safeRemove(item.id);
+          });
         });
       });
       this.obj_charts = {};
     }
   }
+
   getChartData() {
     const symbolInterval = this.widget.symbolInterval(); if (!symbolInterval) return null;
     const symbolResKey = `${symbolInterval.symbol.toString().toLowerCase()}${symbolInterval.interval.toString().toLowerCase()}`;
     const barsResult = this.udf_datafeed?._historyProvider?.bars_result?.get(symbolResKey);
+
+    console.log(`[DEBUG-CHARTS] getChartData for ${symbolResKey}: Found=${!!barsResult}`);
     if (!barsResult) return null;
+
+    // 关键修复：检查图表 visibleRange 是否有效
+    if (!this.chart) {
+         console.warn("[DEBUG-CHARTS] getChartData aborted: this.chart is null.");
+         return null;
+    }
     const visibleRange = this.chart.getVisibleRange();
-    const from = visibleRange?.from || 0;
+    if (!visibleRange || !visibleRange.from || !visibleRange.to) {
+         console.warn("[DEBUG-CHARTS] getChartData aborted: VisibleRange invalid (chart loading).");
+         return null;
+    }
+
+    const from = visibleRange.from;
     const symbolKey = `${symbolInterval.symbol}_${symbolInterval.interval}`;
     return { symbolKey, barsResult, from };
   }
+
   initChartContainer(symbolKey) {
     if (!this.obj_charts[symbolKey]) {
       this.obj_charts[symbolKey] = {};
@@ -251,6 +291,7 @@ class ChartManager {
     }
     return this.obj_charts[symbolKey];
   }
+
   getMACDStudyId() {
       if (this.macdStudyId) return this.macdStudyId;
       const studies = this.chart.getAllStudies();
@@ -261,26 +302,58 @@ class ChartManager {
 
   drawChartElements(chartData, currentInterval) {
     const { symbolKey, barsResult, from } = chartData;
+
+    const bisCount = barsResult.bis ? barsResult.bis.length : 0;
+    console.log(`[DEBUG-CHARTS] drawChartElements: symbol=${symbolKey}, from=${from}, Bis Count=${bisCount}`);
+
+    if (!barsResult) return;
+
     const chartContainer = this.initChartContainer(symbolKey);
 
-    if (barsResult.fxs) { barsResult.fxs.forEach((fx) => { if (fx.points?.[0]?.time >= from) { const key = JSON.stringify(fx); if (!chartContainer.fxs.find(item => item.key === key)) chartContainer.fxs.push({ time: fx.points[0].time, key, id: ChartUtils.createFxShape(this.chart, fx) }); } }); }
-    if (barsResult.bis) { barsResult.bis.forEach((bi) => { if (bi.points?.[0]?.time >= from) { const key = JSON.stringify(bi); if (!chartContainer.bis.find(item => item.key === key)) chartContainer.bis.push({ time: bi.points[0].time, key, id: ChartUtils.createLineShape(this.chart, bi, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }) }); } }); }
-    if (barsResult.xds) { barsResult.xds.forEach((xd) => { if (xd.points?.[0]?.time >= from) { const key = JSON.stringify(xd); if (!chartContainer.xds.find(item => item.key === key)) chartContainer.xds.push({ time: xd.points[0].time, key, id: ChartUtils.createLineShape(this.chart, xd, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }) }); } }); }
-    if (barsResult.zsds) { barsResult.zsds.forEach((zsd) => { if (zsd.points?.[0]?.time >= from) { const key = JSON.stringify(zsd); if (!chartContainer.zsds.find(item => item.key === key)) chartContainer.zsds.push({ time: zsd.points[0].time, key, id: ChartUtils.createLineShape(this.chart, zsd, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }) }); } }); }
-    if (barsResult.bi_zss) { barsResult.bi_zss.forEach((bi_zs) => { if (bi_zs.points?.[0]?.time >= from) { const key = JSON.stringify(bi_zs); if (!chartContainer.bi_zss.find(item => item.key === key)) chartContainer.bi_zss.push({ time: bi_zs.points[0].time, key, id: ChartUtils.createZhongshuShape(this.chart, bi_zs, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }) }); } }); }
-    if (barsResult.xd_zss) { barsResult.xd_zss.forEach((xd_zs) => { if (xd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(xd_zs); if (!chartContainer.xd_zss.find(item => item.key === key)) chartContainer.xd_zss.push({ time: xd_zs.points[0].time, key, id: ChartUtils.createZhongshuShape(this.chart, xd_zs, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }) }); } }); }
-    if (barsResult.zsd_zss) { barsResult.zsd_zss.forEach((zsd_zs) => { if (zsd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(zsd_zs); if (!chartContainer.zsd_zss.find(item => item.key === key)) chartContainer.zsd_zss.push({ time: zsd_zs.points[0].time, key, id: ChartUtils.createZhongshuShape(this.chart, zsd_zs, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }) }); } }); }
-    if (barsResult.bcs) { barsResult.bcs.forEach((bc) => { if (bc.points?.time >= from) { const key = JSON.stringify(bc); if (!chartContainer.bcs.find(item => item.key === key)) chartContainer.bcs.push({ time: bc.points.time, key, id: ChartUtils.createBcShape(this.chart, bc) }); } }); }
-    if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = JSON.stringify(mmd); if (!chartContainer.mmds.find(item => item.key === key)) chartContainer.mmds.push({ time: mmd.points.time, key, id: ChartUtils.createMmdShape(this.chart, mmd) }); } }); }
+    const safeCreate = (promise, type) => {
+        if (promise && typeof promise.then === 'function') {
+            return promise.catch(e => {
+                console.error(`[DEBUG-CHARTS] Error creating shape (${type}):`, e);
+                return null;
+            });
+        }
+        return promise;
+    };
 
-// -----------------------------------------------------------------------
-    // [MACD Area Drawing] - V43 Backend-Sync Strategy
-    // -----------------------------------------------------------------------
+    // 统计绘制情况
+    let stats = { bis: 0, xds: 0, zsds: 0, skipped_bis: 0 };
+
+    if (barsResult.fxs) { barsResult.fxs.forEach((fx) => { if (fx.points?.[0]?.time >= from) { const key = JSON.stringify(fx); if (!chartContainer.fxs.find(item => item.key === key)) chartContainer.fxs.push({ time: fx.points[0].time, key, id: safeCreate(ChartUtils.createFxShape(this.chart, fx), 'fx') }); } }); }
+
+    if (barsResult.bis) {
+        barsResult.bis.forEach((bi) => {
+            if (bi.points?.[0]?.time >= from) {
+                const key = JSON.stringify(bi);
+                if (!chartContainer.bis.find(item => item.key === key)) {
+                    chartContainer.bis.push({ time: bi.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, bi, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi') });
+                    stats.bis++;
+                }
+            } else {
+                stats.skipped_bis++;
+            }
+        });
+    }
+
+    if (barsResult.xds) { barsResult.xds.forEach((xd) => { if (xd.points?.[0]?.time >= from) { const key = JSON.stringify(xd); if (!chartContainer.xds.find(item => item.key === key)) { chartContainer.xds.push({ time: xd.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, xd, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd') }); stats.xds++; } } }); }
+    if (barsResult.zsds) { barsResult.zsds.forEach((zsd) => { if (zsd.points?.[0]?.time >= from) { const key = JSON.stringify(zsd); if (!chartContainer.zsds.find(item => item.key === key)) { chartContainer.zsds.push({ time: zsd.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, zsd, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd') }); stats.zsds++; } } }); }
+    if (barsResult.bi_zss) { barsResult.bi_zss.forEach((bi_zs) => { if (bi_zs.points?.[0]?.time >= from) { const key = JSON.stringify(bi_zs); if (!chartContainer.bi_zss.find(item => item.key === key)) chartContainer.bi_zss.push({ time: bi_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, bi_zs, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs') }); } }); }
+    if (barsResult.xd_zss) { barsResult.xd_zss.forEach((xd_zs) => { if (xd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(xd_zs); if (!chartContainer.xd_zss.find(item => item.key === key)) chartContainer.xd_zss.push({ time: xd_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, xd_zs, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs') }); } }); }
+    if (barsResult.zsd_zss) { barsResult.zsd_zss.forEach((zsd_zs) => { if (zsd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(zsd_zs); if (!chartContainer.zsd_zss.find(item => item.key === key)) chartContainer.zsd_zss.push({ time: zsd_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, zsd_zs, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs') }); } }); }
+    if (barsResult.bcs) { barsResult.bcs.forEach((bc) => { if (bc.points?.time >= from) { const key = JSON.stringify(bc); if (!chartContainer.bcs.find(item => item.key === key)) chartContainer.bcs.push({ time: bc.points.time, key, id: safeCreate(ChartUtils.createBcShape(this.chart, bc), 'bc') }); } }); }
+    if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = JSON.stringify(mmd); if (!chartContainer.mmds.find(item => item.key === key)) chartContainer.mmds.push({ time: mmd.points.time, key, id: safeCreate(ChartUtils.createMmdShape(this.chart, mmd), 'mmd') }); } }); }
+
+    console.log(`[DEBUG-CHARTS] Draw Stats: Created Bis=${stats.bis}, Skipped Bis=${stats.skipped_bis}, Created Xds=${stats.xds}`);
+
     if (barsResult.macd_hist && barsResult.times) {
+        // ... (MACD Logic remains same) ...
         const macdId = this.getMACDStudyId();
         if (macdId) {
             const hist = barsResult.macd_hist;
-            // 优先使用后端计算好的 area, 如果没有则回退到空数组(后续如果不兼容则需要处理)
             const areas = barsResult.macd_area || [];
             const times = barsResult.times;
             const line1 = barsResult.macd_dif || barsResult.dif || [];
@@ -288,7 +361,8 @@ class ChartManager {
             const hasLines = line1.length > 0 && line2.length > 0;
 
             const len = Math.min(hist.length, times.length);
-            const chartVisibleFrom = this.chart.getVisibleRange().from;
+            const visibleRange = this.chart.getVisibleRange();
+            const chartVisibleFrom = visibleRange ? visibleRange.from : 0;
             const isChartSeconds = chartVisibleFrom < 10000000000;
 
             let startIndex = 0;
@@ -301,20 +375,14 @@ class ChartManager {
 
                 let maxAbs = -1;
                 let maxIdx = -1;
-
-                // 记录波段极值用于定位文字Y轴
                 let segmentHigh = -Infinity;
                 let segmentLow = Infinity;
 
-                // 扫描当前红/绿柱子波段
                 while(endIndex < len) {
                     const v = hist[endIndex];
                     if (isNaN(v) || v === 0 || (v > 0 !== isPos)) break;
 
-                    // 1. 找峰值位置 (决定 X 轴)
                     if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
-
-                    // 2. 找包络线极值 (决定 Y 轴)
                     if (hasLines) {
                         const l1 = line1[endIndex] || 0;
                         const l2 = line2[endIndex] || 0;
@@ -330,65 +398,40 @@ class ChartManager {
                     endIndex++;
                 }
 
-                // 绘制逻辑
                 if (maxIdx !== -1) {
                     let peakTime = times[maxIdx];
                     if (isChartSeconds && peakTime > 10000000000) peakTime /= 1000;
 
                     if (peakTime >= chartVisibleFrom) {
-                        // 优先使用后端 area 数据，保证数值一致性
-                        // 如果后端没有传 area，则前端不显示或需要自行累加(此处略)
                         let areaVal = 0;
-                        if (areas.length > maxIdx) {
-                            areaVal = areas[maxIdx];
-                        }
+                        if (areas.length > maxIdx) areaVal = areas[maxIdx];
 
                         const text = areaVal.toFixed(2);
                         const color = isPos ? CHART_CONFIG.COLORS.AREA_POS : CHART_CONFIG.COLORS.AREA_NEG;
                         const key = `macd_area_${peakTime}`;
-
-                        // Y轴定位逻辑
                         let basePrice = isPos ? segmentHigh : segmentLow;
                         if (basePrice === -Infinity || basePrice === Infinity) basePrice = hist[maxIdx];
-
-                        // 间距计算
                         const range = segmentHigh - segmentLow;
                         let padding = range * 0.15;
                         if (padding === 0 || isNaN(padding)) padding = Math.abs(hist[maxIdx]) * 0.2;
-
                         let offsetPrice = isPos ? basePrice + padding : basePrice - padding;
 
-                        // --- 增量更新处理 ---
-                        // 检查是否是"活跃波段" (即包含了最新数据的波段)
                         const isActiveSegment = (endIndex >= len - 1);
                         const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
 
                         if (isActiveSegment && existingIdx !== -1) {
-                            // 如果是活跃波段且已存在，强制删除旧的，以便更新数值
-                            // (因为TV Shape 不方便直接改文字)
                             const oldItem = chartContainer.macd_areas[existingIdx];
-                            try { this.chart.removeEntity(oldItem.id); } catch(e){}
+                            this.safeRemove(oldItem.id);
                             chartContainer.macd_areas.splice(existingIdx, 1);
                         }
 
-                        // 创建新的 Shape
                         if (!chartContainer.macd_areas.find(item => item.key === key)) {
                             chartContainer.macd_areas.push({
                                 time: peakTime, key: key,
-                                id: this.chart.createShape({time: peakTime, price: offsetPrice}, {
-                                    shape: 'text',
-                                    text: text,
-                                    ownerStudyId: macdId,
-                                    lock: true,
-                                    disableSelection: true,
-                                    overrides: {
-                                        color: color,
-                                        fontsize: 11,
-                                        linewidth: 0,
-                                        transparency: 0,
-                                        bold: true
-                                    }
-                                })
+                                id: safeCreate(this.chart.createShape({time: peakTime, price: offsetPrice}, {
+                                    shape: 'text', text: text, ownerStudyId: macdId, lock: true, disableSelection: true,
+                                    overrides: { color: color, fontsize: 11, linewidth: 0, transparency: 0, bold: true }
+                                }), 'macd_area')
                             });
                         }
                     }
@@ -400,8 +443,25 @@ class ChartManager {
   }
 
   draw_chanlun() {
-    const chartData = this.getChartData(); if (!chartData) return;
-    const symbolInterval = this.widget.symbolInterval(); if (!symbolInterval) return;
+    // 再次确保 chart 对象有效
+    if (!this.chart) {
+        try {
+            this.chart = this.widget.activeChart();
+        } catch(e) {
+            console.warn("[DEBUG-CHARTS] draw_chanlun: activeChart not available");
+            return;
+        }
+    }
+
+    const chartData = this.getChartData();
+    if (!chartData) {
+        console.warn("[DEBUG-CHARTS] draw_chanlun aborted: No chart data or chart not ready.");
+        return;
+    }
+    const symbolInterval = this.widget.symbolInterval();
+    if (!symbolInterval) return;
+
+    console.log("[DEBUG-CHARTS] draw_chanlun executing for", symbolInterval.interval);
     this.drawChartElements(chartData, symbolInterval.interval);
   }
 }
