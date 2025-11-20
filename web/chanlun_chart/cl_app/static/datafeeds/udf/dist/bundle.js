@@ -59,12 +59,10 @@
                     return `${encodeURIComponent(key)}=${encodeURIComponent(params[key].toString())}`;
                 }).join('&');
             }
-            // Send user cookies if the URL is on the same origin as the calling script.
             const options = { credentials: 'same-origin' };
             if (this._headers !== undefined) {
                 options.headers = this._headers;
             }
-            // eslint-disable-next-line no-restricted-globals
             return fetch(`${datafeedUrl}/${urlPath}`, options)
                 .then((response) => response.text())
                 .then((responseTest) => JSON.parse(responseTest));
@@ -109,7 +107,6 @@
                 catch (e) {
                     if (e instanceof Error || typeof e === "string") {
                         const reasonString = getErrorMessage(e);
-                        // tslint:disable-next-line:no-console
                         console.warn(`HistoryProvider: getBars() failed, error=${reasonString}`);
                         reject(reasonString);
                     }
@@ -123,7 +120,6 @@
                     this._limitedServerResponse.maxResponseLength > 0 &&
                     this._limitedServerResponse.maxResponseLength === lastResultLength &&
                     requestParams.from < requestParams.to) {
-                    // adjust request parameters for follow-up request
                     if (requestParams.countback) {
                         requestParams.countback =
                             requestParams.countback - lastResultLength;
@@ -137,12 +133,9 @@
                     const followupResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
                     const followupResult = this._processHistoryResponse(followupResponse, requestParams);
                     lastResultLength = followupResult.bars.length;
-                    // merge result with results collected so far
                     if (this._limitedServerResponse.expectedOrder === "earliestFirst") {
                         if (followupResult.bars[0].time ===
                             result.bars[result.bars.length - 1].time) {
-                            // Datafeed shouldn't include a value exactly matching the `to` timestamp but in case it does
-                            // we will remove the duplicate.
                             followupResult.bars.shift();
                         }
                         result.bars.push(...followupResult.bars);
@@ -150,8 +143,6 @@
                     else {
                         if (followupResult.bars[followupResult.bars.length - 1].time ===
                             result.bars[0].time) {
-                            // Datafeed shouldn't include a value exactly matching the `to` timestamp but in case it does
-                            // we will remove the duplicate.
                             followupResult.bars.pop();
                         }
                         result.bars.unshift(...followupResult.bars);
@@ -159,13 +150,8 @@
                 }
             }
             catch (e) {
-                /**
-                 * Error occurred during followup request. We won't reject the original promise
-                 * because the initial response was valid so we will return what we've got so far.
-                 */
                 if (e instanceof Error || typeof e === "string") {
                     const reasonString = getErrorMessage(e);
-                    // tslint:disable-next-line:no-console
                     console.warn(`HistoryProvider: getBars() warning during followup request, error=${reasonString}`);
                 }
             }
@@ -206,12 +192,81 @@
                 // 设置保存的key
                 const res_key = requestParams["symbol"].toString().toLowerCase() +
                     requestParams["resolution"].toString().toLowerCase();
-                // 保存数据
+
+                // 获取现有数据
                 let obj_res = this.bars_result.get(res_key);
+
+                const raw_times = (response.t || []).map(t => t * 1000);
+                const macd_dif = response.macd_dif || [];
+                const macd_dea = response.macd_dea || [];
+                const macd_hist = response.macd_hist || [];
+                const macd_area = response.macd_area || [];
+
+                // --- [DEBUG] 打印后端返回的数据维度，方便诊断 ---
+                console.log(`[Bundle] Backend data recv: Times=${raw_times.length}, MACD=${macd_dif.length}, Key=${res_key}`);
+
+                // ========================================================================
+                // [修复] 通用数据合并/填充逻辑
+                // 目的：确保 macd 等自定义数组永远与 times 数组长度一致，且通过时间 key 对齐
+                // ========================================================================
+                const mergeAlignedArrays = (existingTimes = [], existingArr = [], newTimes = [], newArr = []) => {
+                    const map = new Map();
+
+                    // 1. 先载入旧数据
+                    existingTimes.forEach((t, i) => {
+                        map.set(t, existingArr[i] !== undefined ? existingArr[i] : NaN);
+                    });
+
+                    // 2. 覆盖新数据 (注意处理空值)
+                    newTimes.forEach((t, i) => {
+                        // 如果后端返回的数据比 time 短，或者该位置是 null/undefined，则存入 NaN
+                        // 这样能保证 map 里一定有值
+                        let val = NaN;
+                        if (newArr && i < newArr.length) {
+                           val = newArr[i];
+                        }
+                        // 只有当值不是 null/undefined 时才视为有效值，否则 NaN
+                        if (val === null || val === undefined) val = NaN;
+
+                        map.set(t, val);
+                    });
+
+                    // 3. 获取所有时间并排序 (Union of times)
+                    // 注意：这里必须和 updateTimes 的逻辑一致，也就是 Set + Sort
+                    const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
+
+                    // 4. 按照排序后的时间提取值，生成对齐的数组
+                    return {
+                        times: allTimes,
+                        values: allTimes.map(t => {
+                            const v = map.get(t);
+                            return (v === undefined || v === null) ? NaN : v;
+                        })
+                    };
+                };
+
+                // 第一次初始化
                 if (response.update == false || obj_res == undefined) {
+                    // 即使是初始化，如果后端 macd 数组比 times 短，也需要填充 NaN
+                    // 我们直接复用上面的逻辑，把 existing 设为空即可
+                    const difObj = mergeAlignedArrays([], [], raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays([], [], raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays([], [], raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays([], [], raw_times, macd_area);
+
+                    // 此时 difObj.times == deaObj.times == raw_times (如果 raw_times 本身是排序且无重复的)
+                    // 为了保险，我们使用计算出来的 times
+
                     this.bars_result.set(res_key, {
                         bars: bars,
                         meta: meta,
+                        // 使用处理过的时间轴，确保和 MACD 数组长度 100% 一致
+                        times: difObj.times,
+                        macd_dif: difObj.values,
+                        macd_dea: deaObj.values,
+                        macd_hist: histObj.values,
+                        macd_area: areaObj.values,
+
                         fxs: response.fxs,
                         bis: response.bis,
                         xds: response.xds,
@@ -225,45 +280,43 @@
                     });
                 }
                 else {
-                    // 更新存在的数据
-                    // 更新逻辑，找到大于等于返回的第一个时间的所有数据；
-                    // 保留小于返回的第一个时间的所有数据；
-                    // 然后添加返回的数据；
-                    // 最后按时间排序；
-                    // 1. 更新其他数据结构（如分型、笔、线段等）
-                    // 处理TextPoint类型数据（fxs, bcs, mmds）
+                    // 增量更新逻辑
+                    const oldTimes = obj_res.times || [];
+
+                    // 分别合并各个数组
+                    const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays(oldTimes, obj_res.macd_dea, raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays(oldTimes, obj_res.macd_hist, raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays(oldTimes, obj_res.macd_area, raw_times, macd_area);
+
+                    // 更新结果
+                    obj_res.times = difObj.times; // 更新为合并后的时间轴
+                    obj_res.macd_dif = difObj.values;
+                    obj_res.macd_dea = deaObj.values;
+                    obj_res.macd_hist = histObj.values;
+                    obj_res.macd_area = areaObj.values;
+
+                    // 原有 updateTextPoints / updateLineSegments 逻辑保持不变
                     const updateTextPoints = (existingPoints, newPoints) => {
                         if (!newPoints || newPoints.length === 0)
                             return existingPoints || [];
                         if (!existingPoints || existingPoints.length === 0)
                             return newPoints;
-                        // 获取点位时间的辅助函数，处理points可能是对象或数组的情况
                         const getPointTime = (point) => {
                             if (Array.isArray(point.points)) {
-                                // 如果是数组，取第一个元素的time
                                 return point.points[0].time;
                             }
                             else {
-                                // 如果是单个对象，直接取time
                                 return point.points.time;
                             }
                         };
                         const minResponseTime = Math.min(...newPoints.map(getPointTime));
                         const updatedPoints = [];
-                        // 保留小于最小时间点的数据
-                        for (const point of existingPoints) {
-                            if (getPointTime(point) < minResponseTime) {
-                                updatedPoints.push(point);
-                            }
-                        }
-                        // 添加返回数据中剩余的新点位
-                        for (const point of newPoints) {
-                            updatedPoints.push(point);
-                        }
-                        // 按时间排序，使用getPointTime辅助函数获取时间
+                        for (const point of existingPoints) { if (getPointTime(point) < minResponseTime) updatedPoints.push(point); }
+                        for (const point of newPoints) { updatedPoints.push(point); }
                         return updatedPoints.sort((a, b) => getPointTime(a) - getPointTime(b));
                     };
-                    // 处理LineSegment类型数据（bis, xds, zsds, bi_zss, xd_zss, zsd_zss）
+
                     const updateLineSegments = (existingSegments, newSegments) => {
                         if (!newSegments || newSegments.length === 0)
                             return existingSegments || [];
@@ -271,7 +324,6 @@
                             return newSegments;
                         const minResponseTime = Math.min(...newSegments.map((segment) => segment.points[0].time));
                         const updatedSegments = [];
-                        // 保留起始时间小于最小时间点的线段
                         for (const segment of existingSegments) {
                             if (segment.points.length > 0) {
                                 if (segment.points[0].time < minResponseTime) {
@@ -279,11 +331,9 @@
                                 }
                             }
                         }
-                        // 添加返回数据中剩余的新线段
                         for (const segment of newSegments) {
                             updatedSegments.push(segment);
                         }
-                        // 按起始时间排序
                         return updatedSegments.sort((a, b) => {
                             if (a.points.length === 0 && b.points.length === 0)
                                 return 0;
@@ -294,7 +344,7 @@
                             return a.points[0].time - b.points[0].time;
                         });
                     };
-                    // 更新所有数据
+
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
                     obj_res.bis = updateLineSegments(obj_res.bis, response.bis);
                     obj_res.xds = updateLineSegments(obj_res.xds, response.xds);
@@ -353,7 +403,6 @@
                 return;
             }
             this._requestsPending = 0;
-            // eslint-disable-next-line guard-for-in
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending += 1;
                 this._updateDataForSubscriber(listenerGuid)
@@ -370,8 +419,6 @@
         _updateDataForSubscriber(listenerGuid) {
             const subscriptionRecord = this._subscribers[listenerGuid];
             const rangeEndTime = parseInt((Date.now() / 1000).toString());
-            // BEWARE: please note we really need 2 bars, not the only last one
-            // see the explanation below. `10` is the `large enough` value to work around holidays
             const rangeStartTime = rangeEndTime - periodLengthSeconds(subscriptionRecord.resolution, 10);
             return this._historyProvider.getBars(subscriptionRecord.symbolInfo, subscriptionRecord.resolution, {
                 from: rangeStartTime,
@@ -384,7 +431,6 @@
             });
         }
         _onSubscriberDataReceived(listenerGuid, result) {
-            // means the subscription was cancelled while waiting for data
             if (!this._subscribers.hasOwnProperty(listenerGuid)) {
                 return;
             }
@@ -398,8 +444,6 @@
                 return;
             }
             const isNewBar = subscriptionRecord.lastBarTime !== null && lastBar.time > subscriptionRecord.lastBarTime;
-            // Pulse updating may miss some trades data (ie, if pulse period = 10 secods and new bar is started 5 seconds later after the last update, the
-            // old bar's last 5 seconds trades will be lost). Thus, at fist we should broadcast old bar updates when it's ready.
             if (isNewBar) {
                 if (bars.length < 2) {
                     throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
@@ -451,8 +495,8 @@
         }
         _createTimersIfRequired() {
             if (this._timers === null) {
-                const fastTimer = window.setInterval(this._updateQuotes.bind(this, 1 /* SymbolsType.Fast */), 10000 /* UpdateTimeouts.Fast */);
-                const generalTimer = window.setInterval(this._updateQuotes.bind(this, 0 /* SymbolsType.General */), 60000 /* UpdateTimeouts.General */);
+                const fastTimer = window.setInterval(this._updateQuotes.bind(this, 1), 10000);
+                const generalTimer = window.setInterval(this._updateQuotes.bind(this, 0), 60000);
                 this._timers = { fastTimer, generalTimer };
             }
         }
@@ -467,11 +511,10 @@
             if (this._requestsPending > 0) {
                 return;
             }
-            // eslint-disable-next-line guard-for-in
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending++;
                 const subscriptionRecord = this._subscribers[listenerGuid];
-                this._quotesProvider.getQuotes(updateType === 1 /* SymbolsType.Fast */ ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
+                this._quotesProvider.getQuotes(updateType === 1 ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
                     .then((data) => {
                     this._requestsPending--;
                     if (!this._subscribers.hasOwnProperty(listenerGuid)) {
@@ -490,7 +533,6 @@
 
     function extractField$1(data, field, arrayIndex, valueIsArray) {
         if (!(field in data)) {
-            // eslint-disable-next-line no-console
             console.warn(`Field "${String(field)}" not present in response`);
             return undefined;
         }
@@ -501,7 +543,6 @@
         return value;
     }
     function symbolKey(symbol, currency, unit) {
-        // here we're using a separator that quite possible shouldn't be in a real symbol name
         return symbol + (currency !== undefined ? '_%|#|%_' + currency : '') + (unit !== undefined ? '_%|#|%_' + unit : '');
     }
     class SymbolsStorage {
@@ -514,12 +555,9 @@
             this._requester = requester;
             this._readyPromise = this._init();
             this._readyPromise.catch((error) => {
-                // seems it is impossible
-                // eslint-disable-next-line no-console
                 console.error(`SymbolsStorage: Cannot init, error=${error.toString()}`);
             });
         }
-        // BEWARE: this function does not consider symbol's exchange
         resolveSymbol(symbolName, currencyCode, unitId) {
             return this._readyPromise.then(() => {
                 const symbolInfo = this._symbolsInfo[symbolKey(symbolName, currencyCode, unitId)];
@@ -618,16 +656,10 @@
                     const listedExchange = extractField$1(data, 'exchange-listed', symbolIndex);
                     const tradedExchange = extractField$1(data, 'exchange-traded', symbolIndex);
                     if (listedExchange !== undefined || tradedExchange !== undefined) {
-                        // eslint-disable-next-line no-console
-                        console.warn('Starting from v30, both "exchange-listed" and "exchange-traded" fields are deprecated. Please use "exchange_listed_name" instead.');
                         fullName = tradedExchange + ':' + symbolName;
                     }
                     const exchangeListedName = extractField$1(data, 'exchange_listed_name', symbolIndex);
-                    if (exchangeListedName === undefined) {
-                        // eslint-disable-next-line no-console
-                        console.warn('Starting from v30, both "exchange-listed" and "exchange-traded" fields are deprecated. Please use "exchange_listed_name" instead.');
-                    }
-                    else {
+                    if (exchangeListedName !== undefined) {
                         fullName = exchangeListedName + ':' + symbolName;
                     }
                     const currencyCode = extractField$1(data, 'currency-code', symbolIndex);
@@ -692,10 +724,6 @@
         const value = data[field];
         return Array.isArray(value) ? value[arrayIndex] : value;
     }
-    /**
-     * This class implements interaction with UDF-compatible datafeed.
-     * See [UDF protocol reference](@docs/connecting_data/UDF.md)
-     */
     class UDFCompatibleDatafeedBase {
         constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse) {
             this._configuration = defaultConfiguration();
@@ -818,7 +846,7 @@
         searchSymbols(userInput, exchange, symbolType, onResult) {
             if (this._configuration.supports_search) {
                 const params = {
-                    limit: 30 /* Constants.SearchItemsLimit */,
+                    limit: 30,
                     query: userInput.toUpperCase(),
                     type: symbolType,
                     exchange: exchange,
@@ -841,7 +869,7 @@
                 if (this._symbolsStorage === null) {
                     throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
                 }
-                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30 /* Constants.SearchItemsLimit */)
+                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30)
                     .then(onResult)
                     .catch(onResult.bind(null, []));
             }

@@ -411,6 +411,10 @@ def tv_history():
         _h = cl_chart_data["h"][-10:]
         _l = cl_chart_data["l"][-10:]
         _v = cl_chart_data["v"][-10:]
+        _macd_dif = cl_chart_data.get("macd_dif", [])[-10:]
+        _macd_dea = cl_chart_data.get("macd_dea", [])[-10:]
+        _macd_hist = cl_chart_data.get("macd_hist", [])[-10:]
+        _macd_area = cl_chart_data.get("macd_area", [])[-10:]
         _fxs = cl_chart_data.get("fxs", [])[-5:]
         _bis = cl_chart_data.get("bis", [])[-5:]
         _xds = cl_chart_data.get("xds", [])[-5:]
@@ -428,6 +432,10 @@ def tv_history():
         _h = cl_chart_data["h"]
         _l = cl_chart_data["l"]
         _v = cl_chart_data["v"]
+        _macd_dif = cl_chart_data.get("macd_dif", [])
+        _macd_dea = cl_chart_data.get("macd_dea", [])
+        _macd_hist = cl_chart_data.get("macd_hist", [])
+        _macd_area = cl_chart_data.get("macd_area", [])
         _fxs = cl_chart_data.get("fxs", [])
         _bis = cl_chart_data.get("bis", [])
         _xds = cl_chart_data.get("xds", [])
@@ -446,6 +454,10 @@ def tv_history():
         "h": _h,
         "l": _l,
         "v": _v,
+        "macd_dif": _macd_dif,
+        "macd_dea": _macd_dea,
+        "macd_hist": _macd_hist,
+        "macd_area": _macd_area,
         "fxs": _fxs,
         "bis": _bis,
         "xds": _xds,

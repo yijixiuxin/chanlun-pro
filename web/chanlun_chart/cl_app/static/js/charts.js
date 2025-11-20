@@ -230,6 +230,7 @@ class ChartManager {
   // 初始化图表
   init() {
     this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 60000);
+    window.tvDatafeed = this.udf_datafeed;
     this.widget = window.tvWidget = new TradingView.widget({
       debug: false,
       autosize: true,
@@ -293,6 +294,7 @@ class ChartManager {
       TvIdxMACDBL.idx(PineJS),
       TvIdxVegasMA.idx(PineJS),
       TvIdxVOL.idx(PineJS),
+        TvIdxMACDBackend.idx(PineJS),
     ]);
   }
 
@@ -345,6 +347,36 @@ class ChartManager {
         return;
       }
 
+
+      // 1. 确保暴露数据源 (如果在 init 方法里没加，这里再加一次保险)
+        if (this.udf_datafeed) {
+            window.tvDatafeed = this.udf_datafeed;
+            console.log("window.tvDatafeed 已暴露");
+        }
+
+        if (this.chart.onDataLoaded) {
+            this.chart.onDataLoaded().subscribe(null, () => {
+                console.log("图表数据加载完毕，准备检查指标...");
+
+                // 获取所有指标
+                const studies = this.chart.getAllStudies();
+
+                // 遍历并删除所有名字里带 MACD 的指标 (防止旧的缓存残留)
+                studies.forEach(s => {
+                    if (s.name === 'MACD_Backend' || s.name === 'macd_backend' || s.name === 'MACD') {
+                        console.log("发现旧指标，正在移除:", s.name, s.id);
+                        this.chart.removeEntity(s.id);
+                    }
+                });
+
+                // 强制重新创建 (延迟 500ms 确保移除完成)
+                setTimeout(() => {
+                    console.log("正在重新创建 macd_backend 指标...");
+                    this.chart.createStudy('macd_backend', false, false);
+                }, 500);
+
+            }, true);
+        }
       // 应用K线颜色
       this.chart.applyOverrides({
         "mainSeriesProperties.candleStyle.upColor": "#ef5350",
