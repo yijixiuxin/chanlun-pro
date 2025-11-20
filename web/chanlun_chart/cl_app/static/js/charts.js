@@ -1,10 +1,12 @@
 // -----------------------------------------------------------------------
 // 文件名: charts.js
-// 版本: V38 (Adaptive Offset Strategy)
-// 修复:
-// 1. 放弃 label/arrow，回归最稳定的 shape: 'text' (无图标，只显示数字)
-// 2. 计算当前视口内 MACD 的最大最小值 (Range)
-// 3. 使用 Range * 10% 作为固定视觉偏移量，确保文字永远悬浮在柱子上方/下方
+// 版本: V42 (Segment-Wide Envelope Strategy)
+// 修复内容:
+// 1. [深度修复] 解决"异位遮挡"问题。之前的版本只参考柱子峰值时刻的线高，
+//    但DIF/DEA线往往在柱子峰值之后还会继续冲高。
+//    V42 引入"全段扫描"，在计算面积时，会遍历整个红/绿段，
+//    找出这一整段内(柱子+快线+慢线)的"绝对最高点"，确保文字悬浮在整个波段的"屋顶"之上。
+// 2. [优化] 保持 10% 的视觉间距，但在全段扫描的加持下，这已经足够安全。
 // -----------------------------------------------------------------------
 
 const CHART_CONFIG = {
@@ -272,19 +274,23 @@ class ChartManager {
     if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = JSON.stringify(mmd); if (!chartContainer.mmds.find(item => item.key === key)) chartContainer.mmds.push({ time: mmd.points.time, key, id: ChartUtils.createMmdShape(this.chart, mmd) }); } }); }
 
     // -----------------------------------------------------------------------
-    // [MACD Area Drawing] - Adaptive Offset Strategy (Final Fix)
+    // [MACD Area Drawing] - V42 Segment-Wide Envelope Strategy
     // -----------------------------------------------------------------------
     if (barsResult.macd_hist && barsResult.times) {
         const macdId = this.getMACDStudyId();
         if (macdId) {
             const hist = barsResult.macd_hist;
             const times = barsResult.times;
+
+            const line1 = barsResult.macd_dif || barsResult.dif || barsResult.diff || barsResult.macd || [];
+            const line2 = barsResult.macd_dea || barsResult.dea || barsResult.dem || barsResult.signal || [];
+            const hasLines = line1.length > 0 && line2.length > 0;
+
             const len = Math.min(hist.length, times.length);
 
             const chartVisibleFrom = this.chart.getVisibleRange().from;
             const isChartSeconds = chartVisibleFrom < 10000000000;
 
-            // [核心逻辑]: 计算可视区域内的最大/最小值，以确定 Offset 大小
             let visibleMax = -Infinity;
             let visibleMin = Infinity;
             for(let i=0; i<len; i++) {
@@ -295,20 +301,20 @@ class ChartManager {
                     if(!isNaN(val)) {
                         if(val > visibleMax) visibleMax = val;
                         if(val < visibleMin) visibleMin = val;
+                        if(hasLines && line1[i]) { visibleMax = Math.max(visibleMax, line1[i]); visibleMin = Math.min(visibleMin, line1[i]); }
+                        if(hasLines && line2[i]) { visibleMax = Math.max(visibleMax, line2[i]); visibleMin = Math.min(visibleMin, line2[i]); }
                     }
                 }
             }
 
-            // 如果没找到有效数据，给个默认值防止崩溃
             if(visibleMax === -Infinity) visibleMax = 1;
             if(visibleMin === Infinity) visibleMin = -1;
 
-            // 计算波动范围和固定偏移量 (Range * 10%)
             const range = visibleMax - visibleMin;
-            const padding = range * 0.10;
+            let padding = range * 0.10;
+            if (padding === 0) padding = 0.1;
 
             let startIndex = 0;
-            let debugCount = 0;
 
             while(startIndex < len) {
                 let val = hist[startIndex];
@@ -319,17 +325,44 @@ class ChartManager {
                 let maxAbs = -1;
                 let maxIdx = -1;
 
+                // [V42新增] 用于记录这一整个波段(segment)内的绝对最高/最低点
+                // 初始化为反向极值
+                let segmentHigh = -Infinity;
+                let segmentLow = Infinity;
+
                 while(endIndex < len) {
                     const v = hist[endIndex];
                     if (isNaN(v) || v === 0 || (v > 0 !== isPos)) break;
                     sum += v;
+
+                    // 记录柱子峰值位置，用于确定X轴坐标
                     if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
+
+                    // [V42核心逻辑]: 扫描整个波段的包络线极值 (Envelope Extremes)
+                    // 无论X轴定在哪，Y轴必须高于这段时间内的所有元素(线和柱子)
+                    if (hasLines) {
+                        const l1 = line1[endIndex] || 0;
+                        const l2 = line2[endIndex] || 0;
+                        const h = v;
+
+                        // 找出当前时间点的最大/最小值
+                        const currentMax = Math.max(l1, l2, h);
+                        const currentMin = Math.min(l1, l2, h);
+
+                        // 更新整个段的极值
+                        if (currentMax > segmentHigh) segmentHigh = currentMax;
+                        if (currentMin < segmentLow) segmentLow = currentMin;
+                    } else {
+                        // 没有线数据时，只看柱子
+                        if (v > segmentHigh) segmentHigh = v;
+                        if (v < segmentLow) segmentLow = v;
+                    }
+
                     endIndex++;
                 }
 
                 if (maxIdx !== -1) {
                     let peakTime = times[maxIdx];
-                    const peakVal = hist[maxIdx];
 
                     if (isChartSeconds && peakTime > 10000000000) {
                          peakTime = peakTime / 1000;
@@ -340,21 +373,29 @@ class ChartManager {
                         const color = isPos ? CHART_CONFIG.COLORS.AREA_POS : CHART_CONFIG.COLORS.AREA_NEG;
                         const key = `macd_area_${peakTime}`;
 
-                        // [应用偏移]:
-                        // 正数 = 峰值 + padding
-                        // 负数 = 峰值 - padding
-                        // 这样偏移量是固定的视觉距离，不再受数值大小影响
-                        let offsetPrice = peakVal;
+                        // 使用全段扫描得到的极值作为基准，而不再是单点极值
+                        let basePrice;
                         if (isPos) {
-                            offsetPrice = peakVal + padding;
+                            // 对于红色区域，取整个波段的最高点
+                            basePrice = segmentHigh;
                         } else {
-                            offsetPrice = peakVal - padding;
+                            // 对于绿色区域，取整个波段的最低点
+                            basePrice = segmentLow;
+                        }
+
+                        // 安全兜底：如果计算异常，回退到柱子高度
+                        if (basePrice === -Infinity || basePrice === Infinity) {
+                            basePrice = hist[maxIdx];
+                        }
+
+                        let offsetPrice;
+                        if (isPos) {
+                            offsetPrice = basePrice + padding;
+                        } else {
+                            offsetPrice = basePrice - padding;
                         }
 
                         if (!chartContainer.macd_areas.find(item => item.key === key)) {
-                            if(debugCount < 3) console.log(`[MACD] Draw ${text} @ ${peakTime} off=${offsetPrice}`);
-                            debugCount++;
-
                             chartContainer.macd_areas.push({
                                 time: peakTime, key: key,
                                 id: this.chart.createShape({time: peakTime, price: offsetPrice}, {
