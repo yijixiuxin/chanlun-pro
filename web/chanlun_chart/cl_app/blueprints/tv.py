@@ -53,6 +53,7 @@ tv_bp = Blueprint("tv", __name__)
 # RLock 用于确保线程安全，防止多个请求同时穿透缓存
 stock_cache = TTLCache(maxsize=100, ttl=3600)
 cache_lock = RLock()
+req_lock = RLock()   # 2. 新增请求计数器锁
 
 @tv_bp.route("/tv/config")
 @login_required
@@ -318,14 +319,12 @@ def tv_search():
 
     return infos
 
-
 @tv_bp.route("/tv/history")
 @login_required
 def tv_history():
     """
     K线柱
     """
-
     symbol = request.args.get("symbol")
     _from = request.args.get("from")
     _to = request.args.get("to")
@@ -341,30 +340,32 @@ def tv_history():
         s = "no_data"
 
     if firstDataRequest == "false":
-        # 判断在 5 秒内，同一个请求大于 5 次，返回 no_data
-        if _symbol_res_old_k_time_key not in __history_req_counter.keys():
-            __history_req_counter[_symbol_res_old_k_time_key] = {
-                "counter": 0,
-                "tm": now_time,
-            }
-        else:
-            if __history_req_counter[_symbol_res_old_k_time_key]["counter"] >= 5:
+        # 3. 使用锁保护计数器逻辑
+        with req_lock:
+            # 判断在 5 秒内，同一个请求大于 5 次，返回 no_data
+            if _symbol_res_old_k_time_key not in __history_req_counter.keys():
                 __history_req_counter[_symbol_res_old_k_time_key] = {
                     "counter": 0,
                     "tm": now_time,
                 }
-                s = "no_data"
-            elif (
-                now_time - __history_req_counter[_symbol_res_old_k_time_key]["tm"]
-                <= 5
-            ):
-                __history_req_counter[_symbol_res_old_k_time_key]["counter"] += 1
-                __history_req_counter[_symbol_res_old_k_time_key]["tm"] = now_time
             else:
-                __history_req_counter[_symbol_res_old_k_time_key] = {
-                    "counter": 0,
-                    "tm": now_time,
-                }
+                if __history_req_counter[_symbol_res_old_k_time_key]["counter"] >= 5:
+                    __history_req_counter[_symbol_res_old_k_time_key] = {
+                        "counter": 0,
+                        "tm": now_time,
+                    }
+                    s = "no_data"
+                elif (
+                    now_time - __history_req_counter[_symbol_res_old_k_time_key]["tm"]
+                    <= 5
+                ):
+                    __history_req_counter[_symbol_res_old_k_time_key]["counter"] += 1
+                    __history_req_counter[_symbol_res_old_k_time_key]["tm"] = now_time
+                else:
+                    __history_req_counter[_symbol_res_old_k_time_key] = {
+                        "counter": 0,
+                        "tm": now_time,
+                    }
 
     market = symbol.split(":")[0].lower()
     code = symbol.split(":")[1]

@@ -273,46 +273,23 @@ class ChartManager {
     if (barsResult.bcs) { barsResult.bcs.forEach((bc) => { if (bc.points?.time >= from) { const key = JSON.stringify(bc); if (!chartContainer.bcs.find(item => item.key === key)) chartContainer.bcs.push({ time: bc.points.time, key, id: ChartUtils.createBcShape(this.chart, bc) }); } }); }
     if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = JSON.stringify(mmd); if (!chartContainer.mmds.find(item => item.key === key)) chartContainer.mmds.push({ time: mmd.points.time, key, id: ChartUtils.createMmdShape(this.chart, mmd) }); } }); }
 
-    // -----------------------------------------------------------------------
-    // [MACD Area Drawing] - V42 Segment-Wide Envelope Strategy
+// -----------------------------------------------------------------------
+    // [MACD Area Drawing] - V43 Backend-Sync Strategy
     // -----------------------------------------------------------------------
     if (barsResult.macd_hist && barsResult.times) {
         const macdId = this.getMACDStudyId();
         if (macdId) {
             const hist = barsResult.macd_hist;
+            // 优先使用后端计算好的 area, 如果没有则回退到空数组(后续如果不兼容则需要处理)
+            const areas = barsResult.macd_area || [];
             const times = barsResult.times;
-
-            const line1 = barsResult.macd_dif || barsResult.dif || barsResult.diff || barsResult.macd || [];
-            const line2 = barsResult.macd_dea || barsResult.dea || barsResult.dem || barsResult.signal || [];
+            const line1 = barsResult.macd_dif || barsResult.dif || [];
+            const line2 = barsResult.macd_dea || barsResult.dea || [];
             const hasLines = line1.length > 0 && line2.length > 0;
 
             const len = Math.min(hist.length, times.length);
-
             const chartVisibleFrom = this.chart.getVisibleRange().from;
             const isChartSeconds = chartVisibleFrom < 10000000000;
-
-            let visibleMax = -Infinity;
-            let visibleMin = Infinity;
-            for(let i=0; i<len; i++) {
-                let t = times[i];
-                if(isChartSeconds && t > 10000000000) t /= 1000;
-                if(t >= chartVisibleFrom) {
-                    const val = hist[i];
-                    if(!isNaN(val)) {
-                        if(val > visibleMax) visibleMax = val;
-                        if(val < visibleMin) visibleMin = val;
-                        if(hasLines && line1[i]) { visibleMax = Math.max(visibleMax, line1[i]); visibleMin = Math.min(visibleMin, line1[i]); }
-                        if(hasLines && line2[i]) { visibleMax = Math.max(visibleMax, line2[i]); visibleMin = Math.min(visibleMin, line2[i]); }
-                    }
-                }
-            }
-
-            if(visibleMax === -Infinity) visibleMax = 1;
-            if(visibleMin === Infinity) visibleMin = -1;
-
-            const range = visibleMax - visibleMin;
-            let padding = range * 0.10;
-            if (padding === 0) padding = 0.1;
 
             let startIndex = 0;
 
@@ -321,80 +298,80 @@ class ChartManager {
                 if (val === 0 || isNaN(val)) { startIndex++; continue; }
                 const isPos = val > 0;
                 let endIndex = startIndex;
-                let sum = 0;
+
                 let maxAbs = -1;
                 let maxIdx = -1;
 
-                // [V42新增] 用于记录这一整个波段(segment)内的绝对最高/最低点
-                // 初始化为反向极值
+                // 记录波段极值用于定位文字Y轴
                 let segmentHigh = -Infinity;
                 let segmentLow = Infinity;
 
+                // 扫描当前红/绿柱子波段
                 while(endIndex < len) {
                     const v = hist[endIndex];
                     if (isNaN(v) || v === 0 || (v > 0 !== isPos)) break;
-                    sum += v;
 
-                    // 记录柱子峰值位置，用于确定X轴坐标
+                    // 1. 找峰值位置 (决定 X 轴)
                     if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
 
-                    // [V42核心逻辑]: 扫描整个波段的包络线极值 (Envelope Extremes)
-                    // 无论X轴定在哪，Y轴必须高于这段时间内的所有元素(线和柱子)
+                    // 2. 找包络线极值 (决定 Y 轴)
                     if (hasLines) {
                         const l1 = line1[endIndex] || 0;
                         const l2 = line2[endIndex] || 0;
                         const h = v;
-
-                        // 找出当前时间点的最大/最小值
                         const currentMax = Math.max(l1, l2, h);
                         const currentMin = Math.min(l1, l2, h);
-
-                        // 更新整个段的极值
                         if (currentMax > segmentHigh) segmentHigh = currentMax;
                         if (currentMin < segmentLow) segmentLow = currentMin;
                     } else {
-                        // 没有线数据时，只看柱子
                         if (v > segmentHigh) segmentHigh = v;
                         if (v < segmentLow) segmentLow = v;
                     }
-
                     endIndex++;
                 }
 
+                // 绘制逻辑
                 if (maxIdx !== -1) {
                     let peakTime = times[maxIdx];
-
-                    if (isChartSeconds && peakTime > 10000000000) {
-                         peakTime = peakTime / 1000;
-                    }
+                    if (isChartSeconds && peakTime > 10000000000) peakTime /= 1000;
 
                     if (peakTime >= chartVisibleFrom) {
-                        const text = sum.toFixed(2);
+                        // 优先使用后端 area 数据，保证数值一致性
+                        // 如果后端没有传 area，则前端不显示或需要自行累加(此处略)
+                        let areaVal = 0;
+                        if (areas.length > maxIdx) {
+                            areaVal = areas[maxIdx];
+                        }
+
+                        const text = areaVal.toFixed(2);
                         const color = isPos ? CHART_CONFIG.COLORS.AREA_POS : CHART_CONFIG.COLORS.AREA_NEG;
                         const key = `macd_area_${peakTime}`;
 
-                        // 使用全段扫描得到的极值作为基准，而不再是单点极值
-                        let basePrice;
-                        if (isPos) {
-                            // 对于红色区域，取整个波段的最高点
-                            basePrice = segmentHigh;
-                        } else {
-                            // 对于绿色区域，取整个波段的最低点
-                            basePrice = segmentLow;
+                        // Y轴定位逻辑
+                        let basePrice = isPos ? segmentHigh : segmentLow;
+                        if (basePrice === -Infinity || basePrice === Infinity) basePrice = hist[maxIdx];
+
+                        // 间距计算
+                        const range = segmentHigh - segmentLow;
+                        let padding = range * 0.15;
+                        if (padding === 0 || isNaN(padding)) padding = Math.abs(hist[maxIdx]) * 0.2;
+
+                        let offsetPrice = isPos ? basePrice + padding : basePrice - padding;
+
+                        // --- 增量更新处理 ---
+                        // 检查是否是"活跃波段" (即包含了最新数据的波段)
+                        const isActiveSegment = (endIndex >= len - 1);
+                        const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
+
+                        if (isActiveSegment && existingIdx !== -1) {
+                            // 如果是活跃波段且已存在，强制删除旧的，以便更新数值
+                            // (因为TV Shape 不方便直接改文字)
+                            const oldItem = chartContainer.macd_areas[existingIdx];
+                            try { this.chart.removeEntity(oldItem.id); } catch(e){}
+                            chartContainer.macd_areas.splice(existingIdx, 1);
                         }
 
-                        // 安全兜底：如果计算异常，回退到柱子高度
-                        if (basePrice === -Infinity || basePrice === Infinity) {
-                            basePrice = hist[maxIdx];
-                        }
-
-                        let offsetPrice;
-                        if (isPos) {
-                            offsetPrice = basePrice + padding;
-                        } else {
-                            offsetPrice = basePrice - padding;
-                        }
-
+                        // 创建新的 Shape
                         if (!chartContainer.macd_areas.find(item => item.key === key)) {
                             chartContainer.macd_areas.push({
                                 time: peakTime, key: key,
