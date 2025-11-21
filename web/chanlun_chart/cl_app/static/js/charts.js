@@ -385,20 +385,29 @@ class ChartManager {
 
                 while(endIndex < len) {
                     const v = hist[endIndex];
-                    if (isNaN(v) || v === 0 || (v > 0 !== isPos)) break;
 
-                    if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
-                    if (hasLines) {
-                        const l1 = line1[endIndex] || 0;
-                        const l2 = line2[endIndex] || 0;
-                        const h = v;
-                        const currentMax = Math.max(l1, l2, h);
-                        const currentMin = Math.min(l1, l2, h);
-                        if (currentMax > segmentHigh) segmentHigh = currentMax;
-                        if (currentMin < segmentLow) segmentLow = currentMin;
-                    } else {
-                        if (v > segmentHigh) segmentHigh = v;
-                        if (v < segmentLow) segmentLow = v;
+                    // 修复逻辑：忽略 NaN 和 0，保持段落连续性
+                    // 只有当数值有效(非0非NaN) 且 符号反转时，才断开段落
+                    if (v !== 0 && !isNaN(v)) {
+                        if (v > 0 !== isPos) break; // 符号反转，断开
+                    }
+                    // 注意：如果 v 是 0 或 NaN，循环继续执行，将其包含在当前段内（或直接跳过计算）
+                    // 这样 "红-0-红" 会被视为一个完整段落，而不是断开
+
+                    if (!isNaN(v)) {
+                        if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
+                        if (hasLines) {
+                            const l1 = line1[endIndex] || 0;
+                            const l2 = line2[endIndex] || 0;
+                            const h = v;
+                            const currentMax = Math.max(l1, l2, h);
+                            const currentMin = Math.min(l1, l2, h);
+                            if (currentMax > segmentHigh) segmentHigh = currentMax;
+                            if (currentMin < segmentLow) segmentLow = currentMin;
+                        } else {
+                            if (v > segmentHigh) segmentHigh = v;
+                            if (v < segmentLow) segmentLow = v;
+                        }
                     }
                     endIndex++;
                 }
@@ -424,15 +433,60 @@ class ChartManager {
                         const isActiveSegment = (endIndex >= len - 1);
                         const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
 
-                        if (isActiveSegment && existingIdx !== -1) {
-                            const oldItem = chartContainer.macd_areas[existingIdx];
-                            this.safeRemove(oldItem.id);
-                            chartContainer.macd_areas.splice(existingIdx, 1);
+                        if (isActiveSegment) {
+                            let boundaryTimeRaw = -Infinity;
+
+                            // 【关键修改】
+                            // 原逻辑：boundaryTimeRaw = times[startIndex - 1];
+                            // 新逻辑：向前回溯 8 根 K 线作为“禁区”。
+                            // 含义：只要是最近 8 根 K 线内产生的旧标记，不管是否属于严格意义上的“当前段”，统统视为“抖动残影”并清除，只保留最新的这一个。
+                            // 这能完美解决日线/周线因微小波动导致的段落断裂问题。
+                            const LOOKBACK_BARS = 8;
+                            let safeIndex = startIndex - LOOKBACK_BARS;
+                            if (safeIndex < 0) safeIndex = 0;
+
+                            if (times.length > safeIndex) {
+                                boundaryTimeRaw = times[safeIndex];
+                            }
+
+                            // 调试日志（确认回溯生效）
+                            // console.log(`[MACD-FIX] 活跃段Start: ${startIndex}, 回溯至: ${safeIndex}, 边界时间: ${new Date(boundaryTimeRaw).toLocaleString()}`);
+
+                            for (let k = chartContainer.macd_areas.length - 1; k >= 0; k--) {
+                                const oldItem = chartContainer.macd_areas[k];
+
+                                // 获取旧标记时间 (优先 rawTime)
+                                let oldItemTimeRaw = oldItem.rawTime;
+                                if (!oldItemTimeRaw) {
+                                    oldItemTimeRaw = oldItem.time > 10000000000 ? oldItem.time : oldItem.time * 1000;
+                                }
+
+                                // 只要旧标记的时间晚于这个“放宽了的边界”，就删掉
+                                if (oldItemTimeRaw > boundaryTimeRaw) {
+                                    this.safeRemove(oldItem.id);
+                                    chartContainer.macd_areas.splice(k, 1);
+                                }
+                            }
+                        } else {
+                            // 历史段逻辑（保持不变）
+                            const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
+                            if (existingIdx !== -1) {
+                                const oldItem = chartContainer.macd_areas[existingIdx];
+                                this.safeRemove(oldItem.id);
+                                chartContainer.macd_areas.splice(existingIdx, 1);
+                            }
                         }
 
                         if (!chartContainer.macd_areas.find(item => item.key === key)) {
+                            // DEBUG: 打印新增标记的动作
+                            if (isActiveSegment) {
+                                console.log(`[MACD-DEBUG] %c[新增标记] Time: ${times[maxIdx]} (${new Date(times[maxIdx]).toLocaleString()})`, "color: green");
+                            }
+
                             chartContainer.macd_areas.push({
-                                time: peakTime, key: key,
+                                time: peakTime,
+                                rawTime: times[maxIdx], // 务必确保这里保存了 times[maxIdx]
+                                key: key,
                                 id: safeCreate(this.chart.createShape({time: peakTime, price: offsetPrice}, {
                                     shape: 'text', text: text, ownerStudyId: macdId, lock: true, disableSelection: true,
                                     overrides: { color: color, fontsize: 11, linewidth: 0, transparency: 0, bold: true }
