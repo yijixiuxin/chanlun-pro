@@ -148,62 +148,188 @@ class ChartManager {
 
   setupEventListeners() {
     const global_widget = this.widget;
+    const self = this;
+    this.measureShapeId = null;
+
+    // 深度扫描函数：在复杂的对象里寻找坐标点
+    const scanForPoints = (obj, depth = 0) => {
+        if (!obj || depth > 3) return null;
+        try {
+            // 1. 检查当前层级是否有 points
+            if (Array.isArray(obj.points) && obj.points.length >= 2 && obj.points[0].time) return obj.points;
+            if (Array.isArray(obj._points) && obj._points.length >= 2 && obj._points[0].time) return obj._points;
+
+            // 2. 遍历属性寻找
+            const keys = Object.keys(obj);
+            for (let k of keys) {
+                const val = obj[k];
+                if (val && typeof val === 'object') {
+                    // 特征匹配：如果是数组且看起来像坐标
+                    if (Array.isArray(val) && val.length >= 2 && val[0] && val[0].hasOwnProperty('time')) {
+                        console.log(`[MACD] 通过深度扫描在属性 [${k}] 中找到坐标!`);
+                        return val;
+                    }
+                    // 递归查找 (限制深度防止死循环)
+                    if (!Array.isArray(val) && k !== 'parent' && k !== 'chart') {
+                         const found = scanForPoints(val, depth + 1);
+                         if (found) return found;
+                    }
+                }
+            }
+        } catch(e) {}
+        return null;
+    };
+
     this.widget.headerReady().then(function () {
+      // ... 原有按钮保持不变 ...
       var buttonReload = global_widget.createButton();
       buttonReload.textContent = "重新加载数据";
       buttonReload.addEventListener("click", function () { global_widget.resetCache(); global_widget.activeChart().resetData(); });
+
       var buttonHideMark = global_widget.createButton();
       buttonHideMark.textContent = "隐藏标记";
       buttonHideMark.addEventListener("click", function () { global_widget.activeChart().clearMarks(); });
+
       var buttonDeleteMark = global_widget.createButton();
       buttonDeleteMark.textContent = "删除标记";
       buttonDeleteMark.addEventListener("click", function () {
         let symbol = global_widget.symbolInterval();
-        $.post({
-          type: "POST", url: "/tv/del_marks", dataType: "json", data: { symbol: symbol.symbol },
-          success: function (res) {
-            if (res.status == "ok") { global_widget.activeChart().clearMarks(); layer.msg("删除标记成功"); }
-            else { layer.msg("删除标记失败"); }
-          },
-        });
+        $.post({ type: "POST", url: "/tv/del_marks", dataType: "json", data: { symbol: symbol.symbol }, success: function (res) { if (res.status == "ok") { global_widget.activeChart().clearMarks(); layer.msg("删除标记成功"); } } });
+      });
+
+      // --- 终极扫描版：MACD 统计按钮 ---
+      var buttonCalcArea = global_widget.createButton();
+      buttonCalcArea.textContent = "创建统计框";
+      buttonCalcArea.style.color = "#1E90FF";
+      buttonCalcArea.style.fontWeight = "bold";
+
+      buttonCalcArea.addEventListener("click", function () {
+        try {
+            const chart = global_widget.activeChart();
+            let targetId = self.measureShapeId;
+            let targetObj = null;
+
+            // 1. 确定目标 ID
+            if (!targetId) {
+                // 尝试搜索
+                try {
+                    const allShapes = chart.getAllShapes();
+                    for (let i = allShapes.length - 1; i >= 0; i--) {
+                        const id = allShapes[i].id;
+                        // 简单粗暴：通过 getShapeById 拿对象，看有没有我们的标签
+                        try {
+                            const s = chart.getShapeById(id);
+                            if (s && (s.text === "MACD_MEASURE_TAG_v1" || (s.options && s.options.text === "MACD_MEASURE_TAG_v1"))) {
+                                targetId = id;
+                                targetObj = s;
+                                break;
+                            }
+                        } catch(e){}
+                    }
+                } catch(e){}
+            }
+
+            // 2. 如果有 ID，尝试获取数据
+            if (targetId) {
+                console.log(`[MACD] 锁定目标 ID: ${targetId}`);
+
+                // 策略 A: getShapeState (新版API)
+                if (!targetObj && typeof chart.getShapeState === 'function') {
+                    try { targetObj = chart.getShapeState(targetId); } catch(e){}
+                }
+                // 策略 B: getShapeById (旧版API)
+                if (!targetObj) {
+                    try { targetObj = chart.getShapeById(targetId); } catch(e){}
+                }
+
+                if (targetObj) {
+                    console.log("[MACD] 获取到对象:", targetObj);
+
+                    // === 核心：提取 Points ===
+                    let points = null;
+
+                    // 1. 直接访问
+                    if (targetObj.points) points = targetObj.points;
+                    else if (targetObj.data && targetObj.data.points) points = targetObj.data.points;
+                    else if (targetObj.json && targetObj.json.points) points = targetObj.json.points;
+                    else if (targetObj._points) points = targetObj._points;
+
+                    // 2. 深度扫描 (如果上面没找到)
+                    if (!points || !Array.isArray(points)) {
+                        console.log("[MACD] 常规路径未找到坐标，启动深度扫描...");
+                        points = scanForPoints(targetObj);
+                    }
+
+                    if (points && Array.isArray(points) && points.length >= 2) {
+                         // >>> 执行计算
+                         const t1 = points[0].time || points[0];
+                         const t2 = points[1].time || points[1];
+                         console.log(`[MACD] 提取到坐标: ${t1} - ${t2}`);
+
+                         const result = self.calculateMACDArea(t1, t2);
+                         if (result) {
+                            const msg = `📊 MACD 统计\n多头: ${result.sumUp}\n空头: ${result.sumDown}\n净值: ${result.netArea}\nK线: ${result.count}`;
+                            alert(msg);
+                            self.measureShapeId = targetId; // 记住这个有效的ID
+                            return; // 成功结束
+                         }
+                    } else {
+                        console.warn("[MACD] ❌ 对象中完全找不到 points 数据。打印 Keys 以便排查:", Object.keys(targetObj));
+                    }
+                }
+            }
+
+            // ===========================
+            // 如果没找到或没数据 -> 创建新框
+            // ===========================
+            console.log("[MACD] 创建新框...");
+            const range = chart.getVisibleRange();
+            const t1 = range.from + (range.to - range.from) * 0.35;
+            const t2 = range.from + (range.to - range.from) * 0.65;
+
+            // 价格计算
+            let pTop=100, pBottom=0;
+            const d = self.getChartData();
+            if(d?.barsResult?.bars){
+                 const b = d.barsResult.bars.slice(-100);
+                 let max=-Infinity; b.forEach(x=>{if(x.high>max)max=x.high});
+                 if(max>-Infinity) { pTop=max*1.1; pBottom=max*0.9; }
+            }
+
+            const cfg = {
+                shape: "rectangle", lock: false, disableSelection: false,
+                text: "MACD_MEASURE_TAG_v1",
+                overrides: { color: "#2962FF", backgroundColor: "#2962FF", transparency: 85, linewidth: 2 }
+            };
+
+            const res = chart.createMultipointShape([{time:t1, price:pTop}, {time:t2, price:pBottom}], cfg);
+
+            Promise.resolve(res).then(id => {
+                if(id) {
+                    self.measureShapeId = id;
+                    buttonCalcArea.textContent = "📊 点击计算";
+                    buttonCalcArea.style.color = "#ff6d00";
+                    if(typeof layer !== 'undefined') layer.msg("框已生成，请拖动后再次点击");
+                    else alert("框已生成，请拖动后再次点击");
+                }
+            });
+
+        } catch(e) {
+            console.error("[MACD] Error:", e);
+        }
       });
     });
     this.widget.onChartReady(() => {
       this.chart = this.widget.activeChart();
       if (!this.chart) return;
-      if (this.udf_datafeed) window.tvDatafeed = this.udf_datafeed;
-
       setTimeout(() => {
           const studies = this.chart.getAllStudies();
-          const oldMacd = studies.find(s => s.name === 'macd_pro_area');
-          if (oldMacd) {
-              try { this.chart.removeEntity(oldMacd.id); } catch(e) {}
-          }
-          const hasMacd = studies.some(s => s.name === 'MACD');
-          if (!hasMacd) {
-              this.chart.createStudy('MACD', false, false)
-                  .then(id => {
-                      this.macdStudyId = id;
-                  })
-                  .catch(e => { console.log("Create MACD failed:", e); });
-          } else {
-              const existing = studies.find(s => s.name === 'MACD');
-              if(existing) this.macdStudyId = existing.id;
-          }
+          if (!studies.some(s => s.name === 'MACD')) { this.chart.createStudy('MACD', false, false).catch(()=>{}); }
       }, 1000);
-
-      this.chart.applyOverrides({
-        "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a",
-        "mainSeriesProperties.candleStyle.borderUpColor": "#ef5350", "mainSeriesProperties.candleStyle.borderDownColor": "#26a69a",
-        "mainSeriesProperties.candleStyle.wickUpColor": "#ef5350", "mainSeriesProperties.candleStyle.wickDownColor": "#26a69a",
-      });
-      this.chart.onSymbolChanged().subscribe(null, (symbol) => this.handleSymbolChange(symbol));
-      this.chart.onIntervalChanged().subscribe(null, (interval) => this.handleIntervalChange(interval));
-      this.chart.onDataLoaded().subscribe(null, () => {
-          this.clear_draw_chanlun();
-          setTimeout(() => this.debouncedDrawChanlun(), 200);
-      }, true);
-
+      this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
+      this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
+      this.chart.onIntervalChanged().subscribe(null, (i) => this.handleIntervalChange(i));
+      this.chart.onDataLoaded().subscribe(null, () => { this.clear_draw_chanlun(); setTimeout(() => this.debouncedDrawChanlun(), 200); }, true);
       this.chart.dataReady(() => this.handleDataReady());
       this.widget.subscribe("onTick", () => this.handleTick());
       this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
@@ -295,6 +421,60 @@ class ChartManager {
     return { symbolKey, barsResult, from };
   }
 
+  // --- 新增功能：计算指定时间区间的 MACD 红绿柱面积 ---
+  calculateMACDArea(startTime, endTime) {
+    // 1. 获取数据
+    const chartData = this.getChartData();
+    if (!chartData || !chartData.barsResult) {
+        console.warn("无法获取图表数据，计算中止");
+        return null;
+    }
+
+    const { times, macd_hist } = chartData.barsResult;
+    if (!times || !macd_hist || times.length !== macd_hist.length) {
+        console.warn("MACD数据不完整");
+        return null;
+    }
+
+    // 2. 确保时间戳单位一致（假设 times 是毫秒，传入的参数可能是秒）
+    // TradingView 绘图返回的通常是秒级时间戳，而 bundle.js 中 times 存的是毫秒
+    const t1 = startTime * 1000;
+    const t2 = endTime * 1000;
+    const start = Math.min(t1, t2);
+    const end = Math.max(t1, t2);
+
+    let sumUp = 0.0;   // 红柱总和（正值）
+    let sumDown = 0.0; // 绿柱总和（负值）
+    let count = 0;
+
+    // 3. 遍历并累加
+    for (let i = 0; i < times.length; i++) {
+        const t = times[i];
+        if (t >= start && t <= end) {
+            const val = macd_hist[i];
+            // 排除无效值 NaN
+            if (val !== undefined && val !== null && !isNaN(val)) {
+                if (val > 0) sumUp += val;
+                else sumDown += val;
+                count++;
+            }
+        }
+    }
+
+    // 4. 格式化结果
+    const result = {
+        start: new Date(start).toLocaleString(),
+        end: new Date(end).toLocaleString(),
+        count: count,
+        sumUp: parseFloat(sumUp.toFixed(4)),     // 多头力度
+        sumDown: parseFloat(sumDown.toFixed(4)), // 空头力度
+        netArea: parseFloat((sumUp + sumDown).toFixed(4)) // 净力度
+    };
+
+    console.log("[MACD统计]", result);
+    return result;
+  }
+
   initChartContainer(symbolKey) {
     if (!this.obj_charts[symbolKey]) {
       this.obj_charts[symbolKey] = {};
@@ -306,7 +486,7 @@ class ChartManager {
   getMACDStudyId() {
       if (this.macdStudyId) return this.macdStudyId;
       const studies = this.chart.getAllStudies();
-      const macdStudy = studies.find(s => s.name === 'MACD');
+      const macdStudy = studies.find(s => s.name === 'macd_pro_area');
       if (macdStudy) { this.macdStudyId = macdStudy.id; return macdStudy.id; }
       return null;
   }
@@ -359,6 +539,150 @@ class ChartManager {
 
     console.log(`[DEBUG-CHARTS] Draw Stats: Created Bis=${stats.bis}, Skipped Bis=${stats.skipped_bis}, Created Xds=${stats.xds}`);
 
+    if (barsResult.macd_hist && barsResult.times) {
+        const macdId = this.getMACDStudyId();
+        if (macdId) {
+            const hist = barsResult.macd_hist;
+            const areas = barsResult.macd_area || [];
+            const times = barsResult.times;
+            const line1 = barsResult.macd_dif || barsResult.dif || [];
+            const line2 = barsResult.macd_dea || barsResult.dea || [];
+            const hasLines = line1.length > 0 && line2.length > 0;
+
+            const len = Math.min(hist.length, times.length);
+            const visibleRange = this.chart.getVisibleRange();
+            const chartVisibleFrom = visibleRange ? visibleRange.from : 0;
+            const isChartSeconds = chartVisibleFrom < 10000000000;
+
+            let startIndex = 0;
+
+            while(startIndex < len) {
+                let val = hist[startIndex];
+                if (val === 0 || isNaN(val)) { startIndex++; continue; }
+                const isPos = val > 0;
+                let endIndex = startIndex;
+
+                let maxAbs = -1;
+                let maxIdx = -1;
+                let segmentHigh = -Infinity;
+                let segmentLow = Infinity;
+
+                while(endIndex < len) {
+                    const v = hist[endIndex];
+
+                    // 修复逻辑：忽略 NaN 和 0，保持段落连续性
+                    // 只有当数值有效(非0非NaN) 且 符号反转时，才断开段落
+                    if (v !== 0 && !isNaN(v)) {
+                        if (v > 0 !== isPos) break; // 符号反转，断开
+                    }
+                    // 注意：如果 v 是 0 或 NaN，循环继续执行，将其包含在当前段内（或直接跳过计算）
+                    // 这样 "红-0-红" 会被视为一个完整段落，而不是断开
+
+                    if (!isNaN(v)) {
+                        if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
+                        if (hasLines) {
+                            const l1 = line1[endIndex] || 0;
+                            const l2 = line2[endIndex] || 0;
+                            const h = v;
+                            const currentMax = Math.max(l1, l2, h);
+                            const currentMin = Math.min(l1, l2, h);
+                            if (currentMax > segmentHigh) segmentHigh = currentMax;
+                            if (currentMin < segmentLow) segmentLow = currentMin;
+                        } else {
+                            if (v > segmentHigh) segmentHigh = v;
+                            if (v < segmentLow) segmentLow = v;
+                        }
+                    }
+                    endIndex++;
+                }
+
+                if (maxIdx !== -1) {
+                    let peakTime = times[maxIdx];
+                    if (isChartSeconds && peakTime > 10000000000) peakTime /= 1000;
+
+                    if (peakTime >= chartVisibleFrom) {
+                        let areaVal = 0;
+                        if (areas.length > maxIdx) areaVal = areas[maxIdx];
+
+                        const text = areaVal.toFixed(2);
+                        const color = isPos ? CHART_CONFIG.COLORS.AREA_POS : CHART_CONFIG.COLORS.AREA_NEG;
+                        const key = `macd_area_${peakTime}`;
+                        let basePrice = isPos ? segmentHigh : segmentLow;
+                        if (basePrice === -Infinity || basePrice === Infinity) basePrice = hist[maxIdx];
+                        const range = segmentHigh - segmentLow;
+                        let padding = range * 0.15;
+                        if (padding === 0 || isNaN(padding)) padding = Math.abs(hist[maxIdx]) * 0.2;
+                        let offsetPrice = isPos ? basePrice + padding : basePrice - padding;
+
+                        const isActiveSegment = (endIndex >= len - 1);
+                        const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
+
+                        if (isActiveSegment) {
+                            let boundaryTimeRaw = -Infinity;
+
+                            // 【关键修改】
+                            // 原逻辑：boundaryTimeRaw = times[startIndex - 1];
+                            // 新逻辑：向前回溯 8 根 K 线作为“禁区”。
+                            // 含义：只要是最近 8 根 K 线内产生的旧标记，不管是否属于严格意义上的“当前段”，统统视为“抖动残影”并清除，只保留最新的这一个。
+                            // 这能完美解决日线/周线因微小波动导致的段落断裂问题。
+                            const LOOKBACK_BARS = 8;
+                            let safeIndex = startIndex - LOOKBACK_BARS;
+                            if (safeIndex < 0) safeIndex = 0;
+
+                            if (times.length > safeIndex) {
+                                boundaryTimeRaw = times[safeIndex];
+                            }
+
+                            // 调试日志（确认回溯生效）
+                            // console.log(`[MACD-FIX] 活跃段Start: ${startIndex}, 回溯至: ${safeIndex}, 边界时间: ${new Date(boundaryTimeRaw).toLocaleString()}`);
+
+                            for (let k = chartContainer.macd_areas.length - 1; k >= 0; k--) {
+                                const oldItem = chartContainer.macd_areas[k];
+
+                                // 获取旧标记时间 (优先 rawTime)
+                                let oldItemTimeRaw = oldItem.rawTime;
+                                if (!oldItemTimeRaw) {
+                                    oldItemTimeRaw = oldItem.time > 10000000000 ? oldItem.time : oldItem.time * 1000;
+                                }
+
+                                // 只要旧标记的时间晚于这个“放宽了的边界”，就删掉
+                                if (oldItemTimeRaw > boundaryTimeRaw) {
+                                    this.safeRemove(oldItem.id);
+                                    chartContainer.macd_areas.splice(k, 1);
+                                }
+                            }
+                        } else {
+                            // 历史段逻辑（保持不变）
+                            const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
+                            if (existingIdx !== -1) {
+                                const oldItem = chartContainer.macd_areas[existingIdx];
+                                this.safeRemove(oldItem.id);
+                                chartContainer.macd_areas.splice(existingIdx, 1);
+                            }
+                        }
+
+                        if (!chartContainer.macd_areas.find(item => item.key === key)) {
+                            // DEBUG: 打印新增标记的动作
+                            if (isActiveSegment) {
+                                console.log(`[MACD-DEBUG] %c[新增标记] Time: ${times[maxIdx]} (${new Date(times[maxIdx]).toLocaleString()})`, "color: green");
+                            }
+
+                            chartContainer.macd_areas.push({
+                                time: peakTime,
+                                rawTime: times[maxIdx], // 务必确保这里保存了 times[maxIdx]
+                                key: key,
+                                id: safeCreate(this.chart.createShape({time: peakTime, price: offsetPrice}, {
+                                    shape: 'text', text: text, ownerStudyId: macdId, lock: true, disableSelection: true,
+                                    overrides: { color: color, fontsize: 11, linewidth: 0, transparency: 0, bold: true }
+                                }), 'macd_area')
+                            });
+                        }
+                    }
+                }
+                startIndex = endIndex;
+            }
+        }
+    }
   }
 
   draw_chanlun() {
