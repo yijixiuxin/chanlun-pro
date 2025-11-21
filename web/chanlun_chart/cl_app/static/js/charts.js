@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------
 // 文件名: charts.js
-// 修复版: V46_Fix_Chart_Ready_Check
+// 修复版: V48_Registry_And_Fix
 // -----------------------------------------------------------------------
 
 const CHART_CONFIG = {
@@ -50,7 +50,6 @@ const ChartUtils = {
     };
     const config = { ...defaults, ...options };
     try {
-        // 再次检查 chart 是否可用
         if(!chart) return Promise.reject("Chart object is null");
 
         return config.shape === "trend_line" || config.shape === "rectangle" || config.shape === "circle"
@@ -95,7 +94,19 @@ class ChartManager {
 
   init() {
     this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 60000);
-    window.tvDatafeed = this.udf_datafeed;
+
+    // --- 核心修复：多图表 Datafeed 注册机制 ---
+    if (!window.GlobalTVDatafeeds) {
+        window.GlobalTVDatafeeds = [];
+    }
+    // 清理旧的
+    if (window.GlobalTVDatafeeds.length > 10) {
+        window.GlobalTVDatafeeds.shift();
+    }
+    window.GlobalTVDatafeeds.push(this.udf_datafeed);
+    window.tvDatafeed = this.udf_datafeed; // 兼容旧代码
+    // ---------------------------------------
+
     this.widget = window.tvWidget = new TradingView.widget({
       debug: false, autosize: true, fullscreen: false,
       container: "tv_chart_container_" + this.id,
@@ -185,7 +196,6 @@ class ChartManager {
       this.chart.onSymbolChanged().subscribe(null, (symbol) => this.handleSymbolChange(symbol));
       this.chart.onIntervalChanged().subscribe(null, (interval) => this.handleIntervalChange(interval));
       this.chart.onDataLoaded().subscribe(null, () => {
-          // onDataLoaded 时，图表准备好，应该刷新一次
           this.clear_draw_chanlun();
           setTimeout(() => this.debouncedDrawChanlun(), 200);
       }, true);
@@ -212,8 +222,6 @@ class ChartManager {
     console.log("[DEBUG-CHARTS] Interval Changed to:", interval);
     Utils.set_local_data(`${market}_interval_${this.id}`, interval);
     this.clear_draw_chanlun();
-    // 切换周期时，立即调用可能导致 getVisibleRange 失效，debounce 稍微延后，
-    // 如果此时图表未就绪，getChartData 会返回 null 阻止绘制，直到 onDataLoaded 再次触发
     this.debouncedDrawChanlun();
   }
   handleDataReady() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
@@ -268,7 +276,6 @@ class ChartManager {
     console.log(`[DEBUG-CHARTS] getChartData for ${symbolResKey}: Found=${!!barsResult}`);
     if (!barsResult) return null;
 
-    // 关键修复：检查图表 visibleRange 是否有效
     if (!this.chart) {
          console.warn("[DEBUG-CHARTS] getChartData aborted: this.chart is null.");
          return null;
@@ -320,7 +327,6 @@ class ChartManager {
         return promise;
     };
 
-    // 统计绘制情况
     let stats = { bis: 0, xds: 0, zsds: 0, skipped_bis: 0 };
 
     if (barsResult.fxs) { barsResult.fxs.forEach((fx) => { if (fx.points?.[0]?.time >= from) { const key = JSON.stringify(fx); if (!chartContainer.fxs.find(item => item.key === key)) chartContainer.fxs.push({ time: fx.points[0].time, key, id: safeCreate(ChartUtils.createFxShape(this.chart, fx), 'fx') }); } }); }
@@ -350,7 +356,6 @@ class ChartManager {
     console.log(`[DEBUG-CHARTS] Draw Stats: Created Bis=${stats.bis}, Skipped Bis=${stats.skipped_bis}, Created Xds=${stats.xds}`);
 
     if (barsResult.macd_hist && barsResult.times) {
-        // ... (MACD Logic remains same) ...
         const macdId = this.getMACDStudyId();
         if (macdId) {
             const hist = barsResult.macd_hist;
@@ -443,7 +448,6 @@ class ChartManager {
   }
 
   draw_chanlun() {
-    // 再次确保 chart 对象有效
     if (!this.chart) {
         try {
             this.chart = this.widget.activeChart();
