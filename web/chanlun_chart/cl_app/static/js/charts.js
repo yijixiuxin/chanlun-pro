@@ -175,15 +175,19 @@ class ChartManager {
 
       setTimeout(() => {
           const studies = this.chart.getAllStudies();
-          const hasMacd = studies.some(s => s.name === 'macd_pro_area');
+          const oldMacd = studies.find(s => s.name === 'macd_pro_area');
+          if (oldMacd) {
+              try { this.chart.removeEntity(oldMacd.id); } catch(e) {}
+          }
+          const hasMacd = studies.some(s => s.name === 'MACD');
           if (!hasMacd) {
-              this.chart.createStudy('macd_pro_area', false, false)
+              this.chart.createStudy('MACD', false, false)
                   .then(id => {
                       this.macdStudyId = id;
                   })
-                  .catch(e => { console.log("Create study failed (benign):", e); });
+                  .catch(e => { console.log("Create MACD failed:", e); });
           } else {
-              const existing = studies.find(s => s.name === 'macd_pro_area');
+              const existing = studies.find(s => s.name === 'MACD');
               if(existing) this.macdStudyId = existing.id;
           }
       }, 1000);
@@ -302,7 +306,7 @@ class ChartManager {
   getMACDStudyId() {
       if (this.macdStudyId) return this.macdStudyId;
       const studies = this.chart.getAllStudies();
-      const macdStudy = studies.find(s => s.name === 'macd_pro_area');
+      const macdStudy = studies.find(s => s.name === 'MACD');
       if (macdStudy) { this.macdStudyId = macdStudy.id; return macdStudy.id; }
       return null;
   }
@@ -355,150 +359,6 @@ class ChartManager {
 
     console.log(`[DEBUG-CHARTS] Draw Stats: Created Bis=${stats.bis}, Skipped Bis=${stats.skipped_bis}, Created Xds=${stats.xds}`);
 
-    if (barsResult.macd_hist && barsResult.times) {
-        const macdId = this.getMACDStudyId();
-        if (macdId) {
-            const hist = barsResult.macd_hist;
-            const areas = barsResult.macd_area || [];
-            const times = barsResult.times;
-            const line1 = barsResult.macd_dif || barsResult.dif || [];
-            const line2 = barsResult.macd_dea || barsResult.dea || [];
-            const hasLines = line1.length > 0 && line2.length > 0;
-
-            const len = Math.min(hist.length, times.length);
-            const visibleRange = this.chart.getVisibleRange();
-            const chartVisibleFrom = visibleRange ? visibleRange.from : 0;
-            const isChartSeconds = chartVisibleFrom < 10000000000;
-
-            let startIndex = 0;
-
-            while(startIndex < len) {
-                let val = hist[startIndex];
-                if (val === 0 || isNaN(val)) { startIndex++; continue; }
-                const isPos = val > 0;
-                let endIndex = startIndex;
-
-                let maxAbs = -1;
-                let maxIdx = -1;
-                let segmentHigh = -Infinity;
-                let segmentLow = Infinity;
-
-                while(endIndex < len) {
-                    const v = hist[endIndex];
-
-                    // 修复逻辑：忽略 NaN 和 0，保持段落连续性
-                    // 只有当数值有效(非0非NaN) 且 符号反转时，才断开段落
-                    if (v !== 0 && !isNaN(v)) {
-                        if (v > 0 !== isPos) break; // 符号反转，断开
-                    }
-                    // 注意：如果 v 是 0 或 NaN，循环继续执行，将其包含在当前段内（或直接跳过计算）
-                    // 这样 "红-0-红" 会被视为一个完整段落，而不是断开
-
-                    if (!isNaN(v)) {
-                        if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
-                        if (hasLines) {
-                            const l1 = line1[endIndex] || 0;
-                            const l2 = line2[endIndex] || 0;
-                            const h = v;
-                            const currentMax = Math.max(l1, l2, h);
-                            const currentMin = Math.min(l1, l2, h);
-                            if (currentMax > segmentHigh) segmentHigh = currentMax;
-                            if (currentMin < segmentLow) segmentLow = currentMin;
-                        } else {
-                            if (v > segmentHigh) segmentHigh = v;
-                            if (v < segmentLow) segmentLow = v;
-                        }
-                    }
-                    endIndex++;
-                }
-
-                if (maxIdx !== -1) {
-                    let peakTime = times[maxIdx];
-                    if (isChartSeconds && peakTime > 10000000000) peakTime /= 1000;
-
-                    if (peakTime >= chartVisibleFrom) {
-                        let areaVal = 0;
-                        if (areas.length > maxIdx) areaVal = areas[maxIdx];
-
-                        const text = areaVal.toFixed(2);
-                        const color = isPos ? CHART_CONFIG.COLORS.AREA_POS : CHART_CONFIG.COLORS.AREA_NEG;
-                        const key = `macd_area_${peakTime}`;
-                        let basePrice = isPos ? segmentHigh : segmentLow;
-                        if (basePrice === -Infinity || basePrice === Infinity) basePrice = hist[maxIdx];
-                        const range = segmentHigh - segmentLow;
-                        let padding = range * 0.15;
-                        if (padding === 0 || isNaN(padding)) padding = Math.abs(hist[maxIdx]) * 0.2;
-                        let offsetPrice = isPos ? basePrice + padding : basePrice - padding;
-
-                        const isActiveSegment = (endIndex >= len - 1);
-                        const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
-
-                        if (isActiveSegment) {
-                            let boundaryTimeRaw = -Infinity;
-
-                            // 【关键修改】
-                            // 原逻辑：boundaryTimeRaw = times[startIndex - 1];
-                            // 新逻辑：向前回溯 8 根 K 线作为“禁区”。
-                            // 含义：只要是最近 8 根 K 线内产生的旧标记，不管是否属于严格意义上的“当前段”，统统视为“抖动残影”并清除，只保留最新的这一个。
-                            // 这能完美解决日线/周线因微小波动导致的段落断裂问题。
-                            const LOOKBACK_BARS = 8;
-                            let safeIndex = startIndex - LOOKBACK_BARS;
-                            if (safeIndex < 0) safeIndex = 0;
-
-                            if (times.length > safeIndex) {
-                                boundaryTimeRaw = times[safeIndex];
-                            }
-
-                            // 调试日志（确认回溯生效）
-                            // console.log(`[MACD-FIX] 活跃段Start: ${startIndex}, 回溯至: ${safeIndex}, 边界时间: ${new Date(boundaryTimeRaw).toLocaleString()}`);
-
-                            for (let k = chartContainer.macd_areas.length - 1; k >= 0; k--) {
-                                const oldItem = chartContainer.macd_areas[k];
-
-                                // 获取旧标记时间 (优先 rawTime)
-                                let oldItemTimeRaw = oldItem.rawTime;
-                                if (!oldItemTimeRaw) {
-                                    oldItemTimeRaw = oldItem.time > 10000000000 ? oldItem.time : oldItem.time * 1000;
-                                }
-
-                                // 只要旧标记的时间晚于这个“放宽了的边界”，就删掉
-                                if (oldItemTimeRaw > boundaryTimeRaw) {
-                                    this.safeRemove(oldItem.id);
-                                    chartContainer.macd_areas.splice(k, 1);
-                                }
-                            }
-                        } else {
-                            // 历史段逻辑（保持不变）
-                            const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
-                            if (existingIdx !== -1) {
-                                const oldItem = chartContainer.macd_areas[existingIdx];
-                                this.safeRemove(oldItem.id);
-                                chartContainer.macd_areas.splice(existingIdx, 1);
-                            }
-                        }
-
-                        if (!chartContainer.macd_areas.find(item => item.key === key)) {
-                            // DEBUG: 打印新增标记的动作
-                            if (isActiveSegment) {
-                                console.log(`[MACD-DEBUG] %c[新增标记] Time: ${times[maxIdx]} (${new Date(times[maxIdx]).toLocaleString()})`, "color: green");
-                            }
-
-                            chartContainer.macd_areas.push({
-                                time: peakTime,
-                                rawTime: times[maxIdx], // 务必确保这里保存了 times[maxIdx]
-                                key: key,
-                                id: safeCreate(this.chart.createShape({time: peakTime, price: offsetPrice}, {
-                                    shape: 'text', text: text, ownerStudyId: macdId, lock: true, disableSelection: true,
-                                    overrides: { color: color, fontsize: 11, linewidth: 0, transparency: 0, bold: true }
-                                }), 'macd_area')
-                            });
-                        }
-                    }
-                }
-                startIndex = endIndex;
-            }
-        }
-    }
   }
 
   draw_chanlun() {
