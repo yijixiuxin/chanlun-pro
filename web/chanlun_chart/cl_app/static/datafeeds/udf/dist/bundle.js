@@ -208,11 +208,18 @@
                 const updateLineSegments = (existingSegments, newSegments) => {
                     if (!newSegments || newSegments.length === 0) return existingSegments || [];
                     if (!existingSegments || existingSegments.length === 0) return newSegments;
-                    const combined = [...existingSegments];
+
+                    // [修复] 先过滤掉 existingSegments 中所有历史遗留的“未完成”段 (linestyle == '1')
+                    // 我们假设 newSegments 中包含最新的未完成段状态，所以旧的可以全部丢弃
+                    const cleanExisting = existingSegments.filter(s => s.linestyle != '1' && s.linestyle != 1);
+
+                    const combined = [...cleanExisting];
+
                     for (const s of newSegments) {
                         const exists = combined.some(es => JSON.stringify(es.points) === JSON.stringify(s.points));
                         if (!exists) combined.push(s);
                     }
+
                     return combined.sort((a, b) => {
                         if (!a.points || a.points.length === 0) return -1;
                         if (!b.points || b.points.length === 0) return 1;
