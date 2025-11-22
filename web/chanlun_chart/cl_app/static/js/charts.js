@@ -491,13 +491,13 @@ class ChartManager {
       return null;
   }
 
-  drawChartElements(chartData, currentInterval) {
+drawChartElements(chartData, currentInterval) {
     const { symbolKey, barsResult, from } = chartData;
+    // [修复] 即使没有数据也要继续，以便执行清理逻辑(虽然此处保留原逻辑判断)
+    if (!barsResult) return;
 
     const bisCount = barsResult.bis ? barsResult.bis.length : 0;
-    console.log(`[DEBUG-CHARTS] drawChartElements: symbol=${symbolKey}, from=${from}, Bis Count=${bisCount}`);
-
-    if (!barsResult) return;
+    // console.log(`[DEBUG-CHARTS] drawChartElements: symbol=${symbolKey}, from=${from}, Bis Count=${bisCount}`);
 
     const chartContainer = this.initChartContainer(symbolKey);
 
@@ -511,16 +511,66 @@ class ChartManager {
         return promise;
     };
 
+    // --- [新增] 核心修复逻辑开始 ---
+
+    // 1. 清理画布上旧的“未完成”元素
+    const removeOldUnfinished = (containerList) => {
+        if (!containerList || containerList.length === 0) return;
+        // 倒序遍历以安全删除
+        for (let i = containerList.length - 1; i >= 0; i--) {
+            if (containerList[i].isUnfinished) {
+                this.safeRemove(containerList[i].id);
+                containerList.splice(i, 1);
+            }
+        }
+    };
+
+    // 2. 清理数据源：分离已完成和未完成，未完成的只保留最后一个(最新的)
+    const getUniqueRenderList = (sourceList) => {
+        if (!sourceList || !Array.isArray(sourceList)) return [];
+        const finished = [];
+        const unfinished = [];
+
+        sourceList.forEach(item => {
+            // 兼容字符串和数字类型的 linestyle
+            if (item.linestyle == '1' || item.linestyle == 1) {
+                unfinished.push(item);
+            } else {
+                finished.push(item);
+            }
+        });
+
+        // 关键：如果有多个未完成的，只取最后一个（最新的状态）
+        if (unfinished.length > 0) {
+            finished.push(unfinished[unfinished.length - 1]);
+        }
+        return finished;
+    };
+    // --- [新增] 核心修复逻辑结束 ---
+
     let stats = { bis: 0, xds: 0, zsds: 0, skipped_bis: 0 };
 
+    // 分型 (FX) 通常是点，不涉及 linestyle 动态延伸问题，保持原样
     if (barsResult.fxs) { barsResult.fxs.forEach((fx) => { if (fx.points?.[0]?.time >= from) { const key = JSON.stringify(fx); if (!chartContainer.fxs.find(item => item.key === key)) chartContainer.fxs.push({ time: fx.points[0].time, key, id: safeCreate(ChartUtils.createFxShape(this.chart, fx), 'fx') }); } }); }
 
+    // --- 修复 笔 (Bis) ---
     if (barsResult.bis) {
-        barsResult.bis.forEach((bi) => {
+        removeOldUnfinished(chartContainer.bis); // 步骤1: 删旧
+        const renderList = getUniqueRenderList(barsResult.bis); // 步骤2: 筛新
+
+        renderList.forEach((bi) => {
             if (bi.points?.[0]?.time >= from) {
                 const key = JSON.stringify(bi);
+                // 只有当它不存在，或者它是未完成状态(因为未完成状态每次都要重画最新的)时才处理
+                // 但由于上面已经删除了旧的未完成，这里只要判断 key 不存在即可
                 if (!chartContainer.bis.find(item => item.key === key)) {
-                    chartContainer.bis.push({ time: bi.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, bi, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi') });
+                    const isUnfinished = (bi.linestyle == '1' || bi.linestyle == 1);
+                    chartContainer.bis.push({
+                        time: bi.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished, // [新增标记]
+                        id: safeCreate(ChartUtils.createLineShape(this.chart, bi, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi')
+                    });
                     stats.bis++;
                 }
             } else {
@@ -529,15 +579,110 @@ class ChartManager {
         });
     }
 
-    if (barsResult.xds) { barsResult.xds.forEach((xd) => { if (xd.points?.[0]?.time >= from) { const key = JSON.stringify(xd); if (!chartContainer.xds.find(item => item.key === key)) { chartContainer.xds.push({ time: xd.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, xd, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd') }); stats.xds++; } } }); }
-    if (barsResult.zsds) { barsResult.zsds.forEach((zsd) => { if (zsd.points?.[0]?.time >= from) { const key = JSON.stringify(zsd); if (!chartContainer.zsds.find(item => item.key === key)) { chartContainer.zsds.push({ time: zsd.points[0].time, key, id: safeCreate(ChartUtils.createLineShape(this.chart, zsd, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd') }); stats.zsds++; } } }); }
-    if (barsResult.bi_zss) { barsResult.bi_zss.forEach((bi_zs) => { if (bi_zs.points?.[0]?.time >= from) { const key = JSON.stringify(bi_zs); if (!chartContainer.bi_zss.find(item => item.key === key)) chartContainer.bi_zss.push({ time: bi_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, bi_zs, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs') }); } }); }
-    if (barsResult.xd_zss) { barsResult.xd_zss.forEach((xd_zs) => { if (xd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(xd_zs); if (!chartContainer.xd_zss.find(item => item.key === key)) chartContainer.xd_zss.push({ time: xd_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, xd_zs, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs') }); } }); }
-    if (barsResult.zsd_zss) { barsResult.zsd_zss.forEach((zsd_zs) => { if (zsd_zs.points?.[0]?.time >= from) { const key = JSON.stringify(zsd_zs); if (!chartContainer.zsd_zss.find(item => item.key === key)) chartContainer.zsd_zss.push({ time: zsd_zs.points[0].time, key, id: safeCreate(ChartUtils.createZhongshuShape(this.chart, zsd_zs, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs') }); } }); }
+    // --- 修复 线段 (Xds) ---
+    if (barsResult.xds) {
+        removeOldUnfinished(chartContainer.xds);
+        const renderList = getUniqueRenderList(barsResult.xds);
+        renderList.forEach((xd) => {
+            if (xd.points?.[0]?.time >= from) {
+                const key = JSON.stringify(xd);
+                if (!chartContainer.xds.find(item => item.key === key)) {
+                    const isUnfinished = (xd.linestyle == '1' || xd.linestyle == 1);
+                    chartContainer.xds.push({
+                        time: xd.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished,
+                        id: safeCreate(ChartUtils.createLineShape(this.chart, xd, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd')
+                    });
+                    stats.xds++;
+                }
+            }
+        });
+    }
+
+    // --- 修复 走势段 (Zsds) ---
+    if (barsResult.zsds) {
+        removeOldUnfinished(chartContainer.zsds);
+        const renderList = getUniqueRenderList(barsResult.zsds);
+        renderList.forEach((zsd) => {
+            if (zsd.points?.[0]?.time >= from) {
+                const key = JSON.stringify(zsd);
+                if (!chartContainer.zsds.find(item => item.key === key)) {
+                    const isUnfinished = (zsd.linestyle == '1' || zsd.linestyle == 1);
+                    chartContainer.zsds.push({
+                        time: zsd.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished,
+                        id: safeCreate(ChartUtils.createLineShape(this.chart, zsd, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd')
+                    });
+                    stats.zsds++;
+                }
+            }
+        });
+    }
+
+    // --- 修复 笔中枢 (Bi_Zss) ---
+    if (barsResult.bi_zss) {
+        removeOldUnfinished(chartContainer.bi_zss);
+        const renderList = getUniqueRenderList(barsResult.bi_zss);
+        renderList.forEach((bi_zs) => {
+            if (bi_zs.points?.[0]?.time >= from) {
+                const key = JSON.stringify(bi_zs);
+                if (!chartContainer.bi_zss.find(item => item.key === key)) {
+                    const isUnfinished = (bi_zs.linestyle == '1' || bi_zs.linestyle == 1);
+                    chartContainer.bi_zss.push({
+                        time: bi_zs.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished,
+                        id: safeCreate(ChartUtils.createZhongshuShape(this.chart, bi_zs, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs')
+                    });
+                }
+            }
+        });
+    }
+
+    // --- 修复 线段中枢 (Xd_Zss) ---
+    if (barsResult.xd_zss) {
+        removeOldUnfinished(chartContainer.xd_zss);
+        const renderList = getUniqueRenderList(barsResult.xd_zss);
+        renderList.forEach((xd_zs) => {
+            if (xd_zs.points?.[0]?.time >= from) {
+                const key = JSON.stringify(xd_zs);
+                if (!chartContainer.xd_zss.find(item => item.key === key)) {
+                    const isUnfinished = (xd_zs.linestyle == '1' || xd_zs.linestyle == 1);
+                    chartContainer.xd_zss.push({
+                        time: xd_zs.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished,
+                        id: safeCreate(ChartUtils.createZhongshuShape(this.chart, xd_zs, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs')
+                    });
+                }
+            }
+        });
+    }
+
+    // --- 修复 走势段中枢 (Zsd_Zss) ---
+    if (barsResult.zsd_zss) {
+        removeOldUnfinished(chartContainer.zsd_zss);
+        const renderList = getUniqueRenderList(barsResult.zsd_zss);
+        renderList.forEach((zsd_zs) => {
+            if (zsd_zs.points?.[0]?.time >= from) {
+                const key = JSON.stringify(zsd_zs);
+                if (!chartContainer.zsd_zss.find(item => item.key === key)) {
+                    const isUnfinished = (zsd_zs.linestyle == '1' || zsd_zs.linestyle == 1);
+                    chartContainer.zsd_zss.push({
+                        time: zsd_zs.points[0].time,
+                        key,
+                        isUnfinished: isUnfinished,
+                        id: safeCreate(ChartUtils.createZhongshuShape(this.chart, zsd_zs, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs')
+                    });
+                }
+            }
+        });
+    }
+
     if (barsResult.bcs) { barsResult.bcs.forEach((bc) => { if (bc.points?.time >= from) { const key = JSON.stringify(bc); if (!chartContainer.bcs.find(item => item.key === key)) chartContainer.bcs.push({ time: bc.points.time, key, id: safeCreate(ChartUtils.createBcShape(this.chart, bc), 'bc') }); } }); }
     if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = JSON.stringify(mmd); if (!chartContainer.mmds.find(item => item.key === key)) chartContainer.mmds.push({ time: mmd.points.time, key, id: safeCreate(ChartUtils.createMmdShape(this.chart, mmd), 'mmd') }); } }); }
-
-    console.log(`[DEBUG-CHARTS] Draw Stats: Created Bis=${stats.bis}, Skipped Bis=${stats.skipped_bis}, Created Xds=${stats.xds}`);
 
     if (barsResult.macd_hist && barsResult.times) {
         const macdId = this.getMACDStudyId();
@@ -569,15 +714,9 @@ class ChartManager {
 
                 while(endIndex < len) {
                     const v = hist[endIndex];
-
-                    // 修复逻辑：忽略 NaN 和 0，保持段落连续性
-                    // 只有当数值有效(非0非NaN) 且 符号反转时，才断开段落
                     if (v !== 0 && !isNaN(v)) {
-                        if (v > 0 !== isPos) break; // 符号反转，断开
+                        if (v > 0 !== isPos) break;
                     }
-                    // 注意：如果 v 是 0 或 NaN，循环继续执行，将其包含在当前段内（或直接跳过计算）
-                    // 这样 "红-0-红" 会被视为一个完整段落，而不是断开
-
                     if (!isNaN(v)) {
                         if (Math.abs(v) >= maxAbs) { maxAbs = Math.abs(v); maxIdx = endIndex; }
                         if (hasLines) {
@@ -615,16 +754,9 @@ class ChartManager {
                         let offsetPrice = isPos ? basePrice + padding : basePrice - padding;
 
                         const isActiveSegment = (endIndex >= len - 1);
-                        const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
 
                         if (isActiveSegment) {
                             let boundaryTimeRaw = -Infinity;
-
-                            // 【关键修改】
-                            // 原逻辑：boundaryTimeRaw = times[startIndex - 1];
-                            // 新逻辑：向前回溯 8 根 K 线作为“禁区”。
-                            // 含义：只要是最近 8 根 K 线内产生的旧标记，不管是否属于严格意义上的“当前段”，统统视为“抖动残影”并清除，只保留最新的这一个。
-                            // 这能完美解决日线/周线因微小波动导致的段落断裂问题。
                             const LOOKBACK_BARS = 8;
                             let safeIndex = startIndex - LOOKBACK_BARS;
                             if (safeIndex < 0) safeIndex = 0;
@@ -633,26 +765,18 @@ class ChartManager {
                                 boundaryTimeRaw = times[safeIndex];
                             }
 
-                            // 调试日志（确认回溯生效）
-                            // console.log(`[MACD-FIX] 活跃段Start: ${startIndex}, 回溯至: ${safeIndex}, 边界时间: ${new Date(boundaryTimeRaw).toLocaleString()}`);
-
                             for (let k = chartContainer.macd_areas.length - 1; k >= 0; k--) {
                                 const oldItem = chartContainer.macd_areas[k];
-
-                                // 获取旧标记时间 (优先 rawTime)
                                 let oldItemTimeRaw = oldItem.rawTime;
                                 if (!oldItemTimeRaw) {
                                     oldItemTimeRaw = oldItem.time > 10000000000 ? oldItem.time : oldItem.time * 1000;
                                 }
-
-                                // 只要旧标记的时间晚于这个“放宽了的边界”，就删掉
                                 if (oldItemTimeRaw > boundaryTimeRaw) {
                                     this.safeRemove(oldItem.id);
                                     chartContainer.macd_areas.splice(k, 1);
                                 }
                             }
                         } else {
-                            // 历史段逻辑（保持不变）
                             const existingIdx = chartContainer.macd_areas.findIndex(item => item.key === key);
                             if (existingIdx !== -1) {
                                 const oldItem = chartContainer.macd_areas[existingIdx];
@@ -662,14 +786,9 @@ class ChartManager {
                         }
 
                         if (!chartContainer.macd_areas.find(item => item.key === key)) {
-                            // DEBUG: 打印新增标记的动作
-                            if (isActiveSegment) {
-                                console.log(`[MACD-DEBUG] %c[新增标记] Time: ${times[maxIdx]} (${new Date(times[maxIdx]).toLocaleString()})`, "color: green");
-                            }
-
                             chartContainer.macd_areas.push({
                                 time: peakTime,
-                                rawTime: times[maxIdx], // 务必确保这里保存了 times[maxIdx]
+                                rawTime: times[maxIdx],
                                 key: key,
                                 id: safeCreate(this.chart.createShape({time: peakTime, price: offsetPrice}, {
                                     shape: 'text', text: text, ownerStudyId: macdId, lock: true, disableSelection: true,
