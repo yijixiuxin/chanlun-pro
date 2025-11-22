@@ -21,10 +21,12 @@ const DEFAULT_COLORS = {
 };
 
 const DYNAMIC_CHART_COLORS = {
-  "1": { ...DEFAULT_COLORS, bis: "#FFA500", xds: "#DAA520", xd_zss: "#ADD8E6" },
-  "5": { ...DEFAULT_COLORS, bi_zss: "#ADD8E6", xds: "#ADD8E6", xd_zss: "#FF0000", zsds: "#FF0000" },
-  "30": { ...DEFAULT_COLORS, xds: "#FF0000", xd_zss: "#008000", zsds: "#008000" },
-  "1D": { ...DEFAULT_COLORS, xds: "#008000", xd_zss: "#00008B", zsds: "#00008B" },
+  "1": { ...DEFAULT_COLORS, bis: "#DF8344", xds: "#FFFF55", xd_zss: "#4FADEA", zsds: "#4FADEA", bi_zss: "#FFFF55" },
+  "5": { ...DEFAULT_COLORS, bis: "#ffff55", xds: "#4FADEA", xd_zss: "#EA3323", zsds: "#EA3323", bi_zss: "#4FADEA" },
+  "30": { ...DEFAULT_COLORS, bis: "#4FADEA", xds: "#EA3323", xd_zss: "#9FCE63", zsds: "#9FCE63", bi_zss: "#EA3323" },
+  "1D": { ...DEFAULT_COLORS, bis: "#EA3323", xds: "#9FCE63", xd_zss: "#4274B1", zsds: "#4274B1", bi_zss: "#9FCE63" },
+  "1W": { ...DEFAULT_COLORS, bis: "#9FCE63", xds: "#4274B1", xd_zss: "#C638DD", zsds: "#C638DD", bi_zss: "#4274B1" },
+  "1M": { ...DEFAULT_COLORS, bis: "#4274B1", xds: "#C638DD", xd_zss: "#5E813F", zsds: "#5E813F", bi_zss: "#C638DD" },
 };
 
 function getDynamicColor(interval, elementType) {
