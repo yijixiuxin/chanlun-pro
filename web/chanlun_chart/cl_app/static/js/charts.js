@@ -21,8 +21,8 @@ const DEFAULT_COLORS = {
 };
 
 const DYNAMIC_CHART_COLORS = {
-  "1": { ...DEFAULT_COLORS, bis: "#DF8344", xds: "#FFFF55", xd_zss: "#4FADEA", zsds: "#4FADEA", bi_zss: "#FFFF55" },
-  "5": { ...DEFAULT_COLORS, bis: "#ffff55", xds: "#4FADEA", xd_zss: "#EA3323", zsds: "#EA3323", bi_zss: "#4FADEA" },
+  "1": { ...DEFAULT_COLORS, bis: "#DF8344", xds: "#ffff00", xd_zss: "#4FADEA", zsds: "#4FADEA", bi_zss: "#FFFF55" },
+  "5": { ...DEFAULT_COLORS, bis: "#ffff00", xds: "#4FADEA", xd_zss: "#EA3323", zsds: "#EA3323", bi_zss: "#4FADEA" },
   "30": { ...DEFAULT_COLORS, bis: "#4FADEA", xds: "#EA3323", xd_zss: "#9FCE63", zsds: "#9FCE63", bi_zss: "#EA3323" },
   "1D": { ...DEFAULT_COLORS, bis: "#EA3323", xds: "#9FCE63", xd_zss: "#4274B1", zsds: "#4274B1", bi_zss: "#9FCE63" },
   "1W": { ...DEFAULT_COLORS, bis: "#9FCE63", xds: "#4274B1", xd_zss: "#C638DD", zsds: "#C638DD", bi_zss: "#4274B1" },
