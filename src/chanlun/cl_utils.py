@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from chanlun import fun
-from chanlun.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
+from chanlun.core.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
 from chanlun.db import db
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
@@ -777,11 +777,11 @@ def cl_data_to_tv_chart(
                     {
                         "points": [
                             {
-                                "time": fun.datetime_to_int(zs.start.k.date),
+                                "time": fun.datetime_to_int(zs.start.end.k.date),
                                 "price": zs.zg,
                             },
                             {
-                                "time": fun.datetime_to_int(zs.end.k.date),
+                                "time": fun.datetime_to_int(zs.end.start.k.date) if zs.end else fun.datetime_to_int(zs.lines[-1].end.k.date),
                                 "price": zs.zd,
                             },
                         ],
@@ -902,6 +902,14 @@ def cl_data_to_tv_chart(
     zsd_zs_chart_data.sort(key=lambda v: v["points"][0]["time"], reverse=False)
     bc_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
     mmd_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
+    # 获取 MACD 数据
+    macd_idx = cd.get_idx()['macd']
+
+    _dif = macd_idx['dif']
+    _dea = macd_idx['dea']
+    _hist = macd_idx['hist']
+
+    _area = macd_idx.get('hist_area', [])
 
     return {
         "t": kline_ts,
@@ -910,6 +918,10 @@ def cl_data_to_tv_chart(
         "h": kline_hs,
         "l": kline_ls,
         "v": kline_vs,
+        "macd_dif": _dif,
+        "macd_dea": _dea,
+        "macd_hist": _hist,
+        "macd_area": _area,
         "fxs": fx_data,
         "bis": bi_chart_data,
         "xds": xd_chart_data,

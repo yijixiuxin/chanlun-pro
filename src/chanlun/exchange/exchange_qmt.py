@@ -147,11 +147,11 @@ class ExchangeQMT(Exchange):
             "w": 8000 * 5,
             "d": 8000,
             "60m": 8000 * 12,
-            "30m": 8000 * 6,
+            "30m": 8000 * 10,
             "15m": 8000 * 3,
-            "5m": 8000,
+            "5m": 8000 * 10,
             "3m": 8000 * 3,
-            "1m": 8000,
+            "1m": 8000 * 20,
         }
         # 复权方式
         dividend_type = "front"
@@ -412,10 +412,26 @@ if __name__ == "__main__":
     # print(len(stocks))
 
     klines = ex.klines(
-        "SH.000001",
-        "d",
+        "SH.688045",
+        "1m",
     )
     print(klines)
+
+    # coding:utf-8
+    # import time
+    # from xtquant import xtdata
+    #
+    # code = "000001.SH"
+    # # 下载历史数据 下载接口本身不返回数据
+    # xtdata.download_history_data(code, period='1m', start_time='20251101', end_time='20251106')
+    #
+    # data = xtdata.get_market_data([], [code], period='1m', start_time='20251101', end_time='20251106')
+    # print('一次性取数据', data)
+    #
+    # do_subscribe_quote(code_list, period)  # 设置订阅参数，使gmd_ex取到最新行情
+    # count = -1  # 设置count参数，使gmd_ex返回全部数据
+    # data3 = xtdata.get_market_data_ex([], code_list, period=period, start_time=start_date, end_time=end_date,
+    #                                   count=-1)  # count 设置为1，使返回值只包含最新行情
 
     # stock = ex.stock_info("SH.000001")
     # print(stock)

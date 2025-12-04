@@ -1,25 +1,22 @@
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
-import pathlib
 import pickle
 import traceback
 
-import numpy as np
 import talib
 
 from chanlun import fun
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.base import Strategy
-from chanlun.cl_interface import BI, ICL
+from chanlun.core.cl_interface import BI, ICL
 from chanlun.cl_utils import (
     query_cl_chart_config,
-    up_cross,
 )
 from chanlun.db import db
 from chanlun.zixuan import ZiXuan
 from chanlun.config import get_data_path
 from tqdm.auto import tqdm
-from chanlun import cl
+from chanlun.core import cl
 
 """
 进行历史选股，测试选股条件是否符合自己预期
