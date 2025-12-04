@@ -19,7 +19,6 @@
         <div class="layui-form-item">
             <label class="layui-form-label">市场</label>
             <div class="layui-input-block" title="当前市场">
-                <label for="kline_type">
                     <select type="select" name="market" lay-filter="alert_config" disabled>
                         <option value="a" {% if market=='a' %} selected {% endif %}>沪深A股</option>
                         <option value="hk" {% if market=='hk' %} selected {% endif %}>港股</option>
@@ -31,7 +30,6 @@
                         <option value="currency_spot" {% if market=='currency_spot' %} selected {% endif %}>数字货币(现货)
                         </option>
                     </select>
-                </label>
             </div>
         </div>
         <div class="layui-form-item">
@@ -65,56 +63,52 @@
         <div class="layui-form-item">
             <label class="layui-form-label">自选组</label>
             <div class="layui-input-block" title="自选组">
-                <label for="zx_group">
                     <select type="select" class="form-control" name="zx_group" lay-filter="alert_config">
                         {% for zg in zixuan_groups %}
                         <option value="{{ zg['name'] }}" {% if zg['name']==zx_group %} selected {% endif %}>{{
                             zg['name'] }}</option>
                         {% endfor %}
                     </select>
-                </label>
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">行情周期</label>
             <div class="layui-input-block" title="行情周期">
-                <label for="frequency">
                     <select type="select" class="form-control" name="frequency" lay-filter="alert_config">
                         {% for f, v in frequencys.items() %}
                         <option value="{{ f }}" {% if frequency==f %} selected {% endif %}>{{ v }}</option>
                         {% endfor %}
                     </select>
-                </label>
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">笔方向</label>
             <div class="layui-input-block" title="笔方向">
-                <label for="check_bi_type">
+                
                     <input type="checkbox" name="check_bi_type" {% if 'up' in check_bi_type.split(',') %} checked {%
                         endif %} value="up" title="向上笔" lay-filter="alert_config" />
                     <input type="checkbox" name="check_bi_type" {% if 'down' in check_bi_type.split(',') %} checked {%
                         endif %} value="down" title="向下笔" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">笔背驰警报</label>
             <div class="layui-input-block" title="笔背驰警报">
-                <label for="check_bi_beichi">
+                
                     <input type="checkbox" name="check_bi_beichi" {% if 'bi' in check_bi_beichi.split(',') %} checked {%
                         endif %} value="bi" title="笔背驰" lay-filter="alert_config" />
                     <input type="checkbox" name="check_bi_beichi" {% if 'pz' in check_bi_beichi.split(',') %} checked {%
                         endif %} value="pz" title="笔盘整背驰" lay-filter="alert_config" />
                     <input type="checkbox" name="check_bi_beichi" {% if 'qs' in check_bi_beichi.split(',') %} checked {%
                         endif %} value="qs" title="笔趋势背驰" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">笔买卖点警报</label>
             <div class="layui-input-block" title="笔买卖点警报">
-                <label for="check_bi_mmd">
+                
                     <input type="checkbox" name="check_bi_mmd" value="1buy" {% if '1buy' in check_bi_mmd.split(',') %}
                         checked {% endif %} title="一买" lay-filter="alert_config" />
                     <input type="checkbox" name="check_bi_mmd" value="2buy" {% if '2buy' in check_bi_mmd.split(',') %}
@@ -135,37 +129,37 @@
                         checked {% endif %} title="三卖" lay-filter="alert_config" />
                     <input type="checkbox" name="check_bi_mmd" value="l3sell" {% if 'l3sell' in check_bi_mmd.split(',')
                         %} checked {% endif %} title="类三卖" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">线段方向</label>
             <div class="layui-input-block" title="笔方向">
-                <label for="check_xd_type">
+                
                     <input type="checkbox" name="check_xd_type" {% if 'up' in check_xd_type.split(',') %} checked {%
                         endif %} value="up" title="向上线段" lay-filter="alert_config" />
                     <input type="checkbox" name="check_xd_type" {% if 'down' in check_xd_type.split(',') %} checked {%
                         endif %} value="down" title="向下线段" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">线段背驰警报</label>
             <div class="layui-input-block" title="线段背驰警报">
-                <label for="check_xd_beichi">
+                
                     <input type="checkbox" name="check_xd_beichi" value="xd" {% if 'xd' in check_xd_beichi.split(',') %}
                         checked {% endif %} title="线段背驰" lay-filter="alert_config" />
                     <input type="checkbox" name="check_xd_beichi" value="pz" {% if 'pz' in check_xd_beichi.split(',') %}
                         checked {% endif %} title="线段盘整背驰" lay-filter="alert_config" />
                     <input type="checkbox" name="check_xd_beichi" value="qs" {% if 'qs' in check_xd_beichi.split(',') %}
                         checked {% endif %} title="线段趋势背驰" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">线段买卖点警报</label>
             <div class="layui-input-block" title="线段买卖点警报">
-                <label for="check_xd_mmd">
+            
                     <input type="checkbox" name="check_xd_mmd" value="1buy" {% if '1buy' in check_xd_mmd.split(',') %}
                         checked {% endif %} title="一买" lay-filter="alert_config" />
                     <input type="checkbox" name="check_xd_mmd" value="2buy" {% if '2buy' in check_xd_mmd.split(',') %}
@@ -186,7 +180,7 @@
                         checked {% endif %} title="三卖" lay-filter="alert_config" />
                     <input type="checkbox" name="check_xd_mmd" value="l3sell" {% if 'l3sell' in check_xd_mmd.split(',')
                         %} checked {% endif %} title="类三卖" lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <!-- 均线指标报警设置 -->
@@ -214,23 +208,21 @@
         <div class="layui-form-item">
             <label class="layui-form-label">发送消息</label>
             <div class="layui-input-block" title="启用">
-                <label for="is_send_msg">
                     <input type="radio" name="is_send_msg" value="1" title="发送" {% if is_send_msg==1 %} checked {% endif
                         %} lay-filter="alert_config" />
                     <input type="radio" name="is_send_msg" value="0" title="不发送" {% if is_send_msg==0 %} checked {%
                         endif %} lay-filter="alert_config" />
-                </label>
             </div>
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">启用</label>
             <div class="layui-input-block" title="启用">
-                <label for="is_run">
+                
                     <input type="radio" name="is_run" value="1" title="启用" {% if is_run==1 %} checked {% endif %}
                         lay-filter="alert_config" />
                     <input type="radio" name="is_run" value="0" title="禁用" {% if is_run==0 %} checked {% endif %}
                         lay-filter="alert_config" />
-                </label>
+                
             </div>
         </div>
         <div class="layui-form-item">

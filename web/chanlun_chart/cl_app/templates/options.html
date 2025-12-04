@@ -369,31 +369,29 @@
             <div class="layui-inline" title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
                 <label class="layui-form-label">笔中枢类型</label>
                 <div class="layui-input-inline">
-                    <label for="zs_bi_type">
                         <input type="checkbox" name="zs_bi_type" value="zs_type_bz" title="标准中枢" lay-filter="cl_config"
-                            {% if 'zs_type_bz' in zs_bi_type %} checked {% endif %} />
+                            {% if "zs_type_bz" in zs_bi_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_bi_type" value="zs_type_dn" title="段内中枢" lay-filter="cl_config"
-                            {% if 'zs_type_dn' in zs_bi_type %} checked {% endif %} />
+                            {% if "zs_type_dn" in zs_bi_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_bi_type" value="zs_type_fx" title="方向中枢" lay-filter="cl_config"
-                            {% if 'zs_type_fx' in zs_bi_type %} checked {% endif %} />
+                            {% if "zs_type_fx" in zs_bi_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_bi_type" value="zs_type_fl" title="分类中枢" lay-filter="cl_config"
-                            {% if 'zs_type_fl' in zs_bi_type %} checked {% endif %} />
-                    </label>
+                            {% if "zs_type_fl" in zs_bi_type %} checked {% endif %} />
+                    
                 </div>
             </div>
             <div class="layui-inline" title="标准中枢，中枢维持，直到出现三类买卖点结束；段内中枢，只计算线段内出现的中枢；方向中枢，严格按照中枢方向生成中枢">
                 <label class="layui-form-label">线段中枢类型</label>
                 <div class="layui-input-inline">
-                    <label for="zs_xd_type">
                         <input type="checkbox" name="zs_xd_type" value="zs_type_bz" title="标准中枢" lay-filter="cl_config"
-                            {% if 'zs_type_bz' in zs_xd_type %} checked {% endif %} />
+                            {% if "zs_type_bz" in zs_xd_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_xd_type" value="zs_type_dn" title="段内中枢" lay-filter="cl_config"
-                            {% if 'zs_type_dn' in zs_xd_type %} checked {% endif %} />
+                            {% if "zs_type_dn" in zs_xd_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_xd_type" value="zs_type_fx" title="方向中枢" lay-filter="cl_config"
-                            {% if 'zs_type_fx' in zs_xd_type %} checked {% endif %} />
+                            {% if "zs_type_fx" in zs_xd_type %} checked {% endif %} />
                         <input type="checkbox" name="zs_xd_type" value="zs_type_fl" title="分类中枢" lay-filter="cl_config"
-                            {% if 'zs_type_fl' in zs_xd_type %} checked {% endif %} />
-                    </label>
+                            {% if "zs_type_fl" in zs_xd_type %} checked {% endif %} />
+                    
                 </div>
             </div>
         </div>
