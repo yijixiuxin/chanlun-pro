@@ -14,14 +14,13 @@ line_exchange = ExchangeBinance()
 # 创建表
 stocks = line_exchange.all_stocks()
 codes = [s["code"] for s in stocks]
-# codes = ['BTC/USDT']
 # codes = [
-#     'BTC/USDT', 'ETH/USDT', 'ETC/USDT', 'GMT/USDT', 'SOL/USDT', 'BNB/USDT', 'AVAX/USDT', 'OP/USDT', 'TRB/USDT',
-#     'FIL/USDT', 'NEAR/USDT', 'LINK/USDT', 'MATIC/USDT', 'DOGE/USDT', 'ADA/USDT', 'APE/USDT', 'DOT/USDT',
-#     '1000SHIB/USDT', 'ZEC/USDT', 'REN/USDT', 'FLOW/USDT', 'SAND/USDT', 'ROSE/USDT', 'XRP/USDT', 'RSR/USDT',
-#     'CRV/USDT', 'FTM/USDT', 'ATOM/USDT', 'MANA/USDT', 'GALA/USDT', 'UNFI/USDT', 'DYDX/USDT', 'WAVES/USDT',
-#     'LTC/USDT', 'AXS/USDT', 'THETA/USDT', 'EOS/USDT', 'BCH/USDT', 'GRT/USDT', 'RUNE/USDT'
-# ]
+#     "BTC/USDT",
+#     "ETH/USDT",
+#     "ETC/USDT",
+#     "GMT/USDT",
+#     "SOL/USDT",
+# ] # 可以自己按需增加 或者 更新全部的标的
 sync_frequencys = ["w", "d", "4h", "60m", "30m", "15m", "10m", "5m", "1m"]
 
 # TODO 同步各个周期的起始时间

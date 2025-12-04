@@ -53,7 +53,7 @@ def xuangu_by_code(code: str):
         """
         这里使用自己需要的选股条件方法进行判断 ***
         """
-        xg_res = xuangu.xg_single_find_3buy_by_zhuanzhe(code, mk_datas)
+        xg_res = xuangu.xg_single_xd_zs_nei_3mmds(code, mk_datas, opt_type=["long"])
         if xg_res is not None:
             stocks = ex.stock_info(code)
             tqdm.write(

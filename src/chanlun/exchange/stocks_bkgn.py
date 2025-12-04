@@ -257,6 +257,11 @@ class StocksBKGN(object):
             .replace("SH.", "")
             .replace("SZSE.", "")
             .replace("SHSE.", "")
+            .replace("BJ.", "")
+            .replace("BJSE.", "")
+            .replace(".SZ", "")
+            .replace(".SH", "")
+            .replace(".BJ", "")
         )
         bkgn_infos = self.file_bkgns()
         code_hys = []
