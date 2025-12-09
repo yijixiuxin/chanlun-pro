@@ -357,7 +357,7 @@ class CL(ICL):
                 )
                 candidate_fxs.append(fx)
         
-        # 处理候选分型，确保顶底交替
+        # 处理候选分型，确保顶底交替且不包含
         if not candidate_fxs:
             return
             
@@ -376,23 +376,19 @@ class CL(ICL):
                 elif current_fx.type == "di" and current_fx.val < last_fx.val:
                     self.fxs[-1] = current_fx
             else:
-                # 不同类型分型，直接添加
-                self.fxs.append(current_fx)
+                # 不同类型分型，检查是否包含
+                if not self._is_fx_included(last_fx, current_fx):
+                    # 不包含，可以添加
+                    self.fxs.append(current_fx)
+                else:
+                    # 包含关系，保留更重要的分型（通常保留前一个）
+                    # 这里可以根据具体策略选择保留哪个分型
+                    pass
 
-    def check_bi_valid(self, start_fx: FX, end_fx: FX, bi_type: str) -> bool:
+    def _check_bi_len_valid(self, start_fx: FX, end_fx: FX, bi_type: str) -> bool:
         """
-        检查笔的有效性，严格按照缠论理论
+        检查笔的长度是否有效
         """
-        # 顶底必须交替
-        if start_fx.type == end_fx.type:
-            return False
-
-        # 方向必须满足：顶->低 新低；底->顶 新高
-        if start_fx.type == "ding" and end_fx.val >= start_fx.val:
-            return False
-        if start_fx.type == "di" and end_fx.val <= start_fx.val:
-            return False
-
         # 缠论K线中心索引差值（用于判断是否存在独立缠论K线）
         ck_diff = end_fx.k.index - start_fx.k.index
 
@@ -415,6 +411,122 @@ class CL(ICL):
             return True
         else:
             return ck_diff >= 2
+
+    def check_bi_valid(self, start_fx: FX, end_fx: FX, bi_type: str) -> bool:
+        """
+        检查笔的有效性，严格按照缠论理论
+        增加分型有效性确认：只有被反向笔确认的分型才可作为笔的转折点
+        """
+        # 顶底必须交替
+        if start_fx.type == end_fx.type:
+            return False
+
+        # 方向必须满足：顶->低 新低；底->顶 新高
+        if start_fx.type == "ding" and end_fx.val >= start_fx.val:
+            return False
+        if start_fx.type == "di" and end_fx.val <= start_fx.val:
+            return False
+
+        # 检查分型有效性：只有被反向笔确认的分型才有效
+        if not self._is_fx_confirmed_by_subsequent_movement(start_fx, end_fx, bi_type):
+            return False
+
+        return self._check_bi_len_valid(start_fx, end_fx, bi_type)
+
+    def _is_fx_included(self, fx1: FX, fx2: FX) -> bool:
+        """
+        检查两个分型是否存在包含关系
+        根据缠论理论：相邻顶底分型中间K线的高低点不能包含
+        
+        包含关系定义：
+        一个分型的最高价 >= 另一个分型的最高价 且
+        一个分型的最低价 <= 另一个分型的最低价
+        """
+        # 获取分型的极值范围
+        fx1_high = fx1.val if fx1.type == "ding" else fx1.k.h
+        fx1_low = fx1.val if fx1.type == "di" else fx1.k.l
+        
+        fx2_high = fx2.val if fx2.type == "ding" else fx2.k.h
+        fx2_low = fx2.val if fx2.type == "di" else fx2.k.l
+        
+        # 检查包含关系
+        if (fx1_high >= fx2_high and fx1_low <= fx2_low) or \
+           (fx2_high >= fx1_high and fx2_low <= fx1_low):
+            return True
+        
+        return False
+
+    def _is_fx_confirmed_by_subsequent_movement(self, start_fx: FX, end_fx: FX, bi_type: str) -> bool:
+        """
+        检查分型是否可以作为有效的笔结束点
+        根据缠论理论，只有被后续走势确认的分型才可作为笔的转折点
+        
+        核心规则：
+        1. 如果后续出现同类型但更极值的分型，则当前分型无效（趋势延续）
+        2. 如果后续出现反向分型并形成有效确认，则当前分型有效
+        3. 保守处理：在没有明确反证时，认为分型有效
+        """
+        end_fx_idx = end_fx.index
+        
+        # 检查后续分型
+        for i in range(end_fx_idx + 1, len(self.fxs)):
+            next_fx = self.fxs[i]
+            
+            # 同类型分型检查：趋势延续
+            if next_fx.type == end_fx.type:
+                if end_fx.type == "ding" and next_fx.val > end_fx.val:
+                    # 后续出现更高的顶分型，说明趋势在延续，当前顶分型无效
+                    return False
+                elif end_fx.type == "di" and next_fx.val < end_fx.val:
+                    # 后续出现更低的底分型，说明趋势在延续，当前底分型无效
+                    return False
+            else:
+                # 反向分型检查：趋势可能反转
+                # 只有当反向分型能够形成有效的一笔时，才算真正确认
+                if self._check_bi_len_valid(end_fx, next_fx, bi_type):
+                    if end_fx.type == "ding" and next_fx.type == "di" and next_fx.val < end_fx.val:
+                        # 顶分型被更低的底分型确认，有效
+                        return True
+                    elif end_fx.type == "di" and next_fx.type == "ding" and next_fx.val > end_fx.val:
+                        # 底分型被更高的顶分型确认，有效
+                        return True
+                else:
+                    # 反向分型虽然方向正确，但距离不够，不能作为确认信号
+                    # 继续向后寻找，防止因伪反向分型导致误判
+                    continue
+        
+        # 如果没有后续分型或无法明确判断，保守处理：认为分型有效
+        # 这样可以避免过度拆分，让市场走势自然发展
+        return True
+
+    def _is_trend_continuation(self, last_bi: BI, next_fx: FX) -> bool:
+        """
+        检查趋势是否在延续
+        防止在趋势延续过程中过早结束当前笔
+        
+        规则：
+        1. 如果当前是向上笔，且后续出现更高的顶分型，说明趋势在延续
+        2. 如果当前是向下笔，且后续出现更低的底分型，说明趋势在延续
+        3. 这种情况下不应该结束当前笔
+        """
+        if last_bi.type == "up" and next_fx.type == "ding":
+            # 向上笔趋势中，出现更高的顶分型
+            # 检查后续是否还有更高的顶分型
+            for i in range(next_fx.index + 1, len(self.fxs)):
+                future_fx = self.fxs[i]
+                if future_fx.type == "ding" and future_fx.val > next_fx.val:
+                    # 后续出现更高的顶分型，说明趋势在延续
+                    return True
+        elif last_bi.type == "down" and next_fx.type == "di":
+            # 向下笔趋势中，出现更低的底分型
+            # 检查后续是否还有更低的底分型
+            for i in range(next_fx.index + 1, len(self.fxs)):
+                future_fx = self.fxs[i]
+                if future_fx.type == "di" and future_fx.val < next_fx.val:
+                    # 后续出现更低的底分型，说明趋势在延续
+                    return True
+        
+        return False
 
     def _bi_high_low(self, start_fx: FX, end_fx: FX) -> Tuple[float, float]:
         """
@@ -506,14 +618,18 @@ class CL(ICL):
 
             # 检查2：不同类型（潜在新笔）
             if self.check_bi_valid(start_fx, next_fx, bi_type):
-                bi = BI(
-                    start=start_fx,
-                    end=next_fx,
-                    _type="down" if start_fx.type == "ding" else "up",
-                    index=len(self.bis)
-                )
-                bi.high, bi.low = self._bi_high_low(start_fx, next_fx)
-                self.bis.append(bi)
+                # 额外检查：趋势延续判断
+                # 如果当前笔是向上笔且后续出现更高的顶分型，或向下笔且后续出现更低的底分型
+                # 说明趋势在延续，不应该结束当前笔
+                if not self._is_trend_continuation(last_bi, next_fx):
+                    bi = BI(
+                        start=start_fx,
+                        end=next_fx,
+                        _type="down" if start_fx.type == "ding" else "up",
+                        index=len(self.bis)
+                    )
+                    bi.high, bi.low = self._bi_high_low(start_fx, next_fx)
+                    self.bis.append(bi)
             else:
                 # 无效新笔，忽略当前分型
                 pass
@@ -625,64 +741,33 @@ class CL(ICL):
     def _check_feature_sequence_fracture(self, feature_sequence: List[TZXL], xd_dir: str) -> Union[Tuple[str, TZXL, bool], None]:
         """
         检查特征序列是否形成分型
-        严格按照缠论理论：特征序列分型识别
-        修复：正确处理缺口判断，返回分型类型、中心元素、是否有缺口
+        只检查序列末尾的三个元素是否构成分型，避免重复检测旧分型
         """
         if len(feature_sequence) < 3:
             return None
             
-        # 收集所有可能的候选分型，类似笔分型的处理方式
-        candidate_fxs = []
+        # 只检查最后三个元素
+        t1, t2, t3 = feature_sequence[-3], feature_sequence[-2], feature_sequence[-1]
         
-        for i in range(2, len(feature_sequence)):
-            t1, t2, t3 = feature_sequence[i-2], feature_sequence[i-1], feature_sequence[i]
-            
-            # 检查是否形成分型
-            fx_type = None
-            if xd_dir == "up":
-                # 向上线段，特征序列(下笔)找顶分型
-                # 严格缠论分型条件：中间元素最高，两边元素较低
-                if t2.max >= t1.max and t2.max >= t3.max:
-                    fx_type = "ding"
-            else:
-                # 向下线段，特征序列(上笔)找底分型
-                # 严格缠论分型条件：中间元素最低，两边元素较高
-                if t2.min <= t1.min and t2.min <= t3.min:
-                    fx_type = "di"
-            
-            if fx_type:
-                # 检查第一与第二元素是否无重叠（缺口）
-                # 缺口判断：两个特征序列元素的价格区间没有重叠
-                a_low, a_high = t1.min, t1.max
-                b_low, b_high = t2.min, t2.max
-                has_gap = (b_low > a_high) or (a_low > b_high)
-                candidate_fxs.append((fx_type, t2, i-1, has_gap))
+        fx_type = None
+        if xd_dir == "up":
+            # 向上线段，特征序列(下笔)找顶分型
+            # 严格缠论分型条件：中间元素最高，两边元素较低
+            if t2.max >= t1.max and t2.max >= t3.max:
+                fx_type = "ding"
+        else:
+            # 向下线段，特征序列(上笔)找底分型
+            # 严格缠论分型条件：中间元素最低，两边元素较高
+            if t2.min <= t1.min and t2.min <= t3.min:
+                fx_type = "di"
         
-        if not candidate_fxs:
-            return None
-        
-        # 处理候选分型，确保同类型相邻分型保留极值
-        valid_fxs = [candidate_fxs[0]]
-        
-        for i in range(1, len(candidate_fxs)):
-            current_fx = candidate_fxs[i]
-            last_valid_fx = valid_fxs[-1]
-            
-            # 检查是否为同类型分型
-            if current_fx[0] == last_valid_fx[0]:
-                # 同类型分型，保留更极值的
-                if current_fx[0] == "ding" and current_fx[1].max > last_valid_fx[1].max:
-                    valid_fxs[-1] = current_fx
-                elif current_fx[0] == "di" and current_fx[1].min < last_valid_fx[1].min:
-                    valid_fxs[-1] = current_fx
-            else:
-                # 不同类型分型，直接添加
-                valid_fxs.append(current_fx)
-        
-        # 返回最后一个有效分型（最新的）
-        if valid_fxs:
-            fx_type, center_tzxl, _, has_gap = valid_fxs[-1]
-            return (fx_type, center_tzxl, has_gap)
+        if fx_type:
+            # 检查第一与第二元素是否无重叠（缺口）
+            # 标准：(b_low > a_high) or (a_low > b_high)
+            a_low, a_high = t1.min, t1.max
+            b_low, b_high = t2.min, t2.max
+            has_gap = (b_low > a_high) or (a_low > b_high)
+            return (fx_type, t2, has_gap)
         
         return None
 
@@ -704,31 +789,33 @@ class CL(ICL):
         """
         获取线段结束的笔索引
         严格按照缠论理论：线段结束于特征序列分型确认的前一笔
-        修复：正确找到与线段同向的最后一笔
+        修复：
+        1. 确保该笔对应特征序列分型的极值点（还原包含处理前的真实极值）
+        2. 返回该极值笔在时间序列上的前一笔（即线段方向的最后一笔）
         """
-        # 分型中心对应的笔是反向笔，需要找到前一笔同向笔作为结束点
-        center_bi = fx_tzxl.line
+        # fx_tzxl 是分型的中间元素（特征序列元素，即反向笔）
+        # 如果发生了包含处理，fx_tzxl.lines 中可能包含多个原始反向笔
+        # 我们需要找到构成极值的那一笔反向笔（target_bi）
         
-        # 根据缠论理论：
-        # 1. 向上线段结束于顶分型，结束点是顶分型前一笔（上笔）
-        # 2. 向下线段结束于底分型，结束点是底分型前一笔（下笔）
-        
-        # 找到分型中心笔在全局笔序列中的位置
-        center_idx = center_bi.index
-        
+        target_bi = None
         if xd_dir == "up":
-            # 向上线段，需要找到最后一个上笔（在顶分型之前）
-            # 从分型中心笔向前找，找到第一个上笔
-            for i in range(center_idx - 1, -1, -1):
-                if self.bis[i].type == "up":
-                    return i
+            # 向上线段结束于顶分型（由下笔构成的特征序列的顶分型）
+            # 我们需要找到中间元素中，起始点（High）最高的那个下笔
+            # 这个下笔的起点，就是向上线段的最高点（终点）
+            target_bi = max(fx_tzxl.lines, key=lambda b: b.high)
         else:
-            # 向下线段，需要找到最后一个下笔（在底分型之前）
-            for i in range(center_idx - 1, -1, -1):
-                if self.bis[i].type == "down":
-                    return i
+            # 向下线段结束于底分型（由上笔构成的特征序列的底分型）
+            # 我们需要找到中间元素中，起始点（Low）最低的那个上笔
+            # 这个上笔的起点，就是向下线段的最低点（终点）
+            target_bi = min(fx_tzxl.lines, key=lambda b: b.low)
+            
+        # 找到这个 target_bi 在全局 bis 列表中的索引
+        center_idx = target_bi.index
         
-        # 如果没找到，返回分型中心笔的前一笔
+        # 线段结束于 target_bi 的前一笔
+        # target_bi 是特征序列元素（反向笔，如X3）
+        # 它的前一笔（如S3）是线段方向的笔，且 S3.end == X3.start
+        # 所以返回 center_idx - 1，即 S3 的索引
         return max(0, center_idx - 1)
 
     def _find_xd_end_by_feature_sequence(self, start_idx: int, xd_dir: str) -> Union[Tuple[int, XLFX, XLFX], None]:
@@ -757,6 +844,92 @@ class CL(ICL):
             
             # --- 情况1：笔是原线段特征序列元素（反向笔） ---
             if bi.type != xd_dir:
+                # 0. 优先检查：笔破坏 + 3笔重叠 (文档修正规则)
+                # 场景：D(破坏), E, F(当前) 构成3笔重叠，且D破坏了B(前一特征笔)
+                # 这是一种特殊的线段结束确认模式，不需要标准特征序列分型
+                if i >= start_idx + 4:
+                    f_bi = bi
+                    e_bi = self.bis[i-1]
+                    d_bi = self.bis[i-2]
+                    
+                    # 检查3笔重叠 (D, E, F)
+                    is_overlap = False
+                    # 重叠定义：max(lows) <= min(highs)
+                    highs = [d_bi.high, e_bi.high, f_bi.high]
+                    lows = [d_bi.low, e_bi.low, f_bi.low]
+                    if max(lows) <= min(highs):
+                        is_overlap = True
+                    
+                    if is_overlap:
+                        # 检查笔破坏：D 跌破 B (对于向上线段)
+                        # B 是 bis[i-4] (上一个特征序列笔)
+                        # 注意：这里直接比较原始笔，未经过包含处理，符合“笔破坏”定义
+                        b_bi = self.bis[i-4]
+                        
+                        is_break = False
+                        if xd_dir == "up":
+                            if d_bi.low < b_bi.low:
+                                is_break = True
+                        else:
+                            if d_bi.high > b_bi.high:
+                                is_break = True
+                                
+                        if is_break:
+                            # 确认线段结束于 C (D的起点)
+                            # C 是 bis[i-3]
+                            end_idx = i - 3
+                            
+                            # 构造虚拟的分型结果用于返回
+                            # 使用 D 作为分型极值点（虽然它是破坏笔，但在逻辑上它终结了线段）
+                            # 或者更准确地，线段结束于 C。
+                            # 我们创建一个基于 C 点前后的虚拟分型结构
+                            
+                            # 构造 TZXL 元素用于创建 XLFX
+                            # 注意：这里主要是为了满足返回类型，核心是 end_idx
+                            tzxl_d = self._create_feature_sequence_element(d_bi, xd_dir)
+                            
+                            # 递归构造结果
+                            return self._create_xd_end_result(
+                                "ding" if xd_dir == "up" else "di",
+                                tzxl_d, # 使用 D 作为特征分型元素
+                                [tzxl_d], # 虚拟列表
+                                end_idx
+                            )
+
+                # 检查是否满足无缺口分型的提前确认条件 (3笔破坏)
+                # 场景：Pending分型(U1) -> CheckSeq(D1) -> Current(U2)
+                # 修改：取消对 has_gap 的限制，允许有缺口分型也通过此逻辑确认（强分型+3笔确认）
+                if pending_gap_fx and pending_gap_fx['has_gap']:
+                    check_seq = pending_gap_fx['check_sequence']
+                    if len(check_seq) >= 1:
+                        # 此时构成了 U1-D1-U2 的三笔结构
+                        # 只要 U2 不创新低(对于底分型) 或 不创新高(对于顶分型)，则反向线段成立
+                        is_valid_reverse = False
+                        pen3 = bi
+                        
+                        # 获取新线段的第一笔（即原分型的最后一笔）
+                        # pending_gap_fx['xls'][-1] 是特征序列元素，取其包含的最后一笔
+                        pen1 = pending_gap_fx['xls'][-1].lines[-1]
+
+                        if xd_dir == "down": # 原向下，新线段向上
+                             # 底分型，要求 U2.low >= Fractal_Min (不创新低)
+                             # 且要求 pen1 和 pen3 有重叠（构成线段基本条件）
+                             if pen3.low >= pending_gap_fx['fx_tzxl'].min and pen3.low <= pen1.high:
+                                 is_valid_reverse = True
+                        else: # 原向上，新线段向下
+                             # 顶分型，要求 U2.high <= Fractal_Max (不创新高)
+                             # 且要求 pen1 和 pen3 有重叠
+                             if pen3.high <= pending_gap_fx['fx_tzxl'].max and pen3.high >= pen1.low:
+                                 is_valid_reverse = True
+                        
+                        if is_valid_reverse:
+                            return self._create_xd_end_result(
+                                pending_gap_fx['fx_type'],
+                                pending_gap_fx['fx_tzxl'],
+                                pending_gap_fx['xls'],
+                                pending_gap_fx['end_bi_idx']
+                            )
+
                 # 创建特征序列元素
                 tzxl = self._create_feature_sequence_element(bi, xd_dir)
                 
@@ -771,27 +944,40 @@ class CL(ICL):
                     feature_sequence.append(tzxl)
                 
                 # 如果当前没有待确认的分型，检查序列A是否形成分型
-                if pending_gap_fx is None:
-                    if len(feature_sequence) >= 3:
-                        fx_result = self._check_feature_sequence_fracture(feature_sequence, xd_dir)
-                        if fx_result:
-                            fx_type, fx_tzxl, has_gap = fx_result
-                            end_bi_idx = self._get_xd_end_bi_index(fx_tzxl, xd_dir)
-                            
-                            # 必须确保分型位置在 start_idx 之后
-                            if end_bi_idx > start_idx:
-                                if not has_gap:
-                                    # 无缺口，直接确认结束
-                                    return self._create_xd_end_result(fx_type, fx_tzxl, feature_sequence[-3:], end_bi_idx)
+                # 修改：无论是否有待确认分型，都检查是否有新的分型形成，并进行择优替换
+                if len(feature_sequence) >= 3:
+                    fx_result = self._check_feature_sequence_fracture(feature_sequence, xd_dir)
+                    if fx_result:
+                        fx_type, fx_tzxl, has_gap = fx_result
+                        end_bi_idx = self._get_xd_end_bi_index(fx_tzxl, xd_dir)
+                        
+                        # 必须确保分型位置在 start_idx 之后
+                        if end_bi_idx > start_idx:
+                            # 判断是否需要更新 pending_gap_fx
+                            should_update = False
+                            if pending_gap_fx is None:
+                                should_update = True
+                            else:
+                                # 比较新分型与当前 pending 分型的极值
+                                # 向下线段(xd_dir='down') -> 找底分型 -> 更低更好
+                                if xd_dir == "down":
+                                    if fx_tzxl.min < pending_gap_fx['fx_tzxl'].min:
+                                        should_update = True
+                                # 向上线段(xd_dir='up') -> 找顶分型 -> 更高更好
                                 else:
-                                    # 有缺口，进入待确认模式
-                                    pending_gap_fx = {
-                                        'fx_type': fx_type,
-                                        'fx_tzxl': fx_tzxl,
-                                        'xls': feature_sequence[-3:].copy(),
-                                        'end_bi_idx': end_bi_idx,
-                                        'check_sequence': [] # 初始化序列B
-                                    }
+                                    if fx_tzxl.max > pending_gap_fx['fx_tzxl'].max:
+                                        should_update = True
+                            
+                            if should_update:
+                                # 更新待确认分型，并重置验证序列
+                                pending_gap_fx = {
+                                    'fx_type': fx_type,
+                                    'fx_tzxl': fx_tzxl,
+                                    'xls': feature_sequence[-3:].copy(),
+                                    'end_bi_idx': end_bi_idx,
+                                    'check_sequence': [], # 初始化序列B
+                                    'has_gap': has_gap # 记录是否有缺口
+                                }
             
             # --- 情况2：笔是原线段同向笔 ---
             else:
@@ -842,6 +1028,7 @@ class CL(ICL):
                     # 3. 检查序列B是否形成分型
                     # 向上线段(xd_dir='up') -> 待确认顶分型 -> 反向向下 -> 序列B(上笔)找底分型
                     # 向下线段(xd_dir='down') -> 待确认底分型 -> 反向向上 -> 序列B(下笔)找顶分型
+                    
                     
                     if len(check_seq) >= 3:
                         # 注意：这里check的特征序列方向是 check_xd_dir
@@ -955,13 +1142,20 @@ class CL(ICL):
                 continue
             
             # 使用特征序列方法寻找线段结束
-            xd_end_info = self._find_xd_end_by_feature_sequence(first_overlap_idx, xd_dir)
+            # 注意：必须从线段起始位置开始扫描特征序列，否则会遗漏前面的特征元素，导致无法识别早期的分型
+            xd_end_info = self._find_xd_end_by_feature_sequence(i, xd_dir)
             if xd_end_info is None:
                 # 没有找到线段结束，继续向后寻找
                 i += 1
                 continue
             
             end_bi_idx, ding_fx, di_fx = xd_end_info
+            
+            # 确保结束点在基本重叠结构之后（线段定义：至少三笔）
+            if end_bi_idx < first_overlap_idx:
+                i += 1
+                continue
+                
             end_bi = self.bis[end_bi_idx]
             
             # 创建线段
