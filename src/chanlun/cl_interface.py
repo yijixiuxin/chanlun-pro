@@ -1345,65 +1345,69 @@ def user_custom_mmd(
     if len(lines) < 4 or len(zss) == 0:
         return False
 
-    # 类二类买卖点，如果前一笔同向的线段出现二类买卖点，当前与二类买卖点笔有重叠（形成中枢），不创前一笔的高点或低点，增加类二类买卖点
-    pre_same_line = lines[line.index - 2]
-    for mmd in pre_same_line.get_mmds(zs_type):
-        if line.type == "down" and mmd.name == "2buy" and line.low > pre_same_line.low:
-            new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
-            if len(new_zss) != 1:
-                continue
-            line.add_mmd(
-                "l2buy",
-                new_zss[0],
-                zs_type,
-                msg="二买后，重叠中枢后，不创二买低点，形成类二买",
-            )
-        if line.type == "up" and mmd.name == "2sell" and line.high < pre_same_line.high:
-            new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
-            if len(new_zss) != 1:
-                continue
-            line.add_mmd(
-                "l2sell",
-                new_zss[0],
-                zs_type,
-                msg="二卖后，重叠中枢后，不创二卖高点，形成类二卖",
-            )
-
-    # 类三类买卖点，如果前一笔同向的线段出现三类买卖点，当前与三类买卖点笔有重叠（形成中枢），不创前中枢的高低点，并且力度笔三类买卖点小，增加类三类买卖点
-    for mmd in pre_same_line.get_mmds(zs_type):
-        if (
-            line.type == "down"
-            and mmd.name == "3buy"
-            and line.low > mmd.zs.zg
-            and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "down")
-        ):
-            new_zss = cd.create_dn_zs(
-                "", lines[-4:]
-            )  # 从三买的前一段到现在一段，共4段形成的中枢
-            if len(new_zss) != 1:
-                continue
-            line.add_mmd(
-                "l3buy",
-                new_zss[0],
-                zs_type,
-                msg="三买后，重叠中枢后，不创三买低点，形成类三买",
-            )
-        if (
-            line.type == "up"
-            and mmd.name == "3sell"
-            and line.high < mmd.zs.zd
-            and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "up")
-        ):
-            new_zss = cd.create_dn_zs(
-                "", lines[-4:]
-            )  # 从三卖的前一段到现在一段，共4段形成的中枢
-            if len(new_zss) != 1:
-                continue
-            line.add_mmd(
-                "l3sell",
-                new_zss[0],
-                zs_type,
-                msg="三卖后，重叠中枢后，不创三卖高点，形成类三卖",
-            )
-
+    # 默认示例代码，cl.py 中已经实现了 类二类三买卖点逻辑，这里不再重复执行
+    # 如有其他自定义买卖点需求，可在此处添加
     return True
+
+    # 类二类买卖点，如果前一笔同向的线段出现二类买卖点，当前与二类买卖点笔有重叠（形成中枢），不创前一笔的高点或低点，增加类二类买卖点
+    # pre_same_line = lines[line.index - 2]
+    # for mmd in pre_same_line.get_mmds(zs_type):
+    #     if line.type == "down" and mmd.name == "2buy" and line.low > pre_same_line.low:
+    #         new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
+    #         if len(new_zss) != 1:
+    #             continue
+    #         line.add_mmd(
+    #             "l2buy",
+    #             new_zss[0],
+    #             zs_type,
+    #             msg="二买后，重叠中枢后，不创二买低点，形成类二买",
+    #         )
+    #     if line.type == "up" and mmd.name == "2sell" and line.high < pre_same_line.high:
+    #         new_zss = cd.create_dn_zs("", lines[-4:])  # 自一类买卖点后形成的中枢
+    #         if len(new_zss) != 1:
+    #             continue
+    #         line.add_mmd(
+    #             "l2sell",
+    #             new_zss[0],
+    #             zs_type,
+    #             msg="二卖后，重叠中枢后，不创二卖高点，形成类二卖",
+    #         )
+
+    # # 类三类买卖点，如果前一笔同向的线段出现三类买卖点，当前与三类买卖点笔有重叠（形成中枢），不创前中枢的高低点，并且力度笔三类买卖点小，增加类三类买卖点
+    # for mmd in pre_same_line.get_mmds(zs_type):
+    #     if (
+    #         line.type == "down"
+    #         and mmd.name == "3buy"
+    #         and line.low > mmd.zs.zg
+    #         and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "down")
+    #     ):
+    #         new_zss = cd.create_dn_zs(
+    #             "", lines[-4:]
+    #         )  # 从三买的前一段到现在一段，共4段形成的中枢
+    #         if len(new_zss) != 1:
+    #             continue
+    #         line.add_mmd(
+    #             "l3buy",
+    #             new_zss[0],
+    #             zs_type,
+    #             msg="三买后，重叠中枢后，不创三买低点，形成类三买",
+    #         )
+    #     if (
+    #         line.type == "up"
+    #         and mmd.name == "3sell"
+    #         and line.high < mmd.zs.zd
+    #         and compare_ld_beichi(pre_same_line.get_ld(cd), line.get_ld(cd), "up")
+    #     ):
+    #         new_zss = cd.create_dn_zs(
+    #             "", lines[-4:]
+    #         )  # 从三卖的前一段到现在一段，共4段形成的中枢
+    #         if len(new_zss) != 1:
+    #             continue
+    #         line.add_mmd(
+    #             "l3sell",
+    #             new_zss[0],
+    #             zs_type,
+    #             msg="三卖后，重叠中枢后，不创三卖高点，形成类三卖",
+    #         )
+
+    # return True

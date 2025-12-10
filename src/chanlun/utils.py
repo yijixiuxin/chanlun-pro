@@ -63,6 +63,7 @@ def config_get_feishu_keys(market):
     if market in config.FEISHU_KEYS.keys():
         keys = config.FEISHU_KEYS[market]
     keys["user_id"] = config.FEISHU_KEYS["user_id"]
+    keys["webhook_url"] = config.FEISHU_KEYS.get("webhook_url", "")
     return keys
 
 
@@ -116,21 +117,9 @@ def send_fs_msg(market, title, contents: Union[str, list]):
     发送飞书消息
     """
     fs_key = config_get_feishu_keys(market)
-    if (
-        fs_key is None
-        or fs_key["app_id"] == ""
-        or fs_key["app_secret"] == ""
-        or fs_key["user_id"] == ""
-    ):
+    if fs_key is None:
         return True
-    # 创建client
-    client = (
-        lark.Client.builder()
-        .app_id(fs_key["app_id"])
-        .app_secret(fs_key["app_secret"])
-        .log_level(lark.LogLevel.WARNING)
-        .build()
-    )
+
     # https://open.feishu.cn/document/server-docs/im-v1/message-content-description/create_json
     if isinstance(contents, str):
         msg_content = {
@@ -156,28 +145,53 @@ def send_fs_msg(market, title, contents: Union[str, list]):
                     {"tag": "text", "text": f"{_c} \n"}
                 )
 
-    msg_content = json.dumps(msg_content, ensure_ascii=False)
-    # 构造请求对象
-    request: CreateMessageRequest = (
-        CreateMessageRequest.builder()
-        .receive_id_type("user_id")
-        .request_body(
-            CreateMessageRequestBody.builder()
-            .receive_id(fs_key["user_id"])
-            .msg_type("post")
-            .content(msg_content)
+    # 发送飞书消息（API）
+    if (
+        fs_key["app_id"] != ""
+        and fs_key["app_secret"] != ""
+        and fs_key["user_id"] != ""
+    ):
+        # 创建client
+        client = (
+            lark.Client.builder()
+            .app_id(fs_key["app_id"])
+            .app_secret(fs_key["app_secret"])
+            .log_level(lark.LogLevel.WARNING)
             .build()
         )
-        .build()
-    )
-
-    # 发起请求
-    response: CreateMessageResponse = client.im.v1.message.create(request)
-    # 处理失败返回
-    if not response.success():
-        lark.logger.error(
-            f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
+        msg_content_str = json.dumps(msg_content, ensure_ascii=False)
+        # 构造请求对象
+        request: CreateMessageRequest = (
+            CreateMessageRequest.builder()
+            .receive_id_type("user_id")
+            .request_body(
+                CreateMessageRequestBody.builder()
+                .receive_id(fs_key["user_id"])
+                .msg_type("post")
+                .content(msg_content_str)
+                .build()
+            )
+            .build()
         )
+
+        # 发起请求
+        response: CreateMessageResponse = client.im.v1.message.create(request)
+        # 处理失败返回
+        if not response.success():
+            lark.logger.error(
+                f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
+            )
+
+    # 发送飞书群机器人webhook消息 https://open.feishu.cn/open-apis/bot/v2/hook/ffa2a92a-5ed4-4f0e-8c58-5a4068977288
+    if fs_key.get("webhook_url", "") != "":
+        try:
+            requests.post(
+                fs_key["webhook_url"],
+                json={"msg_type": "post", "content": {"post": msg_content}},
+            )
+        except Exception as e:
+            print(f"Send Feishu Webhook Msg Error: {e}")
+
     return True
 
 

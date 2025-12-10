@@ -691,11 +691,14 @@ class CL(ICL):
         """
         创建特征序列元素
         修复：根据缠论理论，特征序列的处理方向与线段方向相反
-        - 向上线段：特征序列为下笔，处理方向为"down"（取低低）
-        - 向下线段：特征序列为上笔，处理方向为"up"（取高高）
+        - 向上线段：特征序列为下笔，处理方向为"up"（取高高，因为向上线段中下笔应该越来越高）
+        - 向下线段：特征序列为上笔，处理方向为"down"（取低低，因为向下线段中上笔应该越来越低）
         """
         # 特征序列方向与线段方向相反
-        bh_direction = "down" if xd_dir == "up" else "up"
+        # 2025修订：修正包含处理方向
+        # 向上线段(xd_dir='up') -> 特征序列(下笔) -> 期望上涨 -> 包含处理取up (High-High)
+        # 向下线段(xd_dir='down') -> 特征序列(上笔) -> 期望下跌 -> 包含处理取down (Low-Low)
+        bh_direction = "up" if xd_dir == "up" else "down"
         
         tzxl = TZXL(
             bh_direction=bh_direction,
@@ -861,6 +864,15 @@ class CL(ICL):
                         is_overlap = True
                     
                     if is_overlap:
+                        # 增加方向性检查：反向线段的第二笔不应创新高/新低
+                        # 如果是向上线段结束（寻找向下线段），中间的上笔E不应高于第一笔D的高点
+                        if xd_dir == "up" and e_bi.high > d_bi.high:
+                            is_overlap = False
+                        # 如果是向下线段结束（寻找向上线段），中间的下笔E不应低于第一笔D的低点
+                        elif xd_dir == "down" and e_bi.low < d_bi.low:
+                            is_overlap = False
+
+                    if is_overlap:
                         # 检查笔破坏：D 跌破 B (对于向上线段)
                         # B 是 bis[i-4] (上一个特征序列笔)
                         # 注意：这里直接比较原始笔，未经过包含处理，符合“笔破坏”定义
@@ -878,6 +890,25 @@ class CL(ICL):
                             # 确认线段结束于 C (D的起点)
                             # C 是 bis[i-3]
                             end_idx = i - 3
+                            
+                            # 修复：如果有待确认的更极值的分型，应该优先使用待确认的分型作为结束点
+                            # 场景：最高点A -> 回调 -> 次高点B -> 破位下跌(D)
+                            # 此时 D 破坏了前面的结构，确认线段结束。
+                            # 但线段真正的结束点应该是 A，而不是 B (D的起点)。
+                            if pending_gap_fx:
+                                use_pending = False
+                                if xd_dir == "up" and pending_gap_fx['fx_tzxl'].max > self.bis[end_idx].end.val:
+                                    use_pending = True
+                                elif xd_dir == "down" and pending_gap_fx['fx_tzxl'].min < self.bis[end_idx].end.val:
+                                    use_pending = True
+                                
+                                if use_pending:
+                                    return self._create_xd_end_result(
+                                        pending_gap_fx['fx_type'],
+                                        pending_gap_fx['fx_tzxl'],
+                                        pending_gap_fx['xls'],
+                                        pending_gap_fx['end_bi_idx']
+                                    )
                             
                             # 构造虚拟的分型结果用于返回
                             # 使用 D 作为分型极值点（虽然它是破坏笔，但在逻辑上它终结了线段）
@@ -1355,7 +1386,9 @@ class CL(ICL):
                     bi.add_bc("pz", zs, compare_line, [compare_line], True, zs_type)
                 
                 # 趋势背驰：需要至少两个中枢形成趋势
-                is_qs, compare_lines = self.beichi_qs(self.bis, zss, bi)
+                # 修复：只传入当前中枢及之前的有效中枢进行判断，避免使用了未来的中枢
+                valid_zss = [z for z in zss if z.index <= zs.index]
+                is_qs, compare_lines = self.beichi_qs(self.bis, valid_zss, bi)
                 if is_qs and zs.lines[-1].index < bi.index:
                     bi.add_bc("qs", zs, None, compare_lines, True, zs_type)
                     
@@ -1511,6 +1544,17 @@ class CL(ICL):
                             if xd.type == "up" and xd.high < zs.zd:
                                 xd.add_mmd("3sell", zs, zs_xd_type)
                     
+                    # 盘整背驰
+                    is_pz, compare_line = self.beichi_pz(zs, xd)
+                    if is_pz:
+                        xd.add_bc("pz", zs, compare_line, [compare_line], True, zs_xd_type)
+
+                    # 趋势背驰
+                    valid_zss = [z for z in xd_zss if z.index <= zs.index]
+                    is_qs, compare_lines = self.beichi_qs(self.xds, valid_zss, xd)
+                    if is_qs and zs.lines[-1].index < xd.index:
+                        xd.add_bc("qs", zs, None, compare_lines, True, zs_xd_type)
+
                     # 第一类买卖点（趋势背驰）
                     is_qs = any(b.type == "qs" and b.zs.index == zs.index for b in xd.get_bcs(zs_xd_type))
                     if is_qs:
@@ -1534,6 +1578,49 @@ class CL(ICL):
                             has_3buy_prev = any(m.name == "3buy" and m.zs.index == zs.index for m in prev_xd_3.get_mmds(zs_xd_type))
                             if has_3buy_prev and not any(m.name == "1sell" for m in prev_xd_2.get_mmds(zs_xd_type)) and xd.high < prev_xd_2.high:
                                 xd.add_mmd("2sell", zs, zs_xd_type)
+
+                # 4. 类买卖点识别
+                if i >= 2:
+                    prev_xd_2 = self.xds[i-2]
+                    prev_xd = self.xds[i-1]
+                    
+                    if xd.type == "down":
+                        # 类二买
+                        if check_l2buy:
+                            has_2buy_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "2buy"]
+                            if has_2buy_mmds:
+                                zg = min(prev_xd_2.high, prev_xd.high, xd.high)
+                                if zg > xd.low and xd.low > prev_xd_2.low:
+                                    target_zs = has_2buy_mmds[0].zs
+                                    xd.add_mmd("l2buy", target_zs, zs_xd_type)
+                        
+                        # 类三买
+                        if check_l3buy:
+                            has_3buy_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "3buy"]
+                            if has_3buy_mmds:
+                                zg = min(prev_xd_2.high, prev_xd.high, xd.high)
+                                if zg > xd.low and xd.low > prev_xd_2.low:
+                                    target_zs = has_3buy_mmds[0].zs
+                                    xd.add_mmd("l3buy", target_zs, zs_xd_type)
+                    
+                    if xd.type == "up":
+                        # 类二卖
+                        if check_l2sell:
+                            has_2sell_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "2sell"]
+                            if has_2sell_mmds:
+                                zd = max(prev_xd_2.low, prev_xd.low, xd.low)
+                                if xd.high > zd and xd.high < prev_xd_2.high:
+                                    target_zs = has_2sell_mmds[0].zs
+                                    xd.add_mmd("l2sell", target_zs, zs_xd_type)
+                        
+                        # 类三卖
+                        if check_l3sell:
+                            has_3sell_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "3sell"]
+                            if has_3sell_mmds:
+                                zd = max(prev_xd_2.low, prev_xd.low, xd.low)
+                                if xd.high > zd and xd.high < prev_xd_2.high:
+                                    target_zs = has_3sell_mmds[0].zs
+                                    xd.add_mmd("l3sell", target_zs, zs_xd_type)
 
     def beichi_pz(self, zs: ZS, now_line: LINE) -> Tuple[bool, Union[LINE, None]]:
         """
