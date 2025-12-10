@@ -31,6 +31,7 @@ dependencies = [
     "polygon-api-client>=1.14.6",
     "prettytable>=3.16.0",
     "pyarmor>=9.1.7",
+    "pyarrow>=22.0.0",
     "pyecharts==2.0.8",
     "pyfolio-reloaded>=0.9.9",
     "pymysql>=1.1.1",
