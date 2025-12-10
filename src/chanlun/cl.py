@@ -1338,12 +1338,23 @@ class CL(ICL):
         zss = self.bi_zss.get(zs_type, [])
         
         # 配置项
-        check_1buy = self.config.get("mmd_1buy_bc", True)
-        check_1sell = self.config.get("mmd_1sell_bc", True)
+        # 1. 第一类买卖点
+        # 趋势背驰
+        check_qs_1mmd = str(self.config.get("cl_mmd_cal_qs_1mmd", "1")) == "1"
+        # 非趋势，3买卖点后，新高/新低且背驰
+        check_not_qs_3mmd_1mmd = str(self.config.get("cl_mmd_cal_not_qs_3mmd_1mmd", "1")) == "1"
+        # 趋势，3买卖点后，新高/新低且背驰
+        check_qs_3mmd_1mmd = str(self.config.get("cl_mmd_cal_qs_3mmd_1mmd", "1")) == "1"
+
+        # 2. 第二类买卖点
         check_2buy = self.config.get("mmd_2buy_bc", True)
         check_2sell = self.config.get("mmd_2sell_bc", True)
+        
+        # 3. 第三类买卖点
         check_3buy = self.config.get("mmd_3buy_bc", True)
         check_3sell = self.config.get("mmd_3sell_bc", True)
+        
+        # 4. 类买卖点
         check_l2buy = self.config.get("mmd_l2buy_bc", True)
         check_l2sell = self.config.get("mmd_l2sell_bc", True)
         check_l3buy = self.config.get("mmd_l3buy_bc", True)
@@ -1370,10 +1381,18 @@ class CL(ICL):
                 if not zs.real:
                     continue
                 
+                # 判断当前中枢是否是趋势中枢
+                valid_zss = [z for z in zss if z.index <= zs.index]
+                is_qs_trend = False
+                if len(valid_zss) >= 2:
+                    trend_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                    if trend_type:
+                        is_qs_trend = True
+
                 # 第三类买卖点：离开中枢后回抽不进入中枢
+                # 检查是否离开中枢
                 if i >= 1:
                     prev_bi = self.bis[i-1]
-                    # 检查是否离开中枢
                     if prev_bi.start.index == zs.end.index:
                         if check_3buy and bi.type == "down" and bi.low > zs.zg:
                             bi.add_mmd("3buy", zs, zs_type)
@@ -1386,18 +1405,64 @@ class CL(ICL):
                     bi.add_bc("pz", zs, compare_line, [compare_line], True, zs_type)
                 
                 # 趋势背驰：需要至少两个中枢形成趋势
-                # 修复：只传入当前中枢及之前的有效中枢进行判断，避免使用了未来的中枢
-                valid_zss = [z for z in zss if z.index <= zs.index]
                 is_qs, compare_lines = self.beichi_qs(self.bis, valid_zss, bi)
                 if is_qs and zs.lines[-1].index < bi.index:
                     bi.add_bc("qs", zs, None, compare_lines, True, zs_type)
                     
                     # 第一类买卖点：趋势背驰
-                    if check_1buy and bi.type == "down" and bi.low < zs.zd:
-                        bi.add_mmd("1buy", zs, zs_type)
-                    if check_1sell and bi.type == "up" and bi.high > zs.zg:
-                        bi.add_mmd("1sell", zs, zs_type)
+                    if check_qs_1mmd and bi.start.index == zs.end.index:
+                        if bi.type == "down" and bi.low < zs.zd:
+                            bi.add_mmd("1buy", zs, zs_type)
+                        if bi.type == "up" and bi.high > zs.zg:
+                            bi.add_mmd("1sell", zs, zs_type)
             
+            # 补充：基于3买卖点后的背驰产生的1买卖点
+            if i >= 2:
+                prev_bi = self.bis[i-1]
+                prev_bi_2 = self.bis[i-2]
+                
+                # 检查前一笔是否有3买卖点
+                prev_mmds = prev_bi.get_mmds(zs_type)
+                
+                # 3卖后背驰 -> 1买
+                has_3sell = [m for m in prev_mmds if m.name == "3sell"]
+                if has_3sell and bi.type == "down" and bi.low < prev_bi_2.low:
+                    # 检查力度背驰
+                    ld_prev = prev_bi_2.get_ld(self)["macd"]
+                    ld_now = bi.get_ld(self)["macd"]
+                    if compare_ld_beichi(ld_prev, ld_now, "down"):
+                        # 确定是趋势还是非趋势
+                        # 获取3卖对应的中枢
+                        zs = has_3sell[0].zs
+                        # 判断该中枢是否形成趋势
+                        valid_zss = [z for z in zss if z.index <= zs.index]
+                        is_qs_trend = False
+                        if len(valid_zss) >= 2:
+                            t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                            if t_type: is_qs_trend = True
+                        
+                        if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
+                            bi.add_mmd("1buy", zs, zs_type)
+                            # 也可以标记为QS背驰，虽然定义上可能略有不同，但为了图表展示一致性
+                            bi.add_bc("qs", zs, None, [prev_bi_2], True, zs_type)
+
+                # 3买后背驰 -> 1卖
+                has_3buy = [m for m in prev_mmds if m.name == "3buy"]
+                if has_3buy and bi.type == "up" and bi.high > prev_bi_2.high:
+                    ld_prev = prev_bi_2.get_ld(self)["macd"]
+                    ld_now = bi.get_ld(self)["macd"]
+                    if compare_ld_beichi(ld_prev, ld_now, "up"):
+                        zs = has_3buy[0].zs
+                        valid_zss = [z for z in zss if z.index <= zs.index]
+                        is_qs_trend = False
+                        if len(valid_zss) >= 2:
+                            t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                            if t_type: is_qs_trend = True
+                            
+                        if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
+                            bi.add_mmd("1sell", zs, zs_type)
+                            bi.add_bc("qs", zs, None, [prev_bi_2], True, zs_type)
+
             # 3. 第二类买卖点识别
             if i >= 2:
                 prev_bi_2 = self.bis[i-2]
@@ -1536,12 +1601,13 @@ class CL(ICL):
                     if not zs.real:
                         continue
                     
+                    # 检查是否离开中枢
                     if i >= 1:
                         prev_xd = self.xds[i-1]
                         if prev_xd.start.index == zs.end.index:
-                            if xd.type == "down" and xd.low > zs.zg:
+                            if check_3buy and xd.type == "down" and xd.low > zs.zg:
                                 xd.add_mmd("3buy", zs, zs_xd_type)
-                            if xd.type == "up" and xd.high < zs.zd:
+                            if check_3sell and xd.type == "up" and xd.high < zs.zd:
                                 xd.add_mmd("3sell", zs, zs_xd_type)
                     
                     # 盘整背驰
@@ -1558,10 +1624,52 @@ class CL(ICL):
                     # 第一类买卖点（趋势背驰）
                     is_qs = any(b.type == "qs" and b.zs.index == zs.index for b in xd.get_bcs(zs_xd_type))
                     if is_qs:
-                        if xd.type == "down" and xd.low < zs.zd:
-                            xd.add_mmd("1buy", zs, zs_xd_type)
-                        if xd.type == "up" and xd.high > zs.zg:
-                            xd.add_mmd("1sell", zs, zs_xd_type)
+                        if check_qs_1mmd and xd.start.index == zs.end.index:
+                            if xd.type == "down" and xd.low < zs.zd:
+                                xd.add_mmd("1buy", zs, zs_xd_type)
+                            if xd.type == "up" and xd.high > zs.zg:
+                                xd.add_mmd("1sell", zs, zs_xd_type)
+            
+            # 补充：基于3买卖点后的背驰产生的1买卖点
+                if i >= 2:
+                    prev_xd = self.xds[i-1]
+                    prev_xd_2 = self.xds[i-2]
+                    
+                    prev_mmds = prev_xd.get_mmds(zs_xd_type)
+                    
+                    # 3卖后背驰 -> 1买
+                    has_3sell = [m for m in prev_mmds if m.name == "3sell"]
+                    if has_3sell and xd.type == "down" and xd.low < prev_xd_2.low:
+                        ld_prev = prev_xd_2.get_ld(self)["macd"]
+                        ld_now = xd.get_ld(self)["macd"]
+                        if compare_ld_beichi(ld_prev, ld_now, "down"):
+                            zs = has_3sell[0].zs
+                            valid_zss = [z for z in xd_zss if z.index <= zs.index]
+                            is_qs_trend = False
+                            if len(valid_zss) >= 2:
+                                t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                                if t_type: is_qs_trend = True
+                            
+                            if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
+                                xd.add_mmd("1buy", zs, zs_xd_type)
+                                xd.add_bc("qs", zs, None, [prev_xd_2], True, zs_xd_type)
+
+                    # 3买后背驰 -> 1卖
+                    has_3buy = [m for m in prev_mmds if m.name == "3buy"]
+                    if has_3buy and xd.type == "up" and xd.high > prev_xd_2.high:
+                        ld_prev = prev_xd_2.get_ld(self)["macd"]
+                        ld_now = xd.get_ld(self)["macd"]
+                        if compare_ld_beichi(ld_prev, ld_now, "up"):
+                            zs = has_3buy[0].zs
+                            valid_zss = [z for z in xd_zss if z.index <= zs.index]
+                            is_qs_trend = False
+                            if len(valid_zss) >= 2:
+                                t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                                if t_type: is_qs_trend = True
+                            
+                            if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
+                                xd.add_mmd("1sell", zs, zs_xd_type)
+                                xd.add_bc("qs", zs, None, [prev_xd_2], True, zs_xd_type)
                     
                     # 第二类买卖点
                     if i >= 3:
