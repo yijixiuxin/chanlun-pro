@@ -411,11 +411,11 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    klines = ex.klines(
-        "SH.000001",
-        "d",
-    )
-    print(klines)
+    # klines = ex.klines(
+    #     "SH.000001",
+    #     "d",
+    # )
+    # print(klines)
 
     # stock = ex.stock_info("SH.000001")
     # print(stock)
@@ -424,26 +424,26 @@ if __name__ == "__main__":
 
     # print(df)
 
-    # def on_klines(_qmt_code, tick):
-    #     if _qmt_code != "600519.SH":
-    #         return
-    #     print(
-    #         _qmt_code,
-    #         "最新价格",
-    #         tick["lastPrice"],
-    #         " 时间：",
-    #         fun.timeint_to_datetime(int(tick["time"] / 1000)),
-    #     )
-    #     _tdx_code = ex.code_to_tdx(_qmt_code)
-    #     print(tick)
-    #     # for _f in ["1m", "5m", "d"]:
-    #     #     print(f"周期：{_f}")
-    #     #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
+    def on_klines(_qmt_code, tick):
+        if _qmt_code != "600519.SH":
+            return
+        print(
+            _qmt_code,
+            "最新价格",
+            tick["lastPrice"],
+            " 时间：",
+            fun.timeint_to_datetime(int(tick["time"] / 1000)),
+        )
+        _tdx_code = ex.code_to_tdx(_qmt_code)
+        print(tick)
+        # for _f in ["1m", "5m", "d"]:
+        #     print(f"周期：{_f}")
+        #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
 
-    #     #     print(klines_df)
-    #     print("-" * 20)
+        #     print(klines_df)
+        print("-" * 20)
 
-    # ex.subscribe_all_ticks(on_klines)
+    ex.subscribe_all_ticks(on_klines)
 
     # ticks = ex.all_ticks()
     # print(len(ticks))
