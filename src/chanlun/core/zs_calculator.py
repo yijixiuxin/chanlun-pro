@@ -266,14 +266,10 @@ class ChanlunStructureAnalyzer:
         self.structures_by_level = {}
 
         for level_index, level in enumerate(self.levels):
-            LogUtil.info(f"分析级别: {level.value}")
+
 
             # 1. 检查线段数量
             if len(current_lines) < self.min_lines_for_analysis:
-                LogUtil.info(
-                    f"线段数量不足 ({len(current_lines)} < {self.min_lines_for_analysis})，"
-                    f"无法分析 {level.value} 级别"
-                )
                 break
 
             # 2. 分析当前级别
@@ -290,7 +286,6 @@ class ChanlunStructureAnalyzer:
             # 下一级别分析的 "线段" 是本级别生成的 "走势类型" (trend_lines)
             trend_lines = level_result.get("trend_lines", [])
             if not trend_lines:
-                LogUtil.info(f"{level.value} 级别未生成走势类型，分析结束")
                 break
 
             current_lines = trend_lines  # 迭代
@@ -316,7 +311,6 @@ class ChanlunStructureAnalyzer:
         """
         # 1. 计算当前级别中枢
         zss = self._calculate_level_zss(lines, level)
-        LogUtil.info(f"识别到 {len(zss)} 个中枢")
 
         # 2. 处理中枢升级和生成走势类型
         trend_lines = self._generate_trends(
@@ -324,8 +318,6 @@ class ChanlunStructureAnalyzer:
             zss,
             level_index
         )
-
-        LogUtil.info(f"生成 {len(trend_lines)} 个走势类型")
 
         return {
             "zss": zss,
@@ -497,8 +489,6 @@ class ChanlunStructureAnalyzer:
                 )
                 if new_trends:
                     trend_lines.extend(new_trends)
-                    LogUtil.info(
-                        f"生成延伸走势: 从中枢 {i} (线段 {current_zs.start.index}) 生成 {len(new_trends)} 个高级别走势")
                 i += 1
                 continue
 
@@ -527,8 +517,6 @@ class ChanlunStructureAnalyzer:
                         )
                         if new_trends:
                             trend_lines.extend(new_trends)
-                            LogUtil.info(
-                                f"生成扩展走势: 从中枢 {i} 到 {i + 1} 生成 {len(new_trends)} 个高级别走势")
                         # 扩展消耗了两个中枢
                         i += 2
                         continue
@@ -616,8 +604,6 @@ class ChanlunStructureAnalyzer:
             new_trend.high = max(start_line.high, end_line.high)
             new_trend.low = min(start_line.low, end_line.low)
 
-            LogUtil.info(
-                f"生成初始盘整走势: [级别 {current_level.value}] 基于中枢 starting at line {current_zs.start.index}")
             return new_trend
 
         # 规则 2: "如果存在走势类型...根据前一个中枢和当前中枢比较位置确定当前的走势类型。"
@@ -635,8 +621,6 @@ class ChanlunStructureAnalyzer:
         else:
             # 两个中枢存在重叠，不构成严格的上涨或下跌趋势（即盘整），
             # 此时不生成新的 ZSLX 趋势对象。
-            LogUtil.info(
-                f"中枢间盘整: [级别 {current_level.value}] 中枢 {previous_zs.index} 和 {current_zs.index} 重叠")
             return None
 
         # 确定走势的起点和终点
@@ -657,6 +641,4 @@ class ChanlunStructureAnalyzer:
             end_line=end_line,  # 走势到当前中枢的离开线结束
             index=(previous_zs.index or 0) + 1  # 假设的索引
         )
-        LogUtil.info(
-            f"生成普通走势 ({direction}): [级别 {current_level.value}] 从中枢 {previous_zs.index} 到 {current_zs.index}")
         return new_trend
