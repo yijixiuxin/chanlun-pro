@@ -1240,7 +1240,7 @@ class ICL(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> Tuple[str, None]:
+    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> Union[str, None]:
         """
         判断两个中枢是否形成趋势（根据设置的位置关系配置，来判断两个中枢是否有重叠）
         返回  up 是向上趋势， down 是向下趋势 ，None 则没有趋势
@@ -1309,17 +1309,37 @@ def compare_ld_beichi(one_ld: dict, two_ld: dict, line_direction: str):
     :param line_direction: [up down] 比较线的方向，向上看macd红柱子之和，向下看macd绿柱子之和
     :return:
     """
+    if "macd" not in two_ld.keys() or "macd" not in one_ld.keys():
+        return False
+
+    # 1. 比较 MACD 柱子面积 (Hist Sum)
     hist_key = "sum"
     if line_direction == "up":
         hist_key = "up_sum"
     elif line_direction == "down":
         hist_key = "down_sum"
-    if "macd" not in two_ld.keys() or "macd" not in one_ld.keys():
-        return False
-    if two_ld["macd"]["hist"][hist_key] < one_ld["macd"]["hist"][hist_key]:
-        return True
-    else:
-        return False
+    
+    hist_bc = two_ld["macd"]["hist"][hist_key] < one_ld["macd"]["hist"][hist_key]
+
+    # 2. 比较 DIF/DEA 黄白线高度
+    # 向上比较最大值，向下比较最小值 (绝对值)
+    # 注意：DEA/DIF 是 trend following，背驰通常意味着价格新高但指标不新高
+    line_bc = False
+    if line_direction == "up":
+        # 价格新高（调用方保证），检查 DIF/DEA 是否新高
+        # 如果当前 DIF/DEA max 小于前一段 DIF/DEA max，则背驰
+        if two_ld["macd"]["dif"]["max"] < one_ld["macd"]["dif"]["max"] and \
+           two_ld["macd"]["dea"]["max"] < one_ld["macd"]["dea"]["max"]:
+            line_bc = True
+    elif line_direction == "down":
+        # 价格新低，检查 DIF/DEA 是否新低 (值越小越低，负数)
+        # 如果当前 DIF/DEA min 大于 前一段 DIF/DEA min (比如 -5 > -10)，则背驰
+        if two_ld["macd"]["dif"]["min"] > one_ld["macd"]["dif"]["min"] and \
+           two_ld["macd"]["dea"]["min"] > one_ld["macd"]["dea"]["min"]:
+            line_bc = True
+
+    # 只要满足其中一种背驰，即认为背驰 (宽松模式，符合实战中“面积背驰”或“黄白线背驰”均可参考的需求)
+    return hist_bc or line_bc
 
 
 def user_custom_mmd(

@@ -1385,7 +1385,7 @@ class CL(ICL):
                 valid_zss = [z for z in zss if z.index <= zs.index]
                 is_qs_trend = False
                 if len(valid_zss) >= 2:
-                    trend_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                    trend_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
                     if trend_type:
                         is_qs_trend = True
 
@@ -1410,7 +1410,7 @@ class CL(ICL):
                     bi.add_bc("qs", zs, None, compare_lines, True, zs_type)
                     
                     # 第一类买卖点：趋势背驰
-                    if check_qs_1mmd and bi.start.index == zs.end.index:
+                    if check_qs_1mmd:
                         if bi.type == "down" and bi.low < zs.zd:
                             bi.add_mmd("1buy", zs, zs_type)
                         if bi.type == "up" and bi.high > zs.zg:
@@ -1438,7 +1438,7 @@ class CL(ICL):
                         valid_zss = [z for z in zss if z.index <= zs.index]
                         is_qs_trend = False
                         if len(valid_zss) >= 2:
-                            t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                            t_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
                             if t_type: is_qs_trend = True
                         
                         if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
@@ -1449,14 +1449,20 @@ class CL(ICL):
                 # 3买后背驰 -> 1卖
                 has_3buy = [m for m in prev_mmds if m.name == "3buy"]
                 if has_3buy and bi.type == "up" and bi.high > prev_bi_2.high:
+                    # 检查力度背驰：当前段与3买前的离开段比较 (Trend Divergence logic)
                     ld_prev = prev_bi_2.get_ld(self)["macd"]
                     ld_now = bi.get_ld(self)["macd"]
-                    if compare_ld_beichi(ld_prev, ld_now, "up"):
-                        zs = has_3buy[0].zs
+                    bc_trend = compare_ld_beichi(ld_prev, ld_now, "up")
+                    
+                    # 检查盘整背驰：当前段与中枢进入段比较 (PZ BC logic)
+                    zs = has_3buy[0].zs
+                    is_pz, _ = self.beichi_pz(zs, bi)
+                    
+                    if bc_trend or is_pz:
                         valid_zss = [z for z in zss if z.index <= zs.index]
                         is_qs_trend = False
                         if len(valid_zss) >= 2:
-                            t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                            t_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
                             if t_type: is_qs_trend = True
                             
                         if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
@@ -1471,18 +1477,23 @@ class CL(ICL):
                 is_1buy = any(m.name == "1buy" for m in prev_bi_2.get_mmds(zs_type))
                 is_1sell = any(m.name == "1sell" for m in prev_bi_2.get_mmds(zs_type))
                 
+                # 检查是否有趋势背驰 (即使没有标记为1buy)
+                has_qs_bc = any(b.type == "qs" for b in prev_bi_2.get_bcs(zs_type))
+
                 if check_2buy and bi.type == "down":
                     # 情况1：一类买点后，不创新低
                     if is_1buy and bi.low > prev_bi_2.low:
                         target_zs = prev_bi_2.get_mmds(zs_type)[0].zs
                         bi.add_mmd("2buy", target_zs, zs_type)
                     
-                    # 情况2：趋势背驰后，不创新低
-                    for bc in prev_bi_2.get_bcs(zs_type):
-                        if bc.type in ["qs", "pz"] and bc.zs is not None:
-                            if bi.low > prev_bi_2.low and compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "down"):
-                                bi.add_mmd("2buy", bc.zs, zs_type)
-                                break
+                    # 情况2：趋势背驰后，不创新低 (即使没有1buy标记)
+                    elif has_qs_bc and bi.low > prev_bi_2.low:
+                         for bc in prev_bi_2.get_bcs(zs_type):
+                            if bc.type == "qs" and bc.zs is not None:
+                                # 再次确认力度衰竭 (可选，但通常二买意味着回调不破低)
+                                if compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "down"):
+                                    bi.add_mmd("2buy", bc.zs, zs_type)
+                                    break
                 
                 if check_2sell and bi.type == "up":
                     # 情况1：一类卖点后，不创新高
@@ -1491,11 +1502,12 @@ class CL(ICL):
                         bi.add_mmd("2sell", target_zs, zs_type)
                     
                     # 情况2：趋势背驰后，不创新高
-                    for bc in prev_bi_2.get_bcs(zs_type):
-                        if bc.type in ["qs", "pz"] and bc.zs is not None:
-                            if bi.high < prev_bi_2.high and compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "up"):
-                                bi.add_mmd("2sell", bc.zs, zs_type)
-                                break
+                    elif has_qs_bc and bi.high < prev_bi_2.high:
+                        for bc in prev_bi_2.get_bcs(zs_type):
+                            if bc.type == "qs" and bc.zs is not None:
+                                if compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "up"):
+                                    bi.add_mmd("2sell", bc.zs, zs_type)
+                                    break
             
             # 4. 类买卖点识别
             if i >= 2:
@@ -1574,27 +1586,31 @@ class CL(ICL):
                     is_1buy = any(m.name == "1buy" for m in prev_xd_2.get_mmds(zs_xd_type))
                     is_1sell = any(m.name == "1sell" for m in prev_xd_2.get_mmds(zs_xd_type))
                     
+                    has_qs_bc = any(b.type == "qs" for b in prev_xd_2.get_bcs(zs_xd_type))
+
                     if xd.type == "down":
                         if is_1buy and xd.low > prev_xd_2.low:
                             target_zs = prev_xd_2.get_mmds(zs_xd_type)[0].zs
                             xd.add_mmd("2buy", target_zs, zs_xd_type)
                         
-                        for bc in prev_xd_2.get_bcs(zs_xd_type):
-                            if bc.type in ["qs", "pz"] and bc.zs is not None:
-                                if xd.low > prev_xd_2.low and compare_ld_beichi(prev_xd_2.get_ld(self), xd.get_ld(self), "down"):
-                                    xd.add_mmd("2buy", bc.zs, zs_xd_type)
-                                    break
+                        elif has_qs_bc and xd.low > prev_xd_2.low:
+                            for bc in prev_xd_2.get_bcs(zs_xd_type):
+                                if bc.type == "qs" and bc.zs is not None:
+                                    if compare_ld_beichi(prev_xd_2.get_ld(self), xd.get_ld(self), "down"):
+                                        xd.add_mmd("2buy", bc.zs, zs_xd_type)
+                                        break
                     
                     if xd.type == "up":
                         if is_1sell and xd.high < prev_xd_2.high:
                             target_zs = prev_xd_2.get_mmds(zs_xd_type)[0].zs
                             xd.add_mmd("2sell", target_zs, zs_xd_type)
                         
-                        for bc in prev_xd_2.get_bcs(zs_xd_type):
-                            if bc.type in ["qs", "pz"] and bc.zs is not None:
-                                if xd.high < prev_xd_2.high and compare_ld_beichi(prev_xd_2.get_ld(self), xd.get_ld(self), "up"):
-                                    xd.add_mmd("2sell", bc.zs, zs_xd_type)
-                                    break
+                        elif has_qs_bc and xd.high < prev_xd_2.high:
+                            for bc in prev_xd_2.get_bcs(zs_xd_type):
+                                if bc.type == "qs" and bc.zs is not None:
+                                    if compare_ld_beichi(prev_xd_2.get_ld(self), xd.get_ld(self), "up"):
+                                        xd.add_mmd("2sell", bc.zs, zs_xd_type)
+                                        break
                 
                 # 第三类买卖点
                 for zs in xd_zss:
@@ -1624,7 +1640,7 @@ class CL(ICL):
                     # 第一类买卖点（趋势背驰）
                     is_qs = any(b.type == "qs" and b.zs.index == zs.index for b in xd.get_bcs(zs_xd_type))
                     if is_qs:
-                        if check_qs_1mmd and xd.start.index == zs.end.index:
+                        if check_qs_1mmd:
                             if xd.type == "down" and xd.low < zs.zd:
                                 xd.add_mmd("1buy", zs, zs_xd_type)
                             if xd.type == "up" and xd.high > zs.zg:
@@ -1640,14 +1656,20 @@ class CL(ICL):
                     # 3卖后背驰 -> 1买
                     has_3sell = [m for m in prev_mmds if m.name == "3sell"]
                     if has_3sell and xd.type == "down" and xd.low < prev_xd_2.low:
+                        # 检查力度背驰：当前段与3卖前的离开段比较
                         ld_prev = prev_xd_2.get_ld(self)["macd"]
                         ld_now = xd.get_ld(self)["macd"]
-                        if compare_ld_beichi(ld_prev, ld_now, "down"):
-                            zs = has_3sell[0].zs
+                        bc_trend = compare_ld_beichi(ld_prev, ld_now, "down")
+
+                        # 检查盘整背驰：当前段与中枢进入段比较
+                        zs = has_3sell[0].zs
+                        is_pz, _ = self.beichi_pz(zs, xd)
+
+                        if bc_trend or is_pz:
                             valid_zss = [z for z in xd_zss if z.index <= zs.index]
                             is_qs_trend = False
                             if len(valid_zss) >= 2:
-                                t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                                t_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
                                 if t_type: is_qs_trend = True
                             
                             if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
@@ -1657,14 +1679,20 @@ class CL(ICL):
                     # 3买后背驰 -> 1卖
                     has_3buy = [m for m in prev_mmds if m.name == "3buy"]
                     if has_3buy and xd.type == "up" and xd.high > prev_xd_2.high:
+                        # 检查力度背驰
                         ld_prev = prev_xd_2.get_ld(self)["macd"]
                         ld_now = xd.get_ld(self)["macd"]
-                        if compare_ld_beichi(ld_prev, ld_now, "up"):
-                            zs = has_3buy[0].zs
+                        bc_trend = compare_ld_beichi(ld_prev, ld_now, "up")
+                        
+                        # 检查盘整背驰
+                        zs = has_3buy[0].zs
+                        is_pz, _ = self.beichi_pz(zs, xd)
+                        
+                        if bc_trend or is_pz:
                             valid_zss = [z for z in xd_zss if z.index <= zs.index]
                             is_qs_trend = False
                             if len(valid_zss) >= 2:
-                                t_type, _ = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
+                                t_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
                                 if t_type: is_qs_trend = True
                             
                             if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
@@ -1776,7 +1804,7 @@ class CL(ICL):
 
         zs1 = zss[-2]
         zs2 = zss[-1]
-        trend_type, _ = self.zss_is_qs(zs1, zs2)
+        trend_type = self.zss_is_qs(zs1, zs2)
         if not trend_type:
             return False, []
 
@@ -1801,7 +1829,7 @@ class CL(ICL):
             return True, [ref]
         return False, []
 
-    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> Tuple[str, None]:
+    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> Union[str, None]:
         """
         判断两个中枢是否形成趋势
         """
@@ -1817,7 +1845,7 @@ class CL(ICL):
             if two_zs.dd > one_zs.gg: is_up = True
             
         if is_up:
-            return "up", None
+            return "up"
             
         # Down Trend
         is_down = False
@@ -1829,9 +1857,9 @@ class CL(ICL):
             if two_zs.gg < one_zs.dd: is_down = True
             
         if is_down:
-            return "down", None
+            return "down"
             
-        return None, None
+        return None
 
     def create_dn_zs(self, zs_type: str, lines: List[LINE], max_line_num: int = 999, zs_include_last_line=True) -> List[ZS]:
         """

@@ -183,7 +183,7 @@ class AIAnalyse:
                 prompt += f"### 中枢信息：{self.map_config_zs_type[zs_type]}\n\n"
                 if len(zss) >= 2:
                     zs_direction = cd.zss_is_qs(zss[-2], zss[-1])
-                    prompt += f"- 最新两个中枢的位置关系：**{self.map_zss_direction[zs_direction]}**\n\n"
+                    prompt += f"- 最新两个中枢的位置关系：**{self.map_zss_direction.get(zs_direction, self.map_zss_direction[None])}**\n\n"
                 else:
                     prompt += "- 目前只有单个中枢\n\n"
                 prompt += "| 起始时间 | 结束时间 | 方向 | 最高值 | 最低值 | 高点 | 低点 | 级别 |\n"
