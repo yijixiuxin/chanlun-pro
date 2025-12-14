@@ -339,13 +339,37 @@ class CL(ICL):
                 if fx_type == "ding":
                     if fx_qj == Config.FX_QJ_CK.value:
                         val = k2.h
+                        # 修正 K 线坐标
+                        high_k = None
+                        for _k in k2.klines:
+                            if abs(_k.h - val) < 1e-9:
+                                high_k = _k
+                                break
+                        if high_k:
+                            k2.k_index = high_k.index
+                            k2.date = high_k.date
                     else:
-                        val = max([_k.h for _k in k2.klines])
+                        high_k = max(k2.klines, key=lambda _k: _k.h)
+                        val = high_k.h
+                        k2.k_index = high_k.index
+                        k2.date = high_k.date
                 else:
                     if fx_qj == Config.FX_QJ_CK.value:
                         val = k2.l
+                        # 修正 K 线坐标
+                        low_k = None
+                        for _k in k2.klines:
+                            if abs(_k.l - val) < 1e-9:
+                                low_k = _k
+                                break
+                        if low_k:
+                            k2.k_index = low_k.index
+                            k2.date = low_k.date
                     else:
-                        val = min([_k.l for _k in k2.klines])
+                        low_k = min(k2.klines, key=lambda _k: _k.l)
+                        val = low_k.l
+                        k2.k_index = low_k.index
+                        k2.date = low_k.date
                 
                 fx = FX(
                     _type=fx_type,
@@ -399,10 +423,10 @@ class CL(ICL):
 
         if bi_type == Config.BI_TYPE_OLD.value:
             # 老笔：分型不共用缠论K线，分型之间至少有一根独立缠论K线
-            return ck_diff >= 2
+            return src_k_num >= 5 and ck_diff >= 4
         elif bi_type == Config.BI_TYPE_NEW.value:
             # 新笔：分型之间至少5根原始K线，且不共用缠论K线（至少一根独立缠论K线）
-            return src_k_num >= 5 and ck_diff >= 2
+            return src_k_num >= 5 and ck_diff >= 4
         elif bi_type == Config.BI_TYPE_JDB.value:
             # 简单笔：至少5根原始K线即可
             return src_k_num >= 5
@@ -410,7 +434,7 @@ class CL(ICL):
             # 顶底成笔：出现相邻顶底即可
             return True
         else:
-            return ck_diff >= 2
+            return ck_diff >= 4
 
     def check_bi_valid(self, start_fx: FX, end_fx: FX, bi_type: str) -> bool:
         """
@@ -1394,9 +1418,9 @@ class CL(ICL):
                 if i >= 1:
                     prev_bi = self.bis[i-1]
                     if prev_bi.start.index == zs.end.index:
-                        if check_3buy and bi.type == "down" and bi.low > zs.zg:
+                        if check_3buy and bi.type == "down" and bi.low > zs.zg and bi.low > zs.lines[-1].high:
                             bi.add_mmd("3buy", zs, zs_type)
-                        if check_3sell and bi.type == "up" and bi.high < zs.zd:
+                        if check_3sell and bi.type == "up" and bi.high < zs.zd and bi.high < zs.lines[-1].low:
                             bi.add_mmd("3sell", zs, zs_type)
                 
                 # 盘整背驰：离开段与进入段比较
@@ -1621,9 +1645,9 @@ class CL(ICL):
                     if i >= 1:
                         prev_xd = self.xds[i-1]
                         if prev_xd.start.index == zs.end.index:
-                            if check_3buy and xd.type == "down" and xd.low > zs.zg:
+                            if check_3buy and xd.type == "down" and xd.low > zs.zg and xd.low > zs.lines[-1].high:
                                 xd.add_mmd("3buy", zs, zs_xd_type)
-                            if check_3sell and xd.type == "up" and xd.high < zs.zd:
+                            if check_3sell and xd.type == "up" and xd.high < zs.zd and xd.high < zs.lines[-1].low:
                                 xd.add_mmd("3sell", zs, zs_xd_type)
                     
                     # 盘整背驰
