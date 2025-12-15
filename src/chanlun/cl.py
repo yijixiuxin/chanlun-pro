@@ -1260,14 +1260,21 @@ class CL(ICL):
         # Helper: 以三线重叠计算中枢，并向后延伸直到离开（含离开段）
         def _calc_zss_by_lines(_lines: List[LINE], _zs_type: str) -> List[ZS]:
             zss: List[ZS] = []
-            if len(_lines) < 3:
+            if len(_lines) < 5:
                 return zss
-            i = 0
+            i = 1
             while i <= len(_lines) - 3:
                 l1, l2, l3 = _lines[i], _lines[i + 1], _lines[i + 2]
                 zg = min(l1.high, l2.high, l3.high)
                 zd = max(l1.low, l2.low, l3.low)
                 if zg > zd:
+                    # Check overlap ratio > 2/3 of fluctuation range
+                    overlap_height = zg - zd
+                    total_range = max(l1.high, l2.high, l3.high) - min(l1.low, l2.low, l3.low)
+                    if total_range > 0 and overlap_height <= total_range * (2/3):
+                        i += 1
+                        continue
+
                     zs = ZS(
                         zs_type=_zs_type,
                         start=l1.start,
@@ -1283,10 +1290,38 @@ class CL(ICL):
                     zs.lines = [l1, l2, l3]
                     zs.real = True
                     j = i + 3
-                    # 段内延伸（含离开段）
+                    
+                    has_leaving = False
+                    # 段内延伸
                     while j < len(_lines):
                         ln = _lines[j]
-                        if not (ln.high < zd or ln.low > zg):
+                        
+                        # Check if line leaves the [zd, zg] range
+                        # If it ends outside the range, it is considered leaving
+                        is_leaving = False
+                        if ln.type == "up":
+                            if ln.high > zg:
+                                is_leaving = True
+                        else:
+                            if ln.low < zd:
+                                is_leaving = True
+
+                        if not is_leaving:
+                            # 检查是否可以作为延伸
+                            # 用户要求：如果不完全重叠或重叠很小，不应算作延伸
+                            # 增加一个检查：如果线段大部分在区间外，则不算延伸
+                            
+                            # 计算重叠部分长度
+                            overlap_high = min(ln.high, zg)
+                            overlap_low = max(ln.low, zd)
+                            overlap_len = max(0, overlap_high - overlap_low)
+                            ln_len = ln.high - ln.low
+                            
+                            # 如果重叠长度小于线段长度的一半，认为重叠不足，不算延伸
+                            # 这将导致循环中断，has_leaving 为 False，从而丢弃该中枢
+                            if ln_len > 0 and overlap_len < ln_len * 0.5:
+                                break
+
                             zs.lines.append(ln)
                             zs.end = ln.end
                             if ln.high > zs.gg:
@@ -1295,16 +1330,27 @@ class CL(ICL):
                                 zs.dd = ln.low
                             j += 1
                         else:
-                            zs.lines.append(ln)  # 计入离开段以确定右边界
-                            zs.end = ln.end
-                            if ln.high > zs.gg:
-                                zs.gg = ln.high
-                            if ln.low < zs.dd:
-                                zs.dd = ln.low
-                            j += 1
+                            has_leaving = True
                             break
+                    
+                    # 必须要有离开段，才算有效中枢
+                    if not has_leaving:
+                         # 如果没有离开段，且已经到了最后，说明中枢未完成，或者不是中枢
+                         # 根据需求 "应是从中枢离开才叫中枢"，这里我们不保存未完成的中枢
+                         i += 1
+                         continue
+
+                    # 检查是否满足5笔条件 (进入1 + 中枢3+ + 离开1)
+                    # 虽然i从1开始已经保证了进入段，这里再确认一下
+                    # has_leaving保证了离开段
+                    # zs.lines至少3笔
+                    # 所以总数至少 1 + 3 + 1 = 5
+                    
                     zss.append(zs)
-                    i = j - 1
+                    # 下一个中枢寻找，从离开段的下一段开始（或者离开段作为可能的进入段）
+                    # j 是离开段的索引。离开段是 _lines[j]
+                    # 下一次寻找中枢，i 应该指向 _lines[j+1] (作为新中枢的第一笔，lines[j]作为进入段)
+                    i = j + 1
                 else:
                     i += 1
             return zss
@@ -1890,10 +1936,10 @@ class CL(ICL):
         根据给定的线列表创建中枢
         """
         zss = []
-        if len(lines) < 3:
+        if len(lines) < 5:
             return zss
             
-        i = 0
+        i = 1
         while i <= len(lines) - 3:
             l1 = lines[i]
             l2 = lines[i+1]
@@ -1903,6 +1949,13 @@ class CL(ICL):
             zd = max(l1.low, l2.low, l3.low)
             
             if zg > zd:
+                # Check overlap ratio > 2/3 of fluctuation range
+                overlap_height = zg - zd
+                total_range = max(l1.high, l2.high, l3.high) - min(l1.low, l2.low, l3.low)
+                if total_range > 0 and overlap_height <= total_range * (2/3):
+                    i += 1
+                    continue
+
                 zs = ZS(
                     zs_type=zs_type,
                     start=l1.start,
@@ -1917,15 +1970,38 @@ class CL(ICL):
                 )
                 zs.lines = [l1, l2, l3]
                 zs.real = True
-                zss.append(zs)
                 
                 j = i + 3
+                has_leaving = False
                 while j < len(lines):
                     ln = lines[j]
                     if not zs_include_last_line and j == len(lines) - 1:
                         break
 
-                    if not (ln.high < zd or ln.low > zg):
+                    is_leaving = False
+                    if ln.type == "up":
+                        if ln.high > zg:
+                            is_leaving = True
+                    else:
+                        if ln.low < zd:
+                            is_leaving = True
+
+                    if not is_leaving:
+                        # 检查是否可以作为延伸
+                        # 用户要求：如果不完全重叠或重叠很小，不应算作延伸
+                        # 增加一个检查：如果线段大部分在区间外，则不算延伸
+                        
+                        # 计算重叠部分长度
+                        overlap_high = min(ln.high, zg)
+                        overlap_low = max(ln.low, zd)
+                        overlap_len = max(0, overlap_high - overlap_low)
+                        ln_len = ln.high - ln.low
+                        
+                        # 如果重叠长度小于线段长度的一半，认为重叠不足，不算延伸
+                        # 这将导致循环中断，has_leaving 为 False，从而丢弃该中枢
+                        if ln_len > 0 and overlap_len < ln_len * 0.5:
+                            break
+
                         if len(zs.lines) >= max_line_num:
                             break
                         zs.lines.append(ln)
@@ -1934,8 +2010,15 @@ class CL(ICL):
                         if ln.low < zs.dd: zs.dd = ln.low
                         j += 1
                     else:
+                        has_leaving = True
                         break
-                i = j - 1
+                
+                if not has_leaving:
+                    i += 1
+                    continue
+
+                zss.append(zs)
+                i = j + 1
             else:
                 i += 1
         return zss
