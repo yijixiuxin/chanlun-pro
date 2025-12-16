@@ -62,10 +62,8 @@ class XdCalculator:
                     is_critical = True
 
             if is_critical:
-                LogUtil.info(f"在索引 {i} 处找到关键笔。从此开始分析。")
                 return i
 
-        LogUtil.warning("未找到关键笔。从索引 0 开始分析。")
         return 0
 
     def _get_characteristic_sequence(self, segment_bis: List[BI], segment_type: str) -> List[BI]:
@@ -196,17 +194,13 @@ class XdCalculator:
         try:
             # 找到目标特征序列笔对应的主序列笔，其前一笔就是线段的结束笔
             idx = target_bi.index
-            LogUtil.info(f"根据分型的中间笔确定线段的结束笔，特征序列笔索引:{idx}")
             if idx > 0:
                 return all_bis[idx - 1]
             else:
-                LogUtil.warning("目标笔是列表中的第一根笔，无法找到其前一笔。")
                 return None
         except ValueError:
-            LogUtil.error("目标笔在 all_bis 列表中未找到。")
             return None
         except AttributeError:
-            LogUtil.error(f"目标笔 {target_bi} 没有 'index' 属性。")
             return None
 
     def _get_extremum_bi_from_cs(self, cs_bi: dict) -> BI:
@@ -234,8 +228,6 @@ class XdCalculator:
         elif segment_type == 'down':
             segment_high = first_bi.start.val
             segment_low = last_bi.end.val
-        else:
-            LogUtil.warning(f"警告: 未知的 segment type '{segment_type}'。")
         return segment_high, segment_low
 
     def calculate(self, bis: List[BI]) -> List[XD]:
@@ -245,7 +237,6 @@ class XdCalculator:
         - 全量计算：当内部线段列表为空时，从头开始计算。
         - 增量计算：当有新笔数据传入时，会从最后一个线段开始回溯，重新评估并延续计算。
         """
-        LogUtil.info("开始划分线段")
         all_bis = bis
 
         is_incremental = bool(self.xds)
@@ -253,7 +244,6 @@ class XdCalculator:
 
         # 优化：如果输入数据没有新笔，则不重新计算
         if self.xds and all_bis and self.xds[-1].end_line == all_bis[-1]:
-            LogUtil.info("输入数据无新笔，跳过线段计算。")
             return []
 
         # --- 状态处理：确定本次计算的起点 ---
@@ -263,7 +253,6 @@ class XdCalculator:
             if not all_bis:
                 return []
             # 增量更新模式
-            LogUtil.info("增量模式：重新评估最近的线段。")
             last_xd = self.xds.pop()  # 弹出最后一个线段（可能是未完成的），准备重新计算
             start_index_for_delta = len(self.xds)  # 记录pop后的数量，用于返回增量
 
@@ -314,7 +303,6 @@ class XdCalculator:
                     continue
 
                 if end_idx < start_idx + 2:
-                    LogUtil.info("Builder 信息不足以构成三笔，退回标准模式。")
                     current_list_index = start_idx + 1
                     next_segment_builder = None
                     continue
@@ -562,7 +550,6 @@ class XdCalculator:
                     pending_xd.done = False
                     self.xds.append(pending_xd)
                 break
-        LogUtil.info(f"线段划分结束，完成 {len(self.xds)} 个线段。")
         if is_incremental:
             return self.xds[start_index_for_delta:]
         else:
