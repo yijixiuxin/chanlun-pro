@@ -234,8 +234,6 @@ class XdCalculator:
         """
         根据笔列表计算线段。
         此方法支持全量和增量计算。
-        - 全量计算：当内部线段列表为空时，从头开始计算。
-        - 增量计算：当有新笔数据传入时，会从最后一个线段开始回溯，重新评估并延续计算。
         """
         all_bis = bis
 
@@ -531,22 +529,51 @@ class XdCalculator:
             # --- 处理最后一个未完成的线段 ---
             if not is_completed and next_check_idx >= len(all_bis) - 1:
                 if current_segment and current_segment.get('bis'):
-                    pending_bis = all_bis[current_list_index:]
+                    # 1. 获取候选笔列表
+                    candidates_bis = all_bis[current_list_index:]
+
+                    # 2. 过滤未完成的笔
+                    pending_bis = [bi for bi in candidates_bis if bi.is_done()]
+
                     if not pending_bis:
                         break
+
+                    # 3. 根据线段方向修正终点：
+                    # 规则：向上线段(up)必须结束于向上笔(up)，向下线段(down)必须结束于向下笔(down)
+                    seg_type = current_segment['type']
+                    last_valid_index = -1
+
+                    # 从后往前遍历，找到第一个与线段方向一致的笔
+                    for i in range(len(pending_bis) - 1, -1, -1):
+                        if pending_bis[i].type == seg_type:
+                            last_valid_index = i
+                            break
+
+                    if last_valid_index != -1:
+                        pending_bis = pending_bis[:last_valid_index + 1]
+                    else:
+                        break
+
+                    if not pending_bis:
+                        break
+
+                    # 4. 构建未完成线段对象
                     pending_xd = XD(
                         start=pending_bis[0].start,
                         end=pending_bis[-1].end,
                         start_line=pending_bis[0],
                         end_line=pending_bis[-1],
-                        _type=current_segment['type'],
+                        _type=seg_type,
                         index=len(self.xds),
                         default_zs_type=self.config.get('zs_type_xd', None)
                     )
                     pending_xd.high = max(bi.high for bi in pending_bis)
                     pending_xd.low = min(bi.low for bi in pending_bis)
+
+                    # 对于未完成线段，中枢高低点暂时取线段的高低点
                     pending_xd.zs_high = pending_xd.high
                     pending_xd.zs_low = pending_xd.low
+
                     pending_xd.done = False
                     self.xds.append(pending_xd)
                 break
