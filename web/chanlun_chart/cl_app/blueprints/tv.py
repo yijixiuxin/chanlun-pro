@@ -2,7 +2,7 @@
 TradingView相关接口蓝图。
 (终极修复版：修复 minmov 校验错误 + 全量数据返回 + 内存缓存)
 """
-
+import pytz
 import datetime
 import time
 from cachetools import TTLCache
@@ -302,18 +302,19 @@ def tv_history():
     ex = get_exchange(Market(market))
 
     if firstDataRequest == "false" and ex.now_trading() is False:
-        # 历史数据请求时不应拦截，直接放行
         pass
 
     frequency = resolution_maps[resolution]
     cl_config = query_cl_chart_config(market, code)
-
-    # ================= 缓存检查 =================
-    cache_key = f"{market}_{code}_{frequency}_{hash(str(cl_config))}"
+    if firstDataRequest == "false":
+        cache_key = f"{market}_{code}_{frequency}_{_from}_{_to}_{hash(str(cl_config))}"
+    else:
+        cache_key = f"{market}_{code}_{frequency}_{hash(str(cl_config))}"
 
     cl_chart_data = None
     is_cache_hit = False
 
+    # 简单策略：仅对全量请求做持久缓存，增量请求做短缓存或直接查询
     if cache_key in chart_data_cache:
         cl_chart_data = chart_data_cache[cache_key]
         is_cache_hit = True
@@ -328,14 +329,45 @@ def tv_history():
                     market, frequency
                 )
 
+                # ==================================================
+                #  核心修改：准备 args 参数，处理时间范围
+                # ==================================================
+                kline_args = {}
+
+                # 定义时区，TV 传过来的是 UTC 时间戳，我们需要转为上海时间供 klines 使用
+                tz_sh = pytz.timezone("Asia/Shanghai")
+
+                if firstDataRequest == "false":
+                    # 增量/历史回读请求：使用前端传入的具体时间范围
+                    try:
+                        # 转换 _from 和 _to 为带时区的 datetime 字符串
+                        # TV 传入的是秒级时间戳
+                        dt_from = datetime.datetime.fromtimestamp(int(_from), tz=tz_sh)
+                        dt_to = datetime.datetime.fromtimestamp(int(_to), tz=tz_sh)
+
+                        kline_args['start_date'] = dt_from.strftime("%Y-%m-%d %H:%M:%S")
+                        kline_args['end_date'] = dt_to.strftime("%Y-%m-%d %H:%M:%S")
+
+                        LogUtil.info(f"增量请求: {code} range: {kline_args['start_date']} -> {kline_args['end_date']}")
+                    except Exception as e:
+                        LogUtil.error(f"时间戳转换失败: {e}")
+                else:
+                    # 首次请求：不传 start_date，让 klines 方法使用默认的 Lookback (获取足够多的数据计算缠论)
+                    # end_date 设为现在
+                    kline_args['end_date'] = datetime.datetime.now(tz_sh).strftime("%Y-%m-%d %H:%M:%S")
+
+                # ==================================================
+
                 if (cl_config["enable_kchart_low_to_high"] == "1" and kchart_to_frequency is not None):
-                    klines = ex.klines(code, frequency_low)
+                    # 低频转高频模式 (注意：这里如果增量请求低频数据，可能需要更复杂的计算，暂时透传参数)
+                    klines = ex.klines(code, frequency_low, **kline_args)
                     cd = web_batch_get_cl_datas(
                         market, code, {frequency_low: klines}, cl_config
                     )[0]
                 else:
                     kchart_to_frequency = None
-                    klines = ex.klines(code, frequency)
+                    # 直接调用 klines，传入 args
+                    klines = ex.klines(code, frequency, **kline_args)
                     cd = web_batch_get_cl_datas(market, code, {frequency: klines}, cl_config)[0]
 
                 if len(klines) > 0 and int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
@@ -345,6 +377,7 @@ def tv_history():
                     cd, cl_config, to_frequency=kchart_to_frequency
                 )
 
+                # 存入缓存
                 chart_data_cache[cache_key] = cl_chart_data
 
     if not is_cache_hit:

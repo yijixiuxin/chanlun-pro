@@ -88,7 +88,6 @@ class CL_Kline_Process:
 
         # 如果没有新的K线数据 (比较最后一个原始K线的索引)
         if len(src_klines) - 1 <= self._last_src_kline_index:
-            LogUtil.info("没有新的K线需要处理。")
             return []
 
         # --- 1. 确定处理的起始位置 ---
@@ -99,7 +98,6 @@ class CL_Kline_Process:
         if self.cl_klines and self._last_src_kline_index >= 0:
             # --- 增量更新 ---
             # 需要回溯一根K线，因为最后一根 cl_kline 可能需要和新的 src_kline 合并
-            LogUtil.info(f"增量更新开始。回溯最后一根 CL Kline (index {self.cl_klines[-1].index})")
             last_cl_k = self.cl_klines.pop()
 
             # 找到这根被弹出的 cl_kline 是由哪根 src_kline *开始* 构成的
@@ -112,11 +110,9 @@ class CL_Kline_Process:
 
             # 记录返回列表的起始位置 (即当前 cl_klines 的末尾)
             return_cl_klines_start_index = len(self.cl_klines)
-            LogUtil.info(f"将从 src_kline 索引 {start_src_index} 开始重新处理。")
 
         else:
             # --- 首次全量处理 ---
-            LogUtil.info("首次运行，处理所有K线。")
             self.cl_klines.clear()
             self._last_src_kline_index = -1
 
@@ -135,7 +131,6 @@ class CL_Kline_Process:
             if not self.cl_klines:
                 # 添加第一根K线
                 self.cl_klines.append(cl_k)
-                LogUtil.info(f"添加第一根 CL Kline (index {cl_k.index}) from src_kline {current_k.index}")
                 continue
 
             # 获取处理后的最后一根K线，用于比较
@@ -147,7 +142,6 @@ class CL_Kline_Process:
                 cl_k.q = True  # 标记为有缺口
                 cl_k.index = len(self.cl_klines)  # 确定其最终索引
                 self.cl_klines.append(cl_k)
-                LogUtil.info(f"检测到缺口。添加新 CL Kline (index {cl_k.index}) from src_kline {current_k.index}")
                 continue
 
             # 检查是否需要合并 (有重叠区域)
@@ -179,8 +173,6 @@ class CL_Kline_Process:
 
                 # 用合并后的K线 *替换* 列表中的最后一根
                 self.cl_klines[-1] = merged_k
-                LogUtil.info(
-                    f"合并 CL Kline (index {merged_k.index}) with src_kline {current_k.index}. Direction: {direction}")
             else:
                 # --- B. 无缺口，无合并 ---
                 # (即K线有重叠，但不构成包含关系，是独立K线)
@@ -193,8 +185,5 @@ class CL_Kline_Process:
         # 仅返回本次调用新增或更新的K线
         new_and_updated_klines = self.cl_klines[return_cl_klines_start_index:]
 
-        LogUtil.info(f"处理完成。总 CL klines: {len(self.cl_klines)}. "
-                     f"最后处理的 src kline 索引: {self._last_src_kline_index}. "
-                     f"返回 {len(new_and_updated_klines)} 根 K线。")
 
         return new_and_updated_klines

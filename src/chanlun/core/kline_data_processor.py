@@ -201,7 +201,6 @@ class KlineDataProcessor:
                     break
 
             if start_index == -1:
-                LogUtil.info("输入的新K线数据均为旧数据，未进行更新。")
                 return []
 
             # 递归调用自己，但使用切片后的正确数据
