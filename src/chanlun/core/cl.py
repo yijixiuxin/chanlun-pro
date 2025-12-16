@@ -130,7 +130,6 @@ class CL(ICL):
         self.macd_calculator.process_macd(self.get_src_klines())
 
         cl_klines = self.cl_kline_processor.process_cl_klines(src_klines)
-        LogUtil.info(f"包含关系处理后，生成 {len(cl_klines)} 根缠论K线。")
 
         # 计算笔和分型
         bis = self.bi_calculator.calculate(cl_klines)

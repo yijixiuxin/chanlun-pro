@@ -154,7 +154,7 @@ class ExchangeChangQiao(Exchange):
             "15m": timedelta(days=90),
             "30m": timedelta(days=240),
             "60m": timedelta(days=365),
-            "d": timedelta(days=365 * 2),
+            "d": timedelta(days=365 * 10),
             "w": timedelta(days=365 * 10),
             "m": timedelta(days=365 * 20),
         }
@@ -202,21 +202,15 @@ class ExchangeChangQiao(Exchange):
 
             end_str = end_dt.isoformat()  # end_dt 始终有值
 
-            print(f"Custom frequency '{frequency}'. Fetching '1m' base data...")
             base_klines = self.klines(code, "1m", base_start_str, end_str, args)
 
             if base_klines is None or base_klines.empty:
-                print("No base data found for resampling.")
                 return pd.DataFrame()
 
-            print("Skipping resampling for this example.")
             return base_klines  # 仅为示例
 
         period = period_map[frequency]
-        adjust = AdjustType.NoAdjust
-        if args and "adjust" in args:
-            if args["adjust"] == "qfq":
-                adjust = AdjustType.ForwardAdjust
+        adjust = AdjustType.ForwardAdjust
 
         # *** 5. API 调用 (使用 offset 进行分页) ***
         try:
@@ -228,11 +222,8 @@ class ExchangeChangQiao(Exchange):
             MAX_LOOPS = 100
             loop_count = 0
 
-            print(f"Fetching data for {code} ({frequency}). Range: {start_dt} -> {end_dt}")
-
             while loop_count < MAX_LOOPS:
                 loop_count += 1
-                print(f"--- Pagination loop {loop_count}: Fetching 1000 bars *before* {current_page_end_dt} ---")
 
                 # *** 使用 history_candlesticks_by_offset ***
                 candlesticks = self.quote_ctx.history_candlesticks_by_offset(
@@ -241,14 +232,13 @@ class ExchangeChangQiao(Exchange):
                     adjust_type=adjust,
                     forward=False,  # <-- 核心：获取之前的数据 (renamed from is_next)
                     count=1000,  # <-- 核心：每次获取 1000 条
-                    time=current_page_end_dt  # <-- 核心：分页光标 (renamed from end_time)
+                    time=current_page_end_dt,  # <-- 核心：分页光标 (renamed from end_time)
+                    trade_sessions=TradeSessions.Intraday
                 )
 
                 if not candlesticks:
-                    print("API returned no data for this page. Breaking loop.")
                     break
 
-                print(f"API returned {len(candlesticks)} items.")
 
                 # 获取这批数据中最早的 K 线时间
                 try:
@@ -280,7 +270,6 @@ class ExchangeChangQiao(Exchange):
                     # 添加到字典并终止
                     for c in final_batch:
                         all_candles_dict[c.timestamp] = c
-                    print(f"Reached start_dt ({start_dt}). Added {len(final_batch)} final items. Breaking loop.")
                     break
                 else:
                     # 否，这整批数据都在我们的范围内
@@ -289,21 +278,16 @@ class ExchangeChangQiao(Exchange):
 
                 # 为下一次循环设置分页光标
                 current_page_end_dt = oldest_candle_dt
-                print(f"Next page will fetch before: {current_page_end_dt}")
 
                 # 如果 API 返回的K线少于 1000, 说明已到历史尽头
                 if len(candlesticks) < 1000:
-                    print(f"API returned {len(candlesticks)} items (< 1000). Assuming end of history. Breaking loop.")
                     break
 
-            if loop_count == MAX_LOOPS:
-                print(f"Warning: klines fetch for {code} reached MAX_LOOPS ({MAX_LOOPS}). Data might be incomplete.")
 
             # 从字典中获取所有 K 线
             all_candlesticks = list(all_candles_dict.values())
 
             if not all_candlesticks:
-                print("No candlesticks fetched.")
                 return pd.DataFrame()
 
             # 6. 构建 DataFrame
@@ -326,7 +310,6 @@ class ExchangeChangQiao(Exchange):
             return df[["date", "frequency", "code", "open", "high", "low", "close", "volume"]]
 
         except Exception as e:
-            print(f"Error in klines: {e}")
             import traceback
             traceback.print_exc()
             return pd.DataFrame()
