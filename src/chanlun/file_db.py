@@ -18,7 +18,7 @@ from chanlun.core.cl_interface import ICL
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import Exchange
-
+from chanlun.tools.log_util import LogUtil
 
 class FileCacheDB(object):
     """
@@ -187,110 +187,107 @@ class FileCacheDB(object):
         return True
 
     def get_web_cl_data(
-        self,
-        market: str,
-        code: str,
-        frequency: str,
-        cl_config: dict,
-        klines: pd.DataFrame,
-    ) -> ICL:
+            self,
+            market: str,
+            code: str,
+            frequency: str,
+            cl_config: dict,
+            klines: pd.DataFrame,
+    ) -> 'ICL':
         """
         获取web缓存的的缠论数据对象
         """
+        logger = LogUtil.get_logger()  # 获取日志实例
         key = self._config_md5(cl_config)
 
+        # 统一标识符用于日志输出
+        log_id = f"[{market}-{code}-{frequency}-{key}]"
+
         file_pathname = (
-            self.cl_data_path
-            / market
-            / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
+                self.cl_data_path
+                / market
+                / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
         )
-        cd: ICL = cl.CL(code, frequency, cl_config)
-        try:
-            if file_pathname.is_file():
-                # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
+
+        cd: 'ICL' = cl.CL(code, frequency, cl_config)
+        need_recompute = False
+
+        if file_pathname.is_file():
+            try:
+                with open(file_pathname, "rb") as fp:
+                    cd = pickle.load(fp)
+
+                # --- 校验逻辑 ---
+                cached_klines = cd.get_src_klines()
+
+                if len(cached_klines) > 0 and len(klines) > 0:
+                    # 1. 连续性校验：判断缓存末尾是否在给定数据时间范围之外
+                    if cached_klines[-1].date < klines.iloc[0]["date"] or cached_klines[0].date > klines.iloc[0][
+                        "date"]:
+                        logger.warning(f"{log_id} 历史数据错位/不连续，将全量重算")
+                        need_recompute = True
+
+                    # 2. 数据一致性校验（防止复权导致的历史数据变更）
+                    if not need_recompute and len(cached_klines) >= 2 and len(klines) >= 2:
+                        cd_pre_kline = cached_klines[-2]
+                        target_rows = klines[klines["date"] == cd_pre_kline.date]
+
+                        if len(target_rows) == 0:
+                            logger.warning(f"{log_id} 缓存参考点日期在输入数据中不存在，重算")
+                            need_recompute = True
+                        else:
+                            row = target_rows.iloc[0]
+                            # 校验 OHLCVA
+                            is_diff = (
+                                    Decimal(str(row["close"])) != Decimal(str(cd_pre_kline.c)) or
+                                    Decimal(str(row["high"])) != Decimal(str(cd_pre_kline.h)) or
+                                    Decimal(str(row["low"])) != Decimal(str(cd_pre_kline.l)) or
+                                    Decimal(str(row["open"])) != Decimal(str(cd_pre_kline.o)) or
+                                    Decimal(str(row["volume"])) != Decimal(str(cd_pre_kline.a))
+                            )
+                            if is_diff:
+                                logger.warning(f"{log_id} 检测到历史数据差异（可能发生复权），重算")
+                                need_recompute = True
+
+                    # 3. 密度校验：检查最近100根K线数量是否对得上
+                    if not need_recompute and len(cached_klines) >= 100 and len(klines) >= 100:
+                        _v_cd = cached_klines[-100:]
+                        _v_src = klines[(klines["date"] >= _v_cd[0].date) & (klines["date"] <= _v_cd[-1].date)]
+                        if len(_v_cd) != len(_v_src):
+                            logger.warning(f"{log_id} 局部数据缺失 [Cache:{len(_v_cd)} vs Src:{len(_v_src)}]，重算")
+                            need_recompute = True
+
+                if need_recompute:
+                    cd = cl.CL(code, frequency, cl_config)
+
+            except Exception as e:
+                logger.error(f"{log_id} 读取缓存或校验过程异常: {str(e)}", exc_info=True)
                 try:
-                    with open(file_pathname, "rb") as fp:
-                        cd = pickle.load(fp)
-                except Exception:
-                    # 读取失败（可能并发写入未完成），清理损坏文件后走全量重算
-                    try:
+                    if file_pathname.exists():
                         file_pathname.unlink()
-                    except Exception:
-                        pass
-                    cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的最后k线是否大于给定的最新一根k线时间，如果小于说明直接有断档，不连续，重新全量重新计算
-                if (
-                    len(cd.get_src_klines()) > 0
-                    and len(klines) > 0
-                    and (
-                        cd.get_src_klines()[-1].date < klines.iloc[0]["date"]
-                        or cd.get_src_klines()[0].date > klines.iloc[0]["date"]
-                    )
-                ):
-                    # print(
-                    #     f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
-                    # )
-                    cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的数据，与给定的K线数据是否有差异，有则表示数据有变（比如复权会产生变化），则重新全量计算
-                if len(cd.get_src_klines()) >= 2 and len(klines) >= 2:
-                    cd_pre_kline = cd.get_src_klines()[-2]
-                    src_klines = klines[klines["date"] == cd_pre_kline.date]
-                    # 计算后的数据没有最开始的日期或者 开高低收其中有不同的，则重新计算
-                    if (
-                        len(src_klines) == 0
-                        or Decimal(src_klines.iloc[0]["close"])
-                        != Decimal(cd_pre_kline.c)
-                        or Decimal(src_klines.iloc[0]["high"])
-                        != Decimal(cd_pre_kline.h)
-                        or Decimal(src_klines.iloc[0]["low"]) != Decimal(cd_pre_kline.l)
-                        or Decimal(src_klines.iloc[0]["open"])
-                        != Decimal(cd_pre_kline.o)
-                        or Decimal(src_klines.iloc[0]["volume"])
-                        != Decimal(cd_pre_kline.a)
-                    ):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key}",
-                        #     cd_pre_kline,
-                        #     src_klines.iloc[0].to_dict(),
-                        # )
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
-                        # )
-                        # print(cd_pre_kline, src_klines)
-                        cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的最近一百根时间范围内的数量是否一致
-                if len(cd.get_src_klines()) >= 100 and len(klines) >= 100:
-                    _valid_cd_klines = cd.get_src_klines()[-100:]
-                    _valid_src_klines = klines[
-                        (klines["date"] >= _valid_cd_klines[0].date)
-                        & (klines["date"] <= _valid_cd_klines[-1].date)
-                    ]
-                    if len(_valid_cd_klines) != len(_valid_src_klines):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
-                        # )
-                        cd = cl.CL(code, frequency, cl_config)
-        except Exception:
-            if file_pathname.is_file():
-                # print(
-                #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
-                # )
-                try:
-                    file_pathname.unlink()
-                except Exception:
-                    pass
+                except Exception as un_e:
+                    logger.error(f"{log_id} 尝试删除损坏缓存失败: {str(un_e)}")
+                cd = cl.CL(code, frequency, cl_config)
 
-        cd.process_klines(klines)
+        # 增量计算
+        try:
+            cd.process_klines(klines)
+        except Exception as e:
+            logger.error(f"{log_id} 执行缠论计算 process_klines 失败: {str(e)}", exc_info=True)
+            return cd  # 或者按需抛出
 
-
+        # 写入缓存
         try:
             self._atomic_write_pickle(file_pathname, cd)
         except Exception as e:
-            print(f"写入缓存异常 {market} {code} {frequency} - {e}")
+            logger.error(f"{log_id} 写入缓存异常: {str(e)}")
 
-        # 加一个随机概率，去清理历史的缓存，避免太多占用空间
+        # 随机清理旧数据
         if random.randint(0, 1000) <= 5:
-            self.clear_old_web_cl_data()
+            try:
+                self.clear_old_web_cl_data()
+            except Exception as e:
+                logger.error(f"清理旧缓存数据异常: {str(e)}")
 
         return cd
 
