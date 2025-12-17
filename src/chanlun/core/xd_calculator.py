@@ -192,15 +192,24 @@ class XdCalculator:
             return None
 
         try:
-            # 找到目标特征序列笔对应的主序列笔，其前一笔就是线段的结束笔
+            # 方法1：先检查 target_bi.index 是否可靠
             idx = target_bi.index
-            if idx > 0:
+            if 0 < idx < len(all_bis) and all_bis[idx] == target_bi:
                 return all_bis[idx - 1]
-            else:
+
+            # 方法2：如果索引不可靠，则在列表中查找该笔的实际位置
+            try:
+                real_idx = all_bis.index(target_bi)
+                if real_idx > 0:
+                    return all_bis[real_idx - 1]
                 return None
-        except ValueError:
-            return None
-        except AttributeError:
+            except ValueError:
+                LogUtil.warning(
+                    f"目标笔在当前的 all_bis 列表中未找到，无法定位前一笔。target_bi index: {target_bi.index}")
+                return None
+
+        except Exception as e:
+            LogUtil.error(f"获取线段结束笔时发生未知异常: {e}")
             return None
 
     def _get_extremum_bi_from_cs(self, cs_bi: dict) -> BI:
@@ -265,12 +274,15 @@ class XdCalculator:
                     break
 
             if not found:
-                LogUtil.warning("无法在'bis'列表中定位上一线段的起点，将执行全量计算。")
+                LogUtil.warning("XdCalculator: 无法在'bis'列表中定位上一线段的起点，将执行全量计算。")
                 self.xds.clear()
                 is_incremental = False
                 start_bi_index = self._find_critical_bi_and_truncate(all_bis)
+            else:
+                LogUtil.info(f"XdCalculator: 增量计算模式。从笔索引 {start_bi_index} (线段 {len(self.xds)}) 继续计算。")
         else:
             # 全量计算模式
+            LogUtil.info("XdCalculator: 全量计算模式。")
             self.xds.clear()
             is_incremental = False
             start_bi_index = self._find_critical_bi_and_truncate(all_bis)
@@ -538,20 +550,52 @@ class XdCalculator:
                     if not pending_bis:
                         break
 
-                    # 3. 根据线段方向修正终点：
-                    # 规则：向上线段(up)必须结束于向上笔(up)，向下线段(down)必须结束于向下笔(down)
                     seg_type = current_segment['type']
-                    last_valid_index = -1
 
-                    # 从后往前遍历，找到第一个与线段方向一致的笔
+                    # 3. 寻找最佳终点 (回退逻辑)
+                    # 步骤 A: 先找到列表末尾第一个方向匹配的笔的索引
+                    last_valid_index = -1
                     for i in range(len(pending_bis) - 1, -1, -1):
                         if pending_bis[i].type == seg_type:
                             last_valid_index = i
                             break
 
+                    # 步骤 B: 执行回退比较逻辑
                     if last_valid_index != -1:
+                        # 从找到的那个笔的前一个位置开始往前找，对比同向笔的高低点
+                        # 注意：这里需要循环往前找，因为中间可能隔着反向笔
+                        current_check_idx = last_valid_index - 1
+                        while current_check_idx >= 0:
+                            bi_to_compare = pending_bis[current_check_idx]
+
+                            if bi_to_compare.type == seg_type:
+                                # 找到了前一个同向笔，开始比较
+                                current_best_bi = pending_bis[last_valid_index]
+
+                                should_backtrack = False
+                                if seg_type == 'up':
+                                    # 向上线段：如果当前暂定终点(last) 低于 前一个同向笔(compare)，则回退
+                                    if current_best_bi.high < bi_to_compare.high:
+                                        should_backtrack = True
+                                else:  # down
+                                    # 向下线段：如果当前暂定终点(last) 高于 前一个同向笔(compare)，则回退
+                                    if current_best_bi.low > bi_to_compare.low:
+                                        should_backtrack = True
+
+                                if should_backtrack:
+                                    # 确认回退：将最佳终点更新为前一个笔
+                                    last_valid_index = current_check_idx
+                                    # 继续向前循环，看是否还有更高的(up)或更低的(down)
+                                else:
+                                    # 如果当前暂定终点表现更好（或相等），则停止回退，这就我们想要的暂定极值
+                                    break
+
+                            current_check_idx -= 1
+
+                        # 步骤 C: 根据最终确定的索引截取列表
                         pending_bis = pending_bis[:last_valid_index + 1]
                     else:
+                        # 没有找到同向笔，异常情况，不生成线段
                         break
 
                     if not pending_bis:
@@ -570,7 +614,7 @@ class XdCalculator:
                     pending_xd.high = max(bi.high for bi in pending_bis)
                     pending_xd.low = min(bi.low for bi in pending_bis)
 
-                    # 对于未完成线段，中枢高低点暂时取线段的高低点
+                    # 对于未完成线段，中枢暂时取自身高低点
                     pending_xd.zs_high = pending_xd.high
                     pending_xd.zs_low = pending_xd.low
 
