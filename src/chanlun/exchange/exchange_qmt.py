@@ -220,7 +220,8 @@ class ExchangeQMT(Exchange):
             field_list=[],
             stock_list=[qmt_code],
             period=frequency_map[frequency],
-            start_time=start_date.replace("-", "") if start_date else "",
+            # 修复：同时替换掉 空格 和 冒号，确保格式为 YYYYMMDDHHMMSS
+            start_time=start_date.replace("-", "").replace(" ", "").replace(":", "") if start_date else "",
             end_time="",
             count=req_counts,
             dividend_type=dividend_type,

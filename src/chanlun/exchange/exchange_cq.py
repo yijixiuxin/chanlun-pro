@@ -11,6 +11,7 @@ from chanlun import fun
 from chanlun.exchange import Exchange
 from chanlun.exchange.exchange import Tick
 from chanlun.fun import str_to_datetime
+from chanlun.tools.log_util import LogUtil
 
 # 统一时区设置
 __tz = pytz.timezone("Asia/Shanghai")
@@ -322,17 +323,33 @@ class ExchangeChangQiao(Exchange):
             quotes = self.quote_ctx.quote(codes)
             res = {}
             for q in quotes:
+                # 提取并转换数值，用于计算
+                last_done = float(q.last_done)
+                prev_close = float(q.prev_close)
+
+                # 计算涨跌幅 (Rate)
+                # 公式: (最新价 - 昨收价) / 昨收价 * 100
+                if prev_close > 0:
+                    cal_rate = ((last_done - prev_close) / prev_close) * 100
+                    # 通常保留2位小数
+                    cal_rate = round(cal_rate, 2)
+                else:
+                    cal_rate = 0.0
+
                 res[q.symbol] = Tick(
                     code=q.symbol,
-                    last=float(q.last_done),
+                    last=last_done,
+                    buy1=0.0,
+                    sell1=0.0,
                     high=float(q.high),
                     low=float(q.low),
                     open=float(q.open),
-                    volume=q.volume
+                    volume=float(q.volume),
+                    rate=cal_rate
                 )
             return res
         except Exception as e:
-            print(f"Error in ticks: {e}")
+            LogUtil.error(f"Error in ticks: {e}")
             return {}
 
     def stock_info(self, code: str) -> Union[Dict, None]:
