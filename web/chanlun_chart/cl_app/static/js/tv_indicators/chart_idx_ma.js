@@ -6,7 +6,7 @@ var TvIdxMA = (function () {
         metainfo: {
           _metainfoVersion: 53,
           id: "CustomIndicatorsMA@tv-basicstudies-1",
-          description: "东@MA均线",
+          description: "MA均线",
           shortDescription: "MA均线",
           is_price_study: true,
           isCustomIndicator: true,
@@ -78,17 +78,8 @@ var TvIdxMA = (function () {
                 trackPrice: false,
                 transparency: 0,
                 visible: true,
-                color: "#FFFFFF", // 白色 - 5日均线
-              },
-              plot_ma8: {
-                linestyle: 0,
-                linewidth: 1,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#FFD700", // 金色 - 8日均线
-              },
+                color: "#FFA500", // 橙色 - 5日均线
+              }
               plot_ma10: {
                 linestyle: 0,
                 linewidth: 1,
@@ -96,106 +87,52 @@ var TvIdxMA = (function () {
                 trackPrice: false,
                 transparency: 0,
                 visible: true,
-                color: "#FFA500", // 橙色 - 10日均线
+                color: "#00BFFF", // 浅蓝 - 10日均线
               },
-              plot_ma13: {
+              plot_ma20: {
                 linestyle: 0,
                 linewidth: 1,
                 plottype: 0,
                 trackPrice: false,
                 transparency: 0,
-                visible: true,
-                color: "#FFFF00", // 黄色 - 13日均线
-              },
-              plot_ma20: {
-                linestyle: 0,
-                linewidth: 2,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#FF69B4", // 粉红色 - 20日均线
-              },
-              plot_ma21: {
-                linestyle: 0,
-                linewidth: 2,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#FF1493", // 深粉色 - 21日均线
+                visible: false,
+                color: "#FF00FF", // 紫红 - 20日均线
               },
               plot_ma30: {
                 linestyle: 0,
-                linewidth: 2,
+                linewidth: 1,
                 plottype: 0,
                 trackPrice: false,
                 transparency: 0,
-                visible: true,
-                color: "#FF0000", // 红色 - 30日均线
-              },
-              plot_ma34: {
-                linestyle: 0,
-                linewidth: 2,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#FF6B6B", // 浅红色 - 34日均线
-              },
-              plot_ma55: {
-                linestyle: 0,
-                linewidth: 2,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#00FF00", // 绿色 - 55日均线
+                visible: false,
+                color: "#0000FF", // 蓝色 - 30日均线
               },
               plot_ma60: {
                 linestyle: 0,
-                linewidth: 3,
+                linewidth: 1,
                 plottype: 0,
                 trackPrice: false,
                 transparency: 0,
-                visible: true,
-                color: "#32CD32", // 酸橙绿 - 60日均线
-              },
-              plot_ma89: {
-                linestyle: 0,
-                linewidth: 3,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#00FFFF", // 青色 - 89日均线
+                visible: false,
+                color: "#00FF00", // 绿色 - 60日均线
               },
               plot_ma120: {
                 linestyle: 0,
-                linewidth: 3,
+                linewidth: 1,
                 plottype: 0,
                 trackPrice: false,
                 transparency: 0,
-                visible: true,
-                color: "#4ECDC4", // 青蓝色 - 120日均线
-              },
-              plot_ma144: {
-                linestyle: 0,
-                linewidth: 3,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: true,
-                color: "#0080FF", // 蓝色 - 144日均线
+                visible: false,
+                color: "#00FFFF", // 青色 - 120日均线
               },
               plot_ma250: {
                 linestyle: 0,
-                linewidth: 4,
+                linewidth: 1,
                 plottype: 0,
                 trackPrice: false,
                 transparency: 0,
-                visible: true,
-                color: "#8A2BE2", // 蓝紫色 - 250日均线
+                visible: false,
+                color: "#FF0000", // 红色 - 250日均线
               },
             },
             inputs: {},
@@ -206,52 +143,24 @@ var TvIdxMA = (function () {
               title: "MA5",
               histogramBase: 0,
             },
-            plot_ma8: {
-              title: "MA8",
-              histogramBase: 0,
-            },
             plot_ma10: {
               title: "MA10",
-              histogramBase: 0,
-            },
-            plot_ma13: {
-              title: "MA13",
               histogramBase: 0,
             },
             plot_ma20: {
               title: "MA20",
               histogramBase: 0,
             },
-            plot_ma21: {
-              title: "MA21",
-              histogramBase: 0,
-            },
             plot_ma30: {
               title: "MA30",
-              histogramBase: 0,
-            },
-            plot_ma34: {
-              title: "MA34",
-              histogramBase: 0,
-            },
-            plot_ma55: {
-              title: "MA55",
               histogramBase: 0,
             },
             plot_ma60: {
               title: "MA60",
               histogramBase: 0,
             },
-            plot_ma89: {
-              title: "MA89",
-              histogramBase: 0,
-            },
             plot_ma120: {
               title: "MA120",
-              histogramBase: 0,
-            },
-            plot_ma144: {
-              title: "MA144",
               histogramBase: 0,
             },
             plot_ma250: {
