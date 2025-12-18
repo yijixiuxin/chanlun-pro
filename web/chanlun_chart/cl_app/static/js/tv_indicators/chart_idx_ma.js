@@ -16,15 +16,7 @@ var TvIdxMA = (function () {
               type: "line",
             },
             {
-              id: "plot_ma8",
-              type: "line",
-            },
-            {
               id: "plot_ma10",
-              type: "line",
-            },
-            {
-              id: "plot_ma13",
               type: "line",
             },
             {
@@ -32,35 +24,11 @@ var TvIdxMA = (function () {
               type: "line",
             },
             {
-              id: "plot_ma21",
-              type: "line",
-            },
-            {
-              id: "plot_ma30",
-              type: "line",
-            },
-            {
-              id: "plot_ma34",
-              type: "line",
-            },
-            {
-              id: "plot_ma55",
-              type: "line",
-            },
-            {
               id: "plot_ma60",
               type: "line",
             },
             {
-              id: "plot_ma89",
-              type: "line",
-            },
-            {
               id: "plot_ma120",
-              type: "line",
-            },
-            {
-              id: "plot_ma144",
               type: "line",
             },
             {
@@ -79,7 +47,7 @@ var TvIdxMA = (function () {
                 transparency: 0,
                 visible: true,
                 color: "#FFA500", // 橙色 - 5日均线
-              }
+              },
               plot_ma10: {
                 linestyle: 0,
                 linewidth: 1,
@@ -97,15 +65,6 @@ var TvIdxMA = (function () {
                 transparency: 0,
                 visible: false,
                 color: "#FF00FF", // 紫红 - 20日均线
-              },
-              plot_ma30: {
-                linestyle: 0,
-                linewidth: 1,
-                plottype: 0,
-                trackPrice: false,
-                transparency: 0,
-                visible: false,
-                color: "#0000FF", // 蓝色 - 30日均线
               },
               plot_ma60: {
                 linestyle: 0,
@@ -151,10 +110,6 @@ var TvIdxMA = (function () {
               title: "MA20",
               histogramBase: 0,
             },
-            plot_ma30: {
-              title: "MA30",
-              histogramBase: 0,
-            },
             plot_ma60: {
               title: "MA60",
               histogramBase: 0,
@@ -187,18 +142,10 @@ var TvIdxMA = (function () {
 
             // 计算各周期简单移动平均线
             const ma5 = PineJS.Std.sma(c, 5, this._context);
-            const ma8 = PineJS.Std.sma(c, 8, this._context);
             const ma10 = PineJS.Std.sma(c, 10, this._context);
-            const ma13 = PineJS.Std.sma(c, 13, this._context);
             const ma20 = PineJS.Std.sma(c, 20, this._context);
-            const ma21 = PineJS.Std.sma(c, 21, this._context);
-            const ma30 = PineJS.Std.sma(c, 30, this._context);
-            const ma34 = PineJS.Std.sma(c, 34, this._context);
-            const ma55 = PineJS.Std.sma(c, 55, this._context);
             const ma60 = PineJS.Std.sma(c, 60, this._context);
-            const ma89 = PineJS.Std.sma(c, 89, this._context);
             const ma120 = PineJS.Std.sma(c, 120, this._context);
-            const ma144 = PineJS.Std.sma(c, 144, this._context);
             const ma250 = PineJS.Std.sma(c, 250, this._context);
 
             return [
