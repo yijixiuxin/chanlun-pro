@@ -324,9 +324,19 @@ class ChartManager {
     this.widget.onChartReady(() => {
       this.chart = this.widget.activeChart();
       if (!this.chart) return;
+      // 延迟加载默认指标 ---
       setTimeout(() => {
           const studies = this.chart.getAllStudies();
-          if (!studies.some(s => s.name === 'MACD')) { this.chart.createStudy('MACD', false, false).catch(()=>{}); }
+
+          // 1. 原有的 MACD 加载逻辑
+          if (!studies.some(s => s.name === 'MACD')) {
+              this.chart.createStudy('MACD', false, false).catch(()=>{});
+          }
+
+          // 2. 加载 MA均线
+          if (!studies.some(s => s.name === 'MA均线')) {
+              this.chart.createStudy('MA均线', false, false).catch(e => console.log("MA加载失败", e));
+          }
       }, 1000);
       this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
       this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
