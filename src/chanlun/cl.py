@@ -231,28 +231,39 @@ class CL(ICL):
         """
         严格按照时间优先级原则处理包含关系
         """
-        self.cl_klines = []
         if len(self.klines) == 0:
+            self.cl_klines = []
             return
 
-        k0 = self.klines[0]
-        ck0 = CLKline(
-            k_index=k0.index,
-            date=k0.date,
-            h=k0.h,
-            l=k0.l,
-            o=k0.o,
-            c=k0.c,
-            a=k0.a,
-            klines=[k0],
-            index=0,
-            _n=1
-        )
-        self.cl_klines.append(ck0)
+        start_idx = 0
+        direction = None
 
-        direction = None  # 初始方向未知
+        if len(self.cl_klines) > 0:
+            # 增量更新：弹出最后一个缠论K线，重新计算
+            last_ck = self.cl_klines.pop()
+            start_idx = last_ck.klines[0].index
+            # 恢复之前的方向
+            if len(self.cl_klines) > 0:
+                direction = self.cl_klines[-1].up_qs
+        else:
+            # 全量计算：初始化第一个K线
+            k0 = self.klines[0]
+            ck0 = CLKline(
+                k_index=k0.index,
+                date=k0.date,
+                h=k0.h,
+                l=k0.l,
+                o=k0.o,
+                c=k0.c,
+                a=k0.a,
+                klines=[k0],
+                index=0,
+                _n=1
+            )
+            self.cl_klines.append(ck0)
+            start_idx = 1
 
-        for i in range(1, len(self.klines)):
+        for i in range(start_idx, len(self.klines)):
             k = self.klines[i]
             last_ck = self.cl_klines[-1]
 
@@ -311,18 +322,27 @@ class CL(ICL):
         """
         严格按照缠论理论识别分型
         """
-        self.fxs = []
         if len(self.cl_klines) < 3:
+            self.fxs = []
             return
 
         fx_qj = self.config["fx_qj"]
         fx_bh = self.config["fx_bh"]
         
+        # 增量更新：清理可能失效的分型
+        # 最后一个CL_Kline可能发生了变化，所以涉及最后几个CL_Kline的分型都需要重算
+        while len(self.fxs) > 0 and self.fxs[-1].k.index >= len(self.cl_klines) - 2:
+            self.fxs.pop()
+            
+        start_idx = 1
+        if len(self.fxs) > 0:
+            start_idx = self.fxs[-1].k.index + 1
+        
         # 临时存储所有候选分型
         candidate_fxs = []
         
         # 分型识别应在无包含K线序列上进行
-        for i in range(1, len(self.cl_klines) - 1):
+        for i in range(start_idx, len(self.cl_klines) - 1):
             k1 = self.cl_klines[i-1]
             k2 = self.cl_klines[i]
             k3 = self.cl_klines[i+1]
@@ -376,7 +396,7 @@ class CL(ICL):
                     k=k2,
                     klines=[k1, k2, k3],
                     val=val,
-                    index=len(candidate_fxs),
+                    index=len(self.fxs) + len(candidate_fxs),
                     done=True
                 )
                 candidate_fxs.append(fx)
@@ -385,10 +405,12 @@ class CL(ICL):
         if not candidate_fxs:
             return
             
-        # 从第一个分型开始
-        self.fxs.append(candidate_fxs[0])
-        
-        for i in range(1, len(candidate_fxs)):
+        # 如果 self.fxs 为空，初始化第一个
+        if not self.fxs:
+            self.fxs.append(candidate_fxs[0])
+            candidate_fxs = candidate_fxs[1:]
+            
+        for i in range(len(candidate_fxs)):
             current_fx = candidate_fxs[i]
             last_fx = self.fxs[-1]
             
@@ -403,6 +425,8 @@ class CL(ICL):
                 # 不同类型分型，检查是否包含
                 if not self._is_fx_included(last_fx, current_fx):
                     # 不包含，可以添加
+                    # 重新设置 index
+                    current_fx.index = len(self.fxs)
                     self.fxs.append(current_fx)
                 else:
                     # 包含关系，保留更重要的分型（通常保留前一个）
@@ -426,7 +450,7 @@ class CL(ICL):
             return src_k_num >= 5 and ck_diff >= 4
         elif bi_type == Config.BI_TYPE_NEW.value:
             # 新笔：分型之间至少5根原始K线，且不共用缠论K线（至少一根独立缠论K线）
-            return src_k_num >= 5 and ck_diff >= 4
+            return src_k_num >= 5 and ck_diff >= 3
         elif bi_type == Config.BI_TYPE_JDB.value:
             # 简单笔：至少5根原始K线即可
             return src_k_num >= 5
@@ -579,39 +603,46 @@ class CL(ICL):
         """
         严格按照缠论理论划分笔
         """
-        self.bis = []
         if len(self.fxs) < 2:
+            self.bis = []
             return
 
         bi_type = self.config["bi_type"]
+
+        # 增量更新：清理失效的笔
+        # 笔依赖于分型，如果分型被清理了，对应的笔也要清理
+        last_fx_index = self.fxs[-1].index
+        while len(self.bis) > 0 and self.bis[-1].end.index > last_fx_index:
+             self.bis.pop()
         
-        # 1. 找到第一个有效的笔
-        start_fx = self.fxs[0]
-        idx = 1
-        
-        while idx < len(self.fxs):
-            end_fx = self.fxs[idx]
+        # 1. 如果没有笔，则全量计算
+        if len(self.bis) == 0:
+            start_fx = self.fxs[0]
+            idx = 1
             
-            if self.check_bi_valid(start_fx, end_fx, bi_type):
-                bi = BI(
-                    start=start_fx,
-                    end=end_fx,
-                    _type="down" if start_fx.type == "ding" else "up",
-                    index=len(self.bis)
-                )
-                bi.high, bi.low = self._bi_high_low(start_fx, end_fx)
-                self.bis.append(bi)
-                break
-            
-            # 更新起始分型（同类型且更极值）
-            if start_fx.type == end_fx.type:
-                if start_fx.type == "ding" and end_fx.val >= start_fx.val:
-                    start_fx = end_fx
-                elif start_fx.type == "di" and end_fx.val <= start_fx.val:
-                    start_fx = end_fx
-            
-            idx += 1
-            
+            while idx < len(self.fxs):
+                end_fx = self.fxs[idx]
+                
+                if self.check_bi_valid(start_fx, end_fx, bi_type):
+                    bi = BI(
+                        start=start_fx,
+                        end=end_fx,
+                        _type="down" if start_fx.type == "ding" else "up",
+                        index=len(self.bis)
+                    )
+                    bi.high, bi.low = self._bi_high_low(start_fx, end_fx)
+                    self.bis.append(bi)
+                    break
+                
+                # 更新起始分型（同类型且更极值）
+                if start_fx.type == end_fx.type:
+                    if start_fx.type == "ding" and end_fx.val >= start_fx.val:
+                        start_fx = end_fx
+                    elif start_fx.type == "di" and end_fx.val <= start_fx.val:
+                        start_fx = end_fx
+                
+                idx += 1
+                
         if not self.bis:
             return
             
@@ -1114,6 +1145,10 @@ class CL(ICL):
         """
         处理未完成线段
         """
+        # 防御性编程：如果已经有未完成的线段，不再添加
+        if len(self.xds) > 0 and not self.xds[-1].done:
+            return
+
         if len(self.xds) > 0:
             last_xd = self.xds[-1]
             # 如果最后有剩余笔，创建未完成线段
@@ -1174,12 +1209,23 @@ class CL(ICL):
         严格按照缠论理论划分线段，基于特征序列分型
         修复：添加基本重叠条件检查，修正线段结束点判断
         """
-        self.xds = []
         if len(self.bis) < 3:
+            self.xds = []
             return
+
+        # 增量更新：清理未完成的线段和失效线段
+        while len(self.xds) > 0 and not self.xds[-1].done:
+            self.xds.pop()
+            
+        # 检查线段是否有效（依赖的笔是否被清理）
+        while len(self.xds) > 0 and self.xds[-1].end_line.index >= len(self.bis):
+             self.xds.pop()
 
         # 严格按照缠论理论进行线段划分
         i = 0
+        if len(self.xds) > 0:
+             i = self.xds[-1].end_line.index + 1
+             
         while i < len(self.bis) - 2:
             # 确定线段起始点
             start_bi = self.bis[i]
@@ -1268,10 +1314,10 @@ class CL(ICL):
                 zg = min(l1.high, l2.high, l3.high)
                 zd = max(l1.low, l2.low, l3.low)
                 if zg > zd:
-                    # Check overlap ratio > 2/3 of fluctuation range
+                    # Check overlap ratio > 1/3 of fluctuation range
                     overlap_height = zg - zd
                     total_range = max(l1.high, l2.high, l3.high) - min(l1.low, l2.low, l3.low)
-                    if total_range > 0 and overlap_height <= total_range * (2/3):
+                    if total_range > 0 and overlap_height <= total_range * (1/3):
                         i += 1
                         continue
 

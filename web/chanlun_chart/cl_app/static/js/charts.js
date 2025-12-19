@@ -452,12 +452,38 @@ class ChartManager {
 
     // 绘制分型
     if (barsResult.fxs) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.fxs.forEach((fx) => {
+        if (fx.points?.[0]?.time >= from) {
+          validTimes.add(fx.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.fxs.length - 1; i >= 0; i--) {
+        const item = chartContainer.fxs[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.fxs.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.fxs.forEach((fx) => {
         if (fx.points?.[0]?.time >= from) {
           const key = JSON.stringify(fx);
-          // 检查，如果 chartContainer.fxs 中，有 key 的值，则跳过
-          const existed = chartContainer.fxs.find((item) => item.key === key);
-          if (existed) return;
+          
+          // 查找是否存在相同时间的分型
+          const existingIndex = chartContainer.fxs.findIndex((item) => item.time === fx.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.fxs[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.fxs.splice(existingIndex, 1);
+          }
+
           chartContainer.fxs.push({
             time: fx.points[0].time,
             key,
@@ -469,12 +495,38 @@ class ChartManager {
 
     // 绘制笔
     if (barsResult.bis) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.bis.forEach((bi) => {
+        if (bi.points?.[0]?.time >= from) {
+          validTimes.add(bi.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素（处理起始点变化的情况）
+      for (let i = chartContainer.bis.length - 1; i >= 0; i--) {
+        const item = chartContainer.bis[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.bis.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.bis.forEach((bi) => {
         if (bi.points?.[0]?.time >= from) {
           const key = JSON.stringify(bi);
-          const existed = chartContainer.bis.find((item) => item.key === key);
-          if (existed) return;
           
+          // 查找是否存在相同时间的笔
+          const existingIndex = chartContainer.bis.findIndex((item) => item.time === bi.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.bis[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.bis.splice(existingIndex, 1);
+          }
+
           // 根据确认状态设置不同的颜色和线宽
           const isConfirmed = bi.confirmed !== false; // 默认为已确认
           const lineColor = isConfirmed ? CHART_CONFIG.COLORS.BI : "#4e4c4cff"; // 未确认笔使用灰色
@@ -496,11 +548,38 @@ class ChartManager {
 
     // 绘制线段
     if (barsResult.xds) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.xds.forEach((xd) => {
+        if (xd.points?.[0]?.time >= from) {
+          validTimes.add(xd.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素（处理起始点变化的情况）
+      for (let i = chartContainer.xds.length - 1; i >= 0; i--) {
+        const item = chartContainer.xds[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.xds.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.xds.forEach((xd) => {
         if (xd.points?.[0]?.time >= from) {
           const key = JSON.stringify(xd);
-          const existed = chartContainer.xds.find((item) => item.key === key);
-          if (existed) return;
+          
+          // 查找是否存在相同时间的线段
+          const existingIndex = chartContainer.xds.findIndex((item) => item.time === xd.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.xds[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.xds.splice(existingIndex, 1);
+          }
+
           chartContainer.xds.push({
             time: xd.points[0].time,
             key,
@@ -515,11 +594,38 @@ class ChartManager {
 
     // 绘制走势段
     if (barsResult.zsds) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.zsds.forEach((zsd) => {
+        if (zsd.points?.[0]?.time >= from) {
+          validTimes.add(zsd.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.zsds.length - 1; i >= 0; i--) {
+        const item = chartContainer.zsds[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.zsds.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.zsds.forEach((zsd) => {
         if (zsd.points?.[0]?.time >= from) {
           const key = JSON.stringify(zsd);
-          const existed = chartContainer.zsds.find((item) => item.key === key);
-          if (existed) return;
+          
+          // 查找是否存在相同时间的走势段
+          const existingIndex = chartContainer.zsds.findIndex((item) => item.time === zsd.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.zsds[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.zsds.splice(existingIndex, 1);
+          }
+
           chartContainer.zsds.push({
             time: zsd.points[0].time,
             key,
@@ -534,13 +640,38 @@ class ChartManager {
 
     // 绘制笔中枢
     if (barsResult.bi_zss) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.bi_zss.forEach((bi_zs) => {
+        if (bi_zs.points?.[0]?.time >= from) {
+          validTimes.add(bi_zs.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.bi_zss.length - 1; i >= 0; i--) {
+        const item = chartContainer.bi_zss[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.bi_zss.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.bi_zss.forEach((bi_zs) => {
         if (bi_zs.points?.[0]?.time >= from) {
           const key = JSON.stringify(bi_zs);
-          const existed = chartContainer.bi_zss.find(
-            (item) => item.key === key
-          );
-          if (existed) return;
+          
+          // 查找是否存在相同时间的中枢
+          const existingIndex = chartContainer.bi_zss.findIndex((item) => item.time === bi_zs.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.bi_zss[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.bi_zss.splice(existingIndex, 1);
+          }
+
           chartContainer.bi_zss.push({
             time: bi_zs.points[0].time,
             key,
@@ -555,13 +686,38 @@ class ChartManager {
 
     // 绘制线段中枢
     if (barsResult.xd_zss) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.xd_zss.forEach((xd_zs) => {
+        if (xd_zs.points?.[0]?.time >= from) {
+          validTimes.add(xd_zs.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.xd_zss.length - 1; i >= 0; i--) {
+        const item = chartContainer.xd_zss[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.xd_zss.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.xd_zss.forEach((xd_zs) => {
         if (xd_zs.points?.[0]?.time >= from) {
           const key = JSON.stringify(xd_zs);
-          const existed = chartContainer.xd_zss.find(
-            (item) => item.key === key
-          );
-          if (existed) return;
+          
+          // 查找是否存在相同时间的中枢
+          const existingIndex = chartContainer.xd_zss.findIndex((item) => item.time === xd_zs.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.xd_zss[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.xd_zss.splice(existingIndex, 1);
+          }
+
           chartContainer.xd_zss.push({
             time: xd_zs.points[0].time,
             key,
@@ -576,13 +732,38 @@ class ChartManager {
 
     // 绘制走势段中枢
     if (barsResult.zsd_zss) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.zsd_zss.forEach((zsd_zs) => {
+        if (zsd_zs.points?.[0]?.time >= from) {
+          validTimes.add(zsd_zs.points[0].time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.zsd_zss.length - 1; i >= 0; i--) {
+        const item = chartContainer.zsd_zss[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.zsd_zss.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.zsd_zss.forEach((zsd_zs) => {
         if (zsd_zs.points?.[0]?.time >= from) {
           const key = JSON.stringify(zsd_zs);
-          const existed = chartContainer.zsd_zss.find(
-            (item) => item.key === key
-          );
-          if (existed) return;
+          
+          // 查找是否存在相同时间的中枢
+          const existingIndex = chartContainer.zsd_zss.findIndex((item) => item.time === zsd_zs.points[0].time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.zsd_zss[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.zsd_zss.splice(existingIndex, 1);
+          }
+
           chartContainer.zsd_zss.push({
             time: zsd_zs.points[0].time,
             key,
@@ -597,11 +778,38 @@ class ChartManager {
 
     // 绘制背驰
     if (barsResult.bcs) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.bcs.forEach((bc) => {
+        if (bc.points?.time >= from) {
+          validTimes.add(bc.points.time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.bcs.length - 1; i >= 0; i--) {
+        const item = chartContainer.bcs[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.bcs.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.bcs.forEach((bc) => {
         if (bc.points?.time >= from) {
           const key = JSON.stringify(bc);
-          const existed = chartContainer.bcs.find((item) => item.key === key);
-          if (existed) return;
+          
+          // 查找是否存在相同时间的背驰
+          const existingIndex = chartContainer.bcs.findIndex((item) => item.time === bc.points.time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.bcs[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.bcs.splice(existingIndex, 1);
+          }
+
           chartContainer.bcs.push({
             time: bc.points.time,
             key,
@@ -613,11 +821,38 @@ class ChartManager {
 
     // 绘制买卖点
     if (barsResult.mmds) {
+      // 1. 收集当前数据中所有有效的时间点
+      const validTimes = new Set();
+      barsResult.mmds.forEach((mmd) => {
+        if (mmd.points?.time >= from) {
+          validTimes.add(mmd.points.time);
+        }
+      });
+
+      // 2. 清理图表中不存在于新数据中的元素
+      for (let i = chartContainer.mmds.length - 1; i >= 0; i--) {
+        const item = chartContainer.mmds[i];
+        if (item.time >= from && !validTimes.has(item.time)) {
+          item.id.then((_id) => this.chart.removeEntity(_id));
+          chartContainer.mmds.splice(i, 1);
+        }
+      }
+
+      // 3. 绘制/更新元素
       barsResult.mmds.forEach((mmd) => {
         if (mmd.points?.time >= from) {
           const key = JSON.stringify(mmd);
-          const existed = chartContainer.mmds.find((item) => item.key === key);
-          if (existed) return;
+          
+          // 查找是否存在相同时间的买卖点
+          const existingIndex = chartContainer.mmds.findIndex((item) => item.time === mmd.points.time);
+          if (existingIndex !== -1) {
+            const existingItem = chartContainer.mmds[existingIndex];
+            if (existingItem.key === key) return; // 完全相同，跳过
+            // key 不同，说明有变化，删除旧的
+            existingItem.id.then((_id) => this.chart.removeEntity(_id));
+            chartContainer.mmds.splice(existingIndex, 1);
+          }
+
           chartContainer.mmds.push({
             time: mmd.points.time,
             key,
