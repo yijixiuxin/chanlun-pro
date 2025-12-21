@@ -556,8 +556,17 @@ class CL(ICL):
                     # 继续向后寻找，防止因伪反向分型导致误判
                     continue
         
-        # 如果没有后续分型或无法明确判断，保守处理：认为分型有效
-        # 这样可以避免过度拆分，让市场走势自然发展
+        # 如果没有后续分型或无法明确判断
+        # 检查是否被后续K线破坏（兜底检查）
+        check_start_k_idx = end_fx.k.index + 1
+        for i in range(check_start_k_idx, len(self.cl_klines)):
+            ck = self.cl_klines[i]
+            if end_fx.type == "ding" and ck.h > end_fx.val:
+                return False
+            if end_fx.type == "di" and ck.l < end_fx.val:
+                return False
+
+        # 保守处理：认为分型有效
         return True
 
     def _is_trend_continuation(self, last_bi: BI, next_fx: FX) -> bool:
@@ -628,6 +637,12 @@ class CL(ICL):
         while len(self.bis) > 0 and self.bis[-1].end.index > last_fx_index:
              self.bis.pop()
         
+        # 检查最后一笔是否被破坏（针对最后一笔结束分型被后续K线破坏的情况）
+        if len(self.bis) > 0:
+            last_bi = self.bis[-1]
+            if not self.check_bi_valid(last_bi.start, last_bi.end, bi_type):
+                self.bis.pop()
+
         # 1. 如果没有笔，则全量计算
         if len(self.bis) == 0:
             start_fx = self.fxs[0]
@@ -703,6 +718,73 @@ class CL(ICL):
                 pass
                 
             curr_fx_idx += 1
+
+        # 尝试添加未完成的笔（Unfinished Pen）
+        # 如果最后一笔之后还有K线，且价格创出新高/新低，说明趋势在延续
+        # 即使没有形成严格的顶底分型，也应该画出一笔
+        if len(self.bis) > 0:
+            last_bi = self.bis[-1]
+            start_k_idx = last_bi.end.k.index + 1
+            if start_k_idx < len(self.cl_klines):
+                # 确定期望的方向
+                expected_type = "up" if last_bi.type == "down" else "down"
+                
+                # 在后续K线中寻找极值
+                target_idx = -1
+                target_val = 0
+                
+                check_klines = self.cl_klines[start_k_idx:]
+                if not check_klines:
+                    return
+
+                if expected_type == "up":
+                    # 向上笔，找最高点
+                    max_k = max(check_klines, key=lambda k: k.h)
+                    target_val = max_k.h
+                    target_idx = max_k.index
+                    
+                    # 只有当新高点高于前一笔的结束点时，才认为有意义
+                    # 或者如果距离足够远（例如 > 5根K线），即使没创新高也可能构成一笔（震荡）
+                    # 这里简化逻辑：只要有数据，就画出到最高点
+                    if target_val <= last_bi.end.val:
+                         # 如果没创新高，检查是否距离足够远且有反向分型但未被确认？
+                         # 暂时只处理创新高的情况，解决"新K线创了新高"的问题
+                         pass
+                else:
+                    # 向下笔，找最低点
+                    min_k = min(check_klines, key=lambda k: k.l)
+                    target_val = min_k.l
+                    target_idx = min_k.index
+                
+                # 只有当找到了有效的极值点（且该点不是起始点本身）
+                if target_idx != -1:
+                    # 创建临时分型
+                    # 注意：这个分型没有加入 self.fxs，只是为了构造 BI
+                    # 修复：设置正确的 index，防止 query_macd_ld 报错 (start_fx.index > end_fx.index)
+                    temp_fx = FX(
+                        _type="ding" if expected_type == "up" else "di", # 结束分型类型
+                        k=self.cl_klines[target_idx],
+                        klines=[], # 临时分型没有详细K线结构
+                        val=target_val,
+                        index=last_bi.end.index + 1, # 确保索引大于前一个分型
+                        done=False
+                    )
+                    
+                    # 创建临时笔
+                    bi = BI(
+                        start=last_bi.end,
+                        end=temp_fx,
+                        _type=expected_type,
+                        index=len(self.bis)
+                    )
+                    bi.high, bi.low = self._bi_high_low(last_bi.end, temp_fx)
+                    
+                    # 只有当这个临时笔的长度或幅度有一定意义时才添加？
+                    # 用户抱怨的是"直接没有了"，所以即使很短也应该显示
+                    # 只要极值点 > 起始点（对于Up）
+                    # 2025-12-22 修订：增加条件 len >= 5，防止"顶分型后跟了2根向下K线"就画出向下笔
+                    if len(check_klines) >= 5:
+                        self.bis.append(bi)
 
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
