@@ -516,6 +516,19 @@ class CL(ICL):
         """
         end_fx_idx = end_fx.index
         
+        # 0. 检查分型是否被后续K线直接破坏（针对最后一笔未完成情况）
+        # 如果分型被后续K线突破（顶分型后有更高High，底分型后有更低Low），则分型无效
+        # 只需要检查到下一个分型之前的K线即可，或者如果没有下一个分型，则检查所有后续K线
+        # 注意：只针对最后一个分型进行此检查，防止历史分型被未来数据破坏
+        if end_fx_idx == len(self.fxs) - 1:
+            check_start_k_idx = end_fx.k.index + 1
+            for i in range(check_start_k_idx, len(self.cl_klines)):
+                ck = self.cl_klines[i]
+                if end_fx.type == "ding" and ck.h > end_fx.val:
+                    return False
+                if end_fx.type == "di" and ck.l < end_fx.val:
+                    return False
+
         # 检查后续分型
         for i in range(end_fx_idx + 1, len(self.fxs)):
             next_fx = self.fxs[i]
@@ -690,48 +703,6 @@ class CL(ICL):
                 pass
                 
             curr_fx_idx += 1
-
-        # 检查最后一笔是否延伸（即收盘价破分型高低点）
-        if self.bis:
-            last_bi = self.bis[-1]
-            last_fx_k_idx = last_bi.end.k.index
-            
-            # 只有当后面还有K线时才检查
-            if last_fx_k_idx < len(self.cl_klines) - 1:
-                # 获取后续所有缠论K线
-                subsequent_cks = self.cl_klines[last_fx_k_idx + 1:]
-                
-                if last_bi.type == "up":
-                    # 向上笔，检查是否创新高
-                    max_h_ck = max(subsequent_cks, key=lambda ck: ck.h)
-                    if max_h_ck.h > last_bi.high:
-                        # 创建虚拟分型，延伸该笔
-                        virtual_fx = FX(
-                            _type="ding",
-                            k=max_h_ck,
-                            klines=[], # 虚拟分型无K线组合
-                            val=max_h_ck.h,
-                            index=last_bi.end.index + 1,
-                            done=False
-                        )
-                        last_bi.end = virtual_fx
-                        last_bi.high = max_h_ck.h
-                
-                elif last_bi.type == "down":
-                    # 向下笔，检查是否创新低
-                    min_l_ck = min(subsequent_cks, key=lambda ck: ck.l)
-                    if min_l_ck.l < last_bi.low:
-                        # 创建虚拟分型，延伸该笔
-                        virtual_fx = FX(
-                            _type="di",
-                            k=min_l_ck,
-                            klines=[],
-                            val=min_l_ck.l,
-                            index=last_bi.end.index + 1,
-                            done=False
-                        )
-                        last_bi.end = virtual_fx
-                        last_bi.low = min_l_ck.l
 
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
@@ -1171,6 +1142,17 @@ class CL(ICL):
                                 pending_gap_fx['end_bi_idx']
                             )
         
+        # 修复：如果在数据末尾有待确认的分型，尝试直接确认
+        # 场景：数据结束时，虽然SequenceB没有形成分型，但Pending分型已经形成且是目前最优解
+        # 对于实时分析，展示这个分型比一直显示“未完成”更有价值
+        if pending_gap_fx:
+            return self._create_xd_end_result(
+                pending_gap_fx['fx_type'],
+                pending_gap_fx['fx_tzxl'],
+                pending_gap_fx['xls'],
+                pending_gap_fx['end_bi_idx']
+            )
+
         return None
 
     def _create_xd_end_result(self, fx_type, fx_tzxl, xls, end_bi_idx):
@@ -1193,88 +1175,15 @@ class CL(ICL):
 
         if len(self.xds) > 0:
             last_xd = self.xds[-1]
-
             # 如果最后有剩余笔，创建未完成线段
             if last_xd.end_line.index < len(self.bis) - 1:
                 start_bi_idx = last_xd.end_line.index + 1
                 if start_bi_idx < len(self.bis):
                     start_bi = self.bis[start_bi_idx]
+                    end_bi = self.bis[-1]
                     
-                    # 确定新线段的方向
                     xd_dir = "down" if last_xd.type == "up" else "up"
                     
-                    # 检查剩余笔中是否存在破坏笔（即反向突破原线段起点/高低点）
-                    # 针对图表末端数据的特殊处理：
-                    # 如果未完成线段中出现了一笔直接破坏了前一线段的走势（例如向下线段后的向上笔创出新高）
-                    # 则认为该未完成线段在破坏笔之前结束，并标记为已完成
-                    # 破坏笔及其后的笔不画线段（等待形成新线段）
-                    
-                    break_bi_idx = -1
-                    check_bis = self.bis[start_bi_idx:]
-                    
-                    for i, bi in enumerate(check_bis):
-                        if xd_dir == "up":
-                             # 尝试生成向上线段（原线段是向下）
-                             # 检查是否有笔低于原向下线段的起点（last_xd.high）？
-                             # 不，这里是反向破坏：原线段是向下(last_xd)，我们在找向上线段(xd_dir='up')
-                             # 破坏是指：向上的一笔直接突破了 last_xd 的高点 (Start High)
-                             # 如果发生了这种破坏，说明 last_xd (向下) 肯定结束了
-                             # 但我们现在的任务是生成这个新的向上线段
-                             # 如果还没形成3笔，通常是未完成
-                             # 但用户要求：如果有一笔直接破坏了，那么这个未完成线段应该在破坏笔之前结束
-                             # 意味着：last_xd 保持不变，新的未完成线段只延伸到破坏笔之前？
-                             # 不，用户说“第二线段未完成但应在破坏笔的起点结束”
-                             # "第二线段"指的是正在生成的这个反向线段（相对于 last_xd 的反向）
-                             # 比如 last_xd 是向下（已完成），现在生成向上线段
-                             # 如果这个向上线段中有一笔（破坏笔）不仅反向，而且创新高（高于 last_xd.high）
-                             # 那么这个向上线段应该在破坏笔的起点结束。
-                             # 等等，如果破坏笔是第一笔呢？那这个线段长度为0？
-                             # 用户例子：第9笔创出新高。前8笔可能构成了一个未完成的向上线段（还没被确认）。
-                             # 第9笔一来，直接突破了。
-                             # 此时，前面的未完成线段应该结束。
-                             # 破坏笔（第9笔）不画线段。
-                             
-                             # 检查是否有笔高于 last_xd.high (对于向下线段)
-                             # 或者是低于 last_xd.low (对于向上线段)
-                             pass # 逻辑在下面实现
-                        pass
-
-                    # 扫描破坏笔
-                    for i, bi in enumerate(check_bis):
-                        if last_xd.type == "down":
-                            # 原线段向下，新线段向上
-                            # 破坏条件：出现一笔高于原线段起点（last_xd.high）
-                            # 或者用户说的“创新高”是指比前一个高点高？
-                            # 用户原话：“比下跌段的起始点还要高一笔破坏向下趋势了” -> bi.high > last_xd.high
-                            if bi.high > last_xd.high:
-                                break_bi_idx = i
-                                break
-                        else:
-                            # 原线段向上，新线段向下
-                            # 破坏条件：出现一笔低于原线段起点（last_xd.low）
-                            if bi.low < last_xd.low:
-                                break_bi_idx = i
-                                break
-                    
-                    # 确定未完成线段的结束笔
-                    if break_bi_idx != -1:
-                        # 找到了破坏笔
-                        # 未完成线段延伸到破坏笔的前一笔
-                        # check_bis[break_bi_idx] 是破坏笔
-                        # 它的起点是 check_bis[break_bi_idx].start
-                        # 也就是前一笔的终点
-                        
-                        # 如果破坏笔是第一笔（break_bi_idx == 0），说明没有线段生成
-                        if break_bi_idx == 0:
-                            return # 不生成未完成线段，直接返回
-
-                        end_bi = check_bis[break_bi_idx - 1]
-                        is_broken_termination = True
-                    else:
-                        # 没有破坏笔，正常延伸到最后一笔
-                        end_bi = self.bis[-1]
-                        is_broken_termination = False
-
                     xd = XD(
                         start=start_bi.start,
                         end=end_bi.end,
@@ -1286,19 +1195,15 @@ class CL(ICL):
                         index=len(self.xds)
                     )
                     
-                    # 计算高低点
-                    segment_bis = self.bis[start_bi_idx : end_bi.index + 1]
                     if xd_dir == "up":
-                        xd.high = max([bi.high for bi in segment_bis])
+                        xd.high = max([bi.high for bi in self.bis[start_bi_idx:]])
                         xd.low = start_bi.start.val
                     else:
                         xd.high = start_bi.start.val
-                        xd.low = min([bi.low for bi in segment_bis])
+                        xd.low = min([bi.low for bi in self.bis[start_bi_idx:]])
                     
-                    # 如果是因破坏而终止，标记为已完成（done=True），否则为未完成
-                    xd.done = is_broken_termination
+                    xd.done = False
                     self.xds.append(xd)
-
         else:
             # 没有线段，创建第一个未完成线段
             if len(self.bis) > 0:
