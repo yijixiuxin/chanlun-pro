@@ -57,7 +57,7 @@ class ExchangeTDXFutures(Exchange):
                         all_markets = client.get_markets()
                         for _m in all_markets:
                             if _m["category"] == 3 and _m["market"] in [
-                                # 23, # PR 香港金融期货
+                                23,  # PR 香港金融期货
                                 28,  # QZ 郑州商品
                                 29,  # QD 大连商品
                                 30,  # QS 上海期货
@@ -220,8 +220,10 @@ class ExchangeTDXFutures(Exchange):
                     )
                     if len(klines) == 0:
                         return pd.DataFrame([])
-                    klines["datetime"] = klines["datetime"].apply(self.fix_yp_date)
-                    klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
+                    klines["fix_datetime"] = klines["datetime"].apply(
+                        lambda _dt: self.fix_yp_date(code, _dt)
+                    )
+                    klines.loc[:, "date"] = pd.to_datetime(klines["fix_datetime"])
                     klines.sort_values("date", inplace=True)
                 else:
                     for i in range(1, args["pages"] + 1):
@@ -235,8 +237,10 @@ class ExchangeTDXFutures(Exchange):
                                 700,
                             )
                         )
-                        _ks["datetime"] = _ks["datetime"].apply(self.fix_yp_date)
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                        _ks["fix_datetime"] = _ks["datetime"].apply(
+                            lambda _dt: self.fix_yp_date(code, _dt)
+                        )
+                        _ks.loc[:, "date"] = pd.to_datetime(_ks["fix_datetime"])
                         _ks.sort_values("date", inplace=True)
                         new_start_dt = _ks.iloc[0]["date"]
                         old_end_dt = klines.iloc[-1]["date"]
@@ -247,11 +251,13 @@ class ExchangeTDXFutures(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(Market.FUTURES.value, code, frequency, klines)
+            self.fdb.save_tdx_klines(
+                Market.FUTURES.value, f"v1_{code}", frequency, klines
+            )
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
-            klines.loc[:, "date"] = pd.to_datetime(klines["datetime"]).dt.tz_localize(
+            klines.loc[:, "date"] = pd.to_datetime(klines["date"]).dt.tz_localize(
                 self.tz
             )
             klines.sort_values("date", inplace=True)
@@ -276,7 +282,7 @@ class ExchangeTDXFutures(Exchange):
         return None
 
     @staticmethod
-    def fix_yp_date(dt: str):
+    def fix_yp_date(code: str, dt: str):
         """
         修复夜盘的时间，tdx将夜盘的时间归类到了第二天，修复为前一天
         """
@@ -287,6 +293,13 @@ class ExchangeTDXFutures(Exchange):
         else:
             _format = "%Y-%m-%d"
         dt = fun.str_to_datetime(dt, _format)
+
+        if code.startswith("PR"):
+            # TODO 香港金融期货时间修复
+            # 小时数大于等于 17，则减去 1 天
+            if dt.hour >= 17:
+                dt = dt - datetime.timedelta(days=1)
+            return fun.datetime_to_str(dt)
 
         if dt.hour >= 21:
             dt = dt - datetime.timedelta(days=1)
@@ -437,7 +450,7 @@ if __name__ == "__main__":
     # print(ex.market_maps)
     # stocks = ex.all_stocks()
     # for s in stocks:
-    #     if "TI." in s["code"]:
+    #     if "HTIL8" in s["code"]:
     #         print(s)
     # print(len(stocks))
     # print(ex.market_maps)
@@ -447,7 +460,7 @@ if __name__ == "__main__":
 
     # print(ex.to_tdx_code('QS.ZN2306'))
 
-    klines = ex.klines(ex.default_code(), "3m")
+    klines = ex.klines("PR.HHIL8", "5m")
     print(klines)
     #
     # for _f in ex.support_frequencys().keys():
