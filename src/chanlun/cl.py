@@ -691,6 +691,48 @@ class CL(ICL):
                 
             curr_fx_idx += 1
 
+        # 检查最后一笔是否延伸（即收盘价破分型高低点）
+        if self.bis:
+            last_bi = self.bis[-1]
+            last_fx_k_idx = last_bi.end.k.index
+            
+            # 只有当后面还有K线时才检查
+            if last_fx_k_idx < len(self.cl_klines) - 1:
+                # 获取后续所有缠论K线
+                subsequent_cks = self.cl_klines[last_fx_k_idx + 1:]
+                
+                if last_bi.type == "up":
+                    # 向上笔，检查是否创新高
+                    max_h_ck = max(subsequent_cks, key=lambda ck: ck.h)
+                    if max_h_ck.h > last_bi.high:
+                        # 创建虚拟分型，延伸该笔
+                        virtual_fx = FX(
+                            _type="ding",
+                            k=max_h_ck,
+                            klines=[], # 虚拟分型无K线组合
+                            val=max_h_ck.h,
+                            index=last_bi.end.index + 1,
+                            done=False
+                        )
+                        last_bi.end = virtual_fx
+                        last_bi.high = max_h_ck.h
+                
+                elif last_bi.type == "down":
+                    # 向下笔，检查是否创新低
+                    min_l_ck = min(subsequent_cks, key=lambda ck: ck.l)
+                    if min_l_ck.l < last_bi.low:
+                        # 创建虚拟分型，延伸该笔
+                        virtual_fx = FX(
+                            _type="di",
+                            k=min_l_ck,
+                            klines=[],
+                            val=min_l_ck.l,
+                            index=last_bi.end.index + 1,
+                            done=False
+                        )
+                        last_bi.end = virtual_fx
+                        last_bi.low = min_l_ck.l
+
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
         检查线段基本重叠条件：第1笔与第3笔必须有价格重叠
@@ -1151,6 +1193,39 @@ class CL(ICL):
 
         if len(self.xds) > 0:
             last_xd = self.xds[-1]
+
+            # 检查是否需要延伸上一线段（即后续走势破坏了原线段结束点）
+            if len(self.bis) > 0:
+                last_bi = self.bis[-1]
+                # 获取自上一线段结束后的所有笔的极值
+                # 注意：last_xd.end_line 是上一线段的结束笔
+                start_check_idx = last_xd.end_line.index + 1
+                if start_check_idx < len(self.bis):
+                    check_bis = self.bis[start_check_idx:]
+                    
+                    if last_xd.type == "up":
+                        # 向上线段，检查是否有更高的点
+                        # 向上线段结束于 Top Fractal，所以后续不应该有更高的点
+                        # 检查后续笔的高点
+                        max_bi = max(check_bis, key=lambda b: b.high)
+                        if max_bi.high > last_xd.high:
+                            # 确实创新高，延伸原线段
+                            last_xd.end = max_bi.end if max_bi.type == "up" else max_bi.start
+                            last_xd.end_line = max_bi
+                            last_xd.high = max_bi.high
+                            # 既然延伸了，就应该视为未完成（或至少更新了状态）
+                            # 但为了保持逻辑一致，我们只更新端点，后续代码会根据新的 end_line 判断是否需要添加 unfinished
+                            # 如果 max_bi 是最后一笔，则不需要添加 unfinished
+                    
+                    elif last_xd.type == "down":
+                        # 向下线段，检查是否有更低的点
+                        min_bi = min(check_bis, key=lambda b: b.low)
+                        if min_bi.low < last_xd.low:
+                            # 确实创新低，延伸原线段
+                            last_xd.end = min_bi.end if min_bi.type == "down" else min_bi.start
+                            last_xd.end_line = min_bi
+                            last_xd.low = min_bi.low
+
             # 如果最后有剩余笔，创建未完成线段
             if last_xd.end_line.index < len(self.bis) - 1:
                 start_bi_idx = last_xd.end_line.index + 1
