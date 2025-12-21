@@ -59,11 +59,14 @@ class AIAnalyse:
 
         cl_config = query_cl_chart_config(self.market, code)
         stock = self.ex.stock_info(code)
-        klines = self.ex.klines(code, frequency)
-        cds = web_batch_get_cl_datas(self.market, code, {frequency: klines}, cl_config)
-        cd = cds[0]
+        # 支持多周期分析，frequency 逗号分割
+        frequencies = frequency.split(",")
+        klines = {}
+        for f in frequencies:
+            klines[f] = self.ex.klines(code, f)
+        cds = web_batch_get_cl_datas(self.market, code, klines, cl_config)
         try:
-            prompt = self.prompt(cd=cd)
+            prompt = self.prompt(cds=cds)
         except Exception as e:
             return {"ok": False, "msg": f"获取缠论当前 Prompt 异常：{e}"}
 
@@ -138,7 +141,8 @@ class AIAnalyse:
         bcs = [self.map_bc_type[_b] for _b in bcs]
         return "|".join(bcs)
 
-    def prompt(self, cd: ICL) -> str:
+    def prompt(self, cds: list) -> str:
+        cd = cds[0]
         stock_info = self.ex.stock_info(cd.get_code())
         if stock_info is None:
             raise Exception(f"股票信息获取失败 {cd.get_code()}")
@@ -152,49 +156,65 @@ class AIAnalyse:
         )
 
         k = cd.get_src_klines()[-1]
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         # Markdown 格式的提示词
         prompt = "```markdown\n# 缠论技术分析\n\n"
-        prompt += "请根据以下缠论数据，分析后续可能走势，并按照概率排序输出。\n\n"
+        prompt += f"你是一个实战经验丰富的缠论交易大师，请根据以下多周期缠论数据，进行联立分析，给出后续的操作建议。当前时间是 {current_time}\n\n"
+        prompt += "**分析原则**：\n"
+        prompt += "1. **当前状态优先**：重点关注当前正在形成的笔/线段（完成状态为False），它们代表当下的市场合力方向。\n"
+        prompt += "2. **历史数据为辅**：历史的买卖点和背驰之前那一笔或那一段的情况，**不要**简单因为历史上有买卖点就认为现在应该买卖，必须按照当前笔和线段的情况来判断（未标注就是没有背驰和买卖点）。\n"
+        prompt += "3. **多周期联立**：\n"
+        prompt += "   - **大周期**（如日线）定方向和背景。\n"
+        prompt += "   - **小周期**（如30分钟、5分钟）找具体的买卖点触发。\n"
+        prompt += "   - 注意**区间套**关系，大周期的笔/线段内部往往对应小周期的走势类型。\n"
+        prompt += "4. **动态演变**：如果当前笔/线段尚未完成，说明方向未定，需提示关键的支撑/压力位（如中枢高低点），观察突破情况。\n\n"
         prompt += "**输出格式：Markdown**\n\n"
-        prompt += f"## 当前品种\n- **代码/名称**：`{cd.get_code()} - {stock_name}`\n- **数据周期**：`{cd.get_frequency()}`\n- **当前时间**：`{fun.datetime_to_str(k.date)}`\n- **最新价格**：`{round(k.c, precision)}`\n\n"
+        prompt += f"## 当前品种\n- **代码/名称**：`{cd.get_code()} - {stock_name}`\n- **数据周期**：`{','.join([_cd.get_frequency() for _cd in cds])}`\n- **当前时间**：`{fun.datetime_to_str(k.date)}`\n- **最新价格**：`{round(k.c, precision)}`\n\n"
 
-        # 笔数据
-        bis_count = 9 if len(cd.get_bis()) >= 9 else len(cd.get_bis())
-        prompt += f"## 最新的 {bis_count} 条缠论笔数据\n\n"
-        prompt += "| 起始时间 | 结束时间 | 方向 | 起始值 | 完成状态 | 买点 | 背驰 |\n"
-        prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
-        for bi in cd.get_bis()[-9:]:
-            prompt += f"| {fun.datetime_to_str(bi.start.k.date)} | {fun.datetime_to_str(bi.end.k.date)} | {self.map_dircetion_type[bi.type]} | {round(bi.start.val, precision)} - {round(bi.end.val, precision)} | {bi.is_done()} | {self.get_line_mmds(bi)} | {self.get_line_bcs(bi)} |\n"
-        prompt += "\n"
+        for cd in cds:
+            prompt += f"## {cd.get_frequency()} 周期数据\n\n"
 
-        # 线段数据
-        xds_count = 3 if len(cd.get_xds()) >= 3 else len(cd.get_xds())
-        prompt += f"## 最新的 {xds_count} 条缠论线段数据\n\n"
-        prompt += "| 起始时间 | 结束时间 | 方向 | 起始值 | 完成状态 | 买点 | 背驰 |\n"
-        prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
-        for xd in cd.get_xds()[-3:]:
-            prompt += f"| {fun.datetime_to_str(xd.start.k.date)} | {fun.datetime_to_str(xd.end.k.date)} | {self.map_dircetion_type[xd.type]} | {round(xd.start.val, precision)} - {round(xd.end.val, precision)} | {xd.is_done()} | {self.get_line_mmds(xd)} | {self.get_line_bcs(xd)} |\n"
-        prompt += "\n"
+            # 笔数据
+            bis = cd.get_bis()
+            bis_count = 9 if len(bis) >= 9 else len(bis)
+            prompt += f"### 最新的 {bis_count} 条缠论笔数据\n\n"
+            prompt += "> **注意**：最后一笔如果`完成状态`为`False`，表示当前正在延伸中，尚未确认结束。未标明背驰表示当前笔无背驰。\n\n"
+            prompt += "| 起始时间 | 结束时间 | 方向 | 起始值 | 结束值 | 完成状态 | 买点 | 背驰 |\n"
+            prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
+            for bi in bis[-9:]:
+                prompt += f"| {fun.datetime_to_str(bi.start.k.date)} | {fun.datetime_to_str(bi.end.k.date)} | {self.map_dircetion_type[bi.type]} | {round(bi.start.val, precision)} | {round(bi.end.val, precision)} | {bi.is_done()} | {self.get_line_mmds(bi)} | {self.get_line_bcs(bi)} |\n"
+            prompt += "\n"
 
-        # 中枢数据
-        for zs_type in cd.get_config()["zs_bi_type"]:
-            zss = cd.get_bi_zss(zs_type)
-            if len(zss) >= 1:
-                prompt += f"### 中枢信息：{self.map_config_zs_type[zs_type]}\n\n"
-                if len(zss) >= 2:
-                    zs_direction = cd.zss_is_qs(zss[-2], zss[-1])
-                    prompt += f"- 最新两个中枢的位置关系：**{self.map_zss_direction.get(zs_direction, self.map_zss_direction[None])}**\n\n"
-                else:
-                    prompt += "- 目前只有单个中枢\n\n"
-                prompt += "| 起始时间 | 结束时间 | 方向 | 最高值 | 最低值 | 高点 | 低点 | 级别 |\n"
-                prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
-                for zs in zss[-2:]:
-                    prompt += f"| {fun.datetime_to_str(zs.start.k.date)} | {fun.datetime_to_str(zs.end.k.date)} | {self.map_zs_type[zs.type]} | {round(zs.gg, precision)} | {round(zs.dd, precision)} | {round(zs.zg, precision)} | {round(zs.zd, precision)} | {zs.level} |\n"
-                prompt += "\n"
+            # 线段数据
+            xds = cd.get_xds()
+            xds_count = 3 if len(xds) >= 3 else len(xds)
+            prompt += f"### 最新的 {xds_count} 条缠论线段数据\n\n"
+            prompt += "> **注意**：最后一段如果`完成状态`为`False`，表示当前正在延伸中，尚未确认结束。未标明背驰表示当前笔无背驰。\n\n"
+            prompt += "| 起始时间 | 结束时间 | 方向 | 起始值 | 结束值 | 完成状态 | 买点 | 背驰 |\n"
+            prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
+            for xd in xds[-3:]:
+                prompt += f"| {fun.datetime_to_str(xd.start.k.date)} | {fun.datetime_to_str(xd.end.k.date)} | {self.map_dircetion_type[xd.type]} | {round(xd.start.val, precision)} | {round(xd.end.val, precision)} | {xd.is_done()} | {self.get_line_mmds(xd)} | {self.get_line_bcs(xd)} |\n"
+            prompt += "\n"
+
+            # 中枢数据
+            for zs_type in cd.get_config()["zs_bi_type"]:
+                zss = cd.get_bi_zss(zs_type)
+                if len(zss) >= 1:
+                    prompt += f"### 中枢信息：{self.map_config_zs_type[zs_type]}\n\n"
+                    if len(zss) >= 2:
+                        zs_direction = cd.zss_is_qs(zss[-2], zss[-1])
+                        prompt += f"- 最新两个中枢的位置关系：**{self.map_zss_direction.get(zs_direction, self.map_zss_direction[None])}**\n\n"
+                    else:
+                        prompt += "- 目前只有单个中枢\n\n"
+                    prompt += "| 起始时间 | 结束时间 | 方向 | 最高值 | 最低值 | 高点 | 低点 | 级别 |\n"
+                    prompt += "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n"
+                    for zs in zss[-2:]:
+                        prompt += f"| {fun.datetime_to_str(zs.start.k.date)} | {fun.datetime_to_str(zs.end.k.date)} | {self.map_zs_type[zs.type]} | {round(zs.gg, precision)} | {round(zs.dd, precision)} | {round(zs.zg, precision)} | {round(zs.zd, precision)} | {zs.level} |\n"
+                    prompt += "\n"
 
         prompt += "> **数据说明**：中枢级别的意思，1表示是本级别，根据中枢内的线段数量计算，小于等于9表示本级别，大于1表示中枢内的线段大于9，中枢级别升级 (计算公式: `round(max([1, zs.line_num / 9]), 2)`)\n\n"
         prompt += "---\n"
-        prompt += "请根据以上提供的笔/线段/中枢数据，进行分析。"
+        prompt += "请根据以上提供的多周期笔/线段/中枢数据，结合缠论动力学和形态学，进行深度分析，并给出概率最大的后续走势推演。"
         return prompt
 
     def req_llm_ai_model(self, prompt: str) -> dict:

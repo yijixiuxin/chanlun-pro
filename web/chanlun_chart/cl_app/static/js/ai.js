@@ -94,20 +94,33 @@ var AI = (function () {
       });
     },
     init_ai_opts: function () {
-      let ai_frequencys = $("#ai_frequencys");
-      $(ai_frequencys).html();
-      layui.each(market_frequencys[Utils.get_market()], function (i, f) {
-        $(ai_frequencys).append("<option value='" + f + "'>" + f + "</option>");
+      let frequencys = market_frequencys[Utils.get_market()];
+      let frequency_opts = [];
+      layui.each(frequencys, function (i, f) {
+        frequency_opts.push({ name: f, value: f, selected: f === "d" });
       });
-      layui.form.render($(ai_frequencys));
-      $(ai_frequencys)
-        .siblings("div.layui-form-select")
-        .find("dl")
-        .find("dd[lay-value=d]")
-        .click();
+
+      var ai_frequencys_select = xmSelect.render({
+        el: "#ai_frequencys",
+        data: frequency_opts,
+        autoRow: true,
+        radio: false,
+        clickClose: false,
+        toolbar: { show: true },
+      });
 
       $("#ai_code").val(Utils.get_code());
       $("#ai_analyse_btn").click(function () {
+        var selectArr = ai_frequencys_select.getValue();
+        var selectList = [];
+        layui.each(selectArr, function (index, item) {
+          selectList.push(item.value);
+        });
+        if (selectList.length === 0) {
+          layer.msg("请选择分析周期");
+          return;
+        }
+
         // 将 btn 置灰
         $("#ai_analyse_btn")
           .addClass("layui-btn-disabled")
@@ -119,7 +132,7 @@ var AI = (function () {
           data: {
             market: Utils.get_market(),
             code: $("#ai_code").val(),
-            frequency: $("#ai_frequencys").val(),
+            frequency: selectList.join(","),
           },
           dataType: "json",
           success: function (res) {
