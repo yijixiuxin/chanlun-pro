@@ -106,7 +106,10 @@ var AI = (function () {
         autoRow: true,
         radio: false,
         clickClose: false,
-        toolbar: { show: true },
+        toolbar: { show: true, list: ["ALL", "CLEAR", "REVERSE"] },
+        theme: {
+          color: "#ff5722",
+        },
       });
 
       $("#ai_code").val(Utils.get_code());

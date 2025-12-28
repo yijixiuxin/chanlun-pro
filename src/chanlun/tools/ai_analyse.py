@@ -141,6 +141,83 @@ class AIAnalyse:
         bcs = [self.map_bc_type[_b] for _b in bcs]
         return "|".join(bcs)
 
+    def get_indicators_info(self, cd: ICL) -> str:
+        """
+        获取技术指标信息
+        """
+        try:
+            klines = cd.get_src_klines()
+            if len(klines) < 20:
+                return "数据不足，无法计算技术指标"
+
+            close = np.array([k.c for k in klines])
+            high = np.array([k.h for k in klines])
+            low = np.array([k.l for k in klines])
+
+            # MA
+            mas = []
+            for p in [5, 10, 20, 60, 120, 250]:
+                if len(close) >= p:
+                    ma = talib.MA(close, timeperiod=p)
+                    if not np.isnan(ma[-1]):
+                        mas.append(f"MA{p}={round(ma[-1], 2)}")
+
+            # MACD
+            dif, dea, hist = talib.MACD(
+                close, fastperiod=12, slowperiod=26, signalperiod=9
+            )
+            macd_str = f"DIF={round(dif[-1], 2)} DEA={round(dea[-1], 2)} MACD={round(hist[-1] * 2, 2)}"
+
+            # KDJ
+            slowk, slowd = talib.STOCH(
+                high,
+                low,
+                close,
+                fastk_period=9,
+                slowk_period=3,
+                slowk_matype=0,
+                slowd_period=3,
+                slowd_matype=0,
+            )
+            k = slowk[-1]
+            d = slowd[-1]
+            j = 3 * k - 2 * d
+            kdj_str = f"K={round(k, 2)} D={round(d, 2)} J={round(j, 2)}"
+
+            # ATR (Volatility)
+            atr = talib.ATR(high, low, close, timeperiod=14)
+            atr_str = f"ATR(14)={round(atr[-1], 2)}"
+
+            # RSI
+            rsi = talib.RSI(close, timeperiod=14)
+            rsi_str = f"RSI(14)={round(rsi[-1], 2)}"
+
+            info = f"- **均线 (MA)**: {', '.join(mas)}\n"
+            info += f"- **MACD**: {macd_str}\n"
+            info += f"- **KDJ**: {kdj_str}\n"
+            info += f"- **波动率 (ATR)**: {atr_str}\n"
+            info += f"- **RSI**: {rsi_str}\n"
+
+            return info
+        except Exception as e:
+            return f"计算技术指标异常：{str(e)}"
+
+    def get_recent_klines_info(self, cd: ICL, limit=10) -> str:
+        """
+        获取最近的K线数据
+        """
+        klines = cd.get_src_klines()
+        recent_klines = klines[-limit:]
+
+        info = f"### 最近 {limit} 根K线数据\n\n"
+        info += "| 时间 | 开盘 | 最高 | 最低 | 收盘 | 成交量 |\n"
+        info += "|:---:|:---:|:---:|:---:|:---:|:---:|\n"
+        for k in recent_klines:
+            dt_str = fun.datetime_to_str(k.date)
+            info += f"| {dt_str} | {k.o} | {k.h} | {k.l} | {k.c} | {k.a} |\n"
+        info += "\n"
+        return info
+
     def prompt(self, cds: list) -> str:
         cd = cds[0]
         stock_info = self.ex.stock_info(cd.get_code())
@@ -156,13 +233,16 @@ class AIAnalyse:
         )
 
         k = cd.get_src_klines()[-1]
-        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        #UTC+8 时间
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " +0800"
         # Markdown 格式的提示词
         prompt = "```markdown\n# 缠论技术分析\n\n"
         prompt += f"你是一个实战经验丰富的缠论交易大师，请根据以下多周期缠论数据，进行联立分析，给出后续的操作建议。当前时间是 {current_time}\n\n"
+        prompt += "结合当前市场环境，美国降息量化宽松，贵金属大宗与A股10年历史级别大牛市，牛市回调多急跌；结合不同市场主力博弈思维，反身性反人性博弈"
         prompt += "**分析原则**：\n"
-        prompt += "1. **当前状态优先**：重点关注当前正在形成的笔/线段（完成状态为False），它们代表当下的市场合力方向。\n"
-        prompt += "2. **历史数据为辅**：历史的买卖点和背驰之前那一笔或那一段的情况，**不要**简单因为历史上有买卖点就认为现在应该买卖，必须按照当前笔和线段的情况来判断（未标注就是没有背驰和买卖点）。\n"
+        prompt += "1. **当前状态优先**：重点关注当前正在形成的笔/线段（完成状态为False），它们代表当下的市场合力方向。不要遗漏未完成的笔/线段以及后续反向还未形成笔的K线及价格。\n"
+        prompt += "顶底背离需结合顶底分型，无分型代表笔未结束，后续可能会化解。趋势交易，上涨趋势结合不破5日线不看空、小时线不破20线不看空、回踩不破零轴继续上等原则，下跌相反。结合裸K交易法和价格行为学判断。\n"
+        prompt += "2. **历史数据为辅**：历史的买卖点和背驰之前那一笔或那一段的情况，**不要**简单因为历史上有买卖点就认为现在应该买卖，必须按照当前笔和线段及后续未形成笔的K线的情况来判断（未标注就是没有背驰和买卖点）。\n"
         prompt += "3. **多周期联立**：\n"
         prompt += "   - **大周期**（如日线）定方向和背景。\n"
         prompt += "   - **小周期**（如30分钟、5分钟）找具体的买卖点触发。\n"
@@ -173,6 +253,10 @@ class AIAnalyse:
 
         for cd in cds:
             prompt += f"## {cd.get_frequency()} 周期数据\n\n"
+
+            prompt += "### 市场概况与技术指标\n\n"
+            prompt += self.get_indicators_info(cd) + "\n"
+            prompt += self.get_recent_klines_info(cd) + "\n"
 
             # 笔数据
             bis = cd.get_bis()
