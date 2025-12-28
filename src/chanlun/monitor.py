@@ -72,6 +72,11 @@ def monitoring_code(
                 "cross_up": 0,
                 "cross_down": 0,
             },
+            "idx_zhixing": {
+                "enable": 0,
+                "cross_up": 0,
+                "cross_down": 0,
+            },
         }
 
     ex = get_exchange(Market(market))
@@ -226,6 +231,42 @@ def monitoring_code(
                     {
                         "type": "macd",
                         "msg": "MACD下穿",
+                        "frequency": frequency,
+                        "cross": "down",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "up",
+                    }
+                )
+
+        if check_idx_types.get("idx_zhixing", {}).get("enable", 0):
+            zhixing_data = Strategy.idx_zhixing(cd)
+            short_trend = zhixing_data["short_trend"]
+            long_short = zhixing_data["long_short"]
+
+            if (
+                check_idx_types["idx_zhixing"]["cross_up"]
+                and short_trend[-1] > long_short[-1]
+                and short_trend[-2] < long_short[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "知行短期趋势线上穿多空线",
+                        "frequency": frequency,
+                        "cross": "up",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "down",
+                    }
+                )
+            if (
+                check_idx_types["idx_zhixing"]["cross_down"]
+                and short_trend[-1] < long_short[-1]
+                and short_trend[-2] > long_short[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "知行短期趋势线下穿多空线",
                         "frequency": frequency,
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,

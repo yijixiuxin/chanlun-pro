@@ -99,6 +99,12 @@ class AlertTasks(object):
                             if alert_config.check_idx_macd_info
                             else {"enable": 0}
                         ),
+                        "idx_zhixing": (
+                            json.loads(alert_config.check_idx_zhixing_info)
+                            if hasattr(alert_config, "check_idx_zhixing_info")
+                            and alert_config.check_idx_zhixing_info
+                            else {"enable": 0}
+                        ),
                     },
                     is_send_msg=bool(alert_config.is_send_msg),
                     cl_config=cl_config,

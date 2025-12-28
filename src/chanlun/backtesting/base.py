@@ -567,6 +567,30 @@ class Strategy(ABC):
         return sar
 
     @staticmethod
+    def idx_zhixing(cd: ICL):
+        """
+        知行指标
+        知行短期趋势线:EMA(EMA(C,10),10)
+        知行多空线:(MA(CLOSE,14)+MA(CLOSE,28)+MA(CLOSE,57)+MA(CLOSE,114))/4
+        """
+        close_prices = np.array([k.c for k in cd.get_klines()])
+        # 短期趋势线
+        ema10 = talib.EMA(close_prices, timeperiod=10)
+        short_trend = talib.EMA(ema10, timeperiod=10)
+
+        # 多空线
+        ma14 = talib.MA(close_prices, timeperiod=14)
+        ma28 = talib.MA(close_prices, timeperiod=28)
+        ma57 = talib.MA(close_prices, timeperiod=57)
+        ma114 = talib.MA(close_prices, timeperiod=114)
+        long_short = (ma14 + ma28 + ma57 + ma114) / 4
+
+        return {
+            "short_trend": short_trend,
+            "long_short": long_short
+        }
+
+    @staticmethod
     def get_max_loss_price(
         mmd_type: str, now_price: float, stop_loss_price: float, max_loss_rate: float
     ):

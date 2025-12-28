@@ -1189,6 +1189,9 @@ def create_app(test_config=None):
             "check_idx_macd_info_enable": 0,
             "check_idx_macd_info_cross_up": 0,
             "check_idx_macd_info_cross_down": 0,
+            "check_idx_zhixing_info_enable": 0,
+            "check_idx_zhixing_info_cross_up": 0,
+            "check_idx_zhixing_info_cross_down": 0,
             "is_send_msg": 1,
             "is_run": 1,
         }
@@ -1209,6 +1212,15 @@ def create_app(test_config=None):
                 check_idx_macd_info = (
                     json.loads(_alert_config.check_idx_macd_info)
                     if _alert_config.check_idx_macd_info
+                    else {
+                        "enable": 0,
+                        "cross_up": 0,
+                        "cross_down": 0,
+                    }
+                )
+                check_idx_zhixing_info = (
+                    json.loads(_alert_config.check_idx_zhixing_info)
+                    if hasattr(_alert_config, "check_idx_zhixing_info") and _alert_config.check_idx_zhixing_info
                     else {
                         "enable": 0,
                         "cross_up": 0,
@@ -1236,6 +1248,9 @@ def create_app(test_config=None):
                     "check_idx_macd_info_enable": check_idx_macd_info["enable"],
                     "check_idx_macd_info_cross_up": check_idx_macd_info["cross_up"],
                     "check_idx_macd_info_cross_down": check_idx_macd_info["cross_down"],
+                    "check_idx_zhixing_info_enable": check_idx_zhixing_info["enable"],
+                    "check_idx_zhixing_info_cross_up": check_idx_zhixing_info["cross_up"],
+                    "check_idx_zhixing_info_cross_down": check_idx_zhixing_info["cross_down"],
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
@@ -1305,6 +1320,25 @@ def create_app(test_config=None):
                 ),
             }
         )
+        check_idx_zhixing_infos = json.dumps(
+            {
+                "enable": (
+                    int(request.form["check_idx_zhixing_info_enable"])
+                    if request.form["check_idx_zhixing_info_enable"]
+                    else 0
+                ),
+                "cross_up": (
+                    int(request.form["check_idx_zhixing_info_cross_up"])
+                    if request.form["check_idx_zhixing_info_cross_up"]
+                    else 0
+                ),
+                "cross_down": (
+                    int(request.form["check_idx_zhixing_info_cross_down"])
+                    if request.form["check_idx_zhixing_info_cross_down"]
+                    else 0
+                ),
+            }
+        )
         alert_config = {
             "id": request.form["id"],
             "market": request.form["market"],
@@ -1320,6 +1354,7 @@ def create_app(test_config=None):
             "check_xd_mmd": request.form["check_xd_mmd"],
             "check_idx_ma_info": check_idx_ma_infos,
             "check_idx_macd_info": check_idx_macd_infos,
+            "check_idx_zhixing_info": check_idx_zhixing_infos,
             "is_send_msg": int(request.form["is_send_msg"]),
             "is_run": int(request.form["is_run"]),
         }

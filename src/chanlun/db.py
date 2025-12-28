@@ -93,6 +93,7 @@ class TableByAlertTask(Base):
     check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
     check_idx_ma_info = Column(String(200), comment="检查指数的均线")
     check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
+    check_idx_zhixing_info = Column(String(200), comment="检查指数的知行")
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
