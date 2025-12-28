@@ -87,6 +87,11 @@ def monitoring_code(
 
         jh_cl_msgs = []  # 这里保存缠论触发的机会信息
         jh_idx_msgs = []  # 这里保存指标触发的机会信息
+    except Exception as e:
+        print(f'{market} {code} {name} 监控异常 {e}')
+        traceback.print_exc()
+        return []
+
     bc_maps = {"xd": "线段背驰", "bi": "笔背驰", "pz": "盘整背驰", "qs": "趋势背驰"}
     mmd_maps = {
         "1buy": "一买点",
