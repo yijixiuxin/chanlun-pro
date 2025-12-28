@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import copy
 import datetime
 from typing import Dict, Union, List, Tuple, Any
 import pandas as pd
@@ -129,16 +130,34 @@ class CL(ICL):
         # 使用MACD计算器更新指标
         self.macd_calculator.process_macd(self.get_src_klines())
 
-        cl_klines = self.cl_kline_processor.process_cl_klines(src_klines)
-
+        # 更新缠论K线
+        self.cl_kline_processor.process_cl_klines(self.get_klines())
+        
+        # 获取全量缠论K线，确保计算器能访问完整历史
         # 计算笔和分型
-        bis = self.bi_calculator.calculate(cl_klines)
+        # 传入全量列表，BiCalculator 内部会根据状态进行增量计算
+        LogUtil.info(f"Step 2: 计算笔 (Bi)...")
+        self.bi_calculator.calculate(self.get_cl_klines())
+        bis = self.get_bis()
 
         # 计算线段
-        xds = self.xd_calculator.calculate(bis)
+        # 传入全量列表，XdCalculator 内部会根据状态进行增量计算
+        LogUtil.info(f"Step 3: 计算线段 (Xd)...")
+        self.xd_calculator.calculate(bis)
+        xds = self.get_xds()
+        msg = f"Step 3 Done: 线段列表总数: {len(xds)}"
+        if xds:
+             msg += f", 最后线段: {xds[-1].index} (Done={xds[-1].done})"
+        LogUtil.info(msg)
 
         # 计算中枢
+        # 目前 ZsCalculator 为全量计算
+        LogUtil.info(f"Step 4: 计算中枢 (Zs)...")
         zss = self.zss_calculator.calculate(xds)
+        msg = f"Step 4 Done: 中枢列表总数: {len(zss)}"
+        if zss:
+            msg += f", 最后中枢: {zss[-1].index} (Done={zss[-1].done})"
+        LogUtil.info(msg)
 
         # results = self.chanlun_structure_analyzer.calculate(xds)
         # 计算买卖点和背驰
@@ -160,18 +179,18 @@ class CL(ICL):
 
     def get_src_klines(self) -> List[Kline]:
         """返回原始K线列表"""
-        return self.kline_processor.klines
+        return copy.deepcopy(self.kline_processor.klines)
 
     def get_klines(self) -> List[Any]:
         """返回K线列表"""
         if self.config.get('kline_type') == Config.KLINE_TYPE_CHANLUN.value:
-            return self.cl_kline_processor.cl_klines
+            return self.get_cl_klines()
         else:
             return self.get_src_klines()
 
     def get_cl_klines(self) -> List[CLKline]:
         """返回缠论K线列表"""
-        return self.cl_kline_processor.cl_klines
+        return copy.deepcopy(self.cl_kline_processor.cl_klines)
 
     def get_idx(self) -> dict:
         """返回技术指标数据"""
@@ -180,15 +199,15 @@ class CL(ICL):
 
     def get_fxs(self) -> List[FX]:
         """返回分型列表"""
-        return self.bi_calculator.fxs
+        return copy.deepcopy(self.bi_calculator.fxs)
 
     def get_bis(self) -> List[BI]:
         """返回笔列表"""
-        return self.bi_calculator.bis
+        return copy.deepcopy(self.bi_calculator.bis)
 
     def get_xds(self) -> List[XD]:
         """返回线段列表"""
-        return self.xd_calculator.xds
+        return copy.deepcopy(self.xd_calculator.xds)
 
     def get_zsds(self) -> List[XD]:
         """返回走势段列表"""
@@ -206,7 +225,7 @@ class CL(ICL):
 
     def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
         """返回线段中枢字典"""
-        zss = self.zss_calculator.zss
+        zss = copy.deepcopy(self.zss_calculator.zss)
         if self.zss_calculator.pending_zs:
             zss.append(self.zss_calculator.pending_zs)
         return zss

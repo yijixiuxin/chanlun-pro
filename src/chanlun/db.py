@@ -25,6 +25,7 @@ from sqlalchemy.pool import QueuePool
 from chanlun import config, fun
 from chanlun.base import Market
 from chanlun.config import get_data_path
+from chanlun.tools.log_util import LogUtil
 
 warnings.filterwarnings("ignore")
 
@@ -104,7 +105,7 @@ class DB(object):
         elif market == Market.A.value:
             table_name = f"{market}_klines_{stock_code[:7]}"
         elif market == Market.US.value:
-            table_name = f"{market}_klines_{stock_code[0]}"
+            table_name = f"{market}_klines_{stock_code}"
         elif market == Market.FX.value:
             table_name = f"{market}_klines_{stock_code}"
         elif market == Market.CURRENCY.value:
@@ -219,34 +220,61 @@ class DB(object):
         return _res
 
     def klines_insert(
-        self, market: str, code: str, frequency: str, klines: pd.DataFrame
+            self, market: str, code: str, frequency: str, klines: pd.DataFrame
     ):
         """
-        插入k线
-        :param market:
-        :param code:
-        :param frequency:
-        :param klines:
-        :return:
+        插入k线 (性能优化版)
         """
+        if klines.empty:
+            return True
+
+        # 1. 数据预处理 (Pandas 向量化操作，替代 iterrows)
+        # 复制一份以防修改原数据
+        df = klines.copy()
+
+        # 统一处理时间：去除时区信息
+        if df["date"].dt.tz is not None:
+            df["dt"] = df["date"].dt.tz_localize(None)
+        else:
+            df["dt"] = df["date"]
+
+        # 映射列名：API返回的列名 -> 数据库列名
+        # 假设 API 列名为: open, close, high, low, volume, position
+        # 数据库列名为: o, c, h, l, v, p
+        rename_map = {
+            "open": "o",
+            "close": "c",
+            "high": "h",
+            "low": "l",
+            "volume": "v",
+            "position": "p"
+        }
+        df.rename(columns=rename_map, inplace=True)
+
+        # 填充必要的索引列
+        df["code"] = code
+        df["f"] = frequency
+
+        # 筛选需要入库的列
+        db_columns = ["code", "dt", "f", "o", "c", "h", "l", "v"]
+        if "p" in df.columns:
+            db_columns.append("p")
+
+        # 确保只包含存在的列，防止 KeyError
+        final_columns = [col for col in db_columns if col in df.columns]
+
+        # 【核心优化点】直接转换为字典列表，极快
+        data_to_insert = df[final_columns].to_dict(orient="records")
+
         with self.Session() as session:
             table = self.klines_tables(market, code)
 
-            # 如果是 sqlite ，则慢慢更新吧
+            # 如果是 SQLite，依然使用 ORM 的 merge 方式或者简化的 upsert
             if config.DB_TYPE == "sqlite":
-                for _, _k in klines.iterrows():
-                    _in_k = {
-                        "code": code,
-                        "f": frequency,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if "position" in _k.keys():
-                        _in_k["p"] = _k["position"]
+                # SQLite 处理逻辑保持现状，或者优化为 execute_many
+                # 这里为了稳妥，暂保持原有的逐行检查逻辑，但数据源已经是 dict list 了
+                # 如果对 SQLite 也有性能要求，建议改用 core insert + on_conflict_do_update
+                for _in_k in data_to_insert:
                     db_k = (
                         session.query(table)
                         .filter(
@@ -265,43 +293,42 @@ class DB(object):
                             table.dt == _in_k["dt"],
                         ).update(_in_k)
                 session.commit()
-                # 失效缓存（新增数据可能更新最后时间）
                 self._last_dt_cache.pop((market, code, frequency), None)
                 return True
 
-            # 将 klines 数据拆分为每 500 条一组，批量插入
-            group = np.arange(len(klines)) // 500
-            groups = [
-                group.reset_index(drop=True) for _, group in klines.groupby(group)
-            ]
-            in_position = "position" in klines.columns
-            for g_klines in groups:
-                insert_klines = []
-                for _, _k in g_klines.iterrows():
-                    _insert_k = {
-                        "code": code,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
+            # MySQL 批量插入优化
+            # 增大 Batch Size (500 -> 20000)
+            batch_size = 20000
+
+            try:
+                # 分块处理
+                for i in range(0, len(data_to_insert), batch_size):
+                    batch = data_to_insert[i: i + batch_size]
+
+                    # 构建 Insert 语句
+                    insert_stmt = insert(table).values(batch)
+
+                    # 构建 On Duplicate Key Update 语句
+                    # 排除主键/唯一索引列 (code, dt, f)
+                    update_columns = {
+                        x.name: x for x in insert_stmt.inserted
+                        if x.name not in ["code", "dt", "f"]
                     }
-                    if in_position:
-                        _insert_k["p"] = _k["position"]
-                    insert_klines.append(_insert_k)
-                insert_stmt = insert(table).values(insert_klines)
-                update_keys = ["o", "c", "h", "l", "v"]
-                if in_position:
-                    update_keys.append("p")
-                update_columns = {
-                    x.name: x for x in insert_stmt.inserted if x.name in update_keys
-                }
-                upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-                session.execute(upsert_stmt)
+
+                    upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
+
+                    # 执行
+                    session.execute(upsert_stmt)
+
+                # 所有批次执行完再一次性提交，极大提升速度
                 session.commit()
-            # 失效缓存（新增数据可能更新最后时间）
+
+            except Exception as e:
+                session.rollback()
+                LogUtil.error(f"Batch Insert Error: {e}")
+                raise e
+
+            # 失效缓存
             self._last_dt_cache.pop((market, code, frequency), None)
 
         return True

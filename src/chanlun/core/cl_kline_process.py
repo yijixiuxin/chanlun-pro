@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-缠论K线包含关系处理模块
-支持增量更新，并仅返回新增或变更的K线
+缠论K线包含关系处理模块 - 修复增量更新问题
 """
 from typing import List
 from chanlun.core.cl_interface import Kline, CLKline
@@ -12,23 +11,16 @@ from chanlun.tools.log_util import LogUtil
 class CL_Kline_Process:
     """
     该类负责处理K线的包含关系，并支持增量更新。
-
-    它接收原始K线列表(src_klines)，并生成经过包含关系处理后的缠论K线列表(cl_klines)。
-    `process_cl_klines` 方法经过优化，仅返回新增或因合并而更新的 CLKline。
+    已修复：支持对同一 index 的 K 线进行数值更新（Re-paint）。
     """
 
     def __init__(self):
-        """
-        初始化处理器
-        """
         self.cl_klines: List[CLKline] = []
-        # 跟踪最后一个已处理的 *原始* K线索引，用于判断是否需要增量更新
+        # 跟踪最后一个已处理的 *原始* K线索引
         self._last_src_kline_index: int = -1
 
     def _need_merge(self, k1: CLKline, k2: CLKline) -> bool:
-        """
-        判断两根缠论K线是否存在包含关系
-        """
+        """判断两根缠论K线是否存在包含关系"""
         # k1 包含 k2
         k1_contains_k2 = k1.h >= k2.h and k1.l <= k2.l
         # k2 包含 k1
@@ -36,30 +28,16 @@ class CL_Kline_Process:
         return k1_contains_k2 or k2_contains_k1
 
     def _merge_klines(self, k1: CLKline, k2: CLKline, direction: str) -> CLKline:
-        """
-        根据指定方向合并两根K线
-
-        Args:
-            k1 (CLKline): 较早的K线 (即 self.cl_klines[-1])
-            k2 (CLKline): 较新的K线 (即从当前 src_kline 生成的)
-            direction (str): 合并方向, 'up' 或 'down'
-
-        Returns:
-            CLKline: 合并后的新K线
-        """
+        """根据指定方向合并两根K线"""
         if direction == 'up':
             # 向上合并：取 高-高, 高-低
             h, l = max(k1.h, k2.h), max(k1.l, k2.l)
-            # 合并后的K线应为阳线 (o=l, c=h)
-            o, c = l, h
-            # 日期和k_index 取高点所在K线的
+            o, c = l, h  # 示意性赋值，实际上缠论合并K线不强调OC，但保持逻辑一致
             date, k_index = (k1.date, k1.k_index) if k1.h > k2.h else (k2.date, k2.k_index)
         else:  # 'down'
             # 向下合并：取 低-高, 低-低
             h, l = min(k1.h, k2.h), min(k1.l, k2.l)
-            # 合并后的K线应为阴线 (o=h, c=l)
             o, c = h, l
-            # 日期和k_index 取低点所在K线的
             date, k_index = (k1.date, k1.k_index) if k1.l < k2.l else (k2.date, k2.k_index)
 
         merged = CLKline(
@@ -67,123 +45,129 @@ class CL_Kline_Process:
             klines=k1.klines + k2.klines,  # 累积所有原始K线
             index=k1.index,  # 保持第一根K线的索引
             _n=k1.n + k2.n,  # 累积合并的K线数量
-            _q=k1.q  # 缺口属性继承自第一根K线
+            _q=k1.q  # 缺口属性继承
         )
-        merged.up_qs = direction  # 记录合并方向
+        merged.up_qs = direction
         return merged
 
-    def process_cl_klines(self, src_klines: List[Kline]) -> List[CLKline]:
+    def _process_one_kline(self, current_k: Kline):
         """
-        遍历原始K线，进行包含关系处理，生成缠论K线。
-        支持增量更新，只处理和返回新增或更新的缠论K线。
+        核心原子操作：将一根原始K线加入到 cl_klines 序列中。
+        """
+        # --- A. 初始化第一根缠论 K 线 ---
+        if not self.cl_klines:
+            new_cl_k = CLKline(
+                k_index=current_k.index, date=current_k.date,
+                h=current_k.h, l=current_k.l, o=current_k.o, c=current_k.c, a=current_k.a,
+                klines=[current_k], index=0, _n=1
+            )
+            self.cl_klines.append(new_cl_k)
+            self._last_src_kline_index = current_k.index
+            return
 
-        Args:
-            src_klines (List[Kline]): 完整的原始K线数据列表
+        # --- B. 获取当前最新的缠论 K 线 ---
+        last_cl_k = self.cl_klines[-1]
 
-        Returns:
-            List[CLKline]: 本次调用新增或更新的缠论K线列表
+        # 创建新对象的包装
+        new_cl_k = CLKline(
+            k_index=current_k.index, date=current_k.date,
+            h=current_k.h, l=current_k.l, o=current_k.o, c=current_k.c, a=current_k.a,
+            klines=[current_k], index=len(self.cl_klines), _n=1
+        )
+
+        # --- C. 判断包含关系 ---
+        # 1. 检查是否有缺口 (即无重叠)
+        has_gap = new_cl_k.l > last_cl_k.h or new_cl_k.h < last_cl_k.l
+
+        if has_gap:
+            new_cl_k.q = True
+            self.cl_klines.append(new_cl_k)
+
+        elif self._need_merge(last_cl_k, new_cl_k):
+            # 确定合并方向
+            direction = 'up'  # 默认
+            if last_cl_k.up_qs is not None:
+                direction = last_cl_k.up_qs
+            elif len(self.cl_klines) >= 2:
+                prev_cl_k = self.cl_klines[-2]
+                if last_cl_k.h < prev_cl_k.h:
+                    direction = 'down'
+            else:
+                # 第一根和第二根的处理
+                if new_cl_k.h > last_cl_k.h:
+                    direction = 'up'
+                elif new_cl_k.h < last_cl_k.h:
+                    direction = 'down'
+                else:
+                    direction = 'up' if new_cl_k.l > last_cl_k.l else 'down'
+
+            merged_k = self._merge_klines(last_cl_k, new_cl_k, direction)
+            # 原地替换
+            merged_k.index = last_cl_k.index
+            self.cl_klines[-1] = merged_k
+
+        else:
+            # 有重叠但无包含，追加
+            self.cl_klines.append(new_cl_k)
+
+        # --- D. 更新状态 ---
+        self._last_src_kline_index = current_k.index
+
+    def process_cl_klines(self, src_klines: List[Kline]):
+        """
+        处理原始K线列表。
+        修复逻辑：如果遇到 index 等于 _last_src_kline_index，视为更新操作，执行回滚并重新计算。
         """
         if not src_klines:
             return []
 
-        # 如果没有新的K线数据 (比较最后一个原始K线的索引)
-        if len(src_klines) - 1 <= self._last_src_kline_index:
-            return []
+        # 记录起始返回点（注意：如果发生回滚，列表长度可能会暂时变短，
+        # 但我们总是希望返回“受影响”的部分，所以取 max(0, len-1) 是安全的起点）
+        return_start_idx = max(0, len(self.cl_klines) - 1)
+        has_processed = False
 
-        # --- 1. 确定处理的起始位置 ---
-        start_src_index: int = 0
-        # 记录返回的 cl_klines 在 self.cl_klines 中的起始索引
-        return_cl_klines_start_index: int = 0
+        for current_k in src_klines:
 
-        if self.cl_klines and self._last_src_kline_index >= 0:
-            # --- 增量更新 ---
-            # 需要回溯一根K线，因为最后一根 cl_kline 可能需要和新的 src_kline 合并
-            last_cl_k = self.cl_klines.pop()
-
-            # 找到这根被弹出的 cl_kline 是由哪根 src_kline *开始* 构成的
-            if last_cl_k.klines:
-                start_src_index = last_cl_k.klines[0].index
-            else:
-                # 保护性分支，理论上 klines 不应为空
-                # 回到上一次处理的最后一根K线的位置
-                start_src_index = self._last_src_kline_index
-
-            # 记录返回列表的起始位置 (即当前 cl_klines 的末尾)
-            return_cl_klines_start_index = len(self.cl_klines)
-
-        else:
-            # --- 首次全量处理 ---
-            self.cl_klines.clear()
-            self._last_src_kline_index = -1
-
-        # --- 2. 主循环，处理K线 ---
-        for i in range(start_src_index, len(src_klines)):
-            current_k = src_klines[i]
-
-            # 将原始K线 包装成 缠论K线
-            cl_k = CLKline(
-                k_index=current_k.index, date=current_k.date, h=current_k.h, l=current_k.l,
-                o=current_k.o, c=current_k.c, a=current_k.a, klines=[current_k],
-                index=len(self.cl_klines),  # 临时索引，后续可能被修改
-                _n=1
-            )
-
-            if not self.cl_klines:
-                # 添加第一根K线
-                self.cl_klines.append(cl_k)
+            # --- 情况1: 这是一个旧数据 (完全忽略) ---
+            if current_k.index < self._last_src_kline_index:
                 continue
 
-            # 获取处理后的最后一根K线，用于比较
-            last_cl_k = self.cl_klines[-1]
+            has_processed = True
 
-            # 检查是否有缺口 (新K线与最后一根K线完全不重合)
-            has_gap = cl_k.l > last_cl_k.h or cl_k.h < last_cl_k.l
-            if has_gap:
-                cl_k.q = True  # 标记为有缺口
-                cl_k.index = len(self.cl_klines)  # 确定其最终索引
-                self.cl_klines.append(cl_k)
-                continue
+            # --- 情况2: 这是一个更新数据 (Index 相同，数据变动) ---
+            if current_k.index == self._last_src_kline_index:
+                # LogUtil.debug(f"检测到K线更新: index={current_k.index}, 执行回滚重算...")
 
-            # 检查是否需要合并 (有重叠区域)
-            if self._need_merge(last_cl_k, cl_k):
-                # --- A. 需要合并 ---
+                # 1. 弹出最后一根受影响的 CLKline
+                if self.cl_klines:
+                    dirty_cl_k = self.cl_klines.pop()
 
-                # 确定合并方向
-                direction = 'up'  # 默认向上
-                if last_cl_k.up_qs is not None:
-                    # 1. 如果上一根K线已是合并K线，继承其方向
-                    direction = last_cl_k.up_qs
-                elif len(self.cl_klines) >= 2:
-                    # 2. 标准情况：比较最后两根已处理K线的高点来定方向
-                    if self.cl_klines[-1].h < self.cl_klines[-2].h:
-                        direction = 'down'
-                    # (如果 >=，则保持默认 'up')
-                else:
-                    # 3. 边缘情况：第一次发生包含 (只有一根K线)
-                    #    比较当前K线和上一根K线
-                    if cl_k.h > last_cl_k.h:
-                        direction = 'up'
-                    elif cl_k.h < last_cl_k.h:
-                        direction = 'down'
-                    else:  # 高点相同，比较低点
-                        direction = 'up' if cl_k.l > last_cl_k.l else 'down'
+                    # 2. 从这根脏 K 线中，分离出 *之前已经确认的* 原始 K 线
+                    #    逻辑：dirty_cl_k 可能由 [8017, 8018] 合并而成。
+                    #    现在 8018 更新了，我们要保留 8017，扔掉旧的 8018，然后放入新的 8018。
+                    valid_prev_klines = [k for k in dirty_cl_k.klines if k.index < current_k.index]
 
-                # 执行合并
-                merged_k = self._merge_klines(last_cl_k, cl_k, direction)
+                    # 3. 修正 _last_src_kline_index
+                    #    我们需要将其回退到 valid_prev_klines 的最后一个 index
+                    #    如果 valid_prev_klines 为空，说明之前那个 cl_k 就是由单根 8018 构成的，
+                    #    那么回退到上一个 cl_kline 的结束点 (或 -1)
+                    if valid_prev_klines:
+                        self._last_src_kline_index = valid_prev_klines[-1].index
+                    else:
+                        # 尝试找更前面的
+                        if self.cl_klines:
+                            # 取当前队尾包含的最后一个原始K线index
+                            self._last_src_kline_index = self.cl_klines[-1].klines[-1].index
+                        else:
+                            self._last_src_kline_index = -1
 
-                # 用合并后的K线 *替换* 列表中的最后一根
-                self.cl_klines[-1] = merged_k
+                    # 4. 【关键】先重放之前的有效 K 线，恢复现场
+                    for prev_k in valid_prev_klines:
+                        self._process_one_kline(prev_k)
+
+                # 5. 最后处理当前这根更新后的 K 线
+                self._process_one_kline(current_k)
+
+            # --- 情况3: 这是一个新数据 (Index 更大) ---
             else:
-                # --- B. 无缺口，无合并 ---
-                # (即K线有重叠，但不构成包含关系，是独立K线)
-                cl_k.index = len(self.cl_klines)  # 确定其最终索引
-                self.cl_klines.append(cl_k)
-
-        # --- 3. 更新状态并返回结果 ---
-        self._last_src_kline_index = len(src_klines) - 1
-
-        # 仅返回本次调用新增或更新的K线
-        new_and_updated_klines = self.cl_klines[return_cl_klines_start_index:]
-
-
-        return new_and_updated_klines
+                self._process_one_kline(current_k)

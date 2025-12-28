@@ -45,10 +45,18 @@ class KlineDataProcessor:
             # 预处理后发现没有新数据
             return []
 
+        if not processed_df.empty:
+             start_date = processed_df['date'].iloc[0]
+             end_date = processed_df['date'].iloc[-1]
+             LogUtil.info(f"KlineProcessor: 预处理后保留 {len(processed_df)} 条数据。范围: {start_date} -> {end_date}")
+
         new_klines = self._convert(processed_df)
 
         # 调用更新方法，并返回其返回的增量数据
-        return self._update_internal_klines(new_klines)
+        increment_klines = self._update_internal_klines(new_klines)
+        if increment_klines:
+            LogUtil.info(f"KlineProcessor: 实际产生增量K线 {len(increment_klines)} 条。Last Date: {self.klines[-1].date}")
+        return increment_klines
 
     def _preprocess(self, klines_df: pd.DataFrame) -> pd.DataFrame:
         """
