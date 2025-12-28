@@ -1,19 +1,12 @@
 # -*- coding: utf-8 -*-
-"""
-笔计算模块 (重构为类)
-负责根据缠论K线，识别分型并连接成笔。
-"""
 from typing import List, Optional
-
 from chanlun.core.cl_interface import FX, BI, CLKline
-from chanlun.tools.log_util import LogUtil
 
 
 class BiCalculator:
     """
     笔计算器
-    封装了分型识别和笔的计算逻辑。
-    支持全量和增量计算。当增量数据传入时，它会从上次的状态继续，并仅返回新形成的结果。
+    修复了增量计算时可能丢失待定笔（pending_bi）的问题。
     """
 
     def __init__(self):
@@ -24,130 +17,188 @@ class BiCalculator:
         self.cl_klines: List[CLKline] = []
 
     def _check_stroke_validity(self, fx1: FX, fx2: FX) -> bool:
-        """
-        检查两个分型是否能构成有效的一笔。
-        """
-        # 规则1: 必须是顶底分型相连
+        """检查两个分型是否能构成有效的一笔。"""
+        # 1. 顶底分型必须不同
         if fx1.type == fx2.type:
             return False
 
-        # 规则2: 分型之间必须至少有1根不属于分型的K线
+        # 2. 顶分型与底分型之间至少隔一根K线 (索引差 >= 4)
         if abs(fx2.k.index - fx1.k.index) < 4:
             return False
 
-        h1 = fx1.k.h
-        l1 = fx1.k.l
-        h2 = fx2.k.h
-        l2 =fx2.k.l
-
-
-        # 规则 5: 新笔的高低点必须突破前一分型
-        if fx1.type == 'ding':  # fx2 必须是底分型
-            if l2 >= l1:
+        # 3. 顶底分型的高低点验证
+        if fx1.type == 'ding':
+            if fx2.val >= fx1.val:  # 底分型底不能高于顶分型底 (严格讲是底分型底 < 顶分型底)
+                # 注意：这里用 val (极值) 比较更通用
                 return False
-        else:  # fx1.type == 'di', fx2 必须是顶分型
-            if h2 <= h1:
+        else:  # fx1.type == 'di'
+            if fx2.val <= fx1.val:  # 顶分型顶不能低于底分型顶
                 return False
 
         return True
 
-    def calculate(self, cl_klines: List[CLKline]) -> List[BI]:
+    def calculate(self, cl_klines: List[CLKline]):
         """
-        在识别分型的过程中同步判断笔的形成。
-        支持全量和增量数据。当传入增量数据时，返回增量结果。
+        支持增量计算的笔识别逻辑。
         """
-        # --- 1. 数据和状态初始化 ---
+        # --- 1. 数据校验与增量判断 ---
         if not cl_klines:
-            return []
+            return
 
         is_incremental = bool(self.cl_klines)
         if is_incremental and cl_klines[-1].index <= self.cl_klines[-1].index:
-            return []
+            return
 
-        new_bis: List[BI] = []
         self.cl_klines = cl_klines
 
+        # --- 2. 确定计算起始点 (回退逻辑) ---
         start_index = 1
+
         if is_incremental:
-            if self.bis and not self.bis[-1].end.done:
-                self.pending_bi = self.bis.pop()
-                self.bi_index -= 1
-                start_index = self.pending_bi.start.k.index
-                self.fxs = [fx for fx in self.fxs if fx.k.index < start_index]
-            elif self.bis:
-                start_index = self.bis[-1].end.k.index
+            # 策略：只要是增量，就假设最后一笔（无论是完成还是未完成）的状态是不稳定的
+            # 尤其是最后一笔未完成时，必须重算。
+            # 如果最后一笔已完成，为了应对包含关系变动导致分型重构的情况，建议也回退。
+
+            if self.bis:
+                last_bi = self.bis[-1]
+
+                # 如果最后一笔未完成，肯定要弹出重算
+                if not last_bi.end.done:
+                    self.bis.pop()
+                    # 弹出后，当前的 bi_index 需要回退
+                    self.bi_index = last_bi.index
+                    # 起点回退到这笔的开始位置，重新扫描，看能否形成新的形态
+                    start_index = last_bi.start.k.index
+                else:
+                    # 如果最后一笔已完成，从它结束的位置开始往后找
+                    # 注意：已完成的笔，其 end 分型是确定的，我们从 end 分型所在 K 线开始扫描
+                    start_index = last_bi.end.k.index
+
             elif self.fxs:
                 start_index = self.fxs[-1].k.index
+
+            # 清理 pending_bi，因为我们要重新从 start_index 处构建它
+            self.pending_bi = None
+
+            # 清理过期的分型缓存 (保留 start_index 之前的，因为它们可能作为起点)
+            # 注意：这里保留 < start_index 的分型。
+            # 当循环从 start_index 开始时，会重新生成该位置及之后的分型。
+            self.fxs = [fx for fx in self.fxs if fx.k.index < start_index]
+
             start_index = max(1, start_index)
+
         else:
+            # 全量计算
             self.bis, self.fxs, self.pending_bi, self.bi_index = [], [], None, 0
 
-        # --- 2. 核心计算循环 ---
+        # --- 3. 核心计算循环 ---
         i = start_index
-        while i < len(self.cl_klines) - 1:
-            current_fx = self._find_fractal(self.cl_klines[i - 1], self.cl_klines[i], self.cl_klines[i + 1])
+        total_len = len(self.cl_klines)
+
+        while i < total_len - 1:
+            k_left = self.cl_klines[i - 1]
+            k_curr = self.cl_klines[i]
+            k_right = self.cl_klines[i + 1]
+
+            current_fx = self._find_fractal(k_left, k_curr, k_right)
 
             if not current_fx:
                 i += 1
-                continue  # 未找到分型，继续遍历
+                continue
 
             self.fxs.append(current_fx)
 
+            # === 分支 A: 当前没有正在构建的笔 ===
             if not self.pending_bi:
-                if len(self.fxs) >= 2:
+                # 寻找起点的策略：
+                start_fx = None
+
+                # 情况1: 如果已经有历史笔，起点必须是上一笔的终点
+                if self.bis:
+                    start_fx = self.bis[-1].end
+                # 情况2: 如果是第一笔，从分型列表中找倒数第二个
+                elif len(self.fxs) >= 2:
                     start_fx = self.fxs[-2]
+
+                if start_fx:
+                    # 尝试构建新笔
                     if self._check_stroke_validity(start_fx, current_fx):
                         bi_type = 'up' if start_fx.type == 'di' else 'down'
-                        self.pending_bi = BI(start=start_fx, end=current_fx, _type=bi_type, index=self.bi_index)
+                        self.pending_bi = BI(
+                            start=start_fx,
+                            end=current_fx,
+                            _type=bi_type,
+                            index=self.bi_index
+                        )
+                        self.pending_bi.end.done = False  # 标记为未完成
                         self.bi_index += 1
-                        i += 3
+                        i += 1  # 即使成笔，也不要跳跃太多，以免漏掉紧随其后的分型变化
                     else:
                         i += 1
                 else:
-                    i += 3
+                    i += 1
+
+            # === 分支 B: 已有正在构建的笔 (判断延伸或结束) ===
             else:
                 end_fx_of_pending = self.pending_bi.end
+
+                # 1. 同向分型：尝试延伸
                 if current_fx.type == end_fx_of_pending.type:
+                    # 顶分型更高，或底分型更低
                     if (end_fx_of_pending.type == 'ding' and current_fx.val > end_fx_of_pending.val) or \
-                       (end_fx_of_pending.type == 'di' and current_fx.val < end_fx_of_pending.val):
+                            (end_fx_of_pending.type == 'di' and current_fx.val < end_fx_of_pending.val):
+                        # 更新当前待定笔的终点
                         self.pending_bi.end = current_fx
-                        i += 3
+                        self.pending_bi.end.done = False
+                        # 延伸后，可以适当跳过一根，但保守起见 i+=1
+                        i += 1
                     else:
                         i += 1
+
+                # 2. 反向分型：尝试结束当前笔，并开启新笔
                 else:
                     if self._check_stroke_validity(end_fx_of_pending, current_fx):
+                        # ---> 确认旧笔结束 <---
                         self.pending_bi.end.done = True
                         self.bis.append(self.pending_bi)
-                        new_bis.append(self.pending_bi)
 
-                        bi_type = 'up' if end_fx_of_pending.type == 'di' else 'down'
-                        self.pending_bi = BI(start=end_fx_of_pending, end=current_fx, _type=bi_type, index=self.bi_index)
+                        # ---> 生成下一笔的雏形 <---
+                        # 新笔起点 = 旧笔终点
+                        start_fx_new = self.pending_bi.end
+                        bi_type_new = 'up' if start_fx_new.type == 'di' else 'down'
+
+                        self.pending_bi = BI(
+                            start=start_fx_new,
+                            end=current_fx,
+                            _type=bi_type_new,
+                            index=self.bi_index
+                        )
+                        self.pending_bi.end.done = False
                         self.bi_index += 1
-                        i += 3
+                        i += 1  # 找到新分型后，继续往后看
                     else:
+                        # 虽是反向分型，但不满足成笔条件（如力度不够），忽略
                         i += 1
-        # --- 3. 循环结束后，处理最后一个待定笔 ---
-        if self.pending_bi:
-            self.pending_bi.end.done = False
-            self.bis.append(self.pending_bi)
-            new_bis.append(self.pending_bi)
 
-        # --- 4. 返回结果 ---
-        if is_incremental:
-            return new_bis
-        else:
-            return self.bis
+        # --- 4. 收尾：将最后的 pending_bi 放入列表供展示 ---
+        # 注意：pending_bi 此时应该是一个 done=False 的笔，代表当前正在运行的那一笔
+        if self.pending_bi:
+            # 如果 bis 为空，直接加
+            if not self.bis:
+                self.bis.append(self.pending_bi)
+            # 如果 bis 不为空，且 pending_bi 不是 bis 里的最后一个对象，则添加
+            elif self.bis[-1] != self.pending_bi:
+                self.bis.append(self.pending_bi)
+
+            # 确保状态正确
+            self.bis[-1].end.done = False
 
     def _find_fractal(self, k1: CLKline, k2: CLKline, k3: CLKline) -> Optional[FX]:
         """
-        根据三根K线判断是否构成顶或底分型。
+        简化版分型识别
         """
-        is_ding = k2.h > k1.h and k2.h > k3.h and k2.l > k1.l and k2.l > k3.l
-        if is_ding:
+        if k2.h > k1.h and k2.h > k3.h and k2.l > k1.l and k2.l > k3.l:
             return FX(_type='ding', k=k2, klines=[k1, k2, k3], val=k2.h)
-
-        is_di = k2.l < k1.l and k2.l < k3.l and k2.h < k1.h and k2.h < k3.h
-        if is_di:
+        if k2.l < k1.l and k2.l < k3.l and k2.h < k1.h and k2.h < k3.h:
             return FX(_type='di', k=k2, klines=[k1, k2, k3], val=k2.l)
-
         return None
