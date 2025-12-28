@@ -1,13 +1,14 @@
 import datetime
 import time
 from typing import Dict, List, Union
-
+from datetime import timedelta
 import pandas as pd
 import pytz
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
 from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
+from chanlun.tools.log_util import LogUtil
 from xtquant import xtdata
 
 """
@@ -23,6 +24,31 @@ class ExchangeQMT(Exchange):
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
+
+        # 1. 优化：利用 QMT 原生支持的周期，减少本地 Resample 的开销
+        self.frequency_map = {
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "15m",
+            "30m": "30m",
+            "60m": "1h",  # 优化：直接使用 1h
+            "d": "1d",
+            "w": "1w",
+            "m": "1mon",
+            "y": "1y",
+        }
+
+        # 2. 你的默认回看周期配置
+        self.DEFAULT_LOOKBACK = {
+            "1m": timedelta(days=30),
+            "5m": timedelta(days=150),
+            "15m": timedelta(days=90),
+            "30m": timedelta(days=750),
+            "60m": timedelta(days=365),
+            "d": timedelta(days=365 * 10),
+            "w": timedelta(days=365 * 20),
+            "m": timedelta(days=365 * 30),
+        }
 
     def code_to_tdx(self, code: str):
         """
@@ -115,152 +141,117 @@ class ExchangeQMT(Exchange):
         # print(f"股票共获取数量：{len(self.g_all_stocks)}")
         return self.g_all_stocks
 
+    def get_start_date_by_frequency(self, frequency: str) -> str:
+        """根据频率和配置计算所需的起始时间字符串 (YYYYMMDD)"""
+        now = datetime.datetime.now()
+        delta = self.DEFAULT_LOOKBACK.get(frequency, timedelta(days=365))
+        start_date = now - delta
+        return start_date.strftime("%Y%m%d")
+
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
+        wait=wait_random(min=0.1, max=1)
     )
     def klines(
-        self,
-        code: str,
-        frequency: str,
-        start_date: str = None,
-        end_date: str = None,
-        args=None,
-    ) -> Union[pd.DataFrame, None]:
-        frequency_map = {
-            "y": "1d",
-            "m": "1d",
-            "w": "1d",
-            "d": "1d",
-            "60m": "5m",
-            "30m": "5m",
-            "15m": "5m",
-            "5m": "5m",
-            "3m": "1m",
-            "1m": "1m",
-        }
-        # TODO 多数据，自定义周去转换消耗时间比较长，可修改为增量替换
-        frequency_count = {
-            "y": -1,
-            "m": 8000 * 20,
-            "w": 8000 * 5,
-            "d": 8000,
-            "60m": 8000 * 12,
-            "30m": 8000 * 10,
-            "15m": 8000 * 3,
-            "5m": 8000 * 10,
-            "3m": 8000 * 3,
-            "1m": 8000 * 20,
-        }
-        # 复权方式
-        dividend_type = "front"
-        if args is not None and "dividend_type" in args:
-            dividend_type = args["dividend_type"]
+            self,
+            code: str,
+            frequency: str,
+            start_date: str = None,
+            end_date: str = None,
+            args=None,
+    ) -> pd.DataFrame:
 
-        # 指定请求数据条数
-        req_counts = frequency_count[frequency]
-        if args is not None and "req_counts" in args:
-            req_counts = args["req_counts"]
-        if start_date:
-            req_counts = -1
+        # 定义标准的空返回值，包含列名，防止下游 KeyError
+        empty_df = pd.DataFrame(columns=['code', 'date', 'open', 'high', 'low', 'close', 'volume'])
 
+        # 1. 确定 QMT 周期
+        qmt_period = self.frequency_map.get(frequency, "1m")
         qmt_code = self.code_to_qmt(code)
 
-        # 首先检查当前是否有数据
-        kline_exists = xtdata.get_market_data(
-            field_list=[],
-            stock_list=[qmt_code],
-            period=frequency_map[frequency],
-            start_time="",
-            end_time="",
-            count=1,
-            dividend_type=dividend_type,
-            fill_data=False,
-        )
-        if kline_exists is None or kline_exists["time"].empty:
-            # 如果没有数据，则全量下载
-            s_time = time.time()
-            # 根据周期，决定下载的时间起始日期
-            if frequency in ["1m", "3m"]:
-                download_start_date = fun.datetime_to_str(
-                    datetime.datetime.now() - datetime.timedelta(days=180), "%Y%m%d"
-                )
-            elif frequency in ["5m", "15m", "30m", "60m"]:
-                download_start_date = fun.datetime_to_str(
-                    datetime.datetime.now() - datetime.timedelta(days=2880), "%Y%m%d"
-                )
-            else:
-                download_start_date = ""
-            if args is not None and "download_start_date" in args:
-                download_start_date = args["download_start_date"]
-
-            xtdata.download_history_data(
-                qmt_code,
-                frequency_map[frequency],
-                start_time=download_start_date,
-                end_time="",
-                incrementally=True,
-            )
-            # print(f"{code}-{frequency} 全量下载历史数据耗时：{time.time() - s_time}")
+        # 2. 确定时间范围
+        if start_date:
+            query_start = start_date.replace("-", "").replace(" ", "").replace(":", "")
         else:
-            # 增量下载
-            # s_time = time.time()
-            xtdata.download_history_data(
-                qmt_code,
-                frequency_map[frequency],
-                start_time="",
-                end_time="",
-                incrementally=True,
-            )
-            # print(f"{code}-{frequency} 增量下载历史数据耗时：{time.time() - s_time}")
+            query_start = self.get_start_date_by_frequency(frequency)
 
-        # s_time = time.time()
-        qmt_klines = xtdata.get_market_data(
-            field_list=[],
-            stock_list=[qmt_code],
-            period=frequency_map[frequency],
-            # 修复：同时替换掉 空格 和 冒号，确保格式为 YYYYMMDDHHMMSS
-            start_time=start_date.replace("-", "").replace(" ", "").replace(":", "") if start_date else "",
+        # 处理复权
+        dividend_type = args.get("dividend_type", "front") if args else "front"
+
+        # 3. 智能增量下载
+        xtdata.download_history_data(
+            stock_code=qmt_code,
+            period=qmt_period,
+            start_time=query_start,
             end_time="",
-            count=req_counts,
+            incrementally=True
+        )
+
+        # 4. 获取数据
+        field_list = ["time", "open", "high", "low", "close", "volume"]
+        raw_data = xtdata.get_market_data(
+            field_list=field_list,
+            stock_list=[qmt_code],
+            period=qmt_period,
+            start_time=query_start,
+            end_time="",
+            count=-1,
             dividend_type=dividend_type,
             fill_data=False,
         )
-        # print(f"{code}-{frequency} 获取历史数据耗时：{time.time() - s_time}")
 
-        s_time = time.time()
-        klines_df = pd.DataFrame(
-            {key: value.values[0] for key, value in qmt_klines.items()}
-        )
+        # 数据完整性检查
+        # 如果 raw_data 为空，或者 time 字段为空/None
+        if not raw_data or raw_data.get("time") is None or raw_data["time"].empty:
+            return empty_df
+
+        # 5. 极速构建 DataFrame
+        try:
+            # 使用 .values[0] 提取第一只股票的数据数组，解决 KeyError: 0
+            data_dict = {
+                "date": raw_data["time"].values[0],
+                "open": raw_data["open"].values[0],
+                "high": raw_data["high"].values[0],
+                "low": raw_data["low"].values[0],
+                "close": raw_data["close"].values[0],
+                "volume": raw_data["volume"].values[0]
+            }
+        except (IndexError, KeyError, AttributeError, ValueError):
+            # 捕获所有可能的解析错误，返回空DF
+            return empty_df
+
+        klines_df = pd.DataFrame(data_dict)
+
+        if klines_df.empty:
+            return empty_df
+
+        # 6. 时间列处理
+        try:
+            klines_df["date"] = pd.to_datetime(klines_df["date"], unit="ms", utc=True)
+            klines_df["date"] = klines_df["date"].dt.tz_convert(self.tz)
+
+            if frequency in ["d", "w", "m", "y"]:
+                klines_df["date"] = klines_df["date"].dt.normalize() + pd.Timedelta(hours=15)
+        except Exception:
+            # 如果时间转换失败
+            return empty_df
+
+        # 添加 code 列
         klines_df["code"] = code
 
-        klines_df["date"] = pd.to_datetime(
-            klines_df["time"], unit="ms", utc=True
-        ).dt.tz_convert(self.tz)
-        klines_df = klines_df[
-            ["code", "date", "open", "high", "low", "close", "volume"]
-        ]
-        # 将 open high low close volume 转换为 float
-        klines_df[["open", "high", "low", "close", "volume"]] = klines_df[
-            ["open", "high", "low", "close", "volume"]
-        ].astype(float)
-        klines_df = klines_df.sort_values("date")
+        # 7. 整理格式
+        klines_df = klines_df[["code", "date", "open", "high", "low", "close", "volume"]]
+        cols_to_float = ["open", "high", "low", "close", "volume"]
+        klines_df[cols_to_float] = klines_df[cols_to_float].astype(float)
 
-        # 如果日线，小时设置为15点
-        if frequency in ["d", "w", "m", "y"]:
-            klines_df["date"] = klines_df["date"].apply(lambda x: x.replace(hour=15))
-
-        # print(f"{code}-{frequency} 获取历史数据转换耗时：{time.time() - s_time}")
-
-        if frequency not in ["d", "5m", "1m"]:
-            # s_time = time.time()
+        # 8. 非原生周期重采样 (如需)
+        if frequency not in self.frequency_map:
             klines_df = convert_stock_kline_frequency(klines_df, frequency)
-            # print(f"{code}-{frequency} 转换历史周期数据耗时：{time.time() - s_time}")
 
-        # print(klines_df.tail(2))
-        if req_counts > 0:
-            klines_df = klines_df.iloc[-req_counts:]
+        # 截断数据
+        if args and "req_counts" in args:
+            req_counts = args["req_counts"]
+            if len(klines_df) > req_counts:
+                klines_df = klines_df.iloc[-req_counts:]
 
         return klines_df
 

@@ -42,7 +42,6 @@ class ZsCalculator:
         # 2. 检查线段数量
         # 形成一个进行中枢至少需要: 1个进入段 + 3个核心段
         if len(lines) < 4:
-            LogUtil.info("线段数量不足4条，无法形成中枢。")
             return []
 
         # 3. 执行核心计算
@@ -88,7 +87,6 @@ class ZsCalculator:
             # 找到了一个有效的三段核心。
             # 注意：seg_c 此时被假定为核心，如果它稍后被证明是离开段，
             # _extend_and_check_complete 将负责将其移除。
-            LogUtil.info(f"以线段 {entry_idx} 为进入段，找到潜在中枢。")
             core_lines = [seg_a, seg_b, seg_c]
 
             center = ZS(zs_type='xd', start=entry_seg, _type=seg_b.type)
@@ -116,7 +114,6 @@ class ZsCalculator:
 
                 if is_valid_center:
                     # ** 有效中枢：添加并前进到离开段 **
-                    LogUtil.info(f"中枢完成 (有效)。核心线段数: {len(center.lines)}.")
                     center.index = len(self.zss)
                     self.zss.append(center)
                     # 下一个中枢的寻找从离开段开始。
@@ -124,7 +121,6 @@ class ZsCalculator:
                 else:
                     # ** 无效中枢：丢弃并从下一个线段开始尝试 **
                     # (例如，初始的seg_c被确认为离开段，导致核心线段 < 3)
-                    LogUtil.info(f"中枢完成 (无效，len={len(center.lines)})。丢弃并从 {entry_idx + 1} 尝试。")
                     # 丢弃这个无效的中枢，entry_idx 增加 1，
                     # 从下一个线段 (self.all_lines[entry_idx + 1])
                     # 重新开始寻找新的“进入段”。
@@ -132,7 +128,6 @@ class ZsCalculator:
             else:
                 # 未完成，说明走到了所有线段的末尾
                 if len(center.lines) >= 3:
-                    LogUtil.info(f"中枢成为进行时。核心线段数: {len(center.lines)}.")
                     self.pending_zs = center
                 # 这是最后一个可能的中枢，所以我们跳出循环。
                 break
@@ -163,7 +158,6 @@ class ZsCalculator:
                     # 这是最后一条线段，它重叠了，必须是核心成员
                     center.lines.append(current_seg)
                     center.update_boundaries()
-                    LogUtil.info(f"中枢延伸至结尾，加入线段 {j}。")
                     return False, j
 
                 # 1.2 预读下一条线段 (next_seg) 以判断是否完成
@@ -175,7 +169,6 @@ class ZsCalculator:
                     # 这证明 current_seg(j) *不是* 离开段，它 *是* 核心成员
                     center.lines.append(current_seg)
                     center.update_boundaries()
-                    LogUtil.info(f"中枢延伸，加入线段 {j}。核心线段数: {len(center.lines)}。")
                     j += 1
                     continue
                 else:
@@ -187,7 +180,6 @@ class ZsCalculator:
                     # current_seg(j) 是离开段，*不要* 将它加入 center.lines
                     center.end = current_seg  # 离开段是 current_seg (j)
                     center.done = True
-                    LogUtil.info(f"中枢完成。离开段为线段 {j}。")
                     return True, j  # 下一个中枢的入口是 j
 
             else:
@@ -205,10 +197,8 @@ class ZsCalculator:
                 # 是否 *就是* center.lines 的末尾 (例如初始的 seg_c)。
                 # 如果是，说明初始的 seg_c 实际上是离开段，应将其从核心线段中移除。
                 if center.lines and center.lines[-1] is center.end:
-                    LogUtil.info(f"将线段 {j - 1} (离开段) 从核心 {center.lines} 中移除。")
                     center.lines.pop()
 
-                LogUtil.info(f"中枢完成。离开段为线段 {j - 1}。")
                 return True, j - 1  # 下一个中枢的入口是 j-1
 
         # 循环正常结束 (j == len(self.all_lines))
@@ -504,7 +494,6 @@ class ChanlunStructureAnalyzer:
                     end_index = next_zs.end.index
                     # 确保索引有效
                     if start_index < 0 or end_index < 0 or end_index + 1 > len(lines):
-                        LogUtil.warning(f"扩展升级索引无效: {start_index}, {end_index}")
                         # 索引无效，退回到规则3
                         pass
                     else:

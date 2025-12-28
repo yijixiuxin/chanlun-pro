@@ -129,6 +129,11 @@ class ExchangeChangQiao(Exchange):
         retry_count = 0
         max_retries = 3
 
+        # 确保 limit 是带时区的
+        tz = pytz.timezone("Asia/Shanghai")
+        if start_dt_limit.tzinfo is None:
+            start_dt_limit = tz.localize(start_dt_limit)
+
         while True:
             try:
                 # 核心 API 调用
@@ -154,26 +159,35 @@ class ExchangeChangQiao(Exchange):
                 break
 
             # 获取这批数据中最老的一条时间，用于更新游标
-            # 注意：API 返回列表顺序通常是 [旧...新] 或 [新...旧]，需根据实际调整
-            # 长桥 forward=False 时，通常 [0] 是最旧的
             oldest_candle = candlesticks[0]
-            oldest_ts_str = oldest_candle.timestamp
 
-            # 简单解析时间用于比较（不做时区转换以节省性能，除非必要）
-            oldest_dt = pd.to_datetime(oldest_ts_str).to_pydatetime()
-            if oldest_dt.tzinfo is None:
-                oldest_dt = pytz.utc.localize(oldest_dt)
+            # --- [修复] 统一转为带时区的 datetime 进行比较 ---
+            try:
+                ts = oldest_candle.timestamp
+                if isinstance(ts, (int, float)):
+                    # Unix 时间戳 (秒) -> UTC -> 转上海
+                    oldest_dt = pd.to_datetime(ts, unit='s', utc=True).dt.tz_convert(tz).to_pydatetime()
+                else:
+                    # Datetime 对象
+                    oldest_dt = pd.to_datetime(ts).to_pydatetime()
+                    if oldest_dt.tzinfo is None:
+                        # 如果是 Naive，假设它已经是上海时间，贴上标签
+                        oldest_dt = tz.localize(oldest_dt)
+                    else:
+                        oldest_dt = oldest_dt.astimezone(tz)
+            except Exception as e:
+                LogUtil.error(f"Time parse error in segment fetch: {e}")
+                break
+            # -------------------------------------------
 
             segment_candles.extend(candlesticks)
 
-            # 更新游标为最老时间，准备获取更老的一页
+            # 更新游标
             current_cursor = oldest_dt
 
-            # 终止条件1: 数据不足1000条，说明到了该股票上市首日
             if len(candlesticks) < 1000:
                 break
 
-            # 终止条件2: 最老时间已经早于本片段的限制时间
             if oldest_dt < start_dt_limit:
                 break
 
@@ -195,7 +209,7 @@ class ExchangeChangQiao(Exchange):
 
         # 1. 默认回看周期配置
         DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=30),  # 缩短默认值，提高响应
+            "1m": timedelta(days=30),
             "5m": timedelta(days=60),
             "15m": timedelta(days=90),
             "30m": timedelta(days=180),
@@ -206,11 +220,26 @@ class ExchangeChangQiao(Exchange):
         }
 
         # 2. 时间标准化处理
-        end_dt = str_to_datetime(end_date) if end_date else datetime.now(tz)
-        if end_dt.tzinfo is None:
-            end_dt = tz.localize(end_dt)
+        # 标记：是否是“历史查询”模式（即用户是否指定了截止日期）
+        is_history_query = end_date is not None
+
+        now_dt = datetime.now(tz)
+
+        if is_history_query:
+            # 用户指定了结束时间，严格按照用户时间查询
+            end_dt = str_to_datetime(end_date)
+            if end_dt.tzinfo is None:
+                end_dt = tz.localize(end_dt)
+            else:
+                end_dt = end_dt.astimezone(tz)
+            # API 请求游标
+            api_cursor_dt = end_dt
         else:
-            end_dt = end_dt.astimezone(tz)
+            # 用户查最新：end_dt 设为当前时间
+            end_dt = now_dt
+            # API 请求游标：往后推 5 分钟，确保能囊括服务器端刚刚生成的最新 K 线
+            # 解决本地时间落后服务器几秒导致拿不到最新数据的问题
+            api_cursor_dt = now_dt + timedelta(minutes=5)
 
         if start_date:
             start_dt = str_to_datetime(start_date)
@@ -229,44 +258,40 @@ class ExchangeChangQiao(Exchange):
             "w": Period.Week, "m": Period.Month,
         }
 
-        # 4. 处理不支持的周期 (递归调用基础周期)
         if frequency not in period_map:
             base_start = start_dt.isoformat() if start_dt else None
-            return self.klines(code, "1m", base_start, end_dt.isoformat(), args)
+            return self.klines(code, "1m", base_start, end_date, args)
 
         period = period_map[frequency]
         adjust = AdjustType.ForwardAdjust
 
-        # *** 5. 并发分片策略 (核心优化) ***
-
-        # 动态决定分片大小 (days)
+        # 5. 并发分片策略
         if frequency == '1m':
-            chunk_days = 5  # 1分钟数据密集，切小片 (5天)
+            chunk_days = 5
         elif frequency == '5m':
-            chunk_days = 15  # 5分钟 (15天)
+            chunk_days = 15
         elif frequency in ['15m', '30m', '60m']:
-            chunk_days = 60  # 小时级 (60天)
+            chunk_days = 60
         else:
-            chunk_days = 3650  # 日线及以上，一次拿完即可 (10年)
+            chunk_days = 3650
 
         tasks = []
-        curr_end = end_dt
+        curr_end = api_cursor_dt  # 使用带 Buffer 的游标
 
-        # 生成时间切片任务列表
         while curr_end > start_dt:
             curr_start = curr_end - timedelta(days=chunk_days)
             if curr_start < start_dt:
                 curr_start = start_dt
 
-            # 提交任务到线程池
             tasks.append(self.executor.submit(
                 self._fetch_segment_data,
                 code, period, adjust, curr_end, curr_start
             ))
-
             curr_end = curr_start
+            if curr_end <= start_dt:
+                break
 
-        # *** 6. 收集结果 ***
+        # 6. 收集结果
         all_candles = []
         for future in as_completed(tasks):
             try:
@@ -279,39 +304,54 @@ class ExchangeChangQiao(Exchange):
         if not all_candles:
             return pd.DataFrame()
 
-        # *** 7. 向量化构建 DataFrame (核心优化) ***
+        # *** 7. 向量化构建 DataFrame (核心修复) ***
         try:
-            # 去重：利用 timestamp 字符串作为 Key
             unique_candles = {c.timestamp: c for c in all_candles}.values()
-
             if not unique_candles:
                 return pd.DataFrame()
 
-            # 批量提取属性，构建 List of Tuples
             data = [
                 (c.timestamp, float(c.open), float(c.high), float(c.low), float(c.close), float(c.volume))
                 for c in unique_candles
             ]
 
-            # 创建 DataFrame
             df = pd.DataFrame(data, columns=["date", "open", "high", "low", "close", "volume"])
 
-            # 向量化时间转换 (比循环快 50倍+)
-            # 1. 转为 datetime 对象
-            df["date"] = pd.to_datetime(df["date"])
+            # === [智能时间处理逻辑] ===
+            if len(data) > 0:
+                first_ts = data[0][0]
 
-            # 2. 统一时区转换
-            if df["date"].dt.tz is None:
-                # 假设 API 返回 UTC，转为上海
-                df["date"] = df["date"].dt.tz_localize("UTC").dt.tz_convert("Asia/Shanghai")
-            else:
-                df["date"] = df["date"].dt.tz_convert("Asia/Shanghai")
+                # 情况 A: 必须明确区分 Unix Timestamp 和 Datetime Object
+                if isinstance(first_ts, (int, float)):
+                    # Unix Timestamp: 必须指定 unit='s' 和 utc=True，然后转上海
+                    df["date"] = pd.to_datetime(df["date"], unit='s', utc=True)
+                    df["date"] = df["date"].dt.tz_convert("Asia/Shanghai")
+                else:
+                    # 情况 B: 已经是 Datetime 对象 (你现在的场景)
+                    df["date"] = pd.to_datetime(df["date"])
 
-            # 3. 最终时间过滤 (去除切片边界可能多出来的部分)
-            mask = (df["date"] >= start_dt) & (df["date"] <= end_dt)
+                    if df["date"].dt.tz is None:
+                        # 关键修复：
+                        # 如果是 Naive 时间，且数值已经是本地时间 (如 00:07)，
+                        # 使用 tz_localize 仅仅加上时区标签，不要转换数值。
+                        df["date"] = df["date"].dt.tz_localize("Asia/Shanghai")
+                    else:
+                        # 如果自带时区，则转换为上海时间
+                        df["date"] = df["date"].dt.tz_convert("Asia/Shanghai")
+            # ==========================
+
+            # === [智能过滤逻辑] ===
+            # 1. 下界过滤：必须大于等于 start_dt (保留)
+            mask = df["date"] >= start_dt
+
+            # 2. 上界过滤：仅当用户查历史 (指定了 end_date) 时才严格过滤
+            # 查实时增量时，不做 <= end_dt 过滤，避免因本地时钟微小差异丢掉最新 K 线
+            if is_history_query:
+                mask = mask & (df["date"] <= end_dt)
+
             df = df.loc[mask]
 
-            # 4. 补充列并排序
+            # 补充字段并排序
             df["code"] = code
             df["frequency"] = frequency
             df = df.sort_values(by="date").reset_index(drop=True)
@@ -320,8 +360,6 @@ class ExchangeChangQiao(Exchange):
 
         except Exception as e:
             LogUtil.error(f"DataFrame construction error: {e}")
-            import traceback
-            traceback.print_exc()
             return pd.DataFrame()
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
