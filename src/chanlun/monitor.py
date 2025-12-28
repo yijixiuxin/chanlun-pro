@@ -82,10 +82,11 @@ def monitoring_code(
     ex = get_exchange(Market(market))
 
     klines = {f: ex.klines(code, f) for f in frequencys}
-    cl_datas: List[ICL] = web_batch_get_cl_datas(market, code, klines, cl_config)
+    try:
+        cl_datas: List[ICL] = web_batch_get_cl_datas(market, code, klines, cl_config)
 
-    jh_cl_msgs = []  # 这里保存缠论触发的机会信息
-    jh_idx_msgs = []  # 这里保存指标触发的机会信息
+        jh_cl_msgs = []  # 这里保存缠论触发的机会信息
+        jh_idx_msgs = []  # 这里保存指标触发的机会信息
     bc_maps = {"xd": "线段背驰", "bi": "笔背驰", "pz": "盘整背驰", "qs": "趋势背驰"}
     mmd_maps = {
         "1buy": "一买点",
@@ -239,9 +240,12 @@ def monitoring_code(
                 )
 
         if check_idx_types.get("idx_zhixing", {}).get("enable", 0):
+            # DEBUG
+            # print("DEBUG: Checking idx_zhixing")
             zhixing_data = Strategy.idx_zhixing(cd)
             short_trend = zhixing_data["short_trend"]
             long_short = zhixing_data["long_short"]
+            close_prices = [k.c for k in cd.get_src_klines()]
 
             if (
                 check_idx_types["idx_zhixing"]["cross_up"]
@@ -267,6 +271,67 @@ def monitoring_code(
                     {
                         "type": "zhixing",
                         "msg": "知行短期趋势线下穿多空线",
+                        "frequency": frequency,
+                        "cross": "down",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "up",
+                    }
+                )
+
+            if (
+                check_idx_types["idx_zhixing"].get("price_cross_short_up", 0)
+                and close_prices[-1] > short_trend[-1]
+                and close_prices[-2] < short_trend[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "收盘价上穿知行短期趋势线",
+                        "frequency": frequency,
+                        "cross": "up",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "down",
+                    }
+                )
+            if (
+                check_idx_types["idx_zhixing"].get("price_cross_short_down", 0)
+                and close_prices[-1] < short_trend[-1]
+                and close_prices[-2] > short_trend[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "收盘价下穿知行短期趋势线",
+                        "frequency": frequency,
+                        "cross": "down",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "up",
+                    }
+                )
+            if (
+                check_idx_types["idx_zhixing"].get("price_cross_long_up", 0)
+                and close_prices[-1] > long_short[-1]
+                and close_prices[-2] < long_short[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "收盘价上穿知行多空线",
+                        "frequency": frequency,
+                        "cross": "up",
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": "down",
+                    }
+                )
+            if (
+                check_idx_types["idx_zhixing"].get("price_cross_long_down", 0)
+                and close_prices[-1] < long_short[-1]
+                and close_prices[-2] > long_short[-2]
+            ):
+                jh_idx_msgs.append(
+                    {
+                        "type": "zhixing",
+                        "msg": "收盘价下穿知行多空线",
                         "frequency": frequency,
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,

@@ -1225,6 +1225,10 @@ def create_app(test_config=None):
                         "enable": 0,
                         "cross_up": 0,
                         "cross_down": 0,
+                        "price_cross_short_up": 0,
+                        "price_cross_short_down": 0,
+                        "price_cross_long_up": 0,
+                        "price_cross_long_down": 0,
                     }
                 )
                 alert_config = {
@@ -1251,6 +1255,10 @@ def create_app(test_config=None):
                     "check_idx_zhixing_info_enable": check_idx_zhixing_info["enable"],
                     "check_idx_zhixing_info_cross_up": check_idx_zhixing_info["cross_up"],
                     "check_idx_zhixing_info_cross_down": check_idx_zhixing_info["cross_down"],
+                    "check_idx_zhixing_info_price_cross_short_up": check_idx_zhixing_info.get("price_cross_short_up", 0),
+                    "check_idx_zhixing_info_price_cross_short_down": check_idx_zhixing_info.get("price_cross_short_down", 0),
+                    "check_idx_zhixing_info_price_cross_long_up": check_idx_zhixing_info.get("price_cross_long_up", 0),
+                    "check_idx_zhixing_info_price_cross_long_down": check_idx_zhixing_info.get("price_cross_long_down", 0),
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
@@ -1335,6 +1343,26 @@ def create_app(test_config=None):
                 "cross_down": (
                     int(request.form["check_idx_zhixing_info_cross_down"])
                     if request.form["check_idx_zhixing_info_cross_down"]
+                    else 0
+                ),
+                "price_cross_short_up": (
+                    int(request.form["check_idx_zhixing_info_price_cross_short_up"])
+                    if request.form.get("check_idx_zhixing_info_price_cross_short_up")
+                    else 0
+                ),
+                "price_cross_short_down": (
+                    int(request.form["check_idx_zhixing_info_price_cross_short_down"])
+                    if request.form.get("check_idx_zhixing_info_price_cross_short_down")
+                    else 0
+                ),
+                "price_cross_long_up": (
+                    int(request.form["check_idx_zhixing_info_price_cross_long_up"])
+                    if request.form.get("check_idx_zhixing_info_price_cross_long_up")
+                    else 0
+                ),
+                "price_cross_long_down": (
+                    int(request.form["check_idx_zhixing_info_price_cross_long_down"])
+                    if request.form.get("check_idx_zhixing_info_price_cross_long_down")
                     else 0
                 ),
             }

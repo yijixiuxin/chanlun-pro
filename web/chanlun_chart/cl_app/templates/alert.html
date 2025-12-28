@@ -208,10 +208,14 @@
         <!-- 知行指标报警设置 -->
         <div class="layui-form-item">
             <label class="layui-form-label">知行报警</label>
-            <div class="layui-input-block" style="display: flex; align-items: center; gap: 10px;">
+            <div class="layui-input-block" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <input type="checkbox" name="check_idx_zhixing_info_enable" value="1" title="启用" lay-filter="alert_config" {% if check_idx_zhixing_info_enable==1 %}checked{% endif %} />
                 <input type="checkbox" name="check_idx_zhixing_info_cross_up" value="1" title="上穿报警" lay-filter="alert_config" {% if check_idx_zhixing_info_cross_up==1 %}checked{% endif %} />
                 <input type="checkbox" name="check_idx_zhixing_info_cross_down" value="1" title="下穿报警" lay-filter="alert_config" {% if check_idx_zhixing_info_cross_down==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_zhixing_info_price_cross_short_up" value="1" title="收盘上穿短期" lay-filter="alert_config" {% if check_idx_zhixing_info_price_cross_short_up==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_zhixing_info_price_cross_short_down" value="1" title="收盘下穿短期" lay-filter="alert_config" {% if check_idx_zhixing_info_price_cross_short_down==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_zhixing_info_price_cross_long_up" value="1" title="收盘上穿多空" lay-filter="alert_config" {% if check_idx_zhixing_info_price_cross_long_up==1 %}checked{% endif %} />
+                <input type="checkbox" name="check_idx_zhixing_info_price_cross_long_down" value="1" title="收盘下穿多空" lay-filter="alert_config" {% if check_idx_zhixing_info_price_cross_long_down==1 %}checked{% endif %} />
             </div>
         </div>
         <div class="layui-form-item">
