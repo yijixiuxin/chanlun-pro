@@ -737,6 +737,26 @@ class CL(ICL):
                 if not check_klines:
                     return
 
+                # 检查是否破坏前一笔结束点（笔延伸）
+                if last_bi.type == "up":
+                    max_k = max(check_klines, key=lambda k: k.h)
+                    if max_k.h > last_bi.high:
+                        # 创新高，前一顶分型失效，笔延伸
+                        # 更新最后一笔的结束点为新的最高点，状态为未完成
+                        temp_fx = FX("ding", max_k, [], max_k.h, index=last_bi.end.index + 1, done=False)
+                        last_bi.end = temp_fx
+                        last_bi.high = max_k.h
+                        # last_bi.done 属性是由 end.done 决定的，这里 temp_fx.done=False，所以 last_bi.is_done() 为 False
+                        return
+                elif last_bi.type == "down":
+                    min_k = min(check_klines, key=lambda k: k.l)
+                    if min_k.l < last_bi.low:
+                        # 创新低，前一底分型失效，笔延伸
+                        temp_fx = FX("di", min_k, [], min_k.l, index=last_bi.end.index + 1, done=False)
+                        last_bi.end = temp_fx
+                        last_bi.low = min_k.l
+                        return
+
                 if expected_type == "up":
                     # 向上笔，找最高点
                     max_k = max(check_klines, key=lambda k: k.h)
@@ -906,15 +926,29 @@ class CL(ICL):
         if xd_dir == "up":
             # 向上线段，特征序列(下笔)找顶分型
             # 严格缠论分型条件：中间元素最高，两边元素较低
-            if t2.max >= t1.max and t2.max >= t3.max:
+            # 2025-12-26 修正：线段的序列分型要求K线与左右2边比，顶分型高点最高低点也是最高
+            if t2.max > t1.max and t2.max > t3.max and t2.min > t1.min and t2.min > t3.min:
                 fx_type = "ding"
         else:
             # 向下线段，特征序列(上笔)找底分型
             # 严格缠论分型条件：中间元素最低，两边元素较高
-            if t2.min <= t1.min and t2.min <= t3.min:
+            # 2025-12-26 修正：线段的序列分型要求K线与左右2边比，底分型低点最低高点也是最低
+            if t2.min < t1.min and t2.min < t3.min and t2.max < t1.max and t2.max < t3.max:
                 fx_type = "di"
         
         if fx_type:
+            # 2025-12-26 修正：特征序列的分型必须是线段的极值，不能只比较3笔
+            # 对于向下线段，分型必须是所有特征序列元素的最低点
+            # 对于向上线段，分型必须是所有特征序列元素的最高点
+            if fx_type == "ding":
+                # 顶分型：必须是全局最高
+                if any(tx.max > t2.max for tx in feature_sequence):
+                    return None
+            elif fx_type == "di":
+                # 底分型：必须是全局最低
+                if any(tx.min < t2.min for tx in feature_sequence):
+                    return None
+
             # 检查第一与第二元素是否无重叠（缺口）
             # 标准：(b_low > a_high) or (a_low > b_high)
             a_low, a_high = t1.min, t1.max
@@ -1040,6 +1074,20 @@ class CL(ICL):
                             # 确认线段结束于 C (D的起点)
                             # C 是 bis[i-3]
                             end_idx = i - 3
+
+                            # 修复：笔破坏场景下，如果被破坏的前一特征笔(B)的极值点比破坏笔(D)的起点更极值，
+                            # 则线段应该结束于 B 的起点（即 i-5），而不是 C (i-3)。
+                            # 场景：向下线段，B(Up) Start=Low1, D(Up) Start=Low2. Low1 < Low2.
+                            # D 破坏 B，确认反转，但反转点（最低点）是 Low1。
+                            if i - 5 > start_idx:
+                                if xd_dir == "up": # 向上线段，找最高点
+                                    # b_bi.start.val (High1) vs d_bi.start.val (High2)
+                                    if b_bi.start.val > d_bi.start.val:
+                                        end_idx = i - 5
+                                else: # 向下线段，找最低点
+                                    # b_bi.start.val (Low1) vs d_bi.start.val (Low2)
+                                    if b_bi.start.val < d_bi.start.val:
+                                        end_idx = i - 5
                             
                             # 修复：如果有待确认的更极值的分型，应该优先使用待确认的分型作为结束点
                             # 场景：最高点A -> 回调 -> 次高点B -> 破位下跌(D)
@@ -1616,9 +1664,9 @@ class CL(ICL):
                 if i >= 1:
                     prev_bi = self.bis[i-1]
                     if prev_bi.start.index == zs.end.index:
-                        if check_3buy and bi.type == "down" and bi.low > zs.zg and bi.low > zs.lines[-1].high:
+                        if check_3buy and bi.type == "down" and bi.is_done() and bi.low > zs.zg and bi.low > zs.lines[-1].high:
                             bi.add_mmd("3buy", zs, zs_type)
-                        if check_3sell and bi.type == "up" and bi.high < zs.zd and bi.high < zs.lines[-1].low:
+                        if check_3sell and bi.type == "up" and bi.is_done() and bi.high < zs.zd and bi.high < zs.lines[-1].low:
                             bi.add_mmd("3sell", zs, zs_type)
                 
                 # 盘整背驰：离开段与进入段比较
@@ -1633,9 +1681,9 @@ class CL(ICL):
                     
                     # 第一类买卖点：趋势背驰
                     if check_qs_1mmd:
-                        if bi.type == "down" and bi.low < zs.zd:
+                        if bi.type == "down" and bi.is_done() and bi.low < zs.zd:
                             bi.add_mmd("1buy", zs, zs_type)
-                        if bi.type == "up" and bi.high > zs.zg:
+                        if bi.type == "up" and bi.is_done() and bi.high > zs.zg:
                             bi.add_mmd("1sell", zs, zs_type)
             
             # 补充：基于3买卖点后的背驰产生的1买卖点
@@ -1648,7 +1696,7 @@ class CL(ICL):
                 
                 # 3卖后背驰 -> 1买
                 has_3sell = [m for m in prev_mmds if m.name == "3sell"]
-                if has_3sell and bi.type == "down" and bi.low < prev_bi_2.low:
+                if has_3sell and bi.type == "down" and bi.is_done() and bi.low < prev_bi_2.low:
                     # 检查力度背驰
                     ld_prev = prev_bi_2.get_ld(self)["macd"]
                     ld_now = bi.get_ld(self)["macd"]
@@ -1670,7 +1718,7 @@ class CL(ICL):
 
                 # 3买后背驰 -> 1卖
                 has_3buy = [m for m in prev_mmds if m.name == "3buy"]
-                if has_3buy and bi.type == "up" and bi.high > prev_bi_2.high:
+                if has_3buy and bi.type == "up" and bi.is_done() and bi.high > prev_bi_2.high:
                     # 检查力度背驰：当前段与3买前的离开段比较 (Trend Divergence logic)
                     ld_prev = prev_bi_2.get_ld(self)["macd"]
                     ld_now = bi.get_ld(self)["macd"]
@@ -1702,7 +1750,7 @@ class CL(ICL):
                 # 检查是否有趋势背驰 (即使没有标记为1buy)
                 has_qs_bc = any(b.type == "qs" for b in prev_bi_2.get_bcs(zs_type))
 
-                if check_2buy and bi.type == "down":
+                if check_2buy and bi.type == "down" and bi.is_done():
                     # 情况1：一类买点后，不创新低
                     if is_1buy and bi.low > prev_bi_2.low:
                         target_zs = prev_bi_2.get_mmds(zs_type)[0].zs
@@ -1717,7 +1765,7 @@ class CL(ICL):
                                     bi.add_mmd("2buy", bc.zs, zs_type)
                                     break
                 
-                if check_2sell and bi.type == "up":
+                if check_2sell and bi.type == "up" and bi.is_done():
                     # 情况1：一类卖点后，不创新高
                     if is_1sell and bi.high < prev_bi_2.high:
                         target_zs = prev_bi_2.get_mmds(zs_type)[0].zs
@@ -1743,7 +1791,7 @@ class CL(ICL):
                         if has_2buy_mmds:
                             # 检查是否有重叠形成中枢
                             zg = min(prev_bi_2.high, prev_bi.high, bi.high)
-                            if zg > bi.low and bi.low > prev_bi_2.low:
+                            if bi.is_done() and zg > bi.low and bi.low > prev_bi_2.low:
                                 target_zs = has_2buy_mmds[0].zs
                                 bi.add_mmd("l2buy", target_zs, zs_type)
                     
@@ -1752,7 +1800,7 @@ class CL(ICL):
                         has_3buy_mmds = [m for m in prev_bi_2.get_mmds(zs_type) if m.name == "3buy"]
                         if has_3buy_mmds:
                             zg = min(prev_bi_2.high, prev_bi.high, bi.high)
-                            if zg > bi.low and bi.low > prev_bi_2.low:
+                            if bi.is_done() and zg > bi.low and bi.low > prev_bi_2.low:
                                 target_zs = has_3buy_mmds[0].zs
                                 bi.add_mmd("l3buy", target_zs, zs_type)
                 
@@ -1762,7 +1810,7 @@ class CL(ICL):
                         has_2sell_mmds = [m for m in prev_bi_2.get_mmds(zs_type) if m.name == "2sell"]
                         if has_2sell_mmds:
                             zd = max(prev_bi_2.low, prev_bi.low, bi.low)
-                            if bi.high > zd and bi.high < prev_bi_2.high:
+                            if bi.is_done() and bi.high > zd and bi.high < prev_bi_2.high:
                                 target_zs = has_2sell_mmds[0].zs
                                 bi.add_mmd("l2sell", target_zs, zs_type)
                     
@@ -1771,7 +1819,7 @@ class CL(ICL):
                         has_3sell_mmds = [m for m in prev_bi_2.get_mmds(zs_type) if m.name == "3sell"]
                         if has_3sell_mmds:
                             zd = max(prev_bi_2.low, prev_bi.low, bi.low)
-                            if bi.high > zd and bi.high < prev_bi_2.high:
+                            if bi.is_done() and bi.high > zd and bi.high < prev_bi_2.high:
                                 target_zs = has_3sell_mmds[0].zs
                                 bi.add_mmd("l3sell", target_zs, zs_type)
         
@@ -1810,7 +1858,7 @@ class CL(ICL):
                     
                     has_qs_bc = any(b.type == "qs" for b in prev_xd_2.get_bcs(zs_xd_type))
 
-                    if xd.type == "down":
+                    if xd.type == "down" and xd.is_done():
                         if is_1buy and xd.low > prev_xd_2.low:
                             target_zs = prev_xd_2.get_mmds(zs_xd_type)[0].zs
                             xd.add_mmd("2buy", target_zs, zs_xd_type)
@@ -1822,7 +1870,7 @@ class CL(ICL):
                                         xd.add_mmd("2buy", bc.zs, zs_xd_type)
                                         break
                     
-                    if xd.type == "up":
+                    if xd.type == "up" and xd.is_done():
                         if is_1sell and xd.high < prev_xd_2.high:
                             target_zs = prev_xd_2.get_mmds(zs_xd_type)[0].zs
                             xd.add_mmd("2sell", target_zs, zs_xd_type)
@@ -1843,9 +1891,9 @@ class CL(ICL):
                     if i >= 1:
                         prev_xd = self.xds[i-1]
                         if prev_xd.start.index == zs.end.index:
-                            if check_3buy and xd.type == "down" and xd.low > zs.zg and xd.low > zs.lines[-1].high:
+                            if check_3buy and xd.type == "down" and xd.is_done() and xd.low > zs.zg and xd.low > zs.lines[-1].high:
                                 xd.add_mmd("3buy", zs, zs_xd_type)
-                            if check_3sell and xd.type == "up" and xd.high < zs.zd and xd.high < zs.lines[-1].low:
+                            if check_3sell and xd.type == "up" and xd.is_done() and xd.high < zs.zd and xd.high < zs.lines[-1].low:
                                 xd.add_mmd("3sell", zs, zs_xd_type)
                     
                     # 盘整背驰
@@ -1863,9 +1911,9 @@ class CL(ICL):
                     is_qs = any(b.type == "qs" and b.zs.index == zs.index for b in xd.get_bcs(zs_xd_type))
                     if is_qs:
                         if check_qs_1mmd:
-                            if xd.type == "down" and xd.low < zs.zd:
+                            if xd.type == "down" and xd.is_done() and xd.low < zs.zd:
                                 xd.add_mmd("1buy", zs, zs_xd_type)
-                            if xd.type == "up" and xd.high > zs.zg:
+                            if xd.type == "up" and xd.is_done() and xd.high > zs.zg:
                                 xd.add_mmd("1sell", zs, zs_xd_type)
             
             # 补充：基于3买卖点后的背驰产生的1买卖点
@@ -1875,9 +1923,10 @@ class CL(ICL):
                     
                     prev_mmds = prev_xd.get_mmds(zs_xd_type)
                     
-                    # 3卖后背驰 -> 1买
+                # 3卖后背驰 -> 1买
+                if i >= 2:
                     has_3sell = [m for m in prev_mmds if m.name == "3sell"]
-                    if has_3sell and xd.type == "down" and xd.low < prev_xd_2.low:
+                    if has_3sell and xd.type == "down" and xd.is_done() and xd.low < prev_xd_2.low:
                         # 检查力度背驰：当前段与3卖前的离开段比较
                         ld_prev = prev_xd_2.get_ld(self)["macd"]
                         ld_now = xd.get_ld(self)["macd"]
@@ -1900,7 +1949,7 @@ class CL(ICL):
 
                     # 3买后背驰 -> 1卖
                     has_3buy = [m for m in prev_mmds if m.name == "3buy"]
-                    if has_3buy and xd.type == "up" and xd.high > prev_xd_2.high:
+                    if has_3buy and xd.type == "up" and xd.is_done() and xd.high > prev_xd_2.high:
                         # 检查力度背驰
                         ld_prev = prev_xd_2.get_ld(self)["macd"]
                         ld_now = xd.get_ld(self)["macd"]
@@ -1927,12 +1976,12 @@ class CL(ICL):
                         prev_xd_3 = self.xds[i-3]
                         is_1buy = any(m.name == "1buy" for m in prev_xd_2.get_mmds(zs_xd_type))
                         
-                        if xd.type == "down":
+                        if xd.type == "down" and xd.is_done():
                             has_3sell_prev = any(m.name == "3sell" and m.zs.index == zs.index for m in prev_xd_3.get_mmds(zs_xd_type))
                             if has_3sell_prev and not is_1buy and xd.low > prev_xd_2.low:
                                 xd.add_mmd("2buy", zs, zs_xd_type)
                         
-                        if xd.type == "up":
+                        if xd.type == "up" and xd.is_done():
                             has_3buy_prev = any(m.name == "3buy" and m.zs.index == zs.index for m in prev_xd_3.get_mmds(zs_xd_type))
                             if has_3buy_prev and not any(m.name == "1sell" for m in prev_xd_2.get_mmds(zs_xd_type)) and xd.high < prev_xd_2.high:
                                 xd.add_mmd("2sell", zs, zs_xd_type)
@@ -1948,7 +1997,7 @@ class CL(ICL):
                             has_2buy_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "2buy"]
                             if has_2buy_mmds:
                                 zg = min(prev_xd_2.high, prev_xd.high, xd.high)
-                                if zg > xd.low and xd.low > prev_xd_2.low:
+                                if xd.is_done() and zg > xd.low and xd.low > prev_xd_2.low:
                                     target_zs = has_2buy_mmds[0].zs
                                     xd.add_mmd("l2buy", target_zs, zs_xd_type)
                         
@@ -1957,7 +2006,7 @@ class CL(ICL):
                             has_3buy_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "3buy"]
                             if has_3buy_mmds:
                                 zg = min(prev_xd_2.high, prev_xd.high, xd.high)
-                                if zg > xd.low and xd.low > prev_xd_2.low:
+                                if xd.is_done() and zg > xd.low and xd.low > prev_xd_2.low:
                                     target_zs = has_3buy_mmds[0].zs
                                     xd.add_mmd("l3buy", target_zs, zs_xd_type)
                     
@@ -1967,7 +2016,7 @@ class CL(ICL):
                             has_2sell_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "2sell"]
                             if has_2sell_mmds:
                                 zd = max(prev_xd_2.low, prev_xd.low, xd.low)
-                                if xd.high > zd and xd.high < prev_xd_2.high:
+                                if xd.is_done() and xd.high > zd and xd.high < prev_xd_2.high:
                                     target_zs = has_2sell_mmds[0].zs
                                     xd.add_mmd("l2sell", target_zs, zs_xd_type)
                         
@@ -1976,7 +2025,7 @@ class CL(ICL):
                             has_3sell_mmds = [m for m in prev_xd_2.get_mmds(zs_xd_type) if m.name == "3sell"]
                             if has_3sell_mmds:
                                 zd = max(prev_xd_2.low, prev_xd.low, xd.low)
-                                if xd.high > zd and xd.high < prev_xd_2.high:
+                                if xd.is_done() and xd.high > zd and xd.high < prev_xd_2.high:
                                     target_zs = has_3sell_mmds[0].zs
                                     xd.add_mmd("l3sell", target_zs, zs_xd_type)
 
