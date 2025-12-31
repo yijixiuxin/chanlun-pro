@@ -1298,65 +1298,83 @@ class CL(ICL):
     def _handle_unfinished_xd(self):
         """
         处理未完成线段
+        修复：支持多段未完成线段的处理，确保线段方向交替，并且正确处理数据末端的破坏笔
         """
         # 防御性编程：如果已经有未完成的线段，不再添加
         if len(self.xds) > 0 and not self.xds[-1].done:
             return
 
+        start_bi_idx = 0
+        current_type = None
+
         if len(self.xds) > 0:
             last_xd = self.xds[-1]
-            # 如果最后有剩余笔，创建未完成线段
             if last_xd.end_line.index < len(self.bis) - 1:
                 start_bi_idx = last_xd.end_line.index + 1
-                if start_bi_idx < len(self.bis):
-                    start_bi = self.bis[start_bi_idx]
-                    end_bi = self.bis[-1]
-                    
-                    xd_dir = "down" if last_xd.type == "up" else "up"
-                    
-                    xd = XD(
-                        start=start_bi.start,
-                        end=end_bi.end,
-                        start_line=start_bi,
-                        end_line=end_bi,
-                        _type=xd_dir,
-                        ding_fx=None,
-                        di_fx=None,
-                        index=len(self.xds)
-                    )
-                    
-                    if xd_dir == "up":
-                        xd.high = max([bi.high for bi in self.bis[start_bi_idx:]])
-                        xd.low = start_bi.start.val
-                    else:
-                        xd.high = start_bi.start.val
-                        xd.low = min([bi.low for bi in self.bis[start_bi_idx:]])
-                    
-                    xd.done = False
-                    self.xds.append(xd)
+                current_type = "down" if last_xd.type == "up" else "up"
+            else:
+                return
         else:
-            # 没有线段，创建第一个未完成线段
             if len(self.bis) > 0:
-                xd = XD(
-                    start=self.bis[0].start,
-                    end=self.bis[-1].end,
-                    start_line=self.bis[0],
-                    end_line=self.bis[-1],
-                    _type=self.bis[0].type,
-                    ding_fx=None,
-                    di_fx=None,
-                    index=0
-                )
+                start_bi_idx = 0
+                current_type = self.bis[0].type
+            else:
+                return
+
+        while start_bi_idx < len(self.bis):
+            # 寻找当前方向的极值笔
+            end_bi_idx = start_bi_idx
+            
+            check_bis = self.bis[start_bi_idx:]
+            if current_type == "up":
+                # 向上线段，找最高点（且笔的方向必须为up）
+                # 注意：bis是交替的，所以 check_bis[0], check_bis[2]... 是 up
+                # 我们需要在这些 up 笔中找 high 最大的
+                max_high = -float('inf')
+                for i, bi in enumerate(check_bis):
+                    if bi.type == "up":
+                        if bi.high >= max_high:
+                            max_high = bi.high
+                            end_bi_idx = start_bi_idx + i
+            else:
+                # 向下线段，找最低点（且笔的方向必须为down）
+                min_low = float('inf')
+                for i, bi in enumerate(check_bis):
+                    if bi.type == "down":
+                        if bi.low <= min_low:
+                            min_low = bi.low
+                            end_bi_idx = start_bi_idx + i
+            
+            start_bi = self.bis[start_bi_idx]
+            end_bi = self.bis[end_bi_idx]
+            
+            xd = XD(
+                start=start_bi.start,
+                end=end_bi.end,
+                start_line=start_bi,
+                end_line=end_bi,
+                _type=current_type,
+                ding_fx=None,
+                di_fx=None,
+                index=len(self.xds)
+            )
+            
+            # 计算高低点
+            # 注意：线段的高低点范围覆盖了 start_bi 到 end_bi 之间的所有笔
+            segment_bis = self.bis[start_bi_idx : end_bi_idx + 1]
+            if current_type == "up":
+                xd.high = max([b.high for b in segment_bis])
+                xd.low = start_bi.start.val
+            else:
+                xd.high = start_bi.start.val
+                xd.low = min([b.low for b in segment_bis])
                 
-                if xd.type == "up":
-                    xd.high = max([bi.high for bi in self.bis])
-                    xd.low = self.bis[0].start.val
-                else:
-                    xd.high = self.bis[0].start.val
-                    xd.low = min([bi.low for bi in self.bis])
-                
-                xd.done = False
-                self.xds.append(xd)
+            xd.done = False
+            self.xds.append(xd)
+            
+            # 准备下一轮
+            start_bi_idx = end_bi_idx + 1
+            current_type = "down" if current_type == "up" else "up"
 
     def _cal_xd(self):
         """

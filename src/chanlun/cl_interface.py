@@ -1338,8 +1338,8 @@ def compare_ld_beichi(one_ld: dict, two_ld: dict, line_direction: str):
            two_ld["macd"]["dea"]["min"] > one_ld["macd"]["dea"]["min"]:
             line_bc = True
 
-    # 全部满足，即认为背驰 (宽松模式，符合实战中“面积背驰”或“黄白线背驰”均可参考的需求)
-    return hist_bc and line_bc
+    # 满足其一，即认为背驰 (宽松模式，符合实战中“面积背驰”或“黄白线背驰”均可参考的需求)
+    return hist_bc or line_bc
 
 
 def user_custom_mmd(

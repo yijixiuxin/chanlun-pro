@@ -758,6 +758,7 @@ class DB(object):
         check_xd_mmd: str,
         check_idx_ma_info: str,
         check_idx_macd_info: str,
+        check_idx_zhixing_info: str,
         is_run: int,
         is_send_msg: int,
     ):
@@ -778,6 +779,7 @@ class DB(object):
                     check_xd_mmd=check_xd_mmd,
                     check_idx_ma_info=check_idx_ma_info,
                     check_idx_macd_info=check_idx_macd_info,
+                    check_idx_zhixing_info=check_idx_zhixing_info,
                     is_run=is_run,
                     is_send_msg=is_send_msg,
                     dt=datetime.datetime.now(),
@@ -824,6 +826,7 @@ class DB(object):
         check_xd_mmd: str,
         check_idx_ma_info: str,
         check_idx_macd_info: str,
+        check_idx_zhixing_info: str,
         is_run: int,
         is_send_msg: int,
     ):
@@ -845,6 +848,7 @@ class DB(object):
                     TableByAlertTask.check_xd_mmd: check_xd_mmd,
                     TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
                     TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
+                    TableByAlertTask.check_idx_zhixing_info: check_idx_zhixing_info,
                     TableByAlertTask.is_run: is_run,
                     TableByAlertTask.is_send_msg: is_send_msg,
                     TableByAlertTask.dt: datetime.datetime.now(),

@@ -95,9 +95,14 @@ class ExchangeTDXFutures(Exchange):
             "m": "M",
             "w": "W",
             "d": "D",
+            "6h": "6h",
+            "4h": "4h",
+            "3h": "3h",
+            "2h": "2h",
             "60m": "60m",
             "30m": "30m",
             "15m": "15m",
+            "10m": "10m",
             "5m": "5m",
             "3m": "3m",
             "2m": "2m",
@@ -187,6 +192,11 @@ class ExchangeTDXFutures(Exchange):
             "3m": 8,
             "2m": 8,
             "1m": 8,
+            "10m": 8,
+            "2h": 3,
+            "3h": 3,
+            "4h": 3,
+            "6h": 3,
         }
         market, tdx_code = self.to_tdx_code(code)
         if market is None or start_date is not None or end_date is not None:
@@ -267,7 +277,7 @@ class ExchangeTDXFutures(Exchange):
 
             # 将 volume 转换成 float类型
             klines[["volume"]] = klines[["volume"]].astype(float)
-            if frequency in ["2m", "3m"]:
+            if frequency in ["2m", "3m", "10m"]:
                 klines = convert_tdx_futures_kline_frequency(klines, frequency)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]

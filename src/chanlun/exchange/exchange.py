@@ -388,6 +388,13 @@ def convert_futures_kline_frequency(
         "6m": "6min",
         "10m": "10min",
         "15m": "15min",
+        "30m": "30min",
+        "60m": "60min",
+        "120m": "120min",
+        "2h": "2H",
+        "3h": "3H",
+        "4h": "4H",
+        "6h": "6H",
         "d": "D",
         "w": "W",
         "m": "M",
@@ -573,6 +580,12 @@ def convert_tdx_futures_kline_frequency(
         "6m": "6min",
         "10m": "10min",
         "15m": "15min",
+        "30m": "30min",
+        "60m": "60min",
+        "2h": "2H",
+        "3h": "3H",
+        "4h": "4H",
+        "6h": "6H",
         "d": "D",
         "w": "W",
         "m": "M",
@@ -618,7 +631,7 @@ def convert_tdx_futures_kline_frequency(
                 period_klines["date"]
             ).dt.tz_localize(__tz)
 
-        if to_f in ["2m", "5m", "6m", "10m", "15m"]:
+        if to_f in ["2m", "5m", "6m", "10m", "15m", "30m", "60m", "2h", "3h", "4h", "6h"]:
             period_klines.loc[:, "date"] = period_klines.index
             period_klines["date"] = period_klines["date"] + pd.to_timedelta(
                 period_maps[to_f]
