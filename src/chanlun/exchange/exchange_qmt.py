@@ -336,9 +336,10 @@ class ExchangeQMT(Exchange):
         df["divid_date"] = pd.to_datetime(df["time"] / 1000, unit="s")
         return df
 
-    def subscribe_all_ticks(self, callback):
+    def subscribe_all_ticks(self, callback, market_list: List[str] = ["SH", "SZ", "BJ"]):
         all_stocks = self.all_stocks()
         all_codes = [_s["code"] for _s in all_stocks]
+        print(len(all_codes))
 
         def on_tick(_ticks):
             for _code, _tick in _ticks.items():
@@ -347,7 +348,7 @@ class ExchangeQMT(Exchange):
                     continue
                 callback(_tdx_code, _tick)
 
-        xtdata.subscribe_whole_quote(["SH", "SZ", "BJ"], on_tick)
+        xtdata.subscribe_whole_quote(market_list, on_tick)
         xtdata.run()
 
     def subscribe_stocks_quotes(self, codes: List[str], callback):
