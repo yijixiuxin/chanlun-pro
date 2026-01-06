@@ -122,7 +122,9 @@ def monitoring_code(
                     "bi_td": bi_td(end_bi, cd),
                     "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
+                    "mark_dt": end_bi.end.k.date,
                     "k_date": cd.get_src_klines()[-1].date,
+                    "k_index": cd.get_src_klines()[-1].index,
                     "line_type": end_bi.type,
                 }
                 for bc_type in check_cl_types["bi_beichi"]
@@ -137,7 +139,9 @@ def monitoring_code(
                     "bi_td": bi_td(end_bi, cd),
                     "fx_ld": end_bi.end.ld(),
                     "line_dt": end_bi.start.k.date,
+                    "mark_dt": end_bi.end.k.date,
                     "k_date": cd.get_src_klines()[-1].date,
+                    "k_index": cd.get_src_klines()[-1].index,
                     "line_type": end_bi.type,
                 }
                 for mmd in check_cl_types["bi_mmd"]
@@ -153,7 +157,9 @@ def monitoring_code(
                         "frequency": frequency,
                         "xd": end_xd,
                         "line_dt": end_xd.start.k.date,
+                        "mark_dt": end_xd.end.k.date,
                         "k_date": cd.get_src_klines()[-1].date,
+                        "k_index": cd.get_src_klines()[-1].index,
                         "line_type": end_xd.type,
                     }
                     for bc_type in check_cl_types["xd_beichi"]
@@ -166,7 +172,9 @@ def monitoring_code(
                         "frequency": frequency,
                         "xd": end_xd,
                         "line_dt": end_xd.start.k.date,
+                        "mark_dt": end_xd.end.k.date,
                         "k_date": cd.get_src_klines()[-1].date,
+                        "k_index": cd.get_src_klines()[-1].index,
                         "line_type": end_xd.type,
                     }
                     for mmd in check_cl_types["xd_mmd"]
@@ -357,7 +365,7 @@ def monitoring_code(
             line_type = "xd"
 
         is_exists = db.alert_record_query_by_code(
-            market, code, jh["frequency"], line_type, jh["line_dt"]
+            market, code, jh["frequency"], line_type, jh["line_dt"].replace(tzinfo=None)
         )
 
         if (
@@ -367,7 +375,21 @@ def monitoring_code(
         ):
             fx_ld = f" FX:{jh['fx_ld']}" if "fx_ld" in jh.keys() else ""  # 分型力度
             msg = f"触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
-            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            
+            # 检查信号是否新鲜，如果是很久之前的信号（比如初始化加载时），则不发送消息，只记录
+            is_fresh = True
+            if "bi" in jh.keys():
+                # 笔信号，判断笔结束分型K线距离当前K线的数量
+                if jh["k_index"] - jh["bi"].end.k.k_index > 3:
+                    is_fresh = False
+            elif "xd" in jh.keys():
+                 # 线段信号，判断线段结束分型K线距离当前K线的数量
+                if jh["k_index"] - jh["xd"].end.k.k_index > 3:
+                    is_fresh = False
+            
+            if is_fresh:
+                send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            
             # 添加数据库记录
             db.alert_record_save(
                 market,
@@ -387,7 +409,7 @@ def monitoring_code(
                 code,
                 name,
                 jh["frequency"],
-                fun.datetime_to_int(jh["k_date"]),
+                fun.datetime_to_int(jh["mark_dt"]),
                 "A",
                 msg,
                 "green" if jh["line_type"] == "down" else "red",

@@ -70,7 +70,11 @@ class AlertTasks(object):
         self.log.info(
             f"执行 {alert_config.task_name} 警报提醒，获取 {alert_config.zx_group} 自选组中 {len(stocks)} 数量股票"
         )
-        for s in tqdm(stocks):
+        
+        # 使用 ThreadPoolExecutor 并发执行监控
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        def process_stock(s):
             try:
                 s: Dict[str, str] = s
                 cl_config = query_cl_chart_config(alert_config.market, s["code"])
@@ -111,6 +115,13 @@ class AlertTasks(object):
                 )
             except Exception as e:
                 self.log.error(f'run {s["code"]} alert exception {e}')
+
+        # 限制最大线程数为 10，避免过多线程导致资源耗尽
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(process_stock, s) for s in stocks]
+            # 使用 tqdm 显示进度
+            for _ in tqdm(as_completed(futures), total=len(stocks)):
+                pass
 
         return True
 

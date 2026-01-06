@@ -1045,11 +1045,11 @@ class DB(object):
         """
         with self.Session() as session:
             # 相同的 market,code/mark_time/mark_label 只能有一个，先删除一下
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarks.stock_code == stock_code,
-                TableByTVMarks.mark_time == mark_time,
-                TableByTVMarks.mark_label == mark_label,
+            session.query(TableByTVMarksPrice).filter(
+                TableByTVMarksPrice.market == market,
+                TableByTVMarksPrice.stock_code == stock_code,
+                TableByTVMarksPrice.mark_time == mark_time,
+                TableByTVMarksPrice.mark_label == mark_label,
             ).delete()
 
             mark = TableByTVMarksPrice(

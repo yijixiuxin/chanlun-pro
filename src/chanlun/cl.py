@@ -719,92 +719,10 @@ class CL(ICL):
                 
             curr_fx_idx += 1
 
-        # 尝试添加未完成的笔（Unfinished Pen）
-        # 如果最后一笔之后还有K线，且价格创出新高/新低，说明趋势在延续
-        # 即使没有形成严格的顶底分型，也应该画出一笔
-        if len(self.bis) > 0:
-            last_bi = self.bis[-1]
-            start_k_idx = last_bi.end.k.index + 1
-            if start_k_idx < len(self.cl_klines):
-                # 确定期望的方向
-                expected_type = "up" if last_bi.type == "down" else "down"
-                
-                # 在后续K线中寻找极值
-                target_idx = -1
-                target_val = 0
-                
-                check_klines = self.cl_klines[start_k_idx:]
-                if not check_klines:
-                    return
-
-                # 检查是否破坏前一笔结束点（笔延伸）
-                if last_bi.type == "up":
-                    max_k = max(check_klines, key=lambda k: k.h)
-                    if max_k.h > last_bi.high:
-                        # 创新高，前一顶分型失效，笔延伸
-                        # 更新最后一笔的结束点为新的最高点，状态为未完成
-                        temp_fx = FX("ding", max_k, [], max_k.h, index=last_bi.end.index + 1, done=False)
-                        last_bi.end = temp_fx
-                        last_bi.high = max_k.h
-                        # last_bi.done 属性是由 end.done 决定的，这里 temp_fx.done=False，所以 last_bi.is_done() 为 False
-                        return
-                elif last_bi.type == "down":
-                    min_k = min(check_klines, key=lambda k: k.l)
-                    if min_k.l < last_bi.low:
-                        # 创新低，前一底分型失效，笔延伸
-                        temp_fx = FX("di", min_k, [], min_k.l, index=last_bi.end.index + 1, done=False)
-                        last_bi.end = temp_fx
-                        last_bi.low = min_k.l
-                        return
-
-                if expected_type == "up":
-                    # 向上笔，找最高点
-                    max_k = max(check_klines, key=lambda k: k.h)
-                    target_val = max_k.h
-                    target_idx = max_k.index
-                    
-                    # 只有当新高点高于前一笔的结束点时，才认为有意义
-                    # 或者如果距离足够远（例如 > 5根K线），即使没创新高也可能构成一笔（震荡）
-                    # 这里简化逻辑：只要有数据，就画出到最高点
-                    if target_val <= last_bi.end.val:
-                         # 如果没创新高，检查是否距离足够远且有反向分型但未被确认？
-                         # 暂时只处理创新高的情况，解决"新K线创了新高"的问题
-                         pass
-                else:
-                    # 向下笔，找最低点
-                    min_k = min(check_klines, key=lambda k: k.l)
-                    target_val = min_k.l
-                    target_idx = min_k.index
-                
-                # 只有当找到了有效的极值点（且该点不是起始点本身）
-                if target_idx != -1:
-                    # 创建临时分型
-                    # 注意：这个分型没有加入 self.fxs，只是为了构造 BI
-                    # 修复：设置正确的 index，防止 query_macd_ld 报错 (start_fx.index > end_fx.index)
-                    temp_fx = FX(
-                        _type="ding" if expected_type == "up" else "di", # 结束分型类型
-                        k=self.cl_klines[target_idx],
-                        klines=[], # 临时分型没有详细K线结构
-                        val=target_val,
-                        index=last_bi.end.index + 1, # 确保索引大于前一个分型
-                        done=False
-                    )
-                    
-                    # 创建临时笔
-                    bi = BI(
-                        start=last_bi.end,
-                        end=temp_fx,
-                        _type=expected_type,
-                        index=len(self.bis)
-                    )
-                    bi.high, bi.low = self._bi_high_low(last_bi.end, temp_fx)
-                    
-                    # 只有当这个临时笔的长度或幅度有一定意义时才添加？
-                    # 用户抱怨的是"直接没有了"，所以即使很短也应该显示
-                    # 只要极值点 > 起始点（对于Up）
-                    # 2025-12-22 修订：增加条件 len >= 5，防止"顶分型后跟了2根向下K线"就画出向下笔
-                    if len(check_klines) >= 5:
-                        self.bis.append(bi)
+        # 2025-01-05 Update: 移除“尝试添加未完成的笔”的手动逻辑
+        # 根据用户要求：历史走势和当前走势逻辑一致，必须有分型才能生成笔。
+        # 原有的“虚拟笔”逻辑（无分型直接连接当前极值）被移除。
+        # 主循环已经能够处理最后一个 valid fractal 形成的笔。
 
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
@@ -1275,6 +1193,10 @@ class CL(ICL):
         # 修复：如果在数据末尾有待确认的分型，尝试直接确认
         # 场景：数据结束时，虽然SequenceB没有形成分型，但Pending分型已经形成且是目前最优解
         # 对于实时分析，展示这个分型比一直显示“未完成”更有价值
+        # 2025-01-05 Update: 恢复此逻辑，并确保主循环正确处理
+        # 用户要求逻辑一致，只要有特征序列分型即可，不需要未来线段确认。
+        # 这里的 pending_gap_fx 就是已经形成的特征序列分型（只是没被后续反向线段确认）。
+        # 对于当前线段，这就是它的结束点。
         if pending_gap_fx:
             return self._create_xd_end_result(
                 pending_gap_fx['fx_type'],
@@ -1283,6 +1205,69 @@ class CL(ICL):
                 pending_gap_fx['end_bi_idx']
             )
 
+        return None
+
+    def _check_fractal_for_unfinished_xd(self, start_idx: int, end_bi_idx: int, xd_dir: str) -> Union[Tuple[XLFX, XLFX], None]:
+        """
+        检查未完成线段的结束点是否构成了特征序列分型
+        """
+        feature_sequence = []
+        target_end_idx = end_bi_idx
+        
+        # 我们需要扫描到 end_bi_idx 之后的笔，以构建特征序列
+        # 特征序列元素必须包含 end_bi_idx 之后的反向笔
+        # 比如向上线段，结束于 end_bi (Up)，我们需要检查 end_bi 之后的 Down 笔是否构成特征序列顶分型
+        
+        # 从线段起点开始构建特征序列，直到覆盖到 end_bi_idx 后面
+        scan_end_idx = min(len(self.bis), end_bi_idx + 5) # 只需要往后多看几笔
+        
+        for i in range(start_idx + 1, scan_end_idx):
+            bi = self.bis[i]
+            
+            # 只关心特征序列笔 (反向笔)
+            if bi.type != xd_dir:
+                tzxl = self._create_feature_sequence_element(bi, xd_dir)
+                
+                if feature_sequence:
+                    last_tzxl = feature_sequence[-1]
+                    if self._is_feature_sequence_included(tzxl, last_tzxl, xd_dir):
+                        self._process_feature_sequence_inclusion(tzxl, last_tzxl, xd_dir)
+                    else:
+                        feature_sequence.append(tzxl)
+                else:
+                    feature_sequence.append(tzxl)
+                
+                # 检查分型
+                if len(feature_sequence) >= 3:
+                    fx_result = self._check_feature_sequence_fracture(feature_sequence, xd_dir)
+                    if fx_result:
+                        fx_type, fx_tzxl, _ = fx_result
+                        
+                        # 检查这个分型是否对应我们的 end_bi_idx
+                        # 分型的中间元素 fx_tzxl 应该对应 end_bi_idx 之后的那个反向笔
+                        # fx_tzxl.lines 包含了原始笔。我们需要找到其中的关键笔。
+                        # 对于向上线段，特征序列顶分型，中间元素是下笔。
+                        # 这个下笔的起点，应该是线段的最高点。
+                        # 也就是该下笔的前一笔，应该是 end_bi。
+                        
+                        target_bi = None
+                        if xd_dir == "up":
+                            # 顶分型，取最高的下笔 (Start High)
+                            target_bi = max(fx_tzxl.lines, key=lambda b: b.high)
+                        else:
+                            # 底分型，取最低的上笔 (Start Low)
+                            target_bi = min(fx_tzxl.lines, key=lambda b: b.low)
+                            
+                        # target_bi 的前一笔的索引
+                        calc_end_idx = target_bi.index - 1
+                        
+                        if calc_end_idx == end_bi_idx:
+                            # 匹配成功！
+                            if fx_type == "ding":
+                                return (self._create_xlfx("ding", fx_tzxl, feature_sequence[-3:]), None)
+                            else:
+                                return (None, self._create_xlfx("di", fx_tzxl, feature_sequence[-3:]))
+        
         return None
 
     def _create_xd_end_result(self, fx_type, fx_tzxl, xls, end_bi_idx):
@@ -1369,6 +1354,12 @@ class CL(ICL):
                 xd.high = start_bi.start.val
                 xd.low = min([b.low for b in segment_bis])
                 
+            # 尝试检查是否存在特征序列分型，以支持 MMD 计算
+            # 注意：这不会改变 xd.done 状态，仅用于 MMD
+            fractal_check = self._check_fractal_for_unfinished_xd(start_bi_idx, end_bi_idx, current_type)
+            if fractal_check:
+                xd.ding_fx, xd.di_fx = fractal_check
+            
             xd.done = False
             self.xds.append(xd)
             
@@ -1453,13 +1444,30 @@ class CL(ICL):
                 xd.low = min([bi.low for bi in xd_bis])
             
             xd.done = True
+            
+            # 2025-01-05 Update: 标记是否为"已完成"
+            # 严格来说，最后一个线段如果没有被反向线段确认，它在 Chanlun 意义上是"未完成"的
+            # 但它有完整的特征序列分型。
+            # 我们可以通过判断它是否是最后一个线段，且结束于数据末尾来标记 done=False?
+            # 或者，如果 xd_end_info 是由 fallback (pending_gap_fx) 返回的，它就是未确认的。
+            # 由于 _find_xd_end_by_feature_sequence 没有返回 flag，我们这里做个简单的判断：
+            # 如果 end_bi 是 bis 列表中的倒数第几个，且后面没有足够的笔形成反向分型，那它就是 provisional.
+            # 不过，cl_interface 定义 done 为 "是否完成"，通常指分型是否完成。
+            # 特征序列分型已经完成，所以 done=True 是合理的 (structurally complete)。
+            # 用户抱怨的是 "Figure 2 marked Done is wrong" (Bi case, no fractal).
+            # 这里是有 Fractal 的，所以 mark Done 应该是对的。
+            # 之前的问题是 "Virtual Pen" 没有 Fractal 也 mark Done。
+            
             self.xds.append(xd)
             
             # 下一段从结束笔的下一笔开始
             i = end_bi_idx + 1
         
         # 处理未完成线段
-        self._handle_unfinished_xd()
+        # 2025-01-05 Update: 移除手动处理未完成线段的逻辑
+        # 主循环已经能够处理以特征序列分型结束的线段。
+        # 如果没有特征序列分型，则不生成线段。
+        # self._handle_unfinished_xd()
 
     def _cal_zsd(self):
         """
@@ -1651,6 +1659,23 @@ class CL(ICL):
         for i in range(len(self.bis)):
             bi = self.bis[i]
             
+            # 检查笔是否有效：未完成的笔，如果没有形成 valid 的分型（end.klines < 3），不进行买卖点计算
+            # 只有当笔的分型构造完成后（至少3根K线），才认为具备判断买卖点的基础
+            # 2025-01-05 Update: 增加严格的几何形态检查，确保未完成笔的端点具备分型结构
+            if not bi.is_done():
+                if not bi.end.klines or len(bi.end.klines) < 3:
+                    continue
+                # 严格检查分型几何形态
+                k1, k2, k3 = bi.end.klines[0], bi.end.klines[1], bi.end.klines[2]
+                if bi.end.type == "ding":
+                    # 顶分型：中间高点最高
+                    if not (k2.h > k1.h and k2.h > k3.h):
+                        continue
+                elif bi.end.type == "di":
+                    # 底分型：中间低点最低
+                    if not (k2.l < k1.l and k2.l < k3.l):
+                        continue
+
             # 1. 基本背驰判断（笔背驰）
             if i >= 2:
                 prev_bi = self.bis[i-2]
@@ -1978,6 +2003,11 @@ class CL(ICL):
             for i in range(len(self.xds)):
                 xd = self.xds[i]
                 
+                # 检查线段是否有效：未完成的线段，如果没有形成特征序列分型（ding_fx/di_fx 为空），不进行买卖点计算
+                # 只有当线段具备特征序列分型或一笔破坏结构时，才认为具备判断买卖点的基础
+                if xd.ding_fx is None and xd.di_fx is None:
+                    continue
+
                 # 线段的无背驰加速赶顶/赶底识别
                 # 线段的买卖点只要有特征序列分型或一笔破坏就可以 (这里简化为只要有分型，即 XD 存在即可)
                 # 因为 XD 对象本身就是由特征序列分型确认生成的
