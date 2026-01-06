@@ -1789,7 +1789,7 @@ class CL(ICL):
                     if is_strong_bottom or is_slope_acc:
                         valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index]
                         target_zs = valid_zss[-1] if valid_zss else None
-                        if target_zs:
+                        if target_zs and bi.low < target_zs.zd:
                             msg = "加速无背驰一买"
                             if is_strong_bottom: msg += "(强底分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -2087,7 +2087,7 @@ class CL(ICL):
                         if is_strong_bottom or is_slope_acc:
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
                             target_zs = valid_zss[-1] if valid_zss else None
-                            if target_zs:
+                            if target_zs and xd.low < target_zs.zd:
                                 msg = "加速无背驰一买"
                                 if is_strong_bottom: msg += "(强底分)"
                                 if is_slope_acc: msg += "(斜率加速)"
