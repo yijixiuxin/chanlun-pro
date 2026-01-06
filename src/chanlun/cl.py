@@ -638,10 +638,32 @@ class CL(ICL):
              self.bis.pop()
         
         # 检查最后一笔是否被破坏（针对最后一笔结束分型被后续K线破坏的情况）
-        if len(self.bis) > 0:
+        while len(self.bis) > 0:
             last_bi = self.bis[-1]
+            
+            # 1. 检查 End 分型是否被破坏 (Existing check, now covers last 2 fractals)
             if not self.check_bi_valid(last_bi.start, last_bi.end, bi_type):
                 self.bis.pop()
+                continue
+                
+            # 2. 检查 Start 分型是否被破坏 (New check)
+            # 如果当前笔的起点分型被当前笔之后的数据破坏，说明起点分型无效，当前笔也应无效
+            # 仅检查最近的2个分型，防止回溯修改太久的历史
+            if last_bi.start.index >= len(self.fxs) - 2:
+                is_start_broken = False
+                check_start_k_idx = last_bi.end.k.index + 1
+                for i in range(check_start_k_idx, len(self.cl_klines)):
+                    ck = self.cl_klines[i]
+                    if last_bi.start.type == "ding" and ck.h > last_bi.start.val:
+                        is_start_broken = True; break
+                    if last_bi.start.type == "di" and ck.l < last_bi.start.val:
+                        is_start_broken = True; break
+                
+                if is_start_broken:
+                    self.bis.pop()
+                    continue
+            
+            break
 
         # 1. 如果没有笔，则全量计算
         if len(self.bis) == 0:
