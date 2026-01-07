@@ -197,8 +197,7 @@ class ContextInfo:
                 for stk in stock_code:
                     _FUNCS_.subscribe_quote(stk, period, dividend_type, -1)
             else:
-                for stk in stock_code:
-                    this.subscribe_whole_quote(stk)
+                this.subscribe_whole_quote(stock_code)
 
         return _FUNCS_.get_market_data_ex(
             fields, stock_code, period

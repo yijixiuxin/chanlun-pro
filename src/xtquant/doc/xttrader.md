@@ -130,6 +130,11 @@ XtQuant目前提供的库包括Python3.6、3.7、3.8版本，不同版本的pyth
 - 2025-04-09
     - 持仓结构`XtPosition`新增持仓盈亏字段
     - `position_profit` - 持仓盈亏，股票不需要
+- 2025-06-03
+    - 添加获取智能算法参数配置信息接口`get_smart_algo_param`
+    - 添加智能算法下单接口`smart_algo_order_async`
+    - 添加智能算法任务查询接口`query_smart_algo_task`
+    - 添加智能算法任务撤销接口`cancel_smart_algo_task_async`
 
 ## 快速入门 
 
@@ -785,6 +790,26 @@ status | int | 账号状态，参见数据字典
 | seq     | int  | 异步请求序号 |
 | success | bool | 是否成功     |
 | msg     | str  | 反馈信息     |
+
+### 智能算法下单反馈的反馈XtSmartAlgoOrderResponse
+
+| 属性          | 类型 | 注释         |
+| ------------- | ---- | ------------ |
+| account_id    | str  | 资金账号     |
+| task_id       | int  | 任务编号     |
+| strategy_name | str  | 策略名称     |
+| order_remark  | str  | 委托备注     |
+| seq           | int  | 下单请求序号 |
+
+### 智能算法任务操作反馈XtOperateSmartTaskResponse
+
+| 属性           | 类型 | 注释         |
+| -------------- | ---- | ------------ |
+| seq            | int  | 异步请求序号 |
+| success        | bool | 是否成功     |
+| task_id        | int  | 任务编号     |
+| operate_reason | str  | 操作说明     |
+| error_msg      | str  | 错误信息     |
 
 ## XtQuant API说明
 
@@ -2127,6 +2152,164 @@ smt_query_compact(account)
       - postponeStatus&#160;-&#160;str&#160;合约展期状态，"0":未审核，"1":审核通过，"2":已撤销，"3":审核不通过
       - applyMode&#160;-&#160;str&#160;资券申请方式，"1":库存券，"2":专项券
 
+### 智能算法相关接口
+
+#### 获取智能算法参数配置信息
+
+```python
+get_smart_algo_param(algo_name_list)
+```
+
+* 释义 
+
+  - 获取智能算法参数配置信息
+
+* 参数
+
+  - algo_name_list - list 智能算法名称的列表
+
+* 返回
+
+  - 形如{algoName1 : [paramDict1, paramDict2, ...], algoName2 : [paramDict1, paramDict2, ...], ...}的字典
+
+    其中paramDict为参数信息的字典,包含以下字段
+
+    - key: 参数名称key值,即smart_algo_order中algoList字典需要传的键值
+    - name: 参数名称
+    - dataType: 参数类型
+    - valueRange: 参数范围
+    - defaultValue: 参数默认值
+    - enumName: 参数枚举值的名称
+    - enumValue: 参数实际的枚举值
+    - unit: 参数的单位,当单位为%时,值要填写小数而非参数范围所示的百分数值(即将参数范围所示值除以100)
+    - valueRangeByName: 不同算法参数范围
+    - defaultValueByName: 不同算法参数默认值
+
+* 示例
+
+```python
+#xt_trader为XtQuant API实例对象
+datas = xt_trader.get_smart_algo_param(['VWAP'])
+print(datas)
+```
+
+#### 智能算法下单
+
+```python
+smart_algo_order_async(
+    account, stock_code, order_type, order_volume, price_type, price, strategy_name, order_remark
+    , algo_name, start_time, end_time, algo_param
+)
+```
+
+* 释义 
+
+  - 智能算法下单，如果正常返回了请求序号seq，会收到on_smart_algo_order_async_response(的反馈
+* 参数
+
+  - account - StockAccount 证券账号
+  - stock_code - str 证券代码, 例如"600000.SH"
+  - order_type - int 委托类型, 23:买, 24:卖
+  - order_volume - int 委托数量, 股票以'股'为单位, 债券以'张'为单位
+  - price_type - int 报价类型, 只支持11:指定价&12:市价
+  - price - float 报价价格, 如果price_type为指定价, 那price为指定的价格, 否则填0
+  - strategy_name - str 策略名称
+  - order_remark - str 投资备注
+  - algo_name - str 算法名称
+  - start_time - str 开始时间,格式"HH:MM:SS",如"10:30:00"
+  - end_time - str 截止时间,格式"HH:MM:SS"，如"14:30:00"
+  - algo_param - dict 算法参数,通过get_smart_algo_param查询
+* 返回
+
+  - 返回下单请求序号, 成功委托后的下单请求序号为大于0的正整数, 如果为-1表示委托失败
+* 示例
+
+```python
+#xt_trader为XtQuant API实例对象
+algoParam={
+    'm_dLimitOverRate': 0.25,      # 量比 25%
+    'm_dMinAmountPerOrder':0,      # 委托最小金额
+    'm_dMaxAmountPerOrder':10000,  # 委托最大金额
+    'm_nStopTradeForOwnHiLow': 1,  # 涨跌停控制
+    'm_dMulitAccountRate':0.30,    # 多账号总量比
+    'm_strCmdRemark':  '投资备注1'  # 投资备注
+}
+seq = xt_trader.smart_algo_order_async(
+        acc, '000001.SZ', xtconstant.STOCK_BUY, 2000, 11, 11.65, 'smart_algo_demo', 'smart_algo_remark'
+        , 'VWAP', '10:25:00', '14:50:00', algo_param
+)
+print(seq)
+```
+
+#### 智能算法任务查询
+
+```python
+query_smart_algo_task(account)
+```
+
+* 释义 
+
+  - 智能算法任务查询
+
+* 参数
+
+  - account - StockAccount 证券账号
+
+* 返回
+
+  - 形如 [taskDict1, taskDict2, ...]的列表
+
+    其中taskDict为任务信息的字典,包含以下字段
+
+    - task_id - int 任务编号
+    - task_status - str 任务状态, 见ETaskStatus说明
+    - task_msg - str 任务状态消息
+    - start_time - int 任务开始时间, 时间戳类型
+    - end_time - int 任务结束时间, 时间戳类型
+    - cancel_time - int 任务取消时间
+    - order_num - int 委托量
+    - business_num - str 已成交量
+    - group_id - str 组合id
+    - algo_id - str 算法母单id
+    - account_id - str 下单账号
+    - account_type - int 账号类型
+    - strategy_name - str 策略名称
+    - order_remark - str 委托备注
+    - order_id_list - list 任务对应委托列表
+
+* 示例
+
+```python
+#xt_trader为XtQuant API实例对象
+tasks = xt_trader.query_smart_algo_task(acc)
+print(tasks)
+```
+
+#### 智能算法任务撤销
+
+```python
+cancel_smart_algo_task_async(account, task_id)
+```
+
+* 释义 
+
+  - 智能算法任务撤销，接口如果正常返回了请求序号seq，会收到on_operate_smart_task_async_response的反馈
+* 参数
+
+  - account - StockAccount 证券账号
+  - task_id - int 任务编号
+
+* 返回
+
+  - 返回请求序号seq，成功发起申请后的请求序号为大于0的正整数，如果为-1表示发起申请失败
+* 示例
+
+```python
+#xt_trader为XtQuant API实例对象
+seq = xt_trader.cancel_smart_algo_task_async(acc, 2)
+print(seq)
+```
+
 ### 回调类
 
 ```python
@@ -2378,6 +2561,36 @@ on_ctp_internal_transfer_async_response(data)
   - CTP资金内转异步接口的回报推送
 * 参数
   - data - XtBankTransferResponse 银证转账异步接口的反馈
+* 返回
+  - 无 
+* 备注
+  - 无
+
+#### 智能算法下单的回报推送
+
+```python
+on_smart_algo_order_async_response(data)
+```
+
+* 释义
+  - 智能算法下单的回报推送
+* 参数
+  - data - XtSmartAlgoOrderResponse智能算法下单反馈
+* 返回
+  - 无 
+* 备注
+  - 无
+
+#### 智能算法任务操作的回报推送
+
+```python
+on_operate_smart_task_async_response(data)
+```
+
+* 释义
+  - 智能算法任务操作的回报推送
+* 参数
+  - data - XtOperateSmartTaskResponse智能算法任务操作反馈
 * 返回
   - 无 
 * 备注
