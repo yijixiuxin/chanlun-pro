@@ -401,3 +401,39 @@ class XtBankTransferResponse(object):
         self.success = success
         self.msg = msg
 
+class XtSmartAlgoOrderResponse(object):
+    """
+    #迅投智能算法任务下单反馈
+    """
+    def __init__(self, account_id, task_id, strategy_name, order_remark, error_msg, seq):
+        """
+        :param account_id: 资金账号
+        :param task_id: 任务编号
+        :param strategy_name: 策略名称
+        :param order_remark: 委托备注
+        :param seq: 下单请求序号
+        """
+        self.account_id = account_id
+        self.task_id = task_id
+        self.strategy_name = strategy_name
+        self.order_remark = order_remark
+        self.error_msg = error_msg
+        self.seq = seq
+
+class XtOperateSmartTaskResponse(object):
+    """
+    #迅投智能算法任务操作反馈
+    """
+    def __init__(self, seq, success, task_id, operate_reason, error_msg):
+        """
+        :param seq: 异步请求序号
+        :param success: 操作状态
+        :param task_id: 任务编号
+        :param operate_reason: 操作说明
+        :param error_msg: 错误信息
+        """
+        self.seq = seq
+        self.success = success
+        self.task_id = task_id
+        self.operate_reason = operate_reason
+        self.error_msg = error_msg

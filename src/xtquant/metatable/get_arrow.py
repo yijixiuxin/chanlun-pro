@@ -227,6 +227,8 @@ def _datetime_to_timetag_end(timelabel, format=''):
             return dt.datetime.strptime(timelabel, format).timestamp() * 1000 + 24*60*60*1000 - 1
         elif len(timelabel) == 14:
             return dt.datetime.strptime(timelabel, format).timestamp() * 1000 + 1000 - 1
+        else:
+            return 0
     except:
         return 0
 

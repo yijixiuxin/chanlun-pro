@@ -212,7 +212,7 @@ def hello():
     import datetime as dt
     cur = dt.datetime.now().strftime("%Y-%m-%d %H:%S:%M")
     print(
-f'''***** xtdata连接成功 {cur}*****
+f'''***** xtdata连接成功 {cur} *****
 服务信息: {server_info}
 服务地址: {peer_addr}
 数据路径: {__data_dir_from_server}

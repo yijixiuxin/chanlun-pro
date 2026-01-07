@@ -91,7 +91,7 @@ def create_app(test_config=None):
 
     _xuangu_tasks = XuanguTasks(scheduler)
 
-    _other_tasks = OtherTasks(scheduler)
+    # _other_tasks = OtherTasks(scheduler)
 
     __log = fun.get_logger()
 
@@ -179,5 +179,5 @@ def create_app(test_config=None):
     app.extensions["scheduler"] = scheduler
     app.extensions["alert_tasks"] = _alert_tasks
     app.extensions["xuangu_tasks"] = _xuangu_tasks
-    app.extensions["other_tasks"] = _other_tasks
+    # app.extensions["other_tasks"] = _other_tasks
     return app

@@ -4,6 +4,7 @@ from . import xtpythonclient as _XTQC_
 from . import xttype as _XTTYPE_
 from . import xtbson as bson
 from . import xtconstant as _XTCONST_
+import json
 
 def title(s = None):
     import inspect
@@ -117,6 +118,20 @@ class XtQuantTraderCallback(object):
         """
         pass
 
+    def on_smart_algo_order_async_response(self, response):
+        """
+        :param response: json类型的反馈信息
+        :return:
+        """
+        pass
+
+    def on_operate_smart_task_async_response(self, response):
+        """
+        :param response: XtOperateSmartTaskResponse 对象
+        :return:
+        """
+        pass
+
 class XtQuantTrader(object):
     def __init__(self, path, session, callback=None):
         """
@@ -207,6 +222,10 @@ class XtQuantTrader(object):
         self.async_client.bindOnQueryBankTransferStreamRespCallback(on_common_resp_callback)
         self.async_client.bindOnQuerySecuAccountRespCallback(on_common_resp_callback)
         self.async_client.bindOnCtpInternalTransferRespCallback(on_common_resp_callback)
+        self.async_client.bindOnGetSmartAlgoParamRespCallback(on_common_resp_callback)
+        self.async_client.bindOnSmartOrderStockRespCallback(on_common_resp_callback)
+        self.async_client.bindOnQuerySmartAlgoTaskRespCallback(on_common_resp_callback)
+        self.async_client.bindOnOperateSmartAlgoTaskRespCallback(on_common_resp_callback)
      
         self.async_client.bindOnQueryAccountInfosCallback(on_common_resp_callback)
         self.async_client.bindOnQueryAccountStatusCallback(on_common_resp_callback)
@@ -351,6 +370,28 @@ class XtQuantTrader(object):
       
         if enable_push:
             self.async_client.bindOnCtpInternalTransferRespCallback(on_common_push_callback_wrapper(2, on_push_ctpInternalTransferAsyncResponse))
+
+        def on_push_smartAlgoOrderAsyncResponse(seq, resp):
+            callback = self.cbs.pop(seq, None)
+            if callback:
+                resp = json.loads(resp)
+                resp = resp.get('error', resp)
+                resp = _XTTYPE_.XtSmartAlgoOrderResponse(resp['account_id'], resp['task_id'], resp['strategy_name'], resp['order_remark'], resp['error_msg'], seq)
+                callback(resp)
+            return
+  
+        if enable_push:
+            self.async_client.bindOnSmartOrderStockRespCallback(on_common_push_callback_wrapper(2, on_push_smartAlgoOrderAsyncResponse))
+
+        def on_push_OperateSmartAlgoTaskAsyncResponse(seq, resp):
+            callback = self.cbs.pop(seq, None)
+            if callback:
+                resp = _XTTYPE_.XtOperateSmartTaskResponse(seq, resp.success, resp.task_id, resp.reason, resp.error_msg)
+                callback(resp)
+            return
+        
+        if enable_push:
+            self.async_client.bindOnOperateSmartAlgoTaskRespCallback(on_common_push_callback_wrapper(2, on_push_OperateSmartAlgoTaskAsyncResponse))
 
     ########################
 
@@ -1474,7 +1515,6 @@ class XtQuantTrader(object):
             seq,
             (self.async_client.exportDataWithSeq, seq, bson.BSON.encode(fix_param), bson.BSON.encode(user_param))
         )
-        import json
         result = json.loads(resp)
         return result
 
@@ -1512,7 +1552,6 @@ class XtQuantTrader(object):
             seq,
             (self.async_client.syncTransactionFromExternalWithSeq, seq, bson.BSON.encode(fix_param), bson_list)
         )
-        import json
         result = json.loads(resp)
         return result
 
@@ -1768,5 +1807,115 @@ class XtQuantTrader(object):
         seq = self.async_client.nextSeq()
         self.cbs[seq] = self.callback.on_ctp_internal_transfer_async_response
         self.async_client.ctpInternalTransferWithSeq(seq, req)
+        return seq
+
+    def get_smart_algo_param(self, algo_name_list):
+        """
+        参数
+        :param algo_name_list: 智能算法名称的列表
+        :return: 返回dict格式的结果反馈信息
+        """
+        seq = self.async_client.nextSeq()
+        resp = self.common_op_sync_with_seq(
+            seq,
+            (self.async_client.getSmartAlgoParamWithSeq, seq, algo_name_list)
+        )
+        resp = json.loads(resp)["datas"]
+        return resp
+
+    def _time_to_timestamp(self, time_str):
+        """
+        将时间字符串（格式如 "09:30:00"）与当天日期结合，转换为秒级时间戳。
+    
+        :param time_str: 时间字符串，格式为 "HH:MM:SS"。
+        :return: 秒级时间戳（UTC）。
+        """
+        from datetime import datetime
+        try:
+            time_obj = datetime.strptime(time_str, "%H:%M:%S").time()
+        except ValueError:
+            raise ValueError("错误的时间格式: ", time_str)
+        today = datetime.now().date()
+        datetime_obj = datetime.combine(today, time_obj)
+        timestamp = int(datetime_obj.timestamp())
+        return timestamp
+
+    def smart_algo_order_async(
+            self, account, stock_code, order_type, order_volume, price_type, price, strategy_name, order_remark
+            , algo_name, start_time, end_time, algo_param
+        ):
+        """
+        :param account: 证券账号
+        :param stock_code: 证券代码, 例如"600000.SH"
+        :param order_type: 委托类型, 23:买, 24:卖
+        :param order_volume: 委托数量, 股票以'股'为单位, 债券以'张'为单位
+        :param price_type: 报价类型, 详见帮助手册
+        :param price: 报价价格, 如果price_type为指定价, 那price为指定的价格, 否则填0
+        :param strategy_name: 策略名称
+        :param order_remark: 委托备注
+        :param algo_name: 算法名称
+        :param start_time: 开始时间
+        :param end_time: 截止时间
+        :param algo_param: 算法参数 
+        :return: 返回下单请求序号, 成功委托后的下单请求序号为大于0的正整数, 如果为-1表示委托失败
+        """
+        orderParam = dict()
+        orderParam['account_type'] = account.account_type
+        orderParam['account_id'] = account.account_id
+        orderParam['stock_code'] = stock_code
+        orderParam['order_type'] = order_type
+        orderParam['order_volume'] = order_volume
+        orderParam['price_type'] = price_type
+        orderParam['price'] = price
+        orderParam['strategy_name'] = strategy_name
+        orderParam['order_remark'] = order_remark
+        orderParam['algo_name'] = algo_name
+        _start_time = self._time_to_timestamp(start_time)
+        _end_time = self._time_to_timestamp(end_time)
+        if _start_time >= _end_time:
+            raise Exception("开始时间需小于截止时间")
+        orderParam['start_time'] = _start_time
+        orderParam['end_time'] = _end_time
+        algo_param['m_nValidTimeStart'] = _start_time
+        algo_param['m_nValidTimeEnd'] = _end_time
+
+        seq = self.async_client.nextSeq()
+        self.cbs[seq] = self.callback.on_smart_algo_order_async_response
+        self.async_client.smartOrderStockWithSeq(seq, bson.BSON.encode(orderParam), bson.BSON.encode(algo_param))
+        return seq
+
+    def query_smart_algo_task(self, account):
+        """
+        :param account: 证券账号
+        :return: 返回dict格式的结果反馈信息
+        """
+        reqParam = dict()
+        reqParam['account_type'] = account.account_type
+        reqParam['account_id'] = account.account_id
+
+        seq = self.async_client.nextSeq()
+        resp = self.common_op_sync_with_seq(
+            seq,
+            (self.async_client.querySmartAlgoTaskWithSeq, seq, bson.BSON.encode(reqParam))
+        )
+        resp = json.loads(resp)
+        resp = resp.get('error', resp)["datas"]
+        return resp
+
+    def cancel_smart_algo_task_async(self, account, task_id):
+        """
+        :param account: 证券账号
+        :param task_id: 智能算法任务编号
+        :return: 返回请求序号, 成功请求后的序号为大于0的正整数, 如果为-1表示请求失败
+        """
+        req = _XTQC_.OperateSmartAlgoTaskReq()
+        req.m_nAccountType = account.account_type
+        req.m_strAccountID = account.account_id
+        req.m_nTaskId = task_id
+        req.m_nOperateType = 3
+
+        seq = self.async_client.nextSeq()
+        self.cbs[seq] = self.callback.on_operate_smart_task_async_response
+        self.async_client.operateSmartAlgoTaskWithSeq(seq, req)
         return seq
 
