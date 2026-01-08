@@ -753,10 +753,12 @@ class CL(ICL):
         """
         if start_bi.type == "up":
             # 向上线段：第3笔低点 <= 第1笔高点
-            return end_bi.low <= start_bi.high
+            # 且 第3笔高点 > 第1笔高点 (创新高)
+            return end_bi.low <= start_bi.high and end_bi.high > start_bi.high
         else:
             # 向下线段：第3笔高点 >= 第1笔低点
-            return end_bi.high >= start_bi.low
+            # 且 第3笔低点 < 第1笔低点 (创新低)
+            return end_bi.high >= start_bi.low and end_bi.low < start_bi.low
 
     def _get_xd_direction(self, start_bi: BI, start_idx: int) -> Union[str, None]:
         """
@@ -946,7 +948,22 @@ class CL(ICL):
         # 所以返回 center_idx - 1，即 S3 的索引
         return max(0, center_idx - 1)
 
-    def _find_xd_end_by_feature_sequence(self, start_idx: int, xd_dir: str) -> Union[Tuple[int, XLFX, XLFX], None]:
+    def _check_next_segment_validity(self, end_bi_idx: int, current_xd_dir: str) -> bool:
+        """
+        检查下一线段是否有效（至少三笔重叠）
+        """
+        next_start_idx = end_bi_idx + 1
+        if next_start_idx >= len(self.bis):
+            # 如果没有下一笔，无法验证，但如果是数据末端，通常允许（依赖 is_done 标记）
+            # 这里返回 False 是为了让 _find_xd_end_by_feature_sequence 继续寻找更确定的结束
+            # 但如果到了数据末尾，应该由 _handle_unfinished_xd 处理
+            return False 
+        
+        next_dir = "down" if current_xd_dir == "up" else "up"
+        overlap_idx = self._find_first_same_dir_overlap_index(next_start_idx, next_dir)
+        return overlap_idx is not None
+
+    def _find_xd_end_by_feature_sequence(self, start_idx: int, xd_dir: str, min_end_idx: int = None) -> Union[Tuple[int, XLFX, XLFX], None]:
         """
         使用特征序列方法寻找线段结束点
         修复：正确处理缺口情形，严格按照缠论理论
@@ -1042,12 +1059,14 @@ class CL(ICL):
                                     use_pending = True
                                 
                                 if use_pending:
-                                    return self._create_xd_end_result(
-                                        pending_gap_fx['fx_type'],
-                                        pending_gap_fx['fx_tzxl'],
-                                        pending_gap_fx['xls'],
-                                        pending_gap_fx['end_bi_idx']
-                                    )
+                                    if (min_end_idx is None or pending_gap_fx['end_bi_idx'] >= min_end_idx) and \
+                                       self._check_next_segment_validity(pending_gap_fx['end_bi_idx'], xd_dir):
+                                        return self._create_xd_end_result(
+                                            pending_gap_fx['fx_type'],
+                                            pending_gap_fx['fx_tzxl'],
+                                            pending_gap_fx['xls'],
+                                            pending_gap_fx['end_bi_idx']
+                                        )
                             
                             # 构造虚拟的分型结果用于返回
                             # 使用 D 作为分型极值点（虽然它是破坏笔，但在逻辑上它终结了线段）
@@ -1058,13 +1077,15 @@ class CL(ICL):
                             # 注意：这里主要是为了满足返回类型，核心是 end_idx
                             tzxl_d = self._create_feature_sequence_element(d_bi, xd_dir)
                             
-                            # 递归构造结果
-                            return self._create_xd_end_result(
-                                "ding" if xd_dir == "up" else "di",
-                                tzxl_d, # 使用 D 作为特征分型元素
-                                [tzxl_d], # 虚拟列表
-                                end_idx
-                            )
+                            if (min_end_idx is None or end_idx >= min_end_idx) and \
+                               self._check_next_segment_validity(end_idx, xd_dir):
+                                # 递归构造结果
+                                return self._create_xd_end_result(
+                                    "ding" if xd_dir == "up" else "di",
+                                    tzxl_d, # 使用 D 作为特征分型元素
+                                    [tzxl_d], # 虚拟列表
+                                    end_idx
+                                )
 
                 # 检查是否满足无缺口分型的提前确认条件 (3笔破坏)
                 # 场景：Pending分型(U1) -> CheckSeq(D1) -> Current(U2)
@@ -1093,12 +1114,14 @@ class CL(ICL):
                                  is_valid_reverse = True
                         
                         if is_valid_reverse:
-                            return self._create_xd_end_result(
-                                pending_gap_fx['fx_type'],
-                                pending_gap_fx['fx_tzxl'],
-                                pending_gap_fx['xls'],
-                                pending_gap_fx['end_bi_idx']
-                            )
+                            if (min_end_idx is None or pending_gap_fx['end_bi_idx'] >= min_end_idx) and \
+                               self._check_next_segment_validity(pending_gap_fx['end_bi_idx'], xd_dir):
+                                return self._create_xd_end_result(
+                                    pending_gap_fx['fx_type'],
+                                    pending_gap_fx['fx_tzxl'],
+                                    pending_gap_fx['xls'],
+                                    pending_gap_fx['end_bi_idx']
+                                )
 
                 # 创建特征序列元素
                 tzxl = self._create_feature_sequence_element(bi, xd_dir)
@@ -1206,12 +1229,14 @@ class CL(ICL):
                         if fx_result_b:
                             # 序列B出现了分型，确认原线段结束！
                             # 结束点就是 pending_gap_fx 中记录的点
-                            return self._create_xd_end_result(
-                                pending_gap_fx['fx_type'],
-                                pending_gap_fx['fx_tzxl'],
-                                pending_gap_fx['xls'],
-                                pending_gap_fx['end_bi_idx']
-                            )
+                            if (min_end_idx is None or pending_gap_fx['end_bi_idx'] >= min_end_idx) and \
+                               self._check_next_segment_validity(pending_gap_fx['end_bi_idx'], xd_dir):
+                                return self._create_xd_end_result(
+                                    pending_gap_fx['fx_type'],
+                                    pending_gap_fx['fx_tzxl'],
+                                    pending_gap_fx['xls'],
+                                    pending_gap_fx['end_bi_idx']
+                                )
         
         # 修复：如果在数据末尾有待确认的分型，尝试直接确认
         # 场景：数据结束时，虽然SequenceB没有形成分型，但Pending分型已经形成且是目前最优解
@@ -1221,12 +1246,14 @@ class CL(ICL):
         # 这里的 pending_gap_fx 就是已经形成的特征序列分型（只是没被后续反向线段确认）。
         # 对于当前线段，这就是它的结束点。
         if pending_gap_fx:
-            return self._create_xd_end_result(
-                pending_gap_fx['fx_type'],
-                pending_gap_fx['fx_tzxl'],
-                pending_gap_fx['xls'],
-                pending_gap_fx['end_bi_idx']
-            )
+            if min_end_idx is None or pending_gap_fx['end_bi_idx'] >= min_end_idx:
+                 return self._create_xd_end_result(
+                     pending_gap_fx['fx_type'],
+                     pending_gap_fx['fx_tzxl'],
+                     pending_gap_fx['xls'],
+                     pending_gap_fx['end_bi_idx'],
+                     is_done=False # 标记为未完成（虚线），因为还未被后续走势完全确认
+                 )
 
         return None
 
@@ -1293,7 +1320,7 @@ class CL(ICL):
         
         return None
 
-    def _create_xd_end_result(self, fx_type, fx_tzxl, xls, end_bi_idx):
+    def _create_xd_end_result(self, fx_type, fx_tzxl, xls, end_bi_idx, is_done=True):
         """辅助方法：创建线段结束返回结果"""
         if fx_type == "ding":
             ding_fx = self._create_xlfx("ding", fx_tzxl, xls)
@@ -1301,7 +1328,7 @@ class CL(ICL):
         else:
             ding_fx = None
             di_fx = self._create_xlfx("di", fx_tzxl, xls)
-        return (end_bi_idx, ding_fx, di_fx)
+        return (end_bi_idx, ding_fx, di_fx, is_done)
 
     def _handle_unfinished_xd(self):
         """
@@ -1425,23 +1452,30 @@ class CL(ICL):
             # 寻找与起始笔同向且满足重叠的最早笔索引（三笔最短线段成立）
             first_overlap_idx = self._find_first_same_dir_overlap_index(i, xd_dir)
             if first_overlap_idx is None:
+                # 关键修复：如果当前位置无法开始新线段（因为不满足重叠条件），说明上一线段结束得过早（或错误）
+                # 此时应该取消上一线段的完成状态，尝试将其延伸
+                if len(self.xds) > 0:
+                     last_xd = self.xds.pop()
+                     # 重置 i 到上一线段的起始位置，重新计算（此时 _find_xd_end_by_feature_sequence 会因为 next_validity 检查而跳过之前的错误结束点）
+                     i = last_xd.start_line.index
+                     continue
+                
                 i += 1
                 continue
             
             # 使用特征序列方法寻找线段结束
             # 注意：必须从线段起始位置开始扫描特征序列，否则会遗漏前面的特征元素，导致无法识别早期的分型
-            xd_end_info = self._find_xd_end_by_feature_sequence(i, xd_dir)
+            # 关键更新：传入 min_end_idx=first_overlap_idx，强制要求线段结束点必须满足最小长度（三笔重叠）
+            # 这避免了返回过短的无效线段，从而防止了外部循环的死锁重试
+            xd_end_info = self._find_xd_end_by_feature_sequence(i, xd_dir, min_end_idx=first_overlap_idx)
             if xd_end_info is None:
-                # 没有找到线段结束，继续向后寻找
-                i += 1
-                continue
+                # 关键修复：如果没有找到线段结束（即使是未完成的），说明线段一直延续到数据末尾
+                # 不应该 continue 跳过，而应该 break，交由 _handle_unfinished_xd 处理
+                break
             
-            end_bi_idx, ding_fx, di_fx = xd_end_info
+            end_bi_idx, ding_fx, di_fx, is_done = xd_end_info
             
-            # 确保结束点在基本重叠结构之后（线段定义：至少三笔）
-            if end_bi_idx < first_overlap_idx:
-                i += 1
-                continue
+            # 此时 end_bi_idx 必然 >= first_overlap_idx，无需再次检查
                 
             end_bi = self.bis[end_bi_idx]
             
@@ -1466,31 +1500,81 @@ class CL(ICL):
                 xd.high = max([bi.high for bi in xd_bis])
                 xd.low = min([bi.low for bi in xd_bis])
             
-            xd.done = True
-            
-            # 2025-01-05 Update: 标记是否为"已完成"
-            # 严格来说，最后一个线段如果没有被反向线段确认，它在 Chanlun 意义上是"未完成"的
-            # 但它有完整的特征序列分型。
-            # 我们可以通过判断它是否是最后一个线段，且结束于数据末尾来标记 done=False?
-            # 或者，如果 xd_end_info 是由 fallback (pending_gap_fx) 返回的，它就是未确认的。
-            # 由于 _find_xd_end_by_feature_sequence 没有返回 flag，我们这里做个简单的判断：
-            # 如果 end_bi 是 bis 列表中的倒数第几个，且后面没有足够的笔形成反向分型，那它就是 provisional.
-            # 不过，cl_interface 定义 done 为 "是否完成"，通常指分型是否完成。
-            # 特征序列分型已经完成，所以 done=True 是合理的 (structurally complete)。
-            # 用户抱怨的是 "Figure 2 marked Done is wrong" (Bi case, no fractal).
-            # 这里是有 Fractal 的，所以 mark Done 应该是对的。
-            # 之前的问题是 "Virtual Pen" 没有 Fractal 也 mark Done。
-            
+            xd.done = is_done
             self.xds.append(xd)
             
             # 下一段从结束笔的下一笔开始
             i = end_bi_idx + 1
         
-        # 处理未完成线段
-        # 2025-01-05 Update: 移除手动处理未完成线段的逻辑
-        # 主循环已经能够处理以特征序列分型结束的线段。
-        # 如果没有特征序列分型，则不生成线段。
-        # self._handle_unfinished_xd()
+        # 处理未完成线段：如果还有剩余的笔，且无法形成完成的线段，尝试生成一个未完成线段
+        # 只要剩余笔数 > 0，且能延续上一线段或开始新线段
+        
+        unfinished_start_idx = 0
+        if len(self.xds) > 0:
+            unfinished_start_idx = self.xds[-1].end_line.index + 1
+            
+        if unfinished_start_idx < len(self.bis):
+            start_bi = self.bis[unfinished_start_idx]
+            i = unfinished_start_idx
+            
+            # 确定方向
+            current_dir = None
+            if len(self.xds) > 0:
+                current_dir = "down" if self.xds[-1].type == "up" else "up"
+            else:
+                current_dir = start_bi.type
+                
+            # 必须与起始笔同向才能开始（或者是新线段的第一笔）
+            # 如果起始笔方向与期望方向不一致，说明这一笔是前一线段的反向修正？
+            # 不，如果 i 是上一线段结束后的第一笔，它必须是反向的。
+            # 如果 last_xd is Up, end_bi is Up. Next bi (i) is Down. 
+            # So current_dir should be Down. start_bi (Down) matches.
+            
+            if start_bi.type == current_dir:
+                # 寻找极值点
+                end_bi_idx = i
+                remaining_bis = self.bis[i:]
+                
+                if current_dir == "up":
+                    # 找最高点
+                    max_val = -float('inf')
+                    for idx, bi in enumerate(remaining_bis):
+                        if bi.type == "up" and bi.high >= max_val:
+                            max_val = bi.high
+                            end_bi_idx = i + idx
+                else:
+                    # 找最低点
+                    min_val = float('inf')
+                    for idx, bi in enumerate(remaining_bis):
+                        if bi.type == "down" and bi.low <= min_val:
+                            min_val = bi.low
+                            end_bi_idx = i + idx
+                            
+                end_bi = self.bis[end_bi_idx]
+                
+                # 创建未完成线段
+                xd = XD(
+                    start=start_bi.start,
+                    end=end_bi.end,
+                    start_line=start_bi,
+                    end_line=end_bi,
+                    _type=current_dir,
+                    ding_fx=None,
+                    di_fx=None,
+                    index=len(self.xds)
+                )
+                
+                # 设置高低点
+                xd_bis = self.bis[i:end_bi_idx+1]
+                if current_dir == "up":
+                    xd.high = max([bi.high for bi in xd_bis])
+                    xd.low = min([bi.low for bi in xd_bis])
+                else:
+                    xd.high = max([bi.high for bi in xd_bis])
+                    xd.low = min([bi.low for bi in xd_bis])
+                
+                xd.done = False
+                self.xds.append(xd)
 
     def _cal_zsd(self):
         """
