@@ -480,6 +480,24 @@ class CL(ICL):
         if not self._is_fx_confirmed_by_subsequent_movement(start_fx, end_fx, bi_type):
             return False
 
+        # 检查分型之间是否存在破坏分型的K线（即向下笔中间出现比顶分型还高的K线，或向上笔中间出现比底分型还低的K线）
+        # 范围：从起点分型后一根K线开始，到终点分型前一根K线结束（终点分型本身如果是更极值的情况由其他逻辑处理）
+        # 只需要检查 cl_klines，因为分型是基于 cl_klines 的
+        check_start_idx = start_fx.k.index + 1
+        check_end_idx = end_fx.k.index
+        
+        # 优化：如果中间K线数量太多，可能影响性能，但对于笔来说通常不会太多
+        # 如果是向下笔（顶->底），中间不能有比顶分型高的
+        if start_fx.type == "ding":
+            for i in range(check_start_idx, check_end_idx):
+                if self.cl_klines[i].h > start_fx.val:
+                    return False
+        # 如果是向上笔（底->顶），中间不能有比底分型低的
+        elif start_fx.type == "di":
+            for i in range(check_start_idx, check_end_idx):
+                if self.cl_klines[i].l < start_fx.val:
+                    return False
+
         return self._check_bi_len_valid(start_fx, end_fx, bi_type)
 
     def _is_fx_included(self, fx1: FX, fx2: FX) -> bool:
@@ -1596,13 +1614,24 @@ class CL(ICL):
         self.xd_zss = {}
 
         # Helper: 以三线重叠计算中枢，并向后延伸直到离开（含离开段）
-        def _calc_zss_by_lines(_lines: List[LINE], _zs_type: str) -> List[ZS]:
+        def _calc_zss_by_lines(_lines: List[LINE], _zs_type: str, _parent_line_type: str = None) -> List[ZS]:
             zss: List[ZS] = []
             if len(_lines) < 5:
                 return zss
             i = 1
             while i <= len(_lines) - 3:
                 l1, l2, l3 = _lines[i], _lines[i + 1], _lines[i + 2]
+                
+                # 如果指定了父级别线段方向，则限制中枢第一笔的方向
+                # 上涨线段，中枢第一笔必须是下（回调）
+                # 下跌线段，中枢第一笔必须是上（反弹）
+                if _parent_line_type == "up" and l1.type != "down":
+                    i += 1
+                    continue
+                if _parent_line_type == "down" and l1.type != "up":
+                    i += 1
+                    continue
+
                 zg = min(l1.high, l2.high, l3.high)
                 zd = max(l1.low, l2.low, l3.low)
                 if zg > zd:
@@ -1711,7 +1740,7 @@ class CL(ICL):
                     sub_lines = [bi for bi in self.bis if start_idx <= bi.index <= end_idx]
                     if len(sub_lines) < 3:
                         continue
-                    zss_dn = _calc_zss_by_lines(sub_lines, zs_type)
+                    zss_dn = _calc_zss_by_lines(sub_lines, zs_type, xd.type)
                     # 修正中枢索引为全局顺序
                     for zs in zss_dn:
                         zs.index = len(self.bi_zss[zs_type])
@@ -1880,10 +1909,17 @@ class CL(ICL):
 
                     # 1 OR 2 满足其一
                     if is_strong_top or is_slope_acc:
-                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index]
-                        target_zs = valid_zss[-1] if valid_zss else None
+                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index and z.lines[-1].index > current_cutoff]
+                        
+                        # 2025-01-09 Fix: 无背驰加速一卖，强制要求是趋势结构（至少两个中枢），防止底部刚启动单中枢误判
+                        if len(valid_zss) < 2:
+                            target_zs = None
+                        else:
+                            target_zs = valid_zss[-1]
+
                         # 增加方向检查：1卖必须是在向上趋势中（进入中枢段为向上，即中枢第一段为向下）
-                        if target_zs and target_zs.lines and target_zs.lines[0].type == "down":
+                        # 增加离开检查：必须突破中枢高点 (ZG)
+                        if target_zs and target_zs.lines and target_zs.lines[0].type == "down" and bi.high > target_zs.zg:
                             msg = "加速无背驰一卖"
                             if is_strong_top: msg += "(强顶分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -1918,9 +1954,16 @@ class CL(ICL):
                         is_slope_acc = True
 
                     if is_strong_bottom or is_slope_acc:
-                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index]
-                        target_zs = valid_zss[-1] if valid_zss else None
+                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index and z.lines[-1].index > current_cutoff]
+                        
+                        # 2025-01-09 Fix: 无背驰加速一买，强制要求是趋势结构（至少两个中枢）
+                        if len(valid_zss) < 2:
+                            target_zs = None
+                        else:
+                            target_zs = valid_zss[-1]
+
                         # 增加方向检查：1买必须是在下跌趋势中（进入中枢段为下跌，即中枢第一段为向上）
+                        # 增加离开检查：必须突破中枢低点 (ZD)
                         if target_zs and bi.low < target_zs.zd and target_zs.lines and target_zs.lines[0].type == "up":
                             msg = "加速无背驰一买"
                             if is_strong_bottom: msg += "(强底分)"
@@ -1938,7 +1981,9 @@ class CL(ICL):
                     continue
                 
                 # 判断当前中枢是否是趋势中枢
-                valid_zss = [z for z in zss if z.index <= zs.index]
+                # 2025-01-09 Fix: 限制 valid_zss 只包含当前线段内的中枢 (通过 current_cutoff 过滤)
+                # 防止跨线段错误匹配中枢导致 1S 误判，同时也避免了单中枢被误判为趋势背驰(需要至少2个中枢)
+                valid_zss = [z for z in zss if z.index <= zs.index and z.lines[-1].index > current_cutoff]
                 is_qs_trend = False
                 if len(valid_zss) >= 2:
                     trend_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
@@ -2193,9 +2238,16 @@ class CL(ICL):
 
                         if is_strong_top or is_slope_acc:
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
-                            target_zs = valid_zss[-1] if valid_zss else None
+                            
+                            # 2025-01-09 Fix: 无背驰加速一卖，强制要求是趋势结构（至少两个中枢）
+                            if len(valid_zss) < 2:
+                                target_zs = None
+                            else:
+                                target_zs = valid_zss[-1]
+
                             # 增加方向检查：1卖必须是在向上趋势中（进入中枢段为向上，即中枢第一段为向下）
-                            if target_zs and target_zs.lines and target_zs.lines[0].type == "down":
+                            # 增加离开检查：必须突破中枢高点 (ZG)
+                            if target_zs and target_zs.lines and target_zs.lines[0].type == "down" and xd.high > target_zs.zg:
                                 msg = "加速无背驰一卖"
                                 if is_strong_top: msg += "(强顶分)"
                                 if is_slope_acc: msg += "(斜率加速)"
@@ -2231,8 +2283,15 @@ class CL(ICL):
 
                         if is_strong_bottom or is_slope_acc:
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
-                            target_zs = valid_zss[-1] if valid_zss else None
+                            
+                            # 2025-01-09 Fix: 无背驰加速一买，强制要求是趋势结构（至少两个中枢）
+                            if len(valid_zss) < 2:
+                                target_zs = None
+                            else:
+                                target_zs = valid_zss[-1]
+
                             # 增加方向检查：1买必须是在下跌趋势中（进入中枢段为下跌，即中枢第一段为向上）
+                            # 增加离开检查：必须突破中枢低点 (ZD)
                             if target_zs and xd.low < target_zs.zd and target_zs.lines and target_zs.lines[0].type == "up":
                                 msg = "加速无背驰一买"
                                 if is_strong_bottom: msg += "(强底分)"
