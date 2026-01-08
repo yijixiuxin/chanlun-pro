@@ -498,11 +498,11 @@ def create_app(test_config=None):
         market = symbol.split(":")[0].lower()
         code = symbol.split(":")[1]
 
-        if firstDataRequest == "true":
-            try:
-                FileCacheDB().clear_web_cl_data(market, code)
-            except Exception:
-                pass
+        # if firstDataRequest == "true":
+        #     try:
+        #         FileCacheDB().clear_web_cl_data(market, code)
+        #     except Exception:
+        #         pass
 
         ex = get_exchange(Market(market))
 

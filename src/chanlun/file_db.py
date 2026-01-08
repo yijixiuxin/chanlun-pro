@@ -258,14 +258,27 @@ class FileCacheDB(object):
                     file_pathname.unlink()
                 except Exception:
                     pass
+        # 判断是否需要更新计算
+        is_run_process = True
+        if len(cd.get_src_klines()) > 0 and len(klines) > 0:
+            cd_last_k = cd.get_src_klines()[-1]
+            new_last_k = klines.iloc[-1]
+            if (
+                cd_last_k.date == new_last_k["date"]
+                and cd_last_k.c == float(new_last_k["close"])
+                and cd_last_k.h == float(new_last_k["high"])
+                and cd_last_k.l == float(new_last_k["low"])
+                and cd_last_k.o == float(new_last_k["open"])
+            ):
+                is_run_process = False
+        if is_run_process:
+            cd.process_klines(klines)
 
-        cd.process_klines(klines)
-
-        try:
-            with open(file_pathname, "wb") as fp:
-                pickle.dump(cd, fp)
-        except Exception as e:
-            print(f"写入缓存异常 {market} {code} {frequency} - {e}")
+            try:
+                with open(file_pathname, "wb") as fp:
+                    pickle.dump(cd, fp)
+            except Exception as e:
+                print(f"写入缓存异常 {market} {code} {frequency} - {e}")
 
         # 加一个随机概率，去清理历史的缓存，避免太多占用空间
         if random.randint(0, 1000) <= 5:
