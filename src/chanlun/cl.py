@@ -752,13 +752,13 @@ class CL(ICL):
         检查线段基本重叠条件：第1笔与第3笔必须有价格重叠
         """
         if start_bi.type == "up":
-            # 向上线段：第3笔低点 <= 第1笔高点
-            # 且 第3笔高点 > 第1笔高点 (创新高)
-            return end_bi.low <= start_bi.high and end_bi.high > start_bi.high
+            # 向上线段：第3笔低点 <= 第1笔高点 且 第3笔高点 >= 第1笔低点 (确保重叠)
+            # 用户修改：三笔重叠即可，不需要创新高
+            return end_bi.low <= start_bi.high and end_bi.high >= start_bi.low
         else:
-            # 向下线段：第3笔高点 >= 第1笔低点
-            # 且 第3笔低点 < 第1笔低点 (创新低)
-            return end_bi.high >= start_bi.low and end_bi.low < start_bi.low
+            # 向下线段：第3笔高点 >= 第1笔低点 且 第3笔低点 <= 第1笔高点 (确保重叠)
+            # 用户修改：三笔重叠即可，不需要创新低
+            return end_bi.high >= start_bi.low and end_bi.low <= start_bi.high
 
     def _get_xd_direction(self, start_bi: BI, start_idx: int) -> Union[str, None]:
         """
@@ -793,11 +793,16 @@ class CL(ICL):
         线段最短三笔成立：首笔与最后一个同向笔区间有交集
         """
         start_bi = self.bis[start_idx]
-        for j in range(start_idx + 2, len(self.bis)):
-            if self.bis[j].type != xd_dir:
-                continue
-            if self._check_xd_basic_overlap(start_bi, self.bis[j]):
-                return j
+        
+        # 用户修改：只检查第三笔（即 start_idx + 2），不向后查找
+        # 如果第三笔不满足重叠，说明无法构成线段（或者已经开始反向）
+        next_idx = start_idx + 2
+        if next_idx < len(self.bis):
+            # 理论上 next_idx 笔方向必然与 start_bi 相同，这里做个安全检查
+            if self.bis[next_idx].type == xd_dir:
+                if self._check_xd_basic_overlap(start_bi, self.bis[next_idx]):
+                    return next_idx
+                    
         return None
 
     def _create_feature_sequence_element(self, bi: BI, xd_dir: str) -> TZXL:
@@ -1763,9 +1768,27 @@ class CL(ICL):
         check_l3buy = self.config.get("mmd_l3buy_bc", True)
         check_l3sell = self.config.get("mmd_l3sell_bc", True)
 
+        # Prepare XD end indices for filtering expired pivots
+        # Only compare Strokes to Pivots that are in the same or current Line Segment structure.
+        # If a Pivot belongs to a Line Segment that has already finished (before the current Stroke), ignore it.
+        xd_end_indices = sorted([xd.end_line.index for xd in self.xds if xd.end_line is not None])
+        xd_idx = 0
+        current_cutoff = -1
+
         for i in range(len(self.bis)):
             bi = self.bis[i]
             
+            # Update current_cutoff
+            # Find the max XD end index that is strictly less than current bi.index
+            # This represents the end of the last completed Line Segment before this Stroke.
+            # Any Pivot that ended before or at this cutoff is considered "history" from a previous Segment.
+            while xd_idx < len(xd_end_indices):
+                if xd_end_indices[xd_idx] < bi.index:
+                    current_cutoff = xd_end_indices[xd_idx]
+                    xd_idx += 1
+                else:
+                    break
+
             # 检查笔是否有效：未完成的笔，如果没有形成 valid 的分型（end.klines < 3），不进行买卖点计算
             # 只有当笔的分型构造完成后（至少3根K线），才认为具备判断买卖点的基础
             # 2025-01-05 Update: 增加严格的几何形态检查，确保未完成笔的端点具备分型结构
@@ -1907,6 +1930,11 @@ class CL(ICL):
             # 2. 基于中枢的买卖点识别
             for zs in zss:
                 if not zs.real:
+                    continue
+
+                # Filter expired pivots
+                # If the pivot ended in a previous completed Line Segment, ignore it.
+                if zs.lines[-1].index <= current_cutoff:
                     continue
                 
                 # 判断当前中枢是否是趋势中枢
