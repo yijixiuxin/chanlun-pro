@@ -14,6 +14,7 @@ from chanlun.cl_interface import (
     query_macd_ld, compare_ld_beichi, user_custom_mmd
 )
 from chanlun.cl_utils import cal_macd_bis_is_bc
+from chanlun.cl_utils_extra import check_loose_3mmd
 
 
 class CL(ICL):
@@ -1774,7 +1775,8 @@ class CL(ICL):
                     if is_strong_top or is_slope_acc:
                         valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index]
                         target_zs = valid_zss[-1] if valid_zss else None
-                        if target_zs:
+                        # 增加方向检查：1卖必须是在向上趋势中（进入中枢段为向上，即中枢第一段为向下）
+                        if target_zs and target_zs.lines and target_zs.lines[0].type == "down":
                             msg = "加速无背驰一卖"
                             if is_strong_top: msg += "(强顶分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -1811,7 +1813,8 @@ class CL(ICL):
                     if is_strong_bottom or is_slope_acc:
                         valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index]
                         target_zs = valid_zss[-1] if valid_zss else None
-                        if target_zs and bi.low < target_zs.zd:
+                        # 增加方向检查：1买必须是在下跌趋势中（进入中枢段为下跌，即中枢第一段为向上）
+                        if target_zs and bi.low < target_zs.zd and target_zs.lines and target_zs.lines[0].type == "up":
                             msg = "加速无背驰一买"
                             if is_strong_bottom: msg += "(强底分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -1834,11 +1837,18 @@ class CL(ICL):
                 # 检查是否离开中枢
                 if i >= 1:
                     prev_bi = self.bis[i-1]
-                    if prev_bi.start.index == zs.end.index:
-                        if check_3buy and bi.type == "down" and bi.low > zs.zg and bi.low > zs.lines[-1].high:
-                            bi.add_mmd("3buy", zs, zs_type)
-                        if check_3sell and bi.type == "up" and bi.high < zs.zd and bi.high < zs.lines[-1].low:
-                            bi.add_mmd("3sell", zs, zs_type)
+                    # 宽松判断：只要前一笔的起点在中枢结束点之后（或就是结束点），且前一笔是离开段
+                    # 且当前笔是回抽段（方向相反）
+                    if prev_bi.start.index >= zs.end.index:
+                        # 3买：向下回抽，不破ZG（宽松）
+                        if check_3buy and bi.type == "down":
+                            if check_loose_3mmd(self, bi, zs, "3buy"):
+                                bi.add_mmd("3buy", zs, zs_type)
+                        
+                        # 3卖：向上回抽，不破ZD（宽松）
+                        if check_3sell and bi.type == "up":
+                            if check_loose_3mmd(self, bi, zs, "3sell"):
+                                bi.add_mmd("3sell", zs, zs_type)
                 
                 # 盘整背驰：离开段与进入段比较
                 is_pz, compare_line = self.beichi_pz(zs, bi)
@@ -2072,7 +2082,8 @@ class CL(ICL):
                         if is_strong_top or is_slope_acc:
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
                             target_zs = valid_zss[-1] if valid_zss else None
-                            if target_zs:
+                            # 增加方向检查：1卖必须是在向上趋势中（进入中枢段为向上，即中枢第一段为向下）
+                            if target_zs and target_zs.lines and target_zs.lines[0].type == "down":
                                 msg = "加速无背驰一卖"
                                 if is_strong_top: msg += "(强顶分)"
                                 if is_slope_acc: msg += "(斜率加速)"
@@ -2109,7 +2120,8 @@ class CL(ICL):
                         if is_strong_bottom or is_slope_acc:
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
                             target_zs = valid_zss[-1] if valid_zss else None
-                            if target_zs and xd.low < target_zs.zd:
+                            # 增加方向检查：1买必须是在下跌趋势中（进入中枢段为下跌，即中枢第一段为向上）
+                            if target_zs and xd.low < target_zs.zd and target_zs.lines and target_zs.lines[0].type == "up":
                                 msg = "加速无背驰一买"
                                 if is_strong_bottom: msg += "(强底分)"
                                 if is_slope_acc: msg += "(斜率加速)"
@@ -2170,11 +2182,15 @@ class CL(ICL):
                     # 检查是否离开中枢
                     if i >= 1:
                         prev_xd = self.xds[i-1]
-                        if prev_xd.start.index == zs.end.index:
-                            if check_3buy and xd.type == "down" and xd.low > zs.zg and xd.low > zs.lines[-1].high:
-                                xd.add_mmd("3buy", zs, zs_xd_type)
-                            if check_3sell and xd.type == "up" and xd.high < zs.zd and xd.high < zs.lines[-1].low:
-                                xd.add_mmd("3sell", zs, zs_xd_type)
+                        # 宽松判断：只要前一线段的起点在中枢结束点之后（或就是结束点）
+                        if prev_xd.start.index >= zs.end.index:
+                            if check_3buy and xd.type == "down":
+                                if check_loose_3mmd(self, xd, zs, "3buy"):
+                                    xd.add_mmd("3buy", zs, zs_xd_type)
+                            
+                            if check_3sell and xd.type == "up":
+                                if check_loose_3mmd(self, xd, zs, "3sell"):
+                                    xd.add_mmd("3sell", zs, zs_xd_type)
                     
                     # 盘整背驰
                     is_pz, compare_line = self.beichi_pz(zs, xd)
