@@ -580,7 +580,7 @@
           if (ca_title === "自选组") {
             if (is_open) {
               interval_update_rates = setInterval(
-                ZiXuan.stocks_update_rate(),
+                ZiXuan.stocks_update_rate,
                 30000
               );
             } else {
@@ -741,7 +741,7 @@
       }
 
       init_web();
-      interval_update_rates = setInterval(ZiXuan.stocks_update_rate(), 30000);
+      interval_update_rates = setInterval(ZiXuan.stocks_update_rate, 30000);
     });
   </script>
 </html>

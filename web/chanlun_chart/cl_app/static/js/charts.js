@@ -167,7 +167,7 @@ class ChartManager {
 
   // 初始化图表
   init() {
-    this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 30000);
+    this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 2000);
     this.widget = window.tvWidget = new TradingView.widget({
       debug: false,
       autosize: true,

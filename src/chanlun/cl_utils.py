@@ -663,6 +663,18 @@ def cl_data_to_tv_chart(
     if len(klines) == 0:
         return None
     klines.loc[:, "code"] = cd.get_code()
+
+    # 修复 TradingView 重复 K 线问题：确保时间戳对齐到分钟/小时/天
+    # 如果没有指定转换周期，或者指定的转换周期就是当前周期，则进行处理
+    # 只处理未进行转换的情况，或者明确知道频率的情况
+    if to_frequency is None:
+        target_freq = cd.get_frequency()
+        if target_freq.endswith('m') or target_freq.endswith('h'):
+            klines['date'] = klines['date'].apply(lambda x: x.replace(second=0, microsecond=0))
+        elif target_freq in ['d', 'w', 'y']:
+            klines['date'] = klines['date'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
+        klines.drop_duplicates(subset=['date'], keep='last', inplace=True)
+
     if to_frequency is not None:
         # 将数据转换成指定的周期数据
         market = to_frequency.split(":")[0]
