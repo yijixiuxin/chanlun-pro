@@ -5,6 +5,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from chanlun.exchange.stocks_bkgn import StocksBKGN
 
 
+from chanlun.db import db
+
 class OtherTasks:
     def __init__(self, scheduler: BackgroundScheduler):
         self.scheduler = scheduler
@@ -14,6 +16,16 @@ class OtherTasks:
         self.run_task()
 
     def run_task(self):
+        # 每天凌晨 2 点清理过期缓存
+        self.scheduler.add_job(
+            db.cache_clear_expired,
+            trigger="cron",
+            hour=2,
+            minute=0,
+            id="cache_clear_expired",
+            name="清理过期缓存",
+            replace_existing=True,
+        )
         # 东方财富抓取的不好用了，建议直接用通达信本地的方式
 
         # 关于沪深股票行业与板块的获取方式，项目中提供了两种方式：

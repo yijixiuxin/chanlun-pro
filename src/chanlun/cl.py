@@ -742,6 +742,56 @@ class CL(ICL):
 
             # 检查2：不同类型（潜在新笔）
             if self.check_bi_valid(start_fx, next_fx, bi_type):
+                # 额外检查：next_fx 是否被后续 K 线破坏
+                # 如果 next_fx 后面没有形成有效的新笔（保护），且出现了破坏 next_fx 的 K 线
+                # 那么 next_fx 就不应该作为当前笔的结束点
+                is_next_fx_broken = False
+                
+                # 预读后续分型
+                temp_curr_idx = curr_fx_idx + 1
+                check_k_start = next_fx.k.index + 1
+                
+                # 标记是否找到保护笔（即 next_fx 能作为下一笔的起点）
+                has_protection = False
+                
+                while temp_curr_idx < len(self.fxs):
+                    future_fx = self.fxs[temp_curr_idx]
+                    
+                    # 1. 检查 next_fx 到 future_fx 之间的 K 线是否破坏 next_fx
+                    check_k_end = future_fx.k.index
+                    for k_i in range(check_k_start, check_k_end):
+                        ck = self.cl_klines[k_i]
+                        if next_fx.type == "ding" and ck.h > next_fx.val:
+                            is_next_fx_broken = True; break
+                        if next_fx.type == "di" and ck.l < next_fx.val:
+                            is_next_fx_broken = True; break
+                    
+                    if is_next_fx_broken:
+                        break
+                        
+                    # 2. 检查 future_fx 是否能保护 next_fx (构成新笔)
+                    if self.check_bi_valid(next_fx, future_fx, bi_type):
+                        has_protection = True
+                        break
+                    
+                    # 更新检查起点
+                    check_k_start = future_fx.k.index # 从分型 K 线开始继续检查
+                    temp_curr_idx += 1
+                
+                # 如果没有被提前破坏，且没有保护，检查最后的 K 线
+                if not is_next_fx_broken and not has_protection:
+                    for k_i in range(check_k_start, len(self.cl_klines)):
+                        ck = self.cl_klines[k_i]
+                        if next_fx.type == "ding" and ck.h > next_fx.val:
+                            is_next_fx_broken = True; break
+                        if next_fx.type == "di" and ck.l < next_fx.val:
+                            is_next_fx_broken = True; break
+                
+                if is_next_fx_broken:
+                    # next_fx 被破坏，跳过它，继续寻找
+                    curr_fx_idx += 1
+                    continue
+
                 # 额外检查：趋势延续判断
                 # 如果当前笔是向上笔且后续出现更高的顶分型，或向下笔且后续出现更低的底分型
                 # 说明趋势在延续，不应该结束当前笔

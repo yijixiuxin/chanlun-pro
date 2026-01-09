@@ -99,7 +99,7 @@ class FileCacheDB(object):
         ]
 
         # 缠论的更新时间，如果与当前保存不一致，需要清空缓存的计算结果，重新计算
-        self.cl_update_date = "2025-12-05"
+        self.cl_update_date = "2026-01-09"
         cache_cl_update_date = db.cache_get("__cl_update_date")
         if cache_cl_update_date != self.cl_update_date:
             db.cache_set("__cl_update_date", self.cl_update_date)
@@ -119,7 +119,10 @@ class FileCacheDB(object):
         try:
             _klines = pd.read_csv(file_pathname)
         except Exception:
-            file_pathname.unlink()
+            try:
+                file_pathname.unlink()
+            except Exception:
+                pass
             return None
         if len(_klines) > 0:
             _klines["date"] = pd.to_datetime(_klines["date"])

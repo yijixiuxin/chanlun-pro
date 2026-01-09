@@ -1,6 +1,7 @@
 import datetime
 import json
 import time
+import random
 import warnings
 from typing import List, Union
 
@@ -1230,10 +1231,15 @@ class DB(object):
                 return json.loads(cache.v)
             # 缓存数据不存在，或缓存数据已过期
             # 删除过期缓存数据，expire_time != 0 and expire_time < now
-            session.query(TableByCache).filter(
-                TableByCache.expire != 0, TableByCache.expire < now
-            ).delete()
-            session.commit()
+            # 频繁删除会导致数据库锁定，改为在 cache_set 中随机清理
+            # try:
+            #     session.query(TableByCache).filter(
+            #         TableByCache.expire != 0, TableByCache.expire < now
+            #     ).delete()
+            #     session.commit()
+            # except Exception:
+            #     # 删除过期缓存失败，可能是数据库锁定，忽略
+            #     pass
 
         return None
 
@@ -1244,6 +1250,21 @@ class DB(object):
             session.add(cache)
             session.commit()
 
+        return True
+
+    def cache_clear_expired(self):
+        """
+        清理过期缓存
+        """
+        try:
+            with self.Session() as session:
+                now = int(time.time())
+                session.query(TableByCache).filter(
+                    TableByCache.expire != 0, TableByCache.expire < now
+                ).delete()
+                session.commit()
+        except Exception:
+            pass
         return True
 
     def cache_del(self, key: str):
