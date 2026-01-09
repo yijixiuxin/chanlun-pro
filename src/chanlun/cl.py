@@ -1747,7 +1747,25 @@ class CL(ICL):
                         self.bi_zss[zs_type].append(zs)
             else:
                 # 标准中枢/其他类型：在全体笔上计算
-                self.bi_zss[zs_type] = _calc_zss_by_lines(self.bis, zs_type)
+                # 2025-01-09 Fix: 即使是标准中枢，笔中枢也不应跨越线段
+                # 修改为：遍历所有线段，分别计算每个线段内的笔中枢，然后合并
+                if len(self.xds) > 0:
+                    for xd in self.xds:
+                        start_idx = xd.start_line.index
+                        end_idx = xd.end_line.index if xd.end_line is not None else self.bis[-1].index
+                        sub_lines = [bi for bi in self.bis if start_idx <= bi.index <= end_idx]
+                        if len(sub_lines) < 3:
+                            continue
+                        
+                        # 这里传入 xd.type 作为 parent_line_type，不仅限制了跨线段，也顺便修正了中枢方向
+                        zss_dn = _calc_zss_by_lines(sub_lines, zs_type, xd.type)
+                        
+                        for zs in zss_dn:
+                            zs.index = len(self.bi_zss[zs_type])
+                            self.bi_zss[zs_type].append(zs)
+                else:
+                    # 如果没有线段（可能是级别很大或者数据太少），则降级为全量计算
+                    self.bi_zss[zs_type] = _calc_zss_by_lines(self.bis, zs_type)
 
         # --- 计算线段中枢（支持标准/段内） ---
         zs_xd_types = self.config.get("zs_xd_type", [])
@@ -1909,7 +1927,12 @@ class CL(ICL):
 
                     # 1 OR 2 满足其一
                     if is_strong_top or is_slope_acc:
-                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index and z.lines[-1].index > current_cutoff]
+                        # 2025-01-09 Fix: 严格限制中枢必须完全在当前线段内（包括第一笔），且当前笔必须在参考中枢最后一笔之后
+                        valid_zss = [
+                            z for z in zss 
+                            if z.lines and z.lines[-1].index < bi.index 
+                            and z.lines[0].index > current_cutoff
+                        ]
                         
                         # 2025-01-09 Fix: 无背驰加速一卖，强制要求是趋势结构（至少两个中枢），防止底部刚启动单中枢误判
                         if len(valid_zss) < 2:
@@ -1919,7 +1942,10 @@ class CL(ICL):
 
                         # 增加方向检查：1卖必须是在向上趋势中（进入中枢段为向上，即中枢第一段为向下）
                         # 增加离开检查：必须突破中枢高点 (ZG)
-                        if target_zs and target_zs.lines and target_zs.lines[0].type == "down" and bi.high > target_zs.zg:
+                        # 增加位置检查：当前笔必须在中枢之后（不能是中枢的一部分）
+                        if (target_zs and target_zs.lines and target_zs.lines[0].type == "down" 
+                            and bi.high > target_zs.zg 
+                            and bi.index > target_zs.lines[-1].index):
                             msg = "加速无背驰一卖"
                             if is_strong_top: msg += "(强顶分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -1954,7 +1980,12 @@ class CL(ICL):
                         is_slope_acc = True
 
                     if is_strong_bottom or is_slope_acc:
-                        valid_zss = [z for z in zss if z.lines and z.lines[-1].index < bi.index and z.lines[-1].index > current_cutoff]
+                        # 2025-01-09 Fix: 严格限制中枢必须完全在当前线段内（包括第一笔）
+                        valid_zss = [
+                            z for z in zss 
+                            if z.lines and z.lines[-1].index < bi.index 
+                            and z.lines[0].index > current_cutoff
+                        ]
                         
                         # 2025-01-09 Fix: 无背驰加速一买，强制要求是趋势结构（至少两个中枢）
                         if len(valid_zss) < 2:
@@ -1964,7 +1995,10 @@ class CL(ICL):
 
                         # 增加方向检查：1买必须是在下跌趋势中（进入中枢段为下跌，即中枢第一段为向上）
                         # 增加离开检查：必须突破中枢低点 (ZD)
-                        if target_zs and bi.low < target_zs.zd and target_zs.lines and target_zs.lines[0].type == "up":
+                        # 增加位置检查：当前笔必须在中枢之后
+                        if (target_zs and bi.low < target_zs.zd 
+                            and target_zs.lines and target_zs.lines[0].type == "up"
+                            and bi.index > target_zs.lines[-1].index):
                             msg = "加速无背驰一买"
                             if is_strong_bottom: msg += "(强底分)"
                             if is_slope_acc: msg += "(斜率加速)"
@@ -1982,8 +2016,9 @@ class CL(ICL):
                 
                 # 判断当前中枢是否是趋势中枢
                 # 2025-01-09 Fix: 限制 valid_zss 只包含当前线段内的中枢 (通过 current_cutoff 过滤)
-                # 防止跨线段错误匹配中枢导致 1S 误判，同时也避免了单中枢被误判为趋势背驰(需要至少2个中枢)
-                valid_zss = [z for z in zss if z.index <= zs.index and z.lines[-1].index > current_cutoff]
+                # 1. z.index <= zs.index: 保证是当前及之前的中枢
+                # 2. z.lines[0].index > current_cutoff: 保证中枢完全在当前线段内（不跨线段）
+                valid_zss = [z for z in zss if z.index <= zs.index and z.lines[0].index > current_cutoff]
                 is_qs_trend = False
                 if len(valid_zss) >= 2:
                     trend_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
@@ -2672,6 +2707,28 @@ class CL(ICL):
 
                         if len(zs.lines) >= max_line_num:
                             break
+                        
+                        # 2025-01-09 Fix: 笔中枢不能跨线段
+                        # 如果是笔中枢计算（_lines 是笔列表），检查延伸笔是否跨越了线段边界
+                        # 只有在进行段内中枢计算时（通常会传入 _parent_line_type），才需要严格保证不跨线段
+                        # 这里通过检查 _parent_line_type 是否存在来判断是否是段内中枢计算模式
+                        if _parent_line_type is not None:
+                            # 简单判断：如果当前延伸笔的方向与父线段方向相同，且是该方向的第一笔（虽然这种情况不太可能出现在延伸中），或者
+                            # 更准确的是：我们是在一个子集 sub_lines 中计算的，sub_lines 本身就是由线段划分的
+                            # 所以只要 sub_lines 列表没有包含跨线段的笔，这里就不需要额外检查。
+                            # 
+                            # 回看调用处：
+                            # sub_lines = [bi for bi in self.bis if start_idx <= bi.index <= end_idx]
+                            # 已经限制了笔列表在当前线段内。
+                            # 
+                            # 但是，如果 _lines 是 self.bis (全量笔)，且 _parent_line_type 为 None (标准中枢)，
+                            # 那么中枢是可以跨线段的。
+                            # 
+                            # 用户要求：笔中枢的构成笔必须是同一线段内。
+                            # 这意味着即使是标准中枢配置，笔中枢也不应该跨越线段。
+                            # 所以我们需要一种方法来判断当前笔所属的线段。
+                            pass
+
                         zs.lines.append(ln)
                         zs.end = ln.end
                         if ln.high > zs.gg: zs.gg = ln.high
