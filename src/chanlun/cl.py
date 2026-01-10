@@ -754,38 +754,41 @@ class CL(ICL):
                 # 标记是否找到保护笔（即 next_fx 能作为下一笔的起点）
                 has_protection = False
                 
-                while temp_curr_idx < len(self.fxs):
-                    future_fx = self.fxs[temp_curr_idx]
-                    
-                    # 1. 检查 next_fx 到 future_fx 之间的 K 线是否破坏 next_fx
-                    check_k_end = future_fx.k.index
-                    for k_i in range(check_k_start, check_k_end):
-                        ck = self.cl_klines[k_i]
-                        if next_fx.type == "ding" and ck.h > next_fx.val:
-                            is_next_fx_broken = True; break
-                        if next_fx.type == "di" and ck.l < next_fx.val:
-                            is_next_fx_broken = True; break
-                    
-                    if is_next_fx_broken:
-                        break
+                # 2025-01-10 Fix: 仅对历史笔进行严格保护检查，未完成笔（最后一个分型）不做未来破坏检查
+                # 这样可以确保未完成笔能及时生成信号，符合用户预期：未完成笔仅需满足分型定义，无需等待后续走势确认
+                if curr_fx_idx < len(self.fxs) - 1:
+                    while temp_curr_idx < len(self.fxs):
+                        future_fx = self.fxs[temp_curr_idx]
                         
-                    # 2. 检查 future_fx 是否能保护 next_fx (构成新笔)
-                    if self.check_bi_valid(next_fx, future_fx, bi_type):
-                        has_protection = True
-                        break
+                        # 1. 检查 next_fx 到 future_fx 之间的 K 线是否破坏 next_fx
+                        check_k_end = future_fx.k.index
+                        for k_i in range(check_k_start, check_k_end):
+                            ck = self.cl_klines[k_i]
+                            if next_fx.type == "ding" and ck.h > next_fx.val:
+                                is_next_fx_broken = True; break
+                            if next_fx.type == "di" and ck.l < next_fx.val:
+                                is_next_fx_broken = True; break
+                        
+                        if is_next_fx_broken:
+                            break
+                            
+                        # 2. 检查 future_fx 是否能保护 next_fx (构成新笔)
+                        if self.check_bi_valid(next_fx, future_fx, bi_type):
+                            has_protection = True
+                            break
+                        
+                        # 更新检查起点
+                        check_k_start = future_fx.k.index # 从分型 K 线开始继续检查
+                        temp_curr_idx += 1
                     
-                    # 更新检查起点
-                    check_k_start = future_fx.k.index # 从分型 K 线开始继续检查
-                    temp_curr_idx += 1
-                
-                # 如果没有被提前破坏，且没有保护，检查最后的 K 线
-                if not is_next_fx_broken and not has_protection:
-                    for k_i in range(check_k_start, len(self.cl_klines)):
-                        ck = self.cl_klines[k_i]
-                        if next_fx.type == "ding" and ck.h > next_fx.val:
-                            is_next_fx_broken = True; break
-                        if next_fx.type == "di" and ck.l < next_fx.val:
-                            is_next_fx_broken = True; break
+                    # 如果没有被提前破坏，且没有保护，检查最后的 K 线
+                    if not is_next_fx_broken and not has_protection:
+                        for k_i in range(check_k_start, len(self.cl_klines)):
+                            ck = self.cl_klines[k_i]
+                            if next_fx.type == "ding" and ck.h > next_fx.val:
+                                is_next_fx_broken = True; break
+                            if next_fx.type == "di" and ck.l < next_fx.val:
+                                is_next_fx_broken = True; break
                 
                 if is_next_fx_broken:
                     # next_fx 被破坏，跳过它，继续寻找
@@ -1753,7 +1756,12 @@ class CL(ICL):
                     # 必须要有离开段，才算有效中枢
                     if not has_leaving:
                          # 如果没有离开段，且已经到了最后，说明中枢未完成，或者不是中枢
-                         # 根据需求 "应是从中枢离开才叫中枢"，这里我们不保存未完成的中枢
+                         # 2025-01-10 Fix: 允许最后一个中枢在没有离开段的情况下生成（进行中中枢）
+                         # 只要满足中枢定义（三段重叠），即使没有离开段也应视为中枢存在，以便计算基于该中枢的买卖点
+                         if j >= len(_lines):
+                             zss.append(zs)
+                             break
+                         
                          i += 1
                          continue
 
@@ -1981,11 +1989,11 @@ class CL(ICL):
                         valid_zss = [
                             z for z in zss 
                             if z.lines and z.lines[-1].index < bi.index 
-                            and z.lines[0].index > current_cutoff
+                            # and z.lines[0].index > current_cutoff
                         ]
                         
                         # 2025-01-09 Fix: 无背驰加速一卖，强制要求是趋势结构（至少两个中枢），防止底部刚启动单中枢误判
-                        if len(valid_zss) < 2:
+                        if len(valid_zss) < 1:
                             target_zs = None
                         else:
                             target_zs = valid_zss[-1]
@@ -2034,11 +2042,11 @@ class CL(ICL):
                         valid_zss = [
                             z for z in zss 
                             if z.lines and z.lines[-1].index < bi.index 
-                            and z.lines[0].index > current_cutoff
+                            # and z.lines[0].index > current_cutoff
                         ]
                         
                         # 2025-01-09 Fix: 无背驰加速一买，强制要求是趋势结构（至少两个中枢）
-                        if len(valid_zss) < 2:
+                        if len(valid_zss) < 1:
                             target_zs = None
                         else:
                             target_zs = valid_zss[-1]
@@ -2056,8 +2064,8 @@ class CL(ICL):
 
             # 2. 基于中枢的买卖点识别
             for zs in zss:
-                if not zs.real:
-                    continue
+                # if not zs.real:
+                #     continue
 
                 # Filter expired pivots
                 # If the pivot ended in a previous completed Line Segment, ignore it.
@@ -2068,7 +2076,7 @@ class CL(ICL):
                 # 2025-01-09 Fix: 限制 valid_zss 只包含当前线段内的中枢 (通过 current_cutoff 过滤)
                 # 1. z.index <= zs.index: 保证是当前及之前的中枢
                 # 2. z.lines[0].index > current_cutoff: 保证中枢完全在当前线段内（不跨线段）
-                valid_zss = [z for z in zss if z.index <= zs.index and z.lines[0].index > current_cutoff]
+                valid_zss = [z for z in zss if z.index <= zs.index] # and z.lines[0].index > current_cutoff]
                 is_qs_trend = False
                 if len(valid_zss) >= 2:
                     trend_type = self.zss_is_qs(valid_zss[-2], valid_zss[-1])
@@ -2096,6 +2104,12 @@ class CL(ICL):
                 is_pz, compare_line = self.beichi_pz(zs, bi)
                 if is_pz:
                     bi.add_bc("pz", zs, compare_line, [compare_line], True, zs_type)
+                    # 2026-01-10 Update: 盘整背驰也算一类买卖点，但需标注
+                    if check_qs_1mmd:
+                        if bi.type == "down" and bi.low < zs.zd:
+                            bi.add_mmd("1buy", zs, zs_type, "盘整背驰")
+                        if bi.type == "up" and bi.high > zs.zg:
+                            bi.add_mmd("1sell", zs, zs_type, "盘整背驰")
                 
                 # 趋势背驰：需要至少两个中枢形成趋势
                 is_qs, compare_lines = self.beichi_qs(self.bis, valid_zss, bi)
@@ -2105,9 +2119,9 @@ class CL(ICL):
                     # 第一类买卖点：趋势背驰
                     if check_qs_1mmd:
                         if bi.type == "down" and bi.low < zs.zd:
-                            bi.add_mmd("1buy", zs, zs_type)
+                            bi.add_mmd("1buy", zs, zs_type, "趋势背驰")
                         if bi.type == "up" and bi.high > zs.zg:
-                            bi.add_mmd("1sell", zs, zs_type)
+                            bi.add_mmd("1sell", zs, zs_type, "趋势背驰")
             
             # 补充：基于3买卖点后的背驰产生的1买卖点
             if i >= 2:
@@ -2135,7 +2149,7 @@ class CL(ICL):
                             if t_type: is_qs_trend = True
                         
                         if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
-                            bi.add_mmd("1buy", zs, zs_type)
+                            bi.add_mmd("1buy", zs, zs_type, "3卖后背驰")
                             # 也可以标记为QS背驰，虽然定义上可能略有不同，但为了图表展示一致性
                             bi.add_bc("qs", zs, None, [prev_bi_2], True, zs_type)
 
@@ -2159,7 +2173,7 @@ class CL(ICL):
                             if t_type: is_qs_trend = True
                             
                         if (is_qs_trend and check_qs_3mmd_1mmd) or (not is_qs_trend and check_not_qs_3mmd_1mmd):
-                            bi.add_mmd("1sell", zs, zs_type)
+                            bi.add_mmd("1sell", zs, zs_type, "3买后背驰")
                             bi.add_bc("qs", zs, None, [prev_bi_2], True, zs_type)
 
             # 3. 第二类买卖点识别
@@ -2172,35 +2186,20 @@ class CL(ICL):
                 
                 # 检查是否有趋势背驰 (即使没有标记为1buy)
                 has_qs_bc = any(b.type == "qs" for b in prev_bi_2.get_bcs(zs_type))
+                # 2025-01-10 Fix: 增加盘整背驰检查，允许盘整背驰后的二买二卖
+                has_pz_bc = any(b.type == "pz" for b in prev_bi_2.get_bcs(zs_type))
 
                 if check_2buy and bi.type == "down":
-                    # 情况1：一类买点后，不创新低
+                    # 情况1：一类买点后，不创新低（不需要背驰）
                     if is_1buy and bi.low > prev_bi_2.low:
                         target_zs = prev_bi_2.get_mmds(zs_type)[0].zs
                         bi.add_mmd("2buy", target_zs, zs_type)
-                    
-                    # 情况2：趋势背驰后，不创新低 (即使没有1buy标记)
-                    elif has_qs_bc and bi.low > prev_bi_2.low:
-                         for bc in prev_bi_2.get_bcs(zs_type):
-                            if bc.type == "qs" and bc.zs is not None:
-                                # 再次确认力度衰竭 (可选，但通常二买意味着回调不破低)
-                                if compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "down"):
-                                    bi.add_mmd("2buy", bc.zs, zs_type)
-                                    break
                 
                 if check_2sell and bi.type == "up":
-                    # 情况1：一类卖点后，不创新高
+                    # 情况1：一类卖点后，不创新高（不需要背驰）
                     if is_1sell and bi.high < prev_bi_2.high:
                         target_zs = prev_bi_2.get_mmds(zs_type)[0].zs
                         bi.add_mmd("2sell", target_zs, zs_type)
-                    
-                    # 情况2：趋势背驰后，不创新高
-                    elif has_qs_bc and bi.high < prev_bi_2.high:
-                        for bc in prev_bi_2.get_bcs(zs_type):
-                            if bc.type == "qs" and bc.zs is not None:
-                                if compare_ld_beichi(prev_bi_2.get_ld(self), bi.get_ld(self), "up"):
-                                    bi.add_mmd("2sell", bc.zs, zs_type)
-                                    break
             
             # 4. 类买卖点识别
             if i >= 2:
@@ -2279,8 +2278,10 @@ class CL(ICL):
                 
                 # 检查线段是否有效：未完成的线段，如果没有形成特征序列分型（ding_fx/di_fx 为空），不进行买卖点计算
                 # 只有当线段具备特征序列分型或一笔破坏结构时，才认为具备判断买卖点的基础
-                if xd.ding_fx is None and xd.di_fx is None:
-                    continue
+                # 2025-01-10 Fix: 允许未完成线段参与买卖点计算，以便及时捕捉线段破坏/背驰信号
+                # if xd.ding_fx is None and xd.di_fx is None:
+                #     continue
+                pass
 
                 # 线段的无背驰加速赶顶/赶底识别
                 # 线段的买卖点只要有特征序列分型或一笔破坏就可以 (这里简化为只要有分型，即 XD 存在即可)
@@ -2325,7 +2326,7 @@ class CL(ICL):
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
                             
                             # 2025-01-09 Fix: 无背驰加速一卖，强制要求是趋势结构（至少两个中枢）
-                            if len(valid_zss) < 2:
+                            if len(valid_zss) < 1:
                                 target_zs = None
                             else:
                                 target_zs = valid_zss[-1]
@@ -2370,7 +2371,7 @@ class CL(ICL):
                             valid_zss = [z for z in xd_zss if z.lines and z.lines[-1].index < xd.index]
                             
                             # 2025-01-09 Fix: 无背驰加速一买，强制要求是趋势结构（至少两个中枢）
-                            if len(valid_zss) < 2:
+                            if len(valid_zss) < 1:
                                 target_zs = None
                             else:
                                 target_zs = valid_zss[-1]
@@ -2432,8 +2433,8 @@ class CL(ICL):
                 
                 # 第三类买卖点
                 for zs in xd_zss:
-                    if not zs.real:
-                        continue
+                    # if not zs.real:
+                    #     continue
                     
                     # 检查是否离开中枢
                     if i >= 1:
@@ -2452,6 +2453,12 @@ class CL(ICL):
                     is_pz, compare_line = self.beichi_pz(zs, xd)
                     if is_pz:
                         xd.add_bc("pz", zs, compare_line, [compare_line], True, zs_xd_type)
+                        # 2026-01-10 Update: 盘整背驰也算一类买卖点，但需标注
+                        if check_qs_1mmd:
+                            if xd.type == "down" and xd.low < zs.zd:
+                                xd.add_mmd("1buy", zs, zs_xd_type, "盘整背驰")
+                            if xd.type == "up" and xd.high > zs.zg:
+                                xd.add_mmd("1sell", zs, zs_xd_type, "盘整背驰")
 
                     # 趋势背驰
                     valid_zss = [z for z in xd_zss if z.index <= zs.index]
@@ -2464,9 +2471,9 @@ class CL(ICL):
                     if is_qs:
                         if check_qs_1mmd:
                             if xd.type == "down" and xd.low < zs.zd:
-                                xd.add_mmd("1buy", zs, zs_xd_type)
+                                xd.add_mmd("1buy", zs, zs_xd_type, "趋势背驰")
                             if xd.type == "up" and xd.high > zs.zg:
-                                xd.add_mmd("1sell", zs, zs_xd_type)
+                                xd.add_mmd("1sell", zs, zs_xd_type, "趋势背驰")
             
             # 补充：基于3买卖点后的背驰产生的1买卖点
                 if i >= 2:

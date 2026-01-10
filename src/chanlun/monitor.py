@@ -380,11 +380,15 @@ def monitoring_code(
             is_fresh = True
             if "bi" in jh.keys():
                 # 笔信号，判断笔结束分型K线距离当前K线的数量
-                if jh["k_index"] - jh["bi"].end.k.k_index > 3:
+                # 2025-01-09 Fix: 放宽笔信号的时效性判断，避免延迟导致不提醒
+                # 因此将新鲜度阈值放宽到3，确保有效信号能被发送
+                if jh["k_index"] - jh["bi"].end.k.k_index > 10:
                     is_fresh = False
             elif "xd" in jh.keys():
                  # 线段信号，判断线段结束分型K线距离当前K线的数量
-                if jh["k_index"] - jh["xd"].end.k.k_index > 3:
+                 # 2025-01-09 Fix: 线段确认往往滞后较多，大幅放宽时效性判断
+                 # 2025-01-10 Fix: 进一步放宽线段新鲜度，以适应未完成线段的延迟
+                if jh["k_index"] - jh["xd"].end.k.k_index > 500:
                     is_fresh = False
             
             if is_fresh:

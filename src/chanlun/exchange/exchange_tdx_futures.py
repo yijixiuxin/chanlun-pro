@@ -198,6 +198,8 @@ class ExchangeTDXFutures(Exchange):
             "4h": 3,
             "6h": 3,
         }
+    
+
         market, tdx_code = self.to_tdx_code(code)
         if market is None or start_date is not None or end_date is not None:
             print("不支持的调用参数")
@@ -422,16 +424,61 @@ class ExchangeTDXFutures(Exchange):
     def now_trading(self):
         """
         返回当前是否是交易时间
-        TODO 简单判断 ：9-12 , 13:30-15:00 21:00-02:30
+        根据国内期货交易所规则：
+        日盘：
+            统一：09:00-10:15, 10:30-11:30, 13:30-15:00
+            股指（CFFEX）：09:30-11:30, 13:00-15:00
+            国债（CFFEX）：09:15-11:30, 13:00-15:15
+        夜盘：21:00 开始
+            23:00 结束：大商所、郑商所大部分
+            次日 01:00 结束：上期所有色
+            次日 02:30 结束：上期所贵金属、能源中心原油
+        
+        这里采用并集策略，只要在任一品种的交易时间内即返回 True，避免漏掉行情。
+        并集时间段：
+        09:00 - 11:30 (覆盖所有日盘上午，含中金所)
+        13:00 - 15:15 (覆盖所有日盘下午，含中金所)
+        21:00 - 次日 02:30 (覆盖所有夜盘)
         """
-        hour = int(time.strftime("%H"))
-        minute = int(time.strftime("%M"))
-        if (
-            hour in {9, 10, 11, 14, 21, 22, 23, 0, 1}
-            or (hour == 13 and minute >= 30)
-            or (hour == 2 and minute <= 30)
-        ):
+        now = datetime.datetime.now()
+        weekday = now.weekday() # 0-6 (Mon-Sun)
+        hour = now.hour
+        minute = now.minute
+        time_float = hour + minute / 60.0
+
+        # 周六日全天不交易 (注意：周五夜盘会延续到周六凌晨)
+        # 周日全天 False
+        if weekday == 6:
+            return False
+        
+        # 周六：02:30 之后 False (周五夜盘结束)
+        if weekday == 5:
+            if time_float >= 2.5:
+                return False
+        
+        # 周一至周五
+        
+        # 09:00 - 11:30
+        if 9.0 <= time_float <= 11.5:
             return True
+            
+        # 13:00 - 15:15
+        if 13.0 <= time_float <= 15.25:
+            return True
+            
+        # 21:00 - 24:00 (当天夜盘前半段)
+        if time_float >= 21.0:
+            return True
+            
+        # 00:00 - 02:30 (夜盘后半段，周二至周六有效，周一凌晨无夜盘)
+        # 这里的 weekday 是当前时间的 weekday
+        # 如果是周一凌晨 (weekday=0)，通常没有夜盘 (周日不交易)
+        if weekday == 0 and time_float < 9.0:
+            return False
+            
+        if 0.0 <= time_float <= 2.5:
+            return True
+            
         return False
 
     @staticmethod

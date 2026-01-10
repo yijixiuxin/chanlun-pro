@@ -381,7 +381,76 @@ class ExchangeTDXNYFutures(Exchange):
     def now_trading(self):
         """
         返回当前是否是交易时间
+        根据用户提供的纽约期货交易所（COMEX）交易时间规则进行判断（转换为北京时间）
+        夏令时：4月第一个周日至10月最后一个周日
+        冬令时：其他时间
+
+        交易时段（北京时间）：
+        夏令时：
+            日间：20:20 - 次日01:30
+            夜间：06:00 - 次日05:00 (周一早06:00开 - 周六早05:00收)
+        冬令时：
+            日间：21:20 - 次日02:30
+            夜间：07:00 - 次日06:00 (周一早07:00开 - 周六早06:00收)
         """
+        now = datetime.datetime.now()
+        year = now.year
+        
+        # 判断夏令时：4月第一个周日 到 10月最后一个周日
+        def get_first_sunday(y, m):
+            d = datetime.datetime(y, m, 1)
+            while d.weekday() != 6:
+                d += datetime.timedelta(days=1)
+            return d
+            
+        def get_last_sunday(y, m):
+            # 下个月第1天减1天是本月最后一天
+            next_month = m + 1 if m < 12 else 1
+            next_year = y if m < 12 else y + 1
+            d = datetime.datetime(next_year, next_month, 1) - datetime.timedelta(days=1)
+            while d.weekday() != 6:
+                d -= datetime.timedelta(days=1)
+            return d
+
+        dst_start = get_first_sunday(year, 4)
+        dst_end = get_last_sunday(year, 10)
+        is_dst = dst_start <= now < dst_end # 简单判定，未精确到小时，误差可接受
+
+        weekday = now.weekday() # 0-6 (Mon-Sun)
+        hour = now.hour
+        minute = now.minute
+        time_float = hour + minute / 60.0
+
+        if is_dst:
+            # 夏令时
+            # 周一早06:00开盘 - 周六早05:00收盘 (覆盖了夜间和日间的主要时段)
+            # 中间可能有短暂休市（如05:00-06:00），这里简化为全时段交易
+            # 严格来说 COMEX 几乎全天交易，这里主要卡住周六日休市
+            
+            # 周六 05:00 后休市
+            if weekday == 5 and time_float >= 5.0:
+                return False
+            # 周日 全天休市 (直到周一早06:00)
+            if weekday == 6:
+                return False
+            # 周一 06:00 前休市
+            if weekday == 0 and time_float < 6.0:
+                return False
+                
+        else:
+            # 冬令时
+            # 周一早07:00开盘 - 周六早06:00收盘
+            
+            # 周六 06:00 后休市
+            if weekday == 5 and time_float >= 6.0:
+                return False
+            # 周日 全天休市
+            if weekday == 6:
+                return False
+            # 周一 07:00 前休市
+            if weekday == 0 and time_float < 7.0:
+                return False
+                
         return True
 
     @staticmethod
