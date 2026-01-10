@@ -143,6 +143,7 @@ def monitoring_code(
                     "k_date": cd.get_src_klines()[-1].date,
                     "k_index": cd.get_src_klines()[-1].index,
                     "line_type": end_bi.type,
+                    "cd": cd, # 传递 cd 对象以便判断是否是最后一笔
                 }
                 for mmd in check_cl_types["bi_mmd"]
                 if end_bi.mmd_exists([mmd], "|")
@@ -161,6 +162,7 @@ def monitoring_code(
                         "k_date": cd.get_src_klines()[-1].date,
                         "k_index": cd.get_src_klines()[-1].index,
                         "line_type": end_xd.type,
+                        "cd": cd,
                     }
                     for bc_type in check_cl_types["xd_beichi"]
                     if end_xd.bc_exists([bc_type], "|")
@@ -176,6 +178,7 @@ def monitoring_code(
                         "k_date": cd.get_src_klines()[-1].date,
                         "k_index": cd.get_src_klines()[-1].index,
                         "line_type": end_xd.type,
+                        "cd": cd,
                     }
                     for mmd in check_cl_types["xd_mmd"]
                     if end_xd.mmd_exists([mmd], "|")
@@ -379,17 +382,35 @@ def monitoring_code(
             # 检查信号是否新鲜，如果是很久之前的信号（比如初始化加载时），则不发送消息，只记录
             is_fresh = True
             if "bi" in jh.keys():
-                # 笔信号，判断笔结束分型K线距离当前K线的数量
-                # 2025-01-09 Fix: 放宽笔信号的时效性判断，避免延迟导致不提醒
-                # 因此将新鲜度阈值放宽到3，确保有效信号能被发送
-                if jh["k_index"] - jh["bi"].end.k.k_index > 10:
+                # 笔信号
+                bi = jh["bi"]
+                # 规则1: 只提示未完成笔的信号 (已完成的笔信号属于历史信号)
+                if bi.is_done():
                     is_fresh = False
+                
+                # 规则2: 如果未完成笔之后已经出现了反向的一笔（哪怕未完成，只要有分型），则不再提示当前笔的信号
+                # 检查当前笔是否是最后一笔
+                # 获取数据对象
+                cd = jh.get("cd")
+                if cd and is_fresh:
+                    last_bi = cd.get_bis()[-1]
+                    # 如果当前触发信号的笔不是最后一笔，说明后面已经有新的一笔生成（即使未完成）
+                    if bi.index != last_bi.index:
+                         is_fresh = False
+
             elif "xd" in jh.keys():
-                 # 线段信号，判断线段结束分型K线距离当前K线的数量
-                 # 2025-01-09 Fix: 线段确认往往滞后较多，大幅放宽时效性判断
-                 # 2025-01-10 Fix: 进一步放宽线段新鲜度，以适应未完成线段的延迟
-                if jh["k_index"] - jh["xd"].end.k.k_index > 500:
-                    is_fresh = False
+                 # 线段信号
+                 xd = jh["xd"]
+                 # 规则1: 只提示未完成线段的信号
+                 if xd.is_done():
+                     is_fresh = False
+                 
+                 # 规则2: 检查是否是最后一段
+                 cd = jh.get("cd")
+                 if cd and is_fresh:
+                     last_xd = cd.get_xds()[-1]
+                     if xd.index != last_xd.index:
+                         is_fresh = False
             
             if is_fresh:
                 send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
