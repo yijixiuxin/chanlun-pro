@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    text,
 )
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -97,6 +98,7 @@ class TableByAlertTask(Base):
     check_idx_zhixing_info = Column(String(200), comment="检查指数的知行")
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
+    is_send_img = Column(Integer, default=0, comment="是否发送图片")  # 是否发送图片
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
     # 添加配置设置编码
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
@@ -244,6 +246,22 @@ class DB(object):
         self.Session = sessionmaker(bind=self.engine)
 
         Base.metadata.create_all(self.engine)
+
+        # 检查并更新表结构
+        try:
+            with self.engine.connect() as conn:
+                # 检查 cl_alert_task 表是否存在 is_send_img 列
+                from sqlalchemy import inspect
+                inspector = inspect(self.engine)
+                if "cl_alert_task" in inspector.get_table_names():
+                    columns = [c["name"] for c in inspector.get_columns("cl_alert_task")]
+                    if "is_send_img" not in columns:
+                        if config.DB_TYPE == "sqlite":
+                            conn.execute(text("ALTER TABLE cl_alert_task ADD COLUMN is_send_img INTEGER DEFAULT 0"))
+                        else:
+                            conn.execute(text("ALTER TABLE cl_alert_task ADD COLUMN is_send_img INTEGER DEFAULT 0"))
+        except Exception as e:
+            print(f"检查并更新表结构异常：{e}")
 
         self.__cache_tables = {}
 
@@ -762,6 +780,7 @@ class DB(object):
         check_idx_zhixing_info: str,
         is_run: int,
         is_send_msg: int,
+        is_send_img: int = 0,
     ):
         with self.Session() as session:
             # 保存任务
@@ -783,6 +802,7 @@ class DB(object):
                     check_idx_zhixing_info=check_idx_zhixing_info,
                     is_run=is_run,
                     is_send_msg=is_send_msg,
+                    is_send_img=is_send_img,
                     dt=datetime.datetime.now(),
                 )
             )
@@ -830,6 +850,7 @@ class DB(object):
         check_idx_zhixing_info: str,
         is_run: int,
         is_send_msg: int,
+        is_send_img: int = 0,
     ):
         with self.Session() as session:
             session.query(TableByAlertTask).filter(
@@ -852,6 +873,7 @@ class DB(object):
                     TableByAlertTask.check_idx_zhixing_info: check_idx_zhixing_info,
                     TableByAlertTask.is_run: is_run,
                     TableByAlertTask.is_send_msg: is_send_msg,
+                    TableByAlertTask.is_send_img: is_send_img,
                     TableByAlertTask.dt: datetime.datetime.now(),
                 }
             )

@@ -1160,6 +1160,7 @@ def create_app(test_config=None):
                 "check_idx_ma_info": _l.check_idx_ma_info,
                 "check_idx_macd_info": _l.check_idx_macd_info,
                 "is_send_msg": _l.is_send_msg,
+                "is_send_img": _l.is_send_img,
                 "is_run": _l.is_run,
             }
             for _l in al
@@ -1195,11 +1196,13 @@ def create_app(test_config=None):
             "check_idx_zhixing_info_cross_up": 0,
             "check_idx_zhixing_info_cross_down": 0,
             "is_send_msg": 1,
+            "is_send_img": 0,
             "is_run": 1,
         }
         if id != "0":
             _alert_config = _alert_tasks.alert_get(id)
             if _alert_config is not None:
+                alert_config['is_send_img'] = _alert_config.is_send_img if hasattr(_alert_config, 'is_send_img') and _alert_config.is_send_img is not None else 0
                 check_idx_ma_info = (
                     json.loads(_alert_config.check_idx_ma_info)
                     if _alert_config.check_idx_ma_info
@@ -1386,6 +1389,7 @@ def create_app(test_config=None):
             "check_idx_macd_info": check_idx_macd_infos,
             "check_idx_zhixing_info": check_idx_zhixing_infos,
             "is_send_msg": int(request.form["is_send_msg"]),
+            "is_send_img": int(request.form["is_send_img"]),
             "is_run": int(request.form["is_run"]),
         }
         _alert_tasks.alert_save(alert_config)

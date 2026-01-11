@@ -34,6 +34,7 @@ def monitoring_code(
     check_cl_types: dict = None,
     check_idx_types: dict = None,
     is_send_msg: bool = False,
+    is_send_img: bool = None,
     cl_config=None,
 ):
     """
@@ -45,6 +46,7 @@ def monitoring_code(
     :param check_cl_types: 监控的缠论项目
     :param check_idx_types: 监控的指标项目
     :param is_send_msg: 是否发送消息
+    :param is_send_img: 是否发送图片（None 则读取全局配置）
     :param cl_config: 缠论配置
     :return:
     """
@@ -204,6 +206,7 @@ def monitoring_code(
                         "cross": "up",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "down",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -219,6 +222,7 @@ def monitoring_code(
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "up",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
         if check_idx_types["idx_macd"]["enable"]:
@@ -237,6 +241,7 @@ def monitoring_code(
                         "cross": "up",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "down",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -252,6 +257,7 @@ def monitoring_code(
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "up",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
 
@@ -276,6 +282,7 @@ def monitoring_code(
                         "cross": "up",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "down",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -291,6 +298,7 @@ def monitoring_code(
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "up",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
 
@@ -307,6 +315,7 @@ def monitoring_code(
                         "cross": "up",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "down",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -322,6 +331,7 @@ def monitoring_code(
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "up",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -337,6 +347,7 @@ def monitoring_code(
                         "cross": "up",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "down",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
             if (
@@ -352,6 +363,7 @@ def monitoring_code(
                         "cross": "down",
                         "k_date": cd.get_src_klines()[-1].date,
                         "line_type": "up",
+                        "price": cd.get_src_klines()[-1].c,
                     }
                 )
 
@@ -377,7 +389,15 @@ def monitoring_code(
             or is_exists.bi_is_td != is_td
         ):
             fx_ld = f" FX:{jh['fx_ld']}" if "fx_ld" in jh.keys() else ""  # 分型力度
-            msg = f"触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
+            
+            # 增加价格信息
+            price_info = ""
+            if "bi" in jh.keys():
+                price_info = f" 价格:{jh['bi'].end.val}"
+            elif "xd" in jh.keys():
+                price_info = f" 价格:{jh['xd'].end.val}"
+
+            msg = f"触发 {jh['type']} ({is_done} - {is_td}{fx_ld}{price_info})"
             
             # 检查信号是否新鲜，如果是很久之前的信号（比如初始化加载时），则不发送消息，只记录
             is_fresh = True
@@ -447,7 +467,8 @@ def monitoring_code(
         )
         if is_exists is None:
             # 之前没有，进行记录
-            msg = f"触发 {jh['msg']}"
+            price_info = f" 价格:{jh['price']}" if "price" in jh else ""
+            msg = f"触发 {jh['msg']}{price_info}"
             send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
             db.alert_record_save(
                 market,
@@ -471,10 +492,12 @@ def monitoring_code(
             send_msgs.append("概念 : " + "/".join([_["name"] for _ in hygn["GN"]]))
 
     # 添加图片
-    if is_send_msg and len(send_msgs) > 0:
+    # 如果 is_send_img 为 None，则使用全局配置
+    send_img = is_send_img if is_send_img is not None else config.FEISHU_KEYS["enable_img"]
+    if is_send_msg and send_img and len(send_msgs) > 0:
         for cd in cl_datas:
             title = f"{name} - {cd.get_frequency()}"
-            image_key = kchart_to_png(market, title, cd, cl_config)
+            image_key = kchart_to_png(market, title, cd, cl_config, force=True)
             if image_key != "":
                 send_msgs.append(image_key)
     # 发送消息
@@ -484,12 +507,12 @@ def monitoring_code(
     return jh_cl_msgs
 
 
-def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
+def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict, force: bool = False) -> str:
     """
     缠论数据保存图表并上传网络，返回访问地址
     """
     # 没有启用图片则不生产图片
-    if config.FEISHU_KEYS["enable_img"] is False:
+    if force is False and config.FEISHU_KEYS["enable_img"] is False:
         return ""
 
     fs_keys = (
@@ -524,7 +547,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
             browser = p.chromium.launch()
             page = browser.new_page()
             # 设置页面的视口大小
-            page.set_viewport_size({"width": 1920, "height": 1680})
+            page.set_viewport_size({"width": 1000, "height": 400})
             page.goto(f"file://{render_file}")
             # 等待页面加载完成
             page.wait_for_load_state("domcontentloaded")

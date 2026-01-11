@@ -228,6 +228,15 @@
             </div>
         </div>
         <div class="layui-form-item">
+            <label class="layui-form-label">发送图片</label>
+            <div class="layui-input-block" title="发送图片">
+                    <input type="radio" name="is_send_img" value="1" title="发送" {% if is_send_img==1 %} checked {% endif
+                        %} lay-filter="alert_config" />
+                    <input type="radio" name="is_send_img" value="0" title="不发送" {% if is_send_img==0 %} checked {%
+                        endif %} lay-filter="alert_config" />
+            </div>
+        </div>
+        <div class="layui-form-item">
             <label class="layui-form-label">启用</label>
             <div class="layui-input-block" title="启用">
                 

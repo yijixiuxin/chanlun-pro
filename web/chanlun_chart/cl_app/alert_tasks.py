@@ -111,6 +111,7 @@ class AlertTasks(object):
                         ),
                     },
                     is_send_msg=bool(alert_config.is_send_msg),
+                    is_send_img=bool(alert_config.is_send_img) if hasattr(alert_config, "is_send_img") and alert_config.is_send_img is not None else False,
                     cl_config=cl_config,
                 )
             except Exception as e:
