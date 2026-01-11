@@ -524,7 +524,7 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
             browser = p.chromium.launch()
             page = browser.new_page()
             # 设置页面的视口大小
-            page.set_viewport_size({"width": 800, "height": 400})
+            page.set_viewport_size({"width": 1920, "height": 1680})
             page.goto(f"file://{render_file}")
             # 等待页面加载完成
             page.wait_for_load_state("domcontentloaded")
@@ -572,9 +572,10 @@ if __name__ == "__main__":
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     ex = ExchangeTDX()
-    cl_config = query_cl_chart_config("a", "SH.000001")
-    klines = ex.klines("SH.600519", "d")
-    cd = cl.CL("SH.600519", "d", cl_config).process_klines(klines)
+    cl_config = query_cl_chart_config("a", "SH.000852")
+    klines = ex.klines("SH.000852", "5m")
+    cd = cl.CL("SH.000852", "5m", cl_config)
+    cd.process_klines(klines)
 
     image_key = kchart_to_png("a", "缠论数据", cd, cl_config)
     print(image_key)

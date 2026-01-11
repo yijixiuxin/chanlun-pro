@@ -166,7 +166,14 @@ class ExchangeTDX(Exchange):
 
         if market == 2:
             _type = "stock_cn"
+        elif market == 1:
+            _type = self.for_sh(code[-6:])
+        elif market == 0:
+            _type = self.for_sz(code[-6:])
         else:
+            _type = None
+            
+        if _type == 'undefined':
             all_stocks = self.all_stocks()
             stock = [_s for _s in all_stocks if _s["code"] == code]
             _type = stock[0]["type"] if stock else None

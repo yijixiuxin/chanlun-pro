@@ -813,10 +813,52 @@ class CL(ICL):
                 
             curr_fx_idx += 1
 
-        # 2025-01-05 Update: 移除“尝试添加未完成的笔”的手动逻辑
-        # 根据用户要求：历史走势和当前走势逻辑一致，必须有分型才能生成笔。
-        # 原有的“虚拟笔”逻辑（无分型直接连接当前极值）被移除。
-        # 主循环已经能够处理最后一个 valid fractal 形成的笔。
+        # 2026-01-11 Update: 恢复虚拟笔逻辑（未完成笔）
+        # 用于在图表上画出当前价格连接线（虚线），但不参与买卖点计算（除非有分型）
+        if self.bis:
+            last_bi = self.bis[-1]
+            last_k_index = last_bi.end.k.index
+            
+            # 检查是否还有剩余K线
+            if last_k_index < len(self.cl_klines) - 1:
+                # 寻找剩余K线中的极值点
+                remaining_klines = self.cl_klines[last_k_index + 1:]
+                target_k = None
+                
+                if last_bi.type == "up":
+                    # 上笔结束，找后续最低点
+                    min_low = float('inf')
+                    for k in remaining_klines:
+                        if k.l < min_low:
+                            min_low = k.l
+                            target_k = k
+                else:
+                    # 下笔结束，找后续最高点
+                    max_high = float('-inf')
+                    for k in remaining_klines:
+                        if k.h > max_high:
+                            max_high = k.h
+                            target_k = k
+                
+                if target_k:
+                    # 创建虚拟分型（done=False, klines不足3根）
+                    # 这样会被 _cal_mmd_bc 中的 check (len < 3) 过滤，不参与买卖点计算
+                    virtual_fx = FX(
+                        _type="di" if last_bi.type == "up" else "ding",
+                        k=target_k,
+                        klines=[target_k],
+                        val=target_k.l if last_bi.type == "up" else target_k.h,
+                        index=target_k.index,
+                        done=False
+                    )
+                    virtual_bi = BI(
+                        start=last_bi.end,
+                        end=virtual_fx,
+                        _type="down" if last_bi.type == "up" else "up",
+                        index=len(self.bis)
+                    )
+                    virtual_bi.high, virtual_bi.low = self._bi_high_low(last_bi.end, virtual_fx)
+                    self.bis.append(virtual_bi)
 
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
@@ -2105,11 +2147,8 @@ class CL(ICL):
                 if is_pz:
                     bi.add_bc("pz", zs, compare_line, [compare_line], True, zs_type)
                     # 2026-01-10 Update: 盘整背驰也算一类买卖点，但需标注
-                    if check_qs_1mmd:
-                        if bi.type == "down" and bi.low < zs.zd:
-                            bi.add_mmd("1buy", zs, zs_type, "盘整背驰")
-                        if bi.type == "up" and bi.high > zs.zg:
-                            bi.add_mmd("1sell", zs, zs_type, "盘整背驰")
+                if check_qs_1mmd:
+                    pass
                 
                 # 趋势背驰：需要至少两个中枢形成趋势
                 is_qs, compare_lines = self.beichi_qs(self.bis, valid_zss, bi)
@@ -2455,10 +2494,7 @@ class CL(ICL):
                         xd.add_bc("pz", zs, compare_line, [compare_line], True, zs_xd_type)
                         # 2026-01-10 Update: 盘整背驰也算一类买卖点，但需标注
                         if check_qs_1mmd:
-                            if xd.type == "down" and xd.low < zs.zd:
-                                xd.add_mmd("1buy", zs, zs_xd_type, "盘整背驰")
-                            if xd.type == "up" and xd.high > zs.zg:
-                                xd.add_mmd("1sell", zs, zs_xd_type, "盘整背驰")
+                            pass
 
                     # 趋势背驰
                     valid_zss = [z for z in xd_zss if z.index <= zs.index]
