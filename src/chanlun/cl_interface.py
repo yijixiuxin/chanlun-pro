@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Tuple, Union
+from scipy import stats
 
 import numpy as np
 import pandas as pd
@@ -400,6 +401,72 @@ class ZS:
         if zgzd == 0.0:
             return 0
         return (zgzd / (self.gg - self.dd)) * 100
+
+    def r2(self, klines: List[Kline]) -> float:
+        """
+        计算中枢的R2值
+        R2表示价格趋近于中枢中线的程度，取值在 0-1
+        越接近1表示价格越平稳（越接近中线），越接近0表示波动大
+        中线 = zg - (zg - zd) / 2
+        """
+        # 获取中枢范围内的所有K线
+        zs_klines = [
+            kline
+            for kline in klines
+            if kline.date >= self.start.k.date and kline.date <= self.end.k.date
+        ]
+
+        if len(zs_klines) == 0:
+            return 0.0
+
+        # 收集所有K线的高开低收价格
+        prices = []
+        for kline in zs_klines:
+            prices.append((kline.h + kline.o + kline.l + kline.c) / 4)
+
+        if len(prices) == 0:
+            return 0.0
+
+        # 根据中枢内的线，生成 zg/zd 之间的折线数据点
+        # 每条线根据方向：向上从 zd 到 zg，向下从 zg 到 zd
+        zs_zigzag = []
+        zs_lines = [
+            _l
+            for _l in self.lines
+            if _l.start.k.date >= self.start.k.date and _l.end.k.date <= self.end.k.date
+        ]
+        for line_idx, line in enumerate(zs_lines):
+            # 计算这条线包含的K线数量
+            k_count = line.end.k.k_index - line.start.k.k_index + 1
+
+            # 根据线的方向确定起点和终点
+            if line.type == "up":
+                y_start, y_end = self.zd, self.zg
+            else:  # down
+                y_start, y_end = self.zg, self.zd
+
+            # 使用两点式直线公式计算每个K线位置对应的值
+            # y = y_start + (y_end - y_start) * i / (n - 1)
+            # 注意：相邻线的连接点共享同一根K线，从第二条线开始跳过第一个点
+            start_i = 1 if line_idx > 0 else 0
+            if k_count == 1:
+                if line_idx == 0:
+                    zs_zigzag.append(y_start)
+            else:
+                for i in range(start_i, k_count):
+                    y_value = y_start + (y_end - y_start) * i / (k_count - 1)
+                    zs_zigzag.append(y_value)
+
+        # 确保 prices 和 zs_zigzag 长度一致
+        if len(prices) != len(zs_zigzag):
+            return -1
+
+        x = np.array(prices)
+        y = np.array(zs_zigzag)
+
+        # 使用线性回归计算 R²
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+        return round(r_value**2, 6)
 
     def zs_mmds(self, zs_type="|") -> List[str]:
         """
