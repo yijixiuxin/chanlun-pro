@@ -451,6 +451,8 @@ class ChartManager {
     // console.log("bars result", barsResult);
     // console.log("chart container ", chartContainer);
 
+    this.clear_draw_chanlun("last");
+
     // 绘制分型
     if (barsResult.fxs) {
       barsResult.fxs.forEach((fx) => {

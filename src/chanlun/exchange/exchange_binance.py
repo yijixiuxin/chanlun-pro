@@ -475,12 +475,12 @@ class ExchangeBinance(Exchange):
 if __name__ == "__main__":
     ex = ExchangeBinance()
 
-    stocks = ex.all_stocks()
-    print(len(stocks))
-    print(stocks[0])
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
+    # print(stocks[0])
 
-    # klines = ex.klines("BTC/USDT", "1m")
-    # print(klines)
+    klines = ex.klines("BTC/USDT", "d")
+    print(klines)
 
     # ticks = ex.ticks(["BTC/USDT", "ETH/USDT"])
     # for _c, _t in ticks.items():

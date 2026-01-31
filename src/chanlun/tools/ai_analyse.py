@@ -201,6 +201,9 @@ class AIAnalyse:
         """
         根据配置，调用不同的大模型服务
         """
+        # TODO 这里直接返回成功的消息
+        # return {"ok": True, "msg": "已读乱回", "model": "No Model"}
+
         if config.OPENROUTER_AI_KEYS != "" and config.OPENROUTER_AI_MODEL != "":
             return self.req_openrouter_ai_model(prompt)
         if config.AI_TOKEN != "" and config.AI_MODEL != "":

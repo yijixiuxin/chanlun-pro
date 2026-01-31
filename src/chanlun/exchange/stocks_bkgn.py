@@ -328,6 +328,9 @@ if __name__ == "__main__":
     print("行业数量：", len(bkgn_infos["hys"]))
     print("概念数量：", len(bkgn_infos["gns"]))
 
+    # for _gn in bkgn_infos["hys"]:
+    #     print(f'"{_gn}",')
+
     # # 同步所有行业指数到数据库
     # from chanlun.exchange.exchange_db import ExchangeDB
 
