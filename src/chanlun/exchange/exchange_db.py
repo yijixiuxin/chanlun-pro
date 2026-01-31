@@ -230,7 +230,7 @@ class ExchangeDB(Exchange):
         kline_pd = pd.DataFrame(kline_pd)
         kline_pd["code"] = code
         kline_pd["date"] = pd.to_datetime(kline_pd["date"]).dt.tz_localize(
-            self.tz
+            self.tz, ambiguous=True
         )  # .map(lambda d: d.to_pydatetime())
         kline_pd["date"] = kline_pd["date"].apply(self.__convert_date)
         kline_pd.sort_values(by="date", inplace=True)
