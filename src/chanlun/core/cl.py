@@ -118,44 +118,34 @@ class CL(ICL):
         """
         处理K线数据，计算缠论分析结果
         支持增量更新：通过对比K线数量和最后一根K线状态，避免不必要的重复计算。
+
+        性能优化：内部流水线直接引用子计算器数据，避免 copy.deepcopy 开销。
+        外部通过 get_xxx() 方法获取数据时仍会 deepcopy，保证外部调用安全。
         """
         # 返回增量更新或新增的K线数据列表
         src_klines: List[Kline] = self.kline_processor.process_kline(klines)
         if not src_klines:
-            LogUtil.info("没有新的源K线需要处理。")
             return
 
-        LogUtil.info(f"为 {self.code}@{self.frequency} 处理 {len(src_klines)} 根新增/更新的K线")
+        # 直接引用内部数据，避免 deepcopy
         # 使用MACD计算器更新指标
-        self.macd_calculator.process_macd(self.get_src_klines())
+        self.macd_calculator.process_macd(self.kline_processor.klines)
 
-        # 更新缠论K线
-        self.cl_kline_processor.process_cl_klines(self.get_klines())
-        
-        # 获取全量缠论K线，确保计算器能访问完整历史
-        # 计算笔和分型
-        # 传入全量列表，BiCalculator 内部会根据状态进行增量计算
-        LogUtil.info(f"Step 2: 计算笔 (Bi)...")
-        self.bi_calculator.calculate(self.get_cl_klines())
-        bis = self.get_bis()
+        # 更新缠论K线 - 直接引用内部列表
+        if self.config.get('kline_type') == Config.KLINE_TYPE_CHANLUN.value:
+            klines_for_cl = self.cl_kline_processor.cl_klines
+        else:
+            klines_for_cl = self.kline_processor.klines
+        self.cl_kline_processor.process_cl_klines(klines_for_cl)
 
-        # 计算线段
-        # 传入全量列表，XdCalculator 内部会根据状态进行增量计算
-        LogUtil.info(f"Step 3: 计算线段 (Xd)...")
-        self.xd_calculator.calculate(bis)
-        xds = self.get_xds()
-        msg = f"Step 3 Done: 线段列表总数: {len(xds)}"
-        if xds:
-             msg += f", 最后线段: {xds[-1].index} (Done={xds[-1].done})"
-        LogUtil.info(msg)
+        # 计算笔和分型 - 直接引用 cl_klines
+        self.bi_calculator.calculate(self.cl_kline_processor.cl_klines)
 
-        # 计算中枢
-        LogUtil.info(f"Step 4: 计算中枢 (Zs)...")
-        zss = self.zss_calculator.calculate(xds)
-        msg = f"Step 4 Done: 中枢列表总数: {len(zss)}"
-        if zss:
-            msg += f", 最后中枢: {zss[-1].index} (Done={zss[-1].done})"
-        LogUtil.info(msg)
+        # 计算线段 - 直接引用 bis
+        self.xd_calculator.calculate(self.bi_calculator.bis)
+
+        # 计算中枢 - 直接引用 xds
+        self.zss_calculator.calculate(self.xd_calculator.xds)
 
         return self
 
@@ -447,27 +437,27 @@ class CL(ICL):
         self.use_time[key] = value
 
     def process_idx(self):
-        self.macd_calculator.process_macd(self.get_src_klines())
+        self.macd_calculator.process_macd(self.kline_processor.klines)
         return self
 
     def process_fx(self):
         # 通过计算器生成 fxs
-        self.bi_calculator.calculate(self.get_cl_klines())
+        self.bi_calculator.calculate(self.cl_kline_processor.cl_klines)
         return self
 
     def process_bi(self):
         # 通过计算器生成 bis
-        self.bi_calculator.calculate(self.get_cl_klines())
+        self.bi_calculator.calculate(self.cl_kline_processor.cl_klines)
         return self
 
     def process_up_line(self):
         # 通过计算器生成 xds
-        self.xd_calculator.calculate(self.get_bis())
+        self.xd_calculator.calculate(self.bi_calculator.bis)
         return self
 
     def process_zs(self):
         # 通过计算器生成中枢
-        self.zss_calculator.calculate(self.get_xds())
+        self.zss_calculator.calculate(self.xd_calculator.xds)
         return self
 
     def process_mmd(self):
