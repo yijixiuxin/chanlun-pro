@@ -11,7 +11,7 @@ from chanlun.core.cl_kline_process import CL_Kline_Process
 from chanlun.core.kline_data_processor import KlineDataProcessor
 from chanlun.core.macd import MACD
 from chanlun.core.xd_calculator import XdCalculator
-from chanlun.core.zs_calculator import ZsCalculator, ChanlunStructureAnalyzer
+from chanlun.core.zs_calculator import ZsCalculator
 from chanlun.tools.log_util import LogUtil
 
 
@@ -58,7 +58,6 @@ class CL(ICL):
 
         self.zss_calculator = ZsCalculator()
 
-        self.chanlun_structure_analyzer = ChanlunStructureAnalyzer()
 
         # 存储各级别数据
         # self.zsds: List[XD] = []  # 走势段列表
@@ -151,7 +150,6 @@ class CL(ICL):
         LogUtil.info(msg)
 
         # 计算中枢
-        # 目前 ZsCalculator 为全量计算
         LogUtil.info(f"Step 4: 计算中枢 (Zs)...")
         zss = self.zss_calculator.calculate(xds)
         msg = f"Step 4 Done: 中枢列表总数: {len(zss)}"
@@ -159,9 +157,6 @@ class CL(ICL):
             msg += f", 最后中枢: {zss[-1].index} (Done={zss[-1].done})"
         LogUtil.info(msg)
 
-        # results = self.chanlun_structure_analyzer.calculate(xds)
-        # 计算买卖点和背驰
-        # calculate_line_signals(self, self.xds, self.xd_zss)
         return self
 
     # --- ICL 接口实现 ---
