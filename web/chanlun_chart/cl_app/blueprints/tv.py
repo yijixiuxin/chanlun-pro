@@ -376,6 +376,8 @@ def tv_history():
                 cl_chart_data = cl_data_to_tv_chart(
                     cd, cl_config, to_frequency=kchart_to_frequency
                 )
+                if cl_chart_data is None:
+                    return {"s": "no_data"}
 
                 # 存入缓存
                 chart_data_cache[cache_key] = cl_chart_data

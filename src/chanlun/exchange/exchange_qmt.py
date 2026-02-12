@@ -25,35 +25,48 @@ class ExchangeQMT(Exchange):
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
-        # 1. 优化：利用 QMT 原生支持的周期，减少本地 Resample 的开销
+        # 1. 读取数据的周期映射 (用于 get_market_data)
         self.frequency_map = {
             "1m": "1m",
             "5m": "5m",
             "15m": "15m",
             "30m": "30m",
-            "60m": "1h",  # 优化：直接使用 1h
+            "60m": "1h",
             "d": "1d",
             "w": "1w",
             "m": "1mon",
             "y": "1y",
         }
 
-        # 2. 你的默认回看周期配置
+        # 2. 新增：下载数据的周期映射 (用于 download_history_data)
+        # QMT 下载接口通常只支持基础周期：1m, 5m, 1d (Tick)
+        # 逻辑：日线及以上下载 1d，分钟线下载 1m 或 5m
+        # 注意：为了数据精确性和合成的灵活性，建议 1m, 5m, 15m, 30m, 60m 都下载基础的 1m 或 5m 数据
+        # 这里为了效率，5m及倍数周期下载 5m，1m 下载 1m
+        self.download_frequency_map = {
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "5m",  # 15m 是 5m 的倍数，下载 5m 数据即可合成
+            "30m": "5m",  # 30m 是 5m 的倍数，下载 5m 数据即可合成
+            "60m": "5m",  # 60m 是 5m 的倍数，下载 5m 数据即可合成
+            "d": "1d",
+            "w": "1d",
+            "m": "1d",
+            "y": "1d",
+        }
+
         self.DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=30),
+            "1m": timedelta(days=60),
             "5m": timedelta(days=150),
             "15m": timedelta(days=90),
-            "30m": timedelta(days=750),
-            "60m": timedelta(days=365),
+            "30m": timedelta(days=365 * 5),
+            "60m": timedelta(days=365 * 8),
             "d": timedelta(days=365 * 10),
             "w": timedelta(days=365 * 20),
             "m": timedelta(days=365 * 30),
         }
 
     def code_to_tdx(self, code: str):
-        """
-        兼容之前的通达信格式,和 qmt 代码格式进行转换
-        """
         _c = code.split(".")
         if len(_c[0]) == 6:
             return _c[1] + "." + _c[0]
@@ -61,9 +74,6 @@ class ExchangeQMT(Exchange):
             return _c[0] + "." + _c[1]
 
     def code_to_qmt(self, code: str):
-        """
-        兼容之前的通达信格式,和 qmt 代码格式进行转换
-        """
         _c = code.split(".")
         if len(_c[0]) == 6:
             return _c[0] + "." + _c[1]
@@ -74,44 +84,17 @@ class ExchangeQMT(Exchange):
         return "SH.000001"
 
     def support_frequencys(self):
-        return {
-            "y": "1y",
-            "m": "1mon",
-            "w": "1w",
-            "d": "1d",
-            "60m": "1h",
-            "30m": "30m",
-            "15m": "15m",
-            "5m": "5m",
-            "1m": "1m",
-        }
+        return self.frequency_map
 
     def all_stocks(self):
-        """
-        获取所有股票代码
-        """
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        # 黑名单 code
         black_codes = [
-            "SZ.399290",
-            "SZ.399289",
-            "SZ.399302",
-            "SZ.399298",
-            "SZ.399481",
-            "SZ.399299",
-            "SZ.399301",
-            "SH.000013",
-            "SH.000022",
-            "SH.000116",
-            "SH.000061",
-            "SH.000101",
-            "SH.000012",
-            "SZ.988201",
-            "SZ.980068",
-            "SZ.980001",
-            "SZ.980023",
+            "SZ.399290", "SZ.399289", "SZ.399302", "SZ.399298", "SZ.399481",
+            "SZ.399299", "SZ.399301", "SH.000013", "SH.000022", "SH.000116",
+            "SH.000061", "SH.000101", "SH.000012", "SZ.988201", "SZ.980068",
+            "SZ.980001", "SZ.980023",
         ]
 
         ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
@@ -120,11 +103,7 @@ class ExchangeQMT(Exchange):
         all_stocks = []
         for _c in tick_codes:
             _stock_type: dict = xtdata.get_instrument_type(_c)
-            if (
-                _stock_type.get("stock")
-                or _stock_type.get("etf")
-                or _stock_type.get("index")
-            ):
+            if _stock_type.get("stock") or _stock_type.get("etf") or _stock_type.get("index"):
                 pass
             else:
                 continue
@@ -132,17 +111,10 @@ class ExchangeQMT(Exchange):
             all_stocks.append(_stock)
 
         all_stocks = [_s for _s in all_stocks if _s["code"] not in black_codes]
-
         self.g_all_stocks = all_stocks
-
-        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
-        # print(f"耗时：{time.time() - s_time}")
-
-        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
         return self.g_all_stocks
 
     def get_start_date_by_frequency(self, frequency: str) -> str:
-        """根据频率和配置计算所需的起始时间字符串 (YYYYMMDD)"""
         now = datetime.datetime.now()
         delta = self.DEFAULT_LOOKBACK.get(frequency, timedelta(days=365))
         start_date = now - delta
@@ -160,13 +132,24 @@ class ExchangeQMT(Exchange):
             end_date: str = None,
             args=None,
     ) -> pd.DataFrame:
-
-        # 定义标准的空返回值，包含列名，防止下游 KeyError
         empty_df = pd.DataFrame(columns=['code', 'date', 'open', 'high', 'low', 'close', 'volume'])
 
-        # 1. 确定 QMT 周期
-        qmt_period = self.frequency_map.get(frequency, "1m")
+        # 1. 确定 读取周期 (Read Period) 和 下载周期 (Download Period)
+        qmt_read_period = self.frequency_map.get(frequency, "1m")
         qmt_code = self.code_to_qmt(code)
+
+        # 核心修改：根据请求周期，选择合适的“基础周期”进行下载
+        # 如果请求是 30m，我们下载 5m 数据（因为 5m 是 30m 的因子，且 QMT 支持 5m 下载）
+        # 如果请求是 1m，下载 1m
+        # 如果请求是 d，下载 1d
+        qmt_download_period = self.download_frequency_map.get(frequency)
+
+        # 兜底逻辑：如果映射里没有，按日内/日线区分
+        if qmt_download_period is None:
+            if frequency in ["1m", "5m", "15m", "30m", "60m"]:
+                qmt_download_period = "1m"  # 分钟线兜底下载 1m，最稳妥但数据量大
+            else:
+                qmt_download_period = "1d"
 
         # 2. 确定时间范围
         if start_date:
@@ -174,16 +157,15 @@ class ExchangeQMT(Exchange):
         else:
             query_start = self.get_start_date_by_frequency(frequency)
 
-        # 处理复权
         dividend_type = args.get("dividend_type", "front") if args else "front"
 
         # 3. 智能增量下载
         xtdata.download_history_data(
             stock_code=qmt_code,
-            period=qmt_period,
+            period=qmt_download_period,
             start_time=query_start,
             end_time="",
-            incrementally=True
+            incrementally=False
         )
 
         # 4. 获取数据
@@ -191,7 +173,7 @@ class ExchangeQMT(Exchange):
         raw_data = xtdata.get_market_data(
             field_list=field_list,
             stock_list=[qmt_code],
-            period=qmt_period,
+            period=qmt_read_period,
             start_time=query_start,
             end_time="",
             count=-1,
@@ -200,13 +182,11 @@ class ExchangeQMT(Exchange):
         )
 
         # 数据完整性检查
-        # 如果 raw_data 为空，或者 time 字段为空/None
         if not raw_data or raw_data.get("time") is None or raw_data["time"].empty:
             return empty_df
 
         # 5. 极速构建 DataFrame
         try:
-            # 使用 .values[0] 提取第一只股票的数据数组，解决 KeyError: 0
             data_dict = {
                 "date": raw_data["time"].values[0],
                 "open": raw_data["open"].values[0],
@@ -216,7 +196,6 @@ class ExchangeQMT(Exchange):
                 "volume": raw_data["volume"].values[0]
             }
         except (IndexError, KeyError, AttributeError, ValueError):
-            # 捕获所有可能的解析错误，返回空DF
             return empty_df
 
         klines_df = pd.DataFrame(data_dict)
@@ -232,10 +211,8 @@ class ExchangeQMT(Exchange):
             if frequency in ["d", "w", "m", "y"]:
                 klines_df["date"] = klines_df["date"].dt.normalize() + pd.Timedelta(hours=15)
         except Exception:
-            # 如果时间转换失败
             return empty_df
 
-        # 添加 code 列
         klines_df["code"] = code
 
         # 7. 整理格式
@@ -256,9 +233,6 @@ class ExchangeQMT(Exchange):
         return klines_df
 
     def stock_info(self, code: str) -> Union[Dict, None]:
-        """
-        获取股票名称
-        """
         qmt_code = self.code_to_qmt(code)
         stock_detail = xtdata.get_instrument_detail(qmt_code, False)
         return {
@@ -390,68 +364,3 @@ class ExchangeQMT(Exchange):
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         raise Exception("QMT 交易功能在 trader 目录实现")
-
-
-if __name__ == "__main__":
-    ex = ExchangeQMT()
-
-    # stocks = ex.all_stocks()
-    # stock_maps = {}
-    # for _s in stocks:
-    #     stock_maps[_s["code"][0:5]] = _s
-    # for _t, _s in stock_maps.items():
-    #     print(_t, _s)
-    # print(len(stocks))
-
-    klines = ex.klines(
-        "SH.688045",
-        "1m",
-    )
-    print(klines)
-
-    # coding:utf-8
-    # import time
-    # from xtquant import xtdata
-    #
-    # code = "000001.SH"
-    # # 下载历史数据 下载接口本身不返回数据
-    # xtdata.download_history_data(code, period='1m', start_time='20251101', end_time='20251106')
-    #
-    # data = xtdata.get_market_data([], [code], period='1m', start_time='20251101', end_time='20251106')
-    # print('一次性取数据', data)
-    #
-    # do_subscribe_quote(code_list, period)  # 设置订阅参数，使gmd_ex取到最新行情
-    # count = -1  # 设置count参数，使gmd_ex返回全部数据
-    # data3 = xtdata.get_market_data_ex([], code_list, period=period, start_time=start_date, end_time=end_date,
-    #                                   count=-1)  # count 设置为1，使返回值只包含最新行情
-
-    # stock = ex.stock_info("SH.000001")
-    # print(stock)
-
-    # df = ex.get_divid_factors("SH.600519")
-
-    # print(df)
-
-    # def on_klines(_qmt_code, tick):
-    #     if _qmt_code != "600519.SH":
-    #         return
-    #     print(
-    #         _qmt_code,
-    #         "最新价格",
-    #         tick["lastPrice"],
-    #         " 时间：",
-    #         fun.timeint_to_datetime(int(tick["time"] / 1000)),
-    #     )
-    #     _tdx_code = ex.code_to_tdx(_qmt_code)
-    #     print(tick)
-    #     # for _f in ["1m", "5m", "d"]:
-    #     #     print(f"周期：{_f}")
-    #     #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
-
-    #     #     print(klines_df)
-    #     print("-" * 20)
-
-    # ex.subscribe_all_ticks(on_klines)
-
-    # ticks = ex.all_ticks()
-    # print(len(ticks))
