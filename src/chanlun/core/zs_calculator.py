@@ -24,40 +24,76 @@ class ZsCalculator:
         self.all_lines: List[LINE] = []
         self.zss: List[ZS] = []
         self.pending_zs: Optional[ZS] = None
+        # 增量计算状态
+        self._last_lines_count: int = 0
+        self._last_entry_idx: int = 0  # 上次计算结束时的 entry_idx
 
     def calculate(self, lines: List[LINE]) -> List[ZS]:
         """
-        全量计算中枢。
+        计算中枢（支持增量）。
+
+        增量逻辑：如果线段列表在末尾追加了新数据（前缀不变），
+        则保留已完成的中枢，仅从 pending_zs 位置或最后完成中枢的
+        exit 位置重新计算，避免全量重扫。
 
         :param lines: 当前级别的所有线段
         :return: 计算出的所有中枢（已完成 + 进行中）
         """
         if not lines:
+            self.zss = []
+            self.pending_zs = None
+            self._last_lines_count = 0
+            self._last_entry_idx = 0
             return []
-        # 1. 初始化状态
-        self.zss = []
-        self.pending_zs = None
-        self.all_lines = lines
 
-        # 2. 检查线段数量
-        # 形成一个进行中枢至少需要: 1个进入段 + 3个核心段
+        # 检查线段数量
         if len(lines) < 4:
+            self._last_lines_count = len(lines)
             return []
 
-        # 3. 执行核心计算
-        self._create_zs_full()
+        # 判断是否为增量更新
+        is_incremental = (
+            self._last_lines_count > 0
+            and len(lines) >= self._last_lines_count
+            and (self.zss or self.pending_zs)
+        )
 
-        # 4. 组合并返回结果
+        if is_incremental:
+            # 增量模式：丢弃 pending_zs，从其起始位置重新计算
+            if self.pending_zs:
+                # pending_zs 的进入段索引就是我们需要回退到的位置
+                restart_idx = self.pending_zs.start.index if self.pending_zs.start else self._last_entry_idx
+                self.pending_zs = None
+            elif self.zss:
+                # 没有 pending 时，从最后一个完成中枢的 exit 位置开始
+                restart_idx = self._last_entry_idx
+            else:
+                restart_idx = 0
+
+            self.all_lines = lines
+            self._create_zs_full(start_entry_idx=restart_idx)
+        else:
+            # 全量模式
+            self.zss = []
+            self.pending_zs = None
+            self.all_lines = lines
+            self._create_zs_full(start_entry_idx=0)
+
+        # 更新增量状态
+        self._last_lines_count = len(lines)
+
+        # 组合并返回结果
         final_zss = self.zss.copy()
         if self.pending_zs:
             final_zss.append(self.pending_zs)
         return final_zss
 
-    def _create_zs_full(self):
+    def _create_zs_full(self, start_entry_idx: int = 0):
         """
-        核心函数：全量扫描并创建所有中枢
+        核心函数：扫描并创建中枢
+        :param start_entry_idx: 扫描起始位置（增量模式下从上次结束位置开始）
         """
-        entry_idx = 0
+        entry_idx = start_entry_idx
         # 循环必须为至少一个进入段和3个核心段(共4段)留出空间。
         while entry_idx <= len(self.all_lines) - 4:
             entry_seg = self.all_lines[entry_idx]
@@ -118,6 +154,7 @@ class ZsCalculator:
                     self.zss.append(center)
                     # 下一个中枢的寻找从离开段开始。
                     entry_idx = exit_idx
+                    self._last_entry_idx = entry_idx
                 else:
                     # ** 无效中枢：丢弃并从下一个线段开始尝试 **
                     # (例如，初始的seg_c被确认为离开段，导致核心线段 < 3)
@@ -129,6 +166,7 @@ class ZsCalculator:
                 # 未完成，说明走到了所有线段的末尾
                 if len(center.lines) >= 3:
                     self.pending_zs = center
+                self._last_entry_idx = entry_idx
                 # 这是最后一个可能的中枢，所以我们跳出循环。
                 break
 
