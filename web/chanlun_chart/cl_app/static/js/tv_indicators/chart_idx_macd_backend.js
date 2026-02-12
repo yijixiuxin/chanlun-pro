@@ -1,9 +1,9 @@
 // -----------------------------------------------------------------------
 // 文件名: chart_idx_macd_backend.js
-// 版本: V31 (Final Fix - Widget Sync)
-// 功能: 强制同步全局 Widget 周期，解决 "1" vs "1D" 匹配错误
+// 版本: V32 (Cross-Timeframe MACD)
+// 功能: 支持跨周期 MACD 显示 (1m->5m, 5m->30m, 30m->d)
 // -----------------------------------------------------------------------
-console.error("[SYSTEM] MACD Backend V31 Loaded - CACHE CLEARED");
+console.error("[SYSTEM] MACD Backend V32 Loaded - Cross-Timeframe MACD");
 
 var TvIdxMACDBackend = (function () {
 
@@ -34,20 +34,20 @@ var TvIdxMACDBackend = (function () {
     let minDiff = Infinity;
 
     if (idx !== -1) {
-        const diff = Math.abs(times[idx] - target);
-        if (diff <= tolerance && diff < minDiff) {
-            minDiff = diff;
-            bestIdx = idx;
-        }
+      const diff = Math.abs(times[idx] - target);
+      if (diff <= tolerance && diff < minDiff) {
+        minDiff = diff;
+        bestIdx = idx;
+      }
     }
 
     let prevIdx = (idx === -1) ? times.length - 1 : idx - 1;
     if (prevIdx >= 0) {
-        const diff = Math.abs(times[prevIdx] - target);
-        if (diff <= tolerance && diff < minDiff) {
-            minDiff = diff;
-            bestIdx = prevIdx;
-        }
+      const diff = Math.abs(times[prevIdx] - target);
+      if (diff <= tolerance && diff < minDiff) {
+        minDiff = diff;
+        bestIdx = prevIdx;
+      }
     }
     return bestIdx;
   }
@@ -55,13 +55,13 @@ var TvIdxMACDBackend = (function () {
   return {
     idx: function (PineJS) {
       return {
-        name: "macd_pro_area",
+        name: "MACD_HTF",
         metainfo: {
           _metainfoVersion: 53,
-          id: "macd_pro_area@tv-basicstudies-1",
-          name: "macd_pro_area",
-          description: "macd_pro_area",
-          shortDescription: "macd_pro_area",
+          id: "MACD_HTF@tv-basicstudies-1",
+          name: "MACD_HTF",
+          description: "MACD_HTF",
+          shortDescription: "MACD_HTF",
           is_price_study: false,
           isCustomIndicator: true,
           plots: [
@@ -107,7 +107,7 @@ var TvIdxMACDBackend = (function () {
           format: { type: "price", precision: 4 },
         },
         constructor: function () {
-          this.init = function (context, inputCallback) {};
+          this.init = function (context, inputCallback) { };
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -117,7 +117,7 @@ var TvIdxMACDBackend = (function () {
             try {
               const currentTime = context.symbol.time;
               if (currentTime === undefined || currentTime === null || isNaN(currentTime)) {
-                  return [NaN, 0, NaN, NaN];
+                return [NaN, 0, NaN, NaN];
               }
 
               // 1. 获取并修正输入参数 (关键修复!)
@@ -127,41 +127,41 @@ var TvIdxMACDBackend = (function () {
               // [FIX V31] 尝试从全局 Widget 获取真实的周期
               // 解决 context 传入 "1" 但实际是 "1d" 的问题
               if (window.tvWidget) {
-                  try {
-                      // 检查 widget 是否就绪并获取周期
-                      if (window.tvWidget.symbolInterval) {
-                        const realRes = window.tvWidget.symbolInterval().interval.toString().toLowerCase();
-                        if (realRes && realRes !== rawInterval) {
-                            // 仅当 context 是纯数字 (如 "1") 而 realRes 是复杂周期 (如 "1d") 时才覆盖
-                            // 或者当 realRes 包含 'd'/'w' 时强制覆盖
-                            if (/^\d+$/.test(rawInterval) && !/^\d+$/.test(realRes)) {
-                                // console.warn(`[MACD-FIX] Override Interval: ${rawInterval} -> ${realRes}`);
-                                rawInterval = realRes;
-                            } else if (realRes.includes('d') || realRes.includes('w')) {
-                                rawInterval = realRes;
-                            }
-                        }
+                try {
+                  // 检查 widget 是否就绪并获取周期
+                  if (window.tvWidget.symbolInterval) {
+                    const realRes = window.tvWidget.symbolInterval().interval.toString().toLowerCase();
+                    if (realRes && realRes !== rawInterval) {
+                      // 仅当 context 是纯数字 (如 "1") 而 realRes 是复杂周期 (如 "1d") 时才覆盖
+                      // 或者当 realRes 包含 'd'/'w' 时强制覆盖
+                      if (/^\d+$/.test(rawInterval) && !/^\d+$/.test(realRes)) {
+                        // console.warn(`[MACD-FIX] Override Interval: ${rawInterval} -> ${realRes}`);
+                        rawInterval = realRes;
+                      } else if (realRes.includes('d') || realRes.includes('w')) {
+                        rawInterval = realRes;
                       }
-                  } catch(e) {
-                      // console.warn("[MACD-FIX] Widget access failed", e);
+                    }
                   }
+                } catch (e) {
+                  // console.warn("[MACD-FIX] Widget access failed", e);
+                }
               }
 
               // 2. 获取数据源
               let datafeeds = [];
               if (window.GlobalTVDatafeeds && window.GlobalTVDatafeeds.length > 0) {
-                  datafeeds = window.GlobalTVDatafeeds;
+                datafeeds = window.GlobalTVDatafeeds;
               } else if (window.tvDatafeed) {
-                  datafeeds = [window.tvDatafeed];
+                datafeeds = [window.tvDatafeed];
               }
 
               // 3. 解析目标
               let targetCode = rawTicker;
               const parts = rawTicker.split(':');
               if (parts.length > 1) {
-                  targetCode = parts[1].replace(/[^\d]/g, '');
+                targetCode = parts[1].replace(/[^\d]/g, '');
               } else {
-                  targetCode = rawTicker.replace(/[^\d]/g, '');
+                targetCode = rawTicker.replace(/[^\d]/g, '');
               }
 
               let targetInterval = rawInterval;
@@ -172,56 +172,67 @@ var TvIdxMACDBackend = (function () {
 
               // 4. 遍历查找 (Fuzzy Match)
               for (const df of datafeeds) {
-                  if (df._historyProvider && df._historyProvider.bars_result) {
-                      const barsMap = df._historyProvider.bars_result;
-                      for (const key of barsMap.keys()) {
-                          const k = String(key);
+                if (df._historyProvider && df._historyProvider.bars_result) {
+                  const barsMap = df._historyProvider.bars_result;
+                  for (const key of barsMap.keys()) {
+                    const k = String(key);
 
-                          if (!k.includes(targetCode)) continue;
+                    if (!k.includes(targetCode)) continue;
 
-                          let intervalMatch = false;
-                          // 严格后缀
-                          if (k.endsWith(targetInterval)) intervalMatch = true;
-                          // 映射后缀
-                          else if (mappings[targetInterval] && k.endsWith(mappings[targetInterval])) intervalMatch = true;
-                          // 补m后缀 (仅当目标是纯数字时)
-                          else if (/^\d+$/.test(targetInterval) && k.endsWith(targetInterval + 'm')) intervalMatch = true;
+                    let intervalMatch = false;
+                    // 严格后缀
+                    if (k.endsWith(targetInterval)) intervalMatch = true;
+                    // 映射后缀
+                    else if (mappings[targetInterval] && k.endsWith(mappings[targetInterval])) intervalMatch = true;
+                    // 补m后缀 (仅当目标是纯数字时)
+                    else if (/^\d+$/.test(targetInterval) && k.endsWith(targetInterval + 'm')) intervalMatch = true;
 
-                          if (intervalMatch) {
-                              barsResult = barsMap.get(k);
-                              break;
-                          }
-                      }
+                    if (intervalMatch) {
+                      barsResult = barsMap.get(k);
+                      break;
+                    }
                   }
-                  if (barsResult) break;
+                }
+                if (barsResult) break;
               }
 
-              // 5. 提取数据
-              if (barsResult && barsResult.times && barsResult.macd_dif) {
+              // 5. 提取数据 (优先使用跨周期 higher_macd 数据)
+              if (barsResult && barsResult.times) {
+                // 判断是否有跨周期 MACD 数据
+                const hasHigherMacd = barsResult.higher_macd_dif &&
+                  barsResult.higher_macd_dif.length > 0 &&
+                  !barsResult.higher_macd_dif.every(function (v) { return isNaN(v) || v === null; });
+
+                var src_dif = hasHigherMacd ? barsResult.higher_macd_dif : barsResult.macd_dif;
+                var src_dea = hasHigherMacd ? barsResult.higher_macd_dea : barsResult.macd_dea;
+                var src_hist = hasHigherMacd ? barsResult.higher_macd_hist : barsResult.macd_hist;
+
+                if (src_dif) {
                   const dataTime = barsResult.times[barsResult.times.length - 1];
                   let searchTime = currentTime;
                   if (dataTime < 10000000000 && searchTime > 10000000000) {
-                      searchTime = Math.floor(searchTime / 1000);
+                    searchTime = Math.floor(searchTime / 1000);
                   }
 
                   const alignedIndex = smartSearch(barsResult.times, searchTime, rawInterval);
 
                   if (alignedIndex !== -1) {
-                    v_dif = Number(barsResult.macd_dif[alignedIndex]);
-                    v_dea = Number(barsResult.macd_dea[alignedIndex]);
-                    v_hist = Number(barsResult.macd_hist[alignedIndex]);
-                    if (alignedIndex > 0) prev_hist = Number(barsResult.macd_hist[alignedIndex - 1]);
+                    v_dif = Number(src_dif[alignedIndex]);
+                    v_dea = Number(src_dea[alignedIndex]);
+                    v_hist = Number(src_hist[alignedIndex]);
+                    if (alignedIndex > 0) prev_hist = Number(src_hist[alignedIndex - 1]);
                   }
+                }
               }
 
             } catch (e) {
-                console.error("[MACD Crash]", e);
+              console.error("[MACD Crash]", e);
             }
 
             let colorIndex = 0;
             if (!isNaN(v_hist)) {
-                if (v_hist >= 0) colorIndex = (v_hist >= prev_hist) ? 0 : 1;
-                else colorIndex = (v_hist > prev_hist) ? 2 : 3;
+              if (v_hist >= 0) colorIndex = (v_hist >= prev_hist) ? 0 : 1;
+              else colorIndex = (v_hist > prev_hist) ? 2 : 3;
             }
             return [v_hist, colorIndex, v_dif, v_dea];
           };

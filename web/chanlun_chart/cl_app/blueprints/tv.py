@@ -6,6 +6,8 @@ import pytz
 import json
 import datetime
 import time
+import numpy as np
+import talib
 from cachetools import TTLCache
 from threading import RLock
 from flask import Blueprint, request
@@ -36,6 +38,26 @@ from ..services.state import history_req_counter as __history_req_counter
 
 
 tv_bp = Blueprint("tv", __name__)
+
+# 跨周期 MACD 周期倍率映射表
+# key = 当前K线频率, value = 倍率（高级别周期包含多少根当前周期K线）
+# 1m→5m: 5倍, 5m→30m: 6倍, 30m→d: 因市场而异
+HIGHER_MACD_RATIO = {
+    "1m": 5,     # 1分钟 → 5分钟 MACD，参数乘以5
+    "5m": 6,     # 5分钟 → 30分钟 MACD，参数乘以6
+}
+
+# 30m → 日线的倍率因市场交易时长不同
+MARKET_30M_TO_D_RATIO = {
+    "a": 8,              # A股 4小时交易 = 8个30分钟
+    "hk": 8,             # 港股
+    "us": 13,            # 美股 6.5小时 = 13个30分钟
+    "futures": 8,        # 国内期货
+    "ny_futures": 13,    # 纽约期货
+    "currency": 48,      # 数字货币 24小时 = 48个30分钟
+    "currency_spot": 48,
+    "fx": 48,            # 外汇
+}
 
 # 基础数据缓存
 stock_cache = TTLCache(maxsize=100, ttl=3600)
@@ -380,6 +402,44 @@ def tv_history():
                 if cl_chart_data is None:
                     return {"s": "no_data"}
 
+                # ==================================================
+                #  跨周期 MACD：用倍率放大参数，在当前K线收盘价上计算
+                #  例如 1m→5m: MACD(12*5, 26*5, 9*5) = MACD(60, 130, 45)
+                # ==================================================
+                ratio = HIGHER_MACD_RATIO.get(frequency)
+                if ratio is None and frequency == "30m":
+                    ratio = MARKET_30M_TO_D_RATIO.get(market, 8)
+
+                if ratio is not None:
+                    try:
+                        closes = np.array(cl_chart_data["c"], dtype=float)
+                        fast = int(cl_config.get("idx_macd_fast", 12)) * ratio
+                        slow = int(cl_config.get("idx_macd_slow", 26)) * ratio
+                        signal = int(cl_config.get("idx_macd_signal", 9)) * ratio
+
+                        h_dif, h_dea, h_hist = talib.MACD(
+                            closes,
+                            fastperiod=fast,
+                            slowperiod=slow,
+                            signalperiod=signal
+                        )
+                        # NaN 转 None 方便 JSON 序列化
+                        cl_chart_data["higher_macd_dif"] = [
+                            None if np.isnan(v) else round(float(v), 6) for v in h_dif
+                        ]
+                        cl_chart_data["higher_macd_dea"] = [
+                            None if np.isnan(v) else round(float(v), 6) for v in h_dea
+                        ]
+                        cl_chart_data["higher_macd_hist"] = [
+                            None if np.isnan(v) else round(float(v), 6) for v in h_hist
+                        ]
+                        LogUtil.info(
+                            f"[tv_history] Scaled MACD ({frequency}, ratio={ratio}) "
+                            f"params=({fast},{slow},{signal}), {len(closes)} bars"
+                        )
+                    except Exception as e:
+                        LogUtil.error(f"[tv_history] Scaled MACD calc failed: {e}")
+
                 # 存入缓存
                 chart_data_cache[cache_key] = cl_chart_data
 
@@ -404,6 +464,9 @@ def tv_history():
         "macd_dea": cl_chart_data.get("macd_dea", []),
         "macd_hist": cl_chart_data.get("macd_hist", []),
         "macd_area": cl_chart_data.get("macd_area", []),
+        "higher_macd_dif": cl_chart_data.get("higher_macd_dif", []),
+        "higher_macd_dea": cl_chart_data.get("higher_macd_dea", []),
+        "higher_macd_hist": cl_chart_data.get("higher_macd_hist", []),
         "fxs": cl_chart_data.get("fxs", []),
         "bis": cl_chart_data.get("bis", []),
         "xds": cl_chart_data.get("xds", []),

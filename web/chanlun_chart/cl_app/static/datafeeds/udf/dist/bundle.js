@@ -1,10 +1,11 @@
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-    typeof define === 'function' && define.amd ? define(['exports'], factory) :
-    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Datafeeds = {}));
-})(this, (function (exports) { 'use strict';
+        typeof define === 'function' && define.amd ? define(['exports'], factory) :
+            (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Datafeeds = {}));
+})(this, (function (exports) {
+    'use strict';
 
-    function logMessage(message) {}
+    function logMessage(message) { }
     function getErrorMessage(error) {
         if (error === undefined) return '';
         else if (typeof error === 'string') return error;
@@ -20,11 +21,11 @@
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'quotes', { symbols: symbols })
                     .then((response) => {
-                    if (response.s === 'ok') resolve(response.d);
-                    else reject(response.errmsg);
-                }).catch((error) => {
-                    reject(`network error: ${getErrorMessage(error)}`);
-                });
+                        if (response.s === 'ok') resolve(response.d);
+                        else reject(response.errmsg);
+                    }).catch((error) => {
+                        reject(`network error: ${getErrorMessage(error)}`);
+                    });
             });
         }
     }
@@ -117,14 +118,14 @@
                 }
             }
         }
-        
+
         _processHistoryResponse(response, requestParams) {
             if (response.s !== "ok" && response.s !== "no_data") {
                 throw new Error(response.errmsg);
             }
             const bars = [];
             const meta = { noData: false };
-            
+
             if (response.s === "no_data") {
                 meta.noData = true;
                 meta.nextTime = response.nextTime;
@@ -160,6 +161,9 @@
                 const macd_dea = response.macd_dea || [];
                 const macd_hist = response.macd_hist || [];
                 const macd_area = response.macd_area || [];
+                const higher_macd_dif = response.higher_macd_dif || [];
+                const higher_macd_dea = response.higher_macd_dea || [];
+                const higher_macd_hist = response.higher_macd_hist || [];
 
                 // [DEBUG LOG] 1. 打印接收到的原始数据情况
                 const bisLen = response.bis ? response.bis.length : 0;
@@ -241,6 +245,9 @@
                         macd_dea: deaObj.values,
                         macd_hist: histObj.values,
                         macd_area: areaObj.values,
+                        higher_macd_dif: mergeAlignedArrays([], [], raw_times, higher_macd_dif).values,
+                        higher_macd_dea: mergeAlignedArrays([], [], raw_times, higher_macd_dea).values,
+                        higher_macd_hist: mergeAlignedArrays([], [], raw_times, higher_macd_hist).values,
                         fxs: response.fxs || [],
                         bis: response.bis || [],
                         xds: response.xds || [],
@@ -277,6 +284,13 @@
                     obj_res.macd_dea = deaObj.values;
                     obj_res.macd_hist = histObj.values;
                     obj_res.macd_area = areaObj.values;
+
+                    const hDifObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dif, raw_times, higher_macd_dif);
+                    const hDeaObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dea, raw_times, higher_macd_dea);
+                    const hHistObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_hist, raw_times, higher_macd_hist);
+                    obj_res.higher_macd_dif = hDifObj.values;
+                    obj_res.higher_macd_dea = hDeaObj.values;
+                    obj_res.higher_macd_hist = hHistObj.values;
 
                     // Chanlun 数据合并
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
@@ -424,12 +438,12 @@
                 const subscriptionRecord = this._subscribers[listenerGuid];
                 this._quotesProvider.getQuotes(updateType === 1 ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
                     .then((data) => {
-                    this._requestsPending--;
-                    if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
-                    subscriptionRecord.listener(data);
-                }).catch((reason) => {
-                    this._requestsPending--;
-                });
+                        this._requestsPending--;
+                        if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
+                        subscriptionRecord.listener(data);
+                    }).catch((reason) => {
+                        this._requestsPending--;
+                    });
             }
         }
     }
@@ -443,7 +457,7 @@
     function symbolKey(symbol, currency, unit) {
         return symbol + (currency !== undefined ? '_%|#|%_' + currency : '') + (unit !== undefined ? '_%|#|%_' + unit : '');
     }
-    
+
     class SymbolsStorage {
         constructor(datafeedUrl, datafeedSupportedResolutions, requester) {
             this._exchangesList = ['NYSE', 'FOREX', 'AMEX'];
@@ -488,17 +502,17 @@
                     .sort((item1, item2) => item1.weight - item2.weight)
                     .slice(0, maxSearchResults)
                     .map((item) => {
-                    const symbolInfo = item.symbolInfo;
-                    return {
-                        symbol: symbolInfo.name,
-                        full_name: `${symbolInfo.exchange}:${symbolInfo.name}`,
-                        description: symbolInfo.description,
-                        exchange: symbolInfo.exchange,
-                        params: [],
-                        type: symbolInfo.type,
-                        ticker: symbolInfo.name,
-                    };
-                });
+                        const symbolInfo = item.symbolInfo;
+                        return {
+                            symbol: symbolInfo.name,
+                            full_name: `${symbolInfo.exchange}:${symbolInfo.name}`,
+                            description: symbolInfo.description,
+                            exchange: symbolInfo.exchange,
+                            params: [],
+                            type: symbolInfo.type,
+                            ticker: symbolInfo.name,
+                        };
+                    });
                 return Promise.resolve(result);
             });
         }
@@ -516,15 +530,15 @@
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'symbol_info', { group: exchange })
                     .then((response) => {
-                    try { this._onExchangeDataReceived(exchange, response); }
-                    catch (error) { reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`)); return; }
-                    resolve();
-                }).catch((reason) => { resolve(); });
+                        try { this._onExchangeDataReceived(exchange, response); }
+                        catch (error) { reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`)); return; }
+                        resolve();
+                    }).catch((reason) => { resolve(); });
             });
         }
         _onExchangeDataReceived(exchange, data) {
-             let symbolIndex = 0;
-             try {
+            let symbolIndex = 0;
+            try {
                 const symbolsCount = data.symbol.length;
                 const tickerPresent = data.ticker !== undefined;
                 for (; symbolIndex < symbolsCount; ++symbolIndex) {
@@ -574,7 +588,7 @@
                     }
                     this._symbolsList.push(symbolName);
                 }
-             } catch(error) { throw new Error(`SymbolsStorage: API error: ${Object(error).message}`); }
+            } catch (error) { throw new Error(`SymbolsStorage: API error: ${Object(error).message}`); }
         }
     }
     function definedValueOrDefault(value, defaultValue) {
@@ -598,9 +612,9 @@
             this._quotesPulseProvider = new QuotesPulseProvider(this._quotesProvider);
             this._configurationReadyPromise = this._requestConfiguration()
                 .then((configuration) => {
-                if (configuration === null) configuration = defaultConfiguration();
-                this._setupWithConfiguration(configuration);
-            });
+                    if (configuration === null) configuration = defaultConfiguration();
+                    this._setupWithConfiguration(configuration);
+                });
         }
         onReady(callback) {
             this._configurationReadyPromise.then(() => { callback(this._configuration); });
@@ -680,7 +694,7 @@
             }).catch((error) => { });
         }
         searchSymbols(userInput, exchange, symbolType, onResult) {
-             if (this._configuration.supports_search) {
+            if (this._configuration.supports_search) {
                 const params = {
                     limit: 30,
                     query: userInput.toUpperCase(),
@@ -707,7 +721,7 @@
                 this._send('symbols', params).then((response) => {
                     if (response.s !== undefined) onError('unknown_symbol');
                     else {
-                         const symbol = response.name;
+                        const symbol = response.name;
                         const listedExchange = response.listed_exchange ?? response['exchange-listed'];
                         const tradedExchange = response.exchange ?? response['exchange-traded'];
                         const result = {
