@@ -131,12 +131,9 @@ class CL(ICL):
         # 使用MACD计算器更新指标
         self.macd_calculator.process_macd(self.kline_processor.klines)
 
-        # 更新缠论K线 - 直接引用内部列表
-        if self.config.get('kline_type') == Config.KLINE_TYPE_CHANLUN.value:
-            klines_for_cl = self.cl_kline_processor.cl_klines
-        else:
-            klines_for_cl = self.kline_processor.klines
-        self.cl_kline_processor.process_cl_klines(klines_for_cl)
+        # 更新缠论K线 - 始终使用原始K线作为包含关系处理的输入
+        # 注意：不能把 cl_kline_processor.cl_klines 作为自身输入（循环引用）
+        self.cl_kline_processor.process_cl_klines(self.kline_processor.klines)
 
         # 计算笔和分型 - 直接引用 cl_klines
         self.bi_calculator.calculate(self.cl_kline_processor.cl_klines)
@@ -146,6 +143,10 @@ class CL(ICL):
 
         # 计算中枢 - 直接引用 xds
         self.zss_calculator.calculate(self.xd_calculator.xds)
+
+        # 每次处理后重置缓存，确保下次访问时重新计算
+        self._last_bi_zs = None
+        self._last_xd_zs = None
 
         return self
 
@@ -163,8 +164,8 @@ class CL(ICL):
         return self.config
 
     def get_src_klines(self) -> List[Kline]:
-        """返回原始K线列表"""
-        return copy.deepcopy(self.kline_processor.klines)
+        """返回原始K线列表（浅拷贝，防止外部修改列表结构）"""
+        return list(self.kline_processor.klines)
 
     def get_klines(self) -> List[Any]:
         """返回K线列表"""
@@ -174,8 +175,8 @@ class CL(ICL):
             return self.get_src_klines()
 
     def get_cl_klines(self) -> List[CLKline]:
-        """返回缠论K线列表"""
-        return copy.deepcopy(self.cl_kline_processor.cl_klines)
+        """返回缠论K线列表（浅拷贝）"""
+        return list(self.cl_kline_processor.cl_klines)
 
     def get_idx(self) -> dict:
         """返回技术指标数据"""
@@ -183,16 +184,16 @@ class CL(ICL):
         return self.macd_calculator.get_results()
 
     def get_fxs(self) -> List[FX]:
-        """返回分型列表"""
-        return copy.deepcopy(self.bi_calculator.fxs)
+        """返回分型列表（浅拷贝）"""
+        return list(self.bi_calculator.fxs)
 
     def get_bis(self) -> List[BI]:
-        """返回笔列表"""
-        return copy.deepcopy(self.bi_calculator.bis)
+        """返回笔列表（浅拷贝）"""
+        return list(self.bi_calculator.bis)
 
     def get_xds(self) -> List[XD]:
-        """返回线段列表"""
-        return copy.deepcopy(self.xd_calculator.xds)
+        """返回线段列表（浅拷贝）"""
+        return list(self.xd_calculator.xds)
 
     def get_zsds(self) -> List[XD]:
         """返回走势段列表"""
@@ -210,7 +211,7 @@ class CL(ICL):
 
     def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
         """返回线段中枢字典"""
-        zss = copy.deepcopy(self.zss_calculator.zss)
+        zss = list(self.zss_calculator.zss)
         if self.zss_calculator.pending_zs:
             zss.append(self.zss_calculator.pending_zs)
         return zss

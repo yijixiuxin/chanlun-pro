@@ -47,7 +47,11 @@ class BiCalculator:
 
         is_incremental = bool(self.cl_klines)
         if is_incremental and cl_klines[-1].index <= self.cl_klines[-1].index:
-            return
+            # 即使 index 相同，Tick 更新可能改变了最后一根K线的高低点
+            last_new = cl_klines[-1]
+            last_old = self.cl_klines[-1]
+            if last_new.h == last_old.h and last_new.l == last_old.l:
+                return
 
         self.cl_klines = cl_klines
 
