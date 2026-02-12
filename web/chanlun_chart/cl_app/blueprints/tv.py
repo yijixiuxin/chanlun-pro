@@ -3,6 +3,7 @@ TradingView相关接口蓝图。
 (终极修复版：修复 minmov 校验错误 + 全量数据返回 + 内存缓存)
 """
 import pytz
+import json
 import datetime
 import time
 from cachetools import TTLCache
@@ -307,9 +308,9 @@ def tv_history():
     frequency = resolution_maps[resolution]
     cl_config = query_cl_chart_config(market, code)
     if firstDataRequest == "false":
-        cache_key = f"{market}_{code}_{frequency}_{_from}_{_to}_{hash(str(cl_config))}"
+        cache_key = f"{market}_{code}_{frequency}_{_from}_{_to}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
     else:
-        cache_key = f"{market}_{code}_{frequency}_{hash(str(cl_config))}"
+        cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
 
     cl_chart_data = None
     is_cache_hit = False

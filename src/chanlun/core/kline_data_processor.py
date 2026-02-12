@@ -80,8 +80,9 @@ class KlineDataProcessor:
             if col in klines.columns:
                 klines[col] = pd.to_numeric(klines[col], errors='coerce')
 
-        # 始终按日期排序，这是后续逻辑的基础
-        klines = klines.sort_values('date').reset_index(drop=True)
+        # 仅在无序时排序，避免对已有序数据的无谓开销
+        if not klines['date'].is_monotonic_increasing:
+            klines = klines.sort_values('date').reset_index(drop=True)
 
         # 1. 按设定的起始时间过滤
         if self.start_datetime:
