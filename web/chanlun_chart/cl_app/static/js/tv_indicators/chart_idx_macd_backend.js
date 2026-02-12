@@ -3,7 +3,6 @@
 // 版本: V32 (Cross-Timeframe MACD)
 // 功能: 支持跨周期 MACD 显示 (1m->5m, 5m->30m, 30m->d)
 // -----------------------------------------------------------------------
-console.error("[SYSTEM] MACD Backend V32 Loaded - Cross-Timeframe MACD");
 
 var TvIdxMACDBackend = (function () {
 
