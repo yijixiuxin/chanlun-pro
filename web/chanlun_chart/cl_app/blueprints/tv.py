@@ -280,6 +280,15 @@ def tv_history():
     """
     K线柱及缠论数据接口
     """
+    args = request.args.to_dict()
+
+    tz = pytz.timezone("Asia/Shanghai")
+    if 'from' in args:
+        args['from'] = datetime.datetime.fromtimestamp(int(args['from']), tz).strftime("%Y-%m-%d %H:%M:%S")
+    if 'to' in args:
+        args['to'] = datetime.datetime.fromtimestamp(int(args['to']), tz).strftime("%Y-%m-%d %H:%M:%S")
+    LogUtil.info(f"tv_history request args: {args}")
+
     symbol = request.args.get("symbol")
     _from = request.args.get("from")
     _to = request.args.get("to")

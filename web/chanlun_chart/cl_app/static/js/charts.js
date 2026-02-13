@@ -203,20 +203,7 @@ class ChartManager {
         this.widget.onChartReady(() => {
             this.chart = this.widget.activeChart();
             if (!this.chart) return;
-            // 延迟加载默认指标 ---
-            setTimeout(() => {
-                const studies = this.chart.getAllStudies();
-
-                // 1. 原有的 MACD 加载逻辑
-                if (!studies.some(s => s.name === 'MACD_HTF')) {
-                    this.chart.createStudy('MACD_HTF', false, false).catch(() => { });
-                }
-
-                // 2. 加载 MA均线
-                if (!studies.some(s => s.name === 'MA均线')) {
-                    this.chart.createStudy('MA均线', false, false).catch(e => console.log("MA加载失败", e));
-                }
-            }, 1000);
+            // 默认指标加载已移至 handleDataReady()，确保数据就绪后再创建
             this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
             this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
             this.chart.onIntervalChanged().subscribe(null, (i) => this.handleIntervalChange(i));
@@ -332,12 +319,7 @@ class ChartManager {
 
     drawChartElements(chartData, currentInterval) {
         const { symbolKey, barsResult, from } = chartData;
-        // [修复] 即使没有数据也要继续，以便执行清理逻辑(虽然此处保留原逻辑判断)
         if (!barsResult) return;
-
-        const bisCount = barsResult.bis ? barsResult.bis.length : 0;
-        // console.log(`[DEBUG-CHARTS] drawChartElements: symbol=${symbolKey}, from=${from}, Bis Count=${bisCount}`);
-
         const chartContainer = this.initChartContainer(symbolKey);
 
         const safeCreate = (promise, type) => {
@@ -349,8 +331,6 @@ class ChartManager {
             }
             return promise;
         };
-
-        // --- [新增] 核心修复逻辑开始 ---
 
         // 1. 清理画布上旧的“未完成”元素
         const removeOldUnfinished = (containerList) => {
@@ -385,8 +365,6 @@ class ChartManager {
             }
             return finished;
         };
-        // --- [新增] 核心修复逻辑结束 ---
-
         let stats = { bis: 0, xds: 0, zsds: 0, skipped_bis: 0 };
 
         // 轻量 key 生成函数，替代昂贵的 JSON.stringify

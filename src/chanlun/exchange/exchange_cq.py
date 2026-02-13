@@ -1,4 +1,5 @@
 import time
+import threading
 import functools
 from datetime import timedelta, datetime, time as datetime_time
 from typing import Dict, List, Union
@@ -6,10 +7,11 @@ import pandas as pd
 import pytz
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 # Longport SDK imports
 from longport.openapi import Config, QuoteContext, TradeContext, Market, Period, \
-    AdjustType, OrderSide, OrderType, TimeInForceType, SecurityListCategory, TradeSessions
+    AdjustType, OrderSide, OrderType, TimeInForceType, SecurityListCategory, TradeSessions, OpenApiException
 
 # Chanlun SDK imports
 from chanlun import fun
@@ -20,6 +22,42 @@ from chanlun.tools.log_util import LogUtil
 
 # 统一时区设置
 __tz = pytz.timezone("Asia/Shanghai")
+
+
+class RateLimiter:
+    """
+    简单令牌桶限流器 (Simple Token Bucket)
+    """
+    def __init__(self, calls: int, period: float):
+        self.calls = calls
+        self.period = period
+        self.timestamps = []
+        self.lock = threading.Lock()
+
+    def wait(self):
+        with self.lock:
+            while True:
+                now = time.time()
+                self.timestamps = [t for t in self.timestamps if now - t < self.period]
+                if len(self.timestamps) < self.calls:
+                    self.timestamps.append(now)
+                    return
+                wait_time = self.timestamps[0] + self.period - now
+                if wait_time > 0:
+                    time.sleep(wait_time)
+
+
+def is_retryable_exception(exception):
+    """
+    判断异常是否需要重试
+    """
+    if isinstance(exception, OpenApiException):
+        # 301600: out of minute kline begin date - 数据超限，不重试
+        # 使用 getattr 避免 LSP 或版本差异导致属性不存在报错
+        code = getattr(exception, 'code', None)
+        if code == 301600:
+            return False
+    return True
 
 
 # === 性能监控装饰器 ===
@@ -56,6 +94,8 @@ class ExchangeChangQiao(Exchange):
         # 线程池配置
         # 建议设置在 8-16 之间。过高可能导致 API 触发流控限制 (Rate Limit)
         self.executor = ThreadPoolExecutor(max_workers=16)
+        # 初始化限流器 (10 QPS)
+        self.rate_limiter = RateLimiter(calls=3, period=1.0)
 
     def default_code(self) -> str:
         return "TSLA.US"
@@ -119,6 +159,23 @@ class ExchangeChangQiao(Exchange):
             LogUtil.info(f"Error checking trading session: {e}")
             return False
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10),
+           retry=retry_if_exception(is_retryable_exception))
+    def _fetch_candlesticks_api(self, symbol, period, adjust_type, count, time_cursor, trade_sessions):
+        """
+        带限流和重试的 API 调用
+        """
+        self.rate_limiter.wait()
+        return self.quote_ctx.history_candlesticks_by_offset(
+            symbol=symbol,
+            period=period,
+            adjust_type=adjust_type,
+            forward=False,  # 向前追溯
+            count=count,
+            time=time_cursor,
+            trade_sessions=trade_sessions
+        )
+
     def _fetch_segment_data(self, code, period, adjust, end_dt, start_dt_limit):
         """
         [内部并发任务] 获取特定时间片段的数据
@@ -126,8 +183,6 @@ class ExchangeChangQiao(Exchange):
         """
         segment_candles = []
         current_cursor = end_dt
-        retry_count = 0
-        max_retries = 3
 
         # 确保 limit 是带时区的
         tz = pytz.timezone("Asia/Shanghai")
@@ -137,23 +192,22 @@ class ExchangeChangQiao(Exchange):
         while True:
             try:
                 # 核心 API 调用
-                candlesticks = self.quote_ctx.history_candlesticks_by_offset(
+                candlesticks = self._fetch_candlesticks_api(
                     symbol=code,
                     period=period,
                     adjust_type=adjust,
-                    forward=False,  # 向前追溯
-                    count=1000,  # 单次最大条数
-                    time=current_cursor,
+                    count=1000,
+                    time_cursor=current_cursor,
                     trade_sessions=TradeSessions.Intraday
                 )
-                retry_count = 0  # 成功重置计数
             except Exception as e:
-                retry_count += 1
-                if retry_count > max_retries:
+                # tenacity 重试失败或遇到不可重试异常
+                err_code = getattr(e, 'code', None)
+                if isinstance(e, OpenApiException) and err_code == 301600:
+                    LogUtil.warning(f"Data limit reached (301600) for {code}, stopping segment.")
+                else:
                     LogUtil.error(f"API Retry failed for segment {end_dt}: {e}")
-                    break
-                time.sleep(0.5 * retry_count)  # 退避重试
-                continue
+                break
 
             if not candlesticks:
                 break
