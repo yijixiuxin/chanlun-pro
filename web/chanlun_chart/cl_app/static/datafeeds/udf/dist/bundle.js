@@ -68,6 +68,67 @@
             if (periodParams.firstDataRequest !== undefined) requestParams.firstDataRequest = periodParams.firstDataRequest;
             if (symbolInfo.currency_code !== undefined) requestParams.currencyCode = symbolInfo.currency_code;
             if (symbolInfo.unit_id !== undefined) requestParams.unitId = symbolInfo.unit_id;
+
+            const res_key = requestParams["symbol"].toString().toLowerCase() +
+                requestParams["resolution"].toString().toLowerCase();
+
+            // --- 1. 获取缓存 ---
+            const cachedData = this.bars_result.get(res_key);
+
+            // --- 2. 缓存策略判断 ---
+            if (cachedData && cachedData.bars && cachedData.bars.length > 0) {
+                const allBars = cachedData.bars;
+                const lastBarTimeSec = allBars[allBars.length - 1].time / 1000;
+                const firstBarTimeSec = allBars[0].time / 1000;
+                const { to } = periodParams;
+
+                // [判断 A: 历史数据请求]
+                // 如果请求的结束时间 (to) 小于等于缓存的最后时间，说明是在看历史，或者切换周期
+                // 这种情况下，绝对使用缓存，防止重复请求
+                const isHistoryRequest = to <= lastBarTimeSec;
+
+                // [判断 B: 增量/脉冲请求]
+                // 如果请求的是"未来"的时间，通常是 DataPulseProvider 在轮询
+                // 我们必须允许这次网络请求通过，否则永远拿不到新数据
+                const isPulseRequest = !isHistoryRequest;
+
+                // [特殊情况]: 虽然是历史请求，但是请求的时间范围完全在我们的缓存之前
+                // 说明已经滑到最左边了，没有更多数据了
+                if (to < firstBarTimeSec) {
+                    return Promise.resolve({
+                        bars: [],
+                        meta: { noData: true }
+                    });
+                }
+
+                // [核心逻辑修正]
+                // 只有在确定是“纯历史”请求时，才拦截并返回缓存。
+                // 如果是脉冲请求(isPulseRequest为true)，则跳过此块，直接走下方的网络请求。
+                if (isHistoryRequest) {
+                    //console.log(`[Cache Hit] Key: ${res_key} | Action: Serving from RAM`);
+
+                    // [修正问题 1: 数据不全]
+                    // 不要使用 from 进行过滤！只过滤 to。
+                    // 返回 to 之前的所有数据，TradingView 会自己裁剪它需要的部分。
+                    // 这样解决了“反复切换图表数据变少”的问题。
+                    const slicedBars = allBars.filter(b => (b.time / 1000) <= to);
+
+                    // 构造返回对象
+                    const result = {
+                        ...cachedData,
+                        bars: slicedBars,
+                        meta: {
+                            // 只有当切片结果为空，且我们真的没有更早的数据时，才报 noData
+                            noData: slicedBars.length === 0 && to < firstBarTimeSec,
+                        }
+                    };
+                    return Promise.resolve(result);
+                }
+                // 否则：继续向下执行，发起 fetch，获取最新数据并合并
+                // console.log(`[Cache Bypass] Key: ${res_key} | Action: Fetching updates...`);
+            }
+
+            // --- 3. 发起网络请求 (无缓存 或 需要增量更新) ---
             return new Promise(async (resolve, reject) => {
                 try {
                     const initialResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
