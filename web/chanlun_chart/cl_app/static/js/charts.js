@@ -207,7 +207,7 @@ class ChartManager {
             this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
             this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
             this.chart.onIntervalChanged().subscribe(null, (i) => this.handleIntervalChange(i));
-            this.chart.onDataLoaded().subscribe(null, () => { this.clear_draw_chanlun(); setTimeout(() => this.debouncedDrawChanlun(), 200); }, true);
+            this.chart.onDataLoaded().subscribe(null, () => { setTimeout(() => this.debouncedDrawChanlun(), 200); }, true);
             this.chart.dataReady(() => this.handleDataReady());
             this.widget.subscribe("onTick", () => this.handleTick());
             this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
@@ -232,8 +232,8 @@ class ChartManager {
         this.clear_draw_chanlun();
         this.debouncedDrawChanlun();
     }
-    handleDataReady() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
-    handleTick() { this.clear_draw_chanlun(); this.debouncedDrawChanlun(); }
+    handleDataReady() { this.debouncedDrawChanlun(); }
+    handleTick() { this.debouncedDrawChanlun(); }
     handleVisibleRangeChange() { this.debouncedDrawChanlun(); }
 
     safeRemove(entityId) {
@@ -301,6 +301,75 @@ class ChartManager {
 
 
 
+    makeKey(item) {
+        if (Array.isArray(item.points)) {
+            return item.points.map(p => `${p.time}_${p.price}`).join('_') + `_${item.linestyle || 0}`;
+        } else if (item.points?.time !== undefined) {
+            return `${item.points.time}_${item.points.price}_${item.text || ''}`;
+        }
+        return JSON.stringify(item);
+    }
+
+    getUniqueRenderList(sourceList) {
+        if (!sourceList || !Array.isArray(sourceList)) return [];
+        const finished = [];
+        const unfinished = [];
+        sourceList.forEach(item => {
+            if (item.linestyle == '1' || item.linestyle == 1) {
+                unfinished.push(item);
+            } else {
+                finished.push(item);
+            }
+        });
+        if (unfinished.length > 0) {
+            finished.push(unfinished[unfinished.length - 1]);
+        }
+        return finished;
+    }
+
+    reconcile(type, sourceList, from, symbolKey, createFunc, useUnique = true) {
+        const container = this.obj_charts[symbolKey][type];
+        let renderList = sourceList || [];
+        if (useUnique) {
+            renderList = this.getUniqueRenderList(renderList);
+        }
+
+        const newKeys = new Set();
+        const itemsToProcess = [];
+
+        renderList.forEach(item => {
+            const itemTime = Array.isArray(item.points) ? item.points[0]?.time : item.points?.time;
+            if (itemTime >= from) {
+                const key = this.makeKey(item);
+                newKeys.add(key);
+                itemsToProcess.push({ item, key, time: itemTime });
+            }
+        });
+
+        // 1. Remove items not in new list or outside window
+        for (let i = container.length - 1; i >= 0; i--) {
+            const existing = container[i];
+            if (!newKeys.has(existing.key) || existing.time < from) {
+                this.safeRemove(existing.id);
+                container.splice(i, 1);
+            }
+        }
+
+        // 2. Create new items
+        const existingKeys = new Set(container.map(item => item.key));
+        itemsToProcess.forEach(({ item, key, time }) => {
+            if (!existingKeys.has(key)) {
+                const id = createFunc(item);
+                container.push({
+                    time: time,
+                    key: key,
+                    isUnfinished: (item.linestyle == '1' || item.linestyle == 1),
+                    id: id
+                });
+            }
+        });
+    }
+
     initChartContainer(symbolKey) {
         if (!this.obj_charts[symbolKey]) {
             this.obj_charts[symbolKey] = {};
@@ -320,7 +389,7 @@ class ChartManager {
     drawChartElements(chartData, currentInterval) {
         const { symbolKey, barsResult, from } = chartData;
         if (!barsResult) return;
-        const chartContainer = this.initChartContainer(symbolKey);
+        this.initChartContainer(symbolKey);
 
         const safeCreate = (promise, type) => {
             if (promise && typeof promise.then === 'function') {
@@ -332,203 +401,16 @@ class ChartManager {
             return promise;
         };
 
-        // 1. 清理画布上旧的“未完成”元素
-        const removeOldUnfinished = (containerList) => {
-            if (!containerList || containerList.length === 0) return;
-            // 倒序遍历以安全删除
-            for (let i = containerList.length - 1; i >= 0; i--) {
-                if (containerList[i].isUnfinished) {
-                    this.safeRemove(containerList[i].id);
-                    containerList.splice(i, 1);
-                }
-            }
-        };
-
-        // 2. 清理数据源：分离已完成和未完成，未完成的只保留最后一个(最新的)
-        const getUniqueRenderList = (sourceList) => {
-            if (!sourceList || !Array.isArray(sourceList)) return [];
-            const finished = [];
-            const unfinished = [];
-
-            sourceList.forEach(item => {
-                // 兼容字符串和数字类型的 linestyle
-                if (item.linestyle == '1' || item.linestyle == 1) {
-                    unfinished.push(item);
-                } else {
-                    finished.push(item);
-                }
-            });
-
-            // 关键：如果有多个未完成的，只取最后一个（最新的状态）
-            if (unfinished.length > 0) {
-                finished.push(unfinished[unfinished.length - 1]);
-            }
-            return finished;
-        };
-        let stats = { bis: 0, xds: 0, zsds: 0, skipped_bis: 0 };
-
-        // 轻量 key 生成函数，替代昂贵的 JSON.stringify
-        const makeKey = (item) => {
-            if (Array.isArray(item.points)) {
-                // 线段/笔: 两个端点 + linestyle
-                const p = item.points;
-                return `${p[0]?.time}_${p[0]?.price}_${p[1]?.time}_${p[1]?.price}_${item.linestyle || 0}`;
-            } else if (item.points?.time !== undefined) {
-                // 背驰/买卖点: 单点
-                return `${item.points.time}_${item.points.price}_${item.text || ''}`;
-            }
-            return JSON.stringify(item); // fallback
-        };
-
-        // 为每个元素类型构建 Set 索引，实现 O(1) 查找
-        const keySets = {};
-        for (const type of CHART_CONFIG.CHART_TYPES) {
-            if (chartContainer[type]) {
-                keySets[type] = new Set(chartContainer[type].map(item => item.key));
-            } else {
-                keySets[type] = new Set();
-            }
-        }
-
-        // 分型 (FX) 通常是点，不涉及 linestyle 动态延伸问题，保持原样
-        if (barsResult.fxs) { barsResult.fxs.forEach((fx) => { if (fx.points?.[0]?.time >= from) { const key = makeKey(fx); if (!keySets.fxs.has(key)) { keySets.fxs.add(key); chartContainer.fxs.push({ time: fx.points[0].time, key, id: safeCreate(ChartUtils.createFxShape(this.chart, fx), 'fx') }); } } }); }
-
-        // --- 修复 笔 (Bis) ---
-        if (barsResult.bis) {
-            removeOldUnfinished(chartContainer.bis);
-            const renderList = getUniqueRenderList(barsResult.bis);
-
-            renderList.forEach((bi) => {
-                if (bi.points?.[0]?.time >= from) {
-                    const key = makeKey(bi);
-                    if (!keySets.bis.has(key)) {
-                        keySets.bis.add(key);
-                        const isUnfinished = (bi.linestyle == '1' || bi.linestyle == 1);
-                        chartContainer.bis.push({
-                            time: bi.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createLineShape(this.chart, bi, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi')
-                        });
-                        stats.bis++;
-                    }
-                } else {
-                    stats.skipped_bis++;
-                }
-            });
-        }
-
-        // --- 修复 线段 (Xds) ---
-        if (barsResult.xds) {
-            removeOldUnfinished(chartContainer.xds);
-            const renderList = getUniqueRenderList(barsResult.xds);
-            renderList.forEach((xd) => {
-                if (xd.points?.[0]?.time >= from) {
-                    const key = makeKey(xd);
-                    if (!keySets.xds.has(key)) {
-                        keySets.xds.add(key);
-                        const isUnfinished = (xd.linestyle == '1' || xd.linestyle == 1);
-                        chartContainer.xds.push({
-                            time: xd.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createLineShape(this.chart, xd, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd')
-                        });
-                        stats.xds++;
-                    }
-                }
-            });
-        }
-
-        // --- 修复 走势段 (Zsds) ---
-        if (barsResult.zsds) {
-            removeOldUnfinished(chartContainer.zsds);
-            const renderList = getUniqueRenderList(barsResult.zsds);
-            renderList.forEach((zsd) => {
-                if (zsd.points?.[0]?.time >= from) {
-                    const key = makeKey(zsd);
-                    if (!keySets.zsds.has(key)) {
-                        keySets.zsds.add(key);
-                        const isUnfinished = (zsd.linestyle == '1' || zsd.linestyle == 1);
-                        chartContainer.zsds.push({
-                            time: zsd.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createLineShape(this.chart, zsd, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd')
-                        });
-                        stats.zsds++;
-                    }
-                }
-            });
-        }
-
-        // --- 修复 笔中枢 (Bi_Zss) ---
-        if (barsResult.bi_zss) {
-            removeOldUnfinished(chartContainer.bi_zss);
-            const renderList = getUniqueRenderList(barsResult.bi_zss);
-            renderList.forEach((bi_zs) => {
-                if (bi_zs.points?.[0]?.time >= from) {
-                    const key = makeKey(bi_zs);
-                    if (!keySets.bi_zss.has(key)) {
-                        keySets.bi_zss.add(key);
-                        const isUnfinished = (bi_zs.linestyle == '1' || bi_zs.linestyle == 1);
-                        chartContainer.bi_zss.push({
-                            time: bi_zs.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createZhongshuShape(this.chart, bi_zs, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs')
-                        });
-                    }
-                }
-            });
-        }
-
-        // --- 修复 线段中枢 (Xd_Zss) ---
-        if (barsResult.xd_zss) {
-            removeOldUnfinished(chartContainer.xd_zss);
-            const renderList = getUniqueRenderList(barsResult.xd_zss);
-            renderList.forEach((xd_zs) => {
-                if (xd_zs.points?.[0]?.time >= from) {
-                    const key = makeKey(xd_zs);
-                    if (!keySets.xd_zss.has(key)) {
-                        keySets.xd_zss.add(key);
-                        const isUnfinished = (xd_zs.linestyle == '1' || xd_zs.linestyle == 1);
-                        chartContainer.xd_zss.push({
-                            time: xd_zs.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createZhongshuShape(this.chart, xd_zs, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs')
-                        });
-                    }
-                }
-            });
-        }
-
-        // --- 修复 走势段中枢 (Zsd_Zss) ---
-        if (barsResult.zsd_zss) {
-            removeOldUnfinished(chartContainer.zsd_zss);
-            const renderList = getUniqueRenderList(barsResult.zsd_zss);
-            renderList.forEach((zsd_zs) => {
-                if (zsd_zs.points?.[0]?.time >= from) {
-                    const key = makeKey(zsd_zs);
-                    if (!keySets.zsd_zss.has(key)) {
-                        keySets.zsd_zss.add(key);
-                        const isUnfinished = (zsd_zs.linestyle == '1' || zsd_zs.linestyle == 1);
-                        chartContainer.zsd_zss.push({
-                            time: zsd_zs.points[0].time,
-                            key,
-                            isUnfinished: isUnfinished,
-                            id: safeCreate(ChartUtils.createZhongshuShape(this.chart, zsd_zs, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs')
-                        });
-                    }
-                }
-            });
-        }
-
-        if (barsResult.bcs) { barsResult.bcs.forEach((bc) => { if (bc.points?.time >= from) { const key = makeKey(bc); if (!keySets.bcs.has(key)) { keySets.bcs.add(key); chartContainer.bcs.push({ time: bc.points.time, key, id: safeCreate(ChartUtils.createBcShape(this.chart, bc), 'bc') }); } } }); }
-        if (barsResult.mmds) { barsResult.mmds.forEach((mmd) => { if (mmd.points?.time >= from) { const key = makeKey(mmd); if (!keySets.mmds.has(key)) { keySets.mmds.add(key); chartContainer.mmds.push({ time: mmd.points.time, key, id: safeCreate(ChartUtils.createMmdShape(this.chart, mmd), 'mmd') }); } } }); }
-
-
+        // Reconcile each type
+        this.reconcile('fxs', barsResult.fxs, from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
+        this.reconcile('bis', barsResult.bis, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi'));
+        this.reconcile('xds', barsResult.xds, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
+        this.reconcile('zsds', barsResult.zsds, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
+        this.reconcile('bi_zss', barsResult.bi_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs'));
+        this.reconcile('xd_zss', barsResult.xd_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
+        this.reconcile('zsd_zss', barsResult.zsd_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs'));
+        this.reconcile('bcs', barsResult.bcs, from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
+        this.reconcile('mmds', barsResult.mmds, from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
     }
 
     draw_chanlun() {
