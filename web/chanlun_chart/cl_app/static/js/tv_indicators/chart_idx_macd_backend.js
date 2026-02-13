@@ -56,7 +56,7 @@ var TvIdxMACDBackend = (function () {
       return {
         name: "MACD_HTF",
         metainfo: {
-          _metainfoVersion: 53,
+          _metainfoVersion: 54,
           id: "MACD_HTF@tv-basicstudies-1",
           name: "MACD_HTF",
           description: "MACD_HTF",
@@ -88,10 +88,10 @@ var TvIdxMACDBackend = (function () {
             palettes: {
               paletteHist: {
                 colors: {
-                  0: { color: "#26a69a", width: 1, style: 1 },
-                  1: { color: "#b2dfdb", width: 1, style: 1 },
-                  2: { color: "#ffcdd2", width: 1, style: 1 },
-                  3: { color: "#ef5350", width: 1, style: 1 },
+                  0: { color: "#ef5350", width: 1, style: 1 },
+                  1: { color: "#ffcdd2", width: 1, style: 1 },
+                  2: { color: "#b2dfdb", width: 1, style: 1 },
+                  3: { color: "#26a69a", width: 1, style: 1 },
                 }
               }
             },
