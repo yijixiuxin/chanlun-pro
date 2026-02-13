@@ -3,11 +3,11 @@ var TvIdxMACDBL = (function () {
     idx: function (PineJS) {
       return {
         name: "MACD背离版+金死叉",
-        metainfo: {
-          _metainfoVersion: 53,
-          id: "CustomIndicatorsMACDBL@tv-basicstudies-1",
-          description: "SQ@MACD背离版+金死叉",
-          shortDescription: "MACD背离版+金死叉",
+          metainfo: {
+            _metainfoVersion: 54,
+            id: "CustomIndicatorsMACDBL@tv-basicstudies-1",
+            description: "SQ@MACD背离版+金死叉",
+            shortDescription: "MACD背离版+金死叉",
           is_price_study: false,
           isCustomIndicator: true,
           plots: [
@@ -15,7 +15,12 @@ var TvIdxMACDBL = (function () {
               id: "plot_hist",
               type: "line",
               target: "plot_macd_bl",
-              palette: "paletteHistColorer",
+            },
+            {
+              id: "plot_hist_color",
+              type: "colorer",
+              target: "plot_hist",
+              palette: "paletteHist",
             },
             {
               id: "plot_macd",
@@ -48,10 +53,25 @@ var TvIdxMACDBL = (function () {
               target: "plot_macd_bl",
             },
           ],
+          palettes: {
+            paletteHist: {
+              colors: {
+                0: { name: "UP_GROW" },
+                1: { name: "UP_FALL" },
+                2: { name: "DOWN_GROW" },
+                3: { name: "DOWN_FALL" },
+              },
+            },
+          },
           defaults: {
             palettes: {
-              paletteHistColorer: {
-                colors: [{ color: "#26A69A" }, { color: "#F44336" }],
+              paletteHist: {
+                colors: {
+                  0: { color: "#ef5350", width: 1, style: 1 },
+                  1: { color: "#ffcdd2", width: 1, style: 1 },
+                  2: { color: "#b2dfdb", width: 1, style: 1 },
+                  3: { color: "#26a69a", width: 1, style: 1 },
+                },
               },
             },
             styles: {
@@ -62,7 +82,6 @@ var TvIdxMACDBL = (function () {
                 trackPrice: false,
                 transparency: 0,
                 visible: true,
-                color: "#26A69A", // 增长绿柱
               },
               plot_macd: {
                 linestyle: 0,
@@ -71,7 +90,7 @@ var TvIdxMACDBL = (function () {
                 trackPrice: false,
                 transparency: 0,
                 visible: true,
-                color: "#2962FF", // MACD线
+                color: "#2962FF",
               },
               plot_signal: {
                 linestyle: 0,
@@ -80,7 +99,7 @@ var TvIdxMACDBL = (function () {
                 trackPrice: false,
                 transparency: 0,
                 visible: true,
-                color: "#FF6D00", // 信号线
+                color: "#FF6D00",
               },
               plot_crossGold: {
                 color: "#FF5252",
@@ -90,22 +109,22 @@ var TvIdxMACDBL = (function () {
                 visible: true,
               },
               plot_crossDead: {
-                color: "#00FF00", // 死叉标识
+                color: "#00FF00",
                 textColor: "#2196F3",
                 plottype: "shape_xcross",
                 location: "Absolute",
                 visible: true,
               },
               plot_bullShape: {
-                color: "#4CAF50",
-                textColor: "#4CAF50",
+                color: "#F44336",
+                textColor: "#F44336",
                 plottype: "shape_triangle_down",
                 location: "Absolute",
                 visible: true,
               },
               plot_bearShape: {
-                color: "#F44336",
-                textColor: "#F44336",
+                color: "#4CAF50",
+                textColor: "#4CAF50",
                 plottype: "shape_triangle_up",
                 location: "Absolute",
                 visible: true,
@@ -119,11 +138,6 @@ var TvIdxMACDBL = (function () {
               plotDead: true,
               plotBull: true,
               plotBear: true,
-            },
-          },
-          palettes: {
-            paletteHistColorer: {
-              colors: [{ name: "UP" }, { name: "DOWN" }],
             },
           },
           styles: {
@@ -143,13 +157,11 @@ var TvIdxMACDBL = (function () {
               title: "金叉标识",
               isHidden: false,
               location: "Absolute",
-              // text: "Gold",
             },
             plot_crossDead: {
               title: "死叉标识",
               isHidden: false,
               location: "Absolute",
-              // text: "Dead",
             },
             plot_bullShape: {
               title: "底背离标识",
@@ -467,6 +479,14 @@ var TvIdxMACDBL = (function () {
             const crossJudgeGold = plotGold && crossGold ? macd.get(0) : NaN;
             const crossJudgeDead = plotDead && crossDead ? macd.get(0) : NaN;
 
+            let colorIndex = 0;
+            const v_hist = hist.get(0);
+            const prev_hist = hist.get(1);
+            if (!isNaN(v_hist)) {
+              if (v_hist >= 0) colorIndex = v_hist >= prev_hist ? 0 : 1;
+              else colorIndex = v_hist > prev_hist ? 2 : 3;
+            }
+
             // ==================== 背离检测逻辑 ====================
             /**
              * 背离检测的核心逻辑：
@@ -533,12 +553,13 @@ var TvIdxMACDBL = (function () {
             // 返回所有指标值
             return [
               hist.get(0), // 0: 直方图
-              macd.get(0), // 1: MACD线
-              signal.get(0), // 2: 信号线
-              crossJudgeGold, // 3: 金叉标识
-              crossJudgeDead, // 4: 死叉标识
-              bullShape, // 5: 底背离标识
-              bearShape, // 6: 顶背离标识
+              colorIndex, // 1: 颜色索引
+              macd.get(0), // 2: MACD线
+              signal.get(0), // 3: 信号线
+              crossJudgeGold, // 4: 金叉标识
+              crossJudgeDead, // 5: 死叉标识
+              bullShape, // 6: 底背离标识
+              bearShape, // 7: 顶背离标识
             ];
           };
         },
