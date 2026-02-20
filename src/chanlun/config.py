@@ -15,7 +15,7 @@ DATA_PATH = "D:/chanlun_pro"
 
 # 代理服务器配置
 PROXY_HOST = '127.0.0.1'
-PROXY_PORT = 7890
+PROXY_PORT = 10808
 
 # 数据库配置
 DB_TYPE = "mysql"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填写 DB_DATABASE 即可
@@ -70,8 +70,8 @@ TQ_SP_ACCOUNT = ''
 TQ_SP_PWD = ''
 
 # 币安交易所配置
-BINANCE_APIKEY = ''
-BINANCE_SECRET = ''
+BINANCE_APIKEY = '1ToQGmip0dXDkdeJw8Ykvd68kIwkSQE8YyrBWoJC8pbaMITyWhvy8DtqTYCgpOHX'
+BINANCE_SECRET = 'WLzOM3IBHu4v9htKsFcQb5KOnsi4FcFplRtgBkaKHzCD5tWuleMbqomJVhE3Bizh'
 
 # ZB交易所配置
 ZB_APIKEY = ''
