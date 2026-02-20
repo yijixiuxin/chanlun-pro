@@ -15,6 +15,8 @@ class BiCalculator:
         self.pending_bi: Optional[BI] = None
         self.bi_index: int = 0
         self.cl_klines: List[CLKline] = []
+        # Snapshot of the last processed kline: (index, high, low)
+        self._last_kline_snapshot: Optional[tuple] = None
 
     def _check_stroke_validity(self, fx1: FX, fx2: FX) -> bool:
         """检查两个分型是否能构成有效的一笔。"""
@@ -46,11 +48,15 @@ class BiCalculator:
             return
 
         is_incremental = bool(self.cl_klines)
-        if is_incremental and cl_klines[-1].index <= self.cl_klines[-1].index:
-            # 即使 index 相同，Tick 更新可能改变了最后一根K线的高低点
-            last_new = cl_klines[-1]
-            last_old = self.cl_klines[-1]
-            if last_new.h == last_old.h and last_new.l == last_old.l:
+        # Use snapshot to check for changes instead of object comparison
+        if is_incremental and self._last_kline_snapshot:
+            current_last = cl_klines[-1]
+            last_idx, last_h, last_l = self._last_kline_snapshot
+            
+            # If index is same or older, AND values haven't changed, skip
+            if (current_last.index <= last_idx and 
+                current_last.h == last_h and 
+                current_last.l == last_l):
                 return
 
         self.cl_klines = cl_klines
@@ -196,6 +202,11 @@ class BiCalculator:
 
             # 确保状态正确
             self.bis[-1].end.done = False
+
+        # Update snapshot
+        if self.cl_klines:
+            last_k = self.cl_klines[-1]
+            self._last_kline_snapshot = (last_k.index, last_k.h, last_k.l)
 
     def _find_fractal(self, k1: CLKline, k2: CLKline, k3: CLKline) -> Optional[FX]:
         """

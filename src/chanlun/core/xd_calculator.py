@@ -23,6 +23,8 @@ class XdCalculator:
         """
         self.config = config
         self.xds: List[XD] = []
+        # Snapshot of the last processed BI: (index, end_val)
+        self._last_bi_snapshot: Optional[tuple] = None
 
     def _check_bi_overlap(self, bi1: BI, bi2: BI) -> bool:
         """
@@ -250,9 +252,14 @@ class XdCalculator:
         start_index_for_delta = 0
 
         # 优化：如果输入数据没有新笔，则不重新计算
-        if self.xds and all_bis and self.xds[-1].end_line == all_bis[-1]:
-            return []
-
+        # Use snapshot check instead of object comparison
+        if self.xds and all_bis and self._last_bi_snapshot:
+            current_last_bi = all_bis[-1]
+            last_idx, last_end_val = self._last_bi_snapshot
+            if (current_last_bi.index == last_idx and 
+                abs(current_last_bi.end.val - last_end_val) < 1e-9):
+                return []
+        
         # --- 状态处理：确定本次计算的起点 ---
         start_bi_index = 0
         if self.xds:
@@ -622,6 +629,19 @@ class XdCalculator:
                     self.xds.append(pending_xd)
                 break
         if is_incremental:
+            # Update snapshot
+            if self.xds:
+                last_bi_used = self.xds[-1].end_line
+                # We need the last BI from the input list, not just the one used in the segment
+                if all_bis:
+                    last_bi = all_bis[-1]
+                    self._last_bi_snapshot = (last_bi.index, last_bi.end.val)
+            
             return self.xds[start_index_for_delta:]
         else:
+            # Update snapshot
+            if all_bis:
+                last_bi = all_bis[-1]
+                self._last_bi_snapshot = (last_bi.index, last_bi.end.val)
+
             return self.xds
