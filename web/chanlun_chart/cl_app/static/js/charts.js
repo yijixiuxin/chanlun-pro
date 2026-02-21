@@ -1,3 +1,4 @@
+window.cl_show_config = JSON.parse(localStorage.getItem('cl_show_config')) || { fx: true, bi: true, xd: true, zsd: true, zs: true, bc: true, mmd: true };
 // -----------------------------------------------------------------------
 // 文件名: charts.js
 // 修复版: V48_Registry_And_Fix
@@ -184,6 +185,43 @@ class ChartManager {
 
         this.widget.headerReady().then(function () {
             // ... 原有按钮保持不变 ...
+            
+            
+            
+            var btnDisplay = global_widget.createButton();
+            btnDisplay.textContent = "缠论显示设置 ▾";
+            btnDisplay.addEventListener("click", function () {
+                let html = `
+                    <div style="padding: 15px; line-height: 28px; font-size: 14px;">
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_fx" ${window.cl_show_config.fx ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 分型</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bi" ${window.cl_show_config.bi ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 笔</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_xd" ${window.cl_show_config.xd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 线段</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_zsd" ${window.cl_show_config.zsd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 走势段</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_zs" ${window.cl_show_config.zs ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 中枢</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bc" ${window.cl_show_config.bc ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 背驰</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_mmd" ${window.cl_show_config.mmd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 买卖点</label>
+                    </div>
+                `;
+                layer.open({
+                    type: 1,
+                    title: '缠论显示/隐藏',
+                    area: ['200px', '320px'],
+                    shade: 0,
+                    offset: 'rt',
+                    content: html,
+                    success: function() {
+                        const keys = ['fx', 'bi', 'xd', 'zsd', 'zs', 'bc', 'mmd'];
+                        keys.forEach(k => {
+                            $('#cl_cb_' + k).change(function() {
+                                window.cl_show_config[k] = $(this).is(':checked');
+                                localStorage.setItem('cl_show_config', JSON.stringify(window.cl_show_config));
+                                self.debouncedDrawChanlun();
+                            });
+                        });
+                    }
+                });
+            });
+
             var buttonReload = global_widget.createButton();
             buttonReload.textContent = "重新加载数据";
             buttonReload.addEventListener("click", function () { global_widget.resetCache(); global_widget.activeChart().resetData(); });
@@ -402,15 +440,15 @@ class ChartManager {
         };
 
         // Reconcile each type
-        this.reconcile('fxs', barsResult.fxs, from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
-        this.reconcile('bis', barsResult.bis, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi'));
-        this.reconcile('xds', barsResult.xds, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
-        this.reconcile('zsds', barsResult.zsds, from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
-        this.reconcile('bi_zss', barsResult.bi_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs'));
-        this.reconcile('xd_zss', barsResult.xd_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
-        this.reconcile('zsd_zss', barsResult.zsd_zss, from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs'));
-        this.reconcile('bcs', barsResult.bcs, from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
-        this.reconcile('mmds', barsResult.mmds, from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
+        this.reconcile('fxs', window.cl_show_config.fx ? barsResult.fxs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
+        this.reconcile('bis', window.cl_show_config.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi'));
+        this.reconcile('xds', window.cl_show_config.xd ? barsResult.xds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
+        this.reconcile('zsds', window.cl_show_config.zsd ? barsResult.zsds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
+        this.reconcile('bi_zss', window.cl_show_config.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs'));
+        this.reconcile('xd_zss', window.cl_show_config.zs ? barsResult.xd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
+        this.reconcile('zsd_zss', window.cl_show_config.zs ? barsResult.zsd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs'));
+        this.reconcile('bcs', window.cl_show_config.bc ? barsResult.bcs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
+        this.reconcile('mmds', window.cl_show_config.mmd ? barsResult.mmds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
     }
 
     draw_chanlun() {
