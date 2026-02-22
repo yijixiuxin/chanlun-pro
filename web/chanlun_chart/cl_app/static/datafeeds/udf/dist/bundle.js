@@ -1,14 +1,21 @@
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-        typeof define === 'function' && define.amd ? define(['exports'], factory) :
-            (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Datafeeds = {}));
-})(this, (function (exports) {
-    'use strict';
+    typeof define === 'function' && define.amd ? define(['exports'], factory) :
+    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Datafeeds = {}));
+})(this, (function (exports) { 'use strict';
 
-    function logMessage(message) { }
+    /**
+     * If you want to enable logs from datafeed set it to `true`
+     */
+    function logMessage(message) {
+    }
     function getErrorMessage(error) {
-        if (error === undefined) return '';
-        else if (typeof error === 'string') return error;
+        if (error === undefined) {
+            return '';
+        }
+        else if (typeof error === 'string') {
+            return error;
+        }
         return error.message;
     }
 
@@ -21,29 +28,43 @@
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'quotes', { symbols: symbols })
                     .then((response) => {
-                        if (response.s === 'ok') resolve(response.d);
-                        else reject(response.errmsg);
-                    }).catch((error) => {
-                        reject(`network error: ${getErrorMessage(error)}`);
-                    });
+                    if (response.s === 'ok') {
+                        resolve(response.d);
+                    }
+                    else {
+                        reject(response.errmsg);
+                    }
+                })
+                    .catch((error) => {
+                    const errorMessage = getErrorMessage(error);
+                    reject(`network error: ${errorMessage}`);
+                });
             });
         }
     }
 
     class Requester {
         constructor(headers) {
-            if (headers) this._headers = headers;
+            if (headers) {
+                this._headers = headers;
+            }
         }
         sendRequest(datafeedUrl, urlPath, params) {
             if (params !== undefined) {
                 const paramKeys = Object.keys(params);
-                if (paramKeys.length !== 0) urlPath += '?';
+                if (paramKeys.length !== 0) {
+                    urlPath += '?';
+                }
                 urlPath += paramKeys.map((key) => {
                     return `${encodeURIComponent(key)}=${encodeURIComponent(params[key].toString())}`;
                 }).join('&');
             }
+            // Send user cookies if the URL is on the same origin as the calling script.
             const options = { credentials: 'same-origin' };
-            if (this._headers !== undefined) options.headers = this._headers;
+            if (this._headers !== undefined) {
+                options.headers = this._headers;
+            }
+            // eslint-disable-next-line no-restricted-globals
             return fetch(`${datafeedUrl}/${urlPath}`, options)
                 .then((response) => response.text())
                 .then((responseTest) => JSON.parse(responseTest));
@@ -64,71 +85,18 @@
                 from: periodParams.from,
                 to: periodParams.to,
             };
-            if (periodParams.countBack !== undefined) requestParams.countback = periodParams.countBack;
-            if (periodParams.firstDataRequest !== undefined) requestParams.firstDataRequest = periodParams.firstDataRequest;
-            if (symbolInfo.currency_code !== undefined) requestParams.currencyCode = symbolInfo.currency_code;
-            if (symbolInfo.unit_id !== undefined) requestParams.unitId = symbolInfo.unit_id;
-
-            const res_key = requestParams["symbol"].toString().toLowerCase() +
-                requestParams["resolution"].toString().toLowerCase();
-
-            // --- 1. 获取缓存 ---
-            const cachedData = this.bars_result.get(res_key);
-
-            // --- 2. 缓存策略判断 ---
-            if (cachedData && cachedData.bars && cachedData.bars.length > 0) {
-                const allBars = cachedData.bars;
-                const lastBarTimeSec = allBars[allBars.length - 1].time / 1000;
-                const firstBarTimeSec = allBars[0].time / 1000;
-                const { to } = periodParams;
-
-                // [判断 A: 历史数据请求]
-                // 如果请求的结束时间 (to) 小于等于缓存的最后时间，说明是在看历史，或者切换周期
-                // 这种情况下，绝对使用缓存，防止重复请求
-                const isHistoryRequest = to <= lastBarTimeSec;
-
-                // [判断 B: 增量/脉冲请求]
-                // 如果请求的是"未来"的时间，通常是 DataPulseProvider 在轮询
-                // 我们必须允许这次网络请求通过，否则永远拿不到新数据
-                const isPulseRequest = !isHistoryRequest;
-
-                // [特殊情况]: 虽然是历史请求，但是请求的时间范围完全在我们的缓存之前
-                // 说明已经滑到最左边了，没有更多数据了
-                if (to < firstBarTimeSec) {
-                    return Promise.resolve({
-                        bars: [],
-                        meta: { noData: true }
-                    });
-                }
-
-                // [核心逻辑修正]
-                // 只有在确定是“纯历史”请求时，才拦截并返回缓存。
-                // 如果是脉冲请求(isPulseRequest为true)，则跳过此块，直接走下方的网络请求。
-                if (isHistoryRequest) {
-                    //console.log(`[Cache Hit] Key: ${res_key} | Action: Serving from RAM`);
-
-                    // [修正问题 1: 数据不全]
-                    // 不要使用 from 进行过滤！只过滤 to。
-                    // 返回 to 之前的所有数据，TradingView 会自己裁剪它需要的部分。
-                    // 这样解决了“反复切换图表数据变少”的问题。
-                    const slicedBars = allBars.filter(b => (b.time / 1000) <= to);
-
-                    // 构造返回对象
-                    const result = {
-                        ...cachedData,
-                        bars: slicedBars,
-                        meta: {
-                            // 只有当切片结果为空，且我们真的没有更早的数据时，才报 noData
-                            noData: slicedBars.length === 0 && to < firstBarTimeSec,
-                        }
-                    };
-                    return Promise.resolve(result);
-                }
-                // 否则：继续向下执行，发起 fetch，获取最新数据并合并
-                // console.log(`[Cache Bypass] Key: ${res_key} | Action: Fetching updates...`);
+            if (periodParams.countBack !== undefined) {
+                requestParams.countback = periodParams.countBack;
             }
-
-            // --- 3. 发起网络请求 (无缓存 或 需要增量更新) ---
+            if (periodParams.firstDataRequest !== undefined) {
+                requestParams.firstDataRequest = periodParams.firstDataRequest;
+            }
+            if (symbolInfo.currency_code !== undefined) {
+                requestParams.currencyCode = symbolInfo.currency_code;
+            }
+            if (symbolInfo.unit_id !== undefined) {
+                requestParams.unitId = symbolInfo.unit_id;
+            }
             return new Promise(async (resolve, reject) => {
                 try {
                     const initialResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
@@ -141,6 +109,7 @@
                 catch (e) {
                     if (e instanceof Error || typeof e === "string") {
                         const reasonString = getErrorMessage(e);
+                        // tslint:disable-next-line:no-console
                         console.warn(`HistoryProvider: getBars() failed, error=${reasonString}`);
                         reject(reasonString);
                     }
@@ -154,48 +123,71 @@
                     this._limitedServerResponse.maxResponseLength > 0 &&
                     this._limitedServerResponse.maxResponseLength === lastResultLength &&
                     requestParams.from < requestParams.to) {
-                    if (requestParams.countback) requestParams.countback = requestParams.countback - lastResultLength;
+                    // adjust request parameters for follow-up request
+                    if (requestParams.countback) {
+                        requestParams.countback =
+                            requestParams.countback - lastResultLength;
+                    }
                     if (this._limitedServerResponse.expectedOrder === "earliestFirst") {
                         requestParams.from = Math.round(result.bars[result.bars.length - 1].time / 1000);
-                    } else {
+                    }
+                    else {
                         requestParams.to = Math.round(result.bars[0].time / 1000);
                     }
                     const followupResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
                     const followupResult = this._processHistoryResponse(followupResponse, requestParams);
                     lastResultLength = followupResult.bars.length;
+                    // merge result with results collected so far
                     if (this._limitedServerResponse.expectedOrder === "earliestFirst") {
-                        if (followupResult.bars[0].time === result.bars[result.bars.length - 1].time) followupResult.bars.shift();
+                        if (followupResult.bars[0].time ===
+                            result.bars[result.bars.length - 1].time) {
+                            // Datafeed shouldn't include a value exactly matching the `to` timestamp but in case it does
+                            // we will remove the duplicate.
+                            followupResult.bars.shift();
+                        }
                         result.bars.push(...followupResult.bars);
-                    } else {
-                        if (followupResult.bars[followupResult.bars.length - 1].time === result.bars[0].time) followupResult.bars.pop();
+                    }
+                    else {
+                        if (followupResult.bars[followupResult.bars.length - 1].time ===
+                            result.bars[0].time) {
+                            // Datafeed shouldn't include a value exactly matching the `to` timestamp but in case it does
+                            // we will remove the duplicate.
+                            followupResult.bars.pop();
+                        }
                         result.bars.unshift(...followupResult.bars);
                     }
                 }
             }
             catch (e) {
+                /**
+                 * Error occurred during followup request. We won't reject the original promise
+                 * because the initial response was valid so we will return what we've got so far.
+                 */
                 if (e instanceof Error || typeof e === "string") {
                     const reasonString = getErrorMessage(e);
+                    // tslint:disable-next-line:no-console
                     console.warn(`HistoryProvider: getBars() warning during followup request, error=${reasonString}`);
                 }
             }
         }
-
         _processHistoryResponse(response, requestParams) {
             if (response.s !== "ok" && response.s !== "no_data") {
                 throw new Error(response.errmsg);
             }
             const bars = [];
-            const meta = { noData: false };
-
+            const meta = {
+                noData: false,
+            };
             if (response.s === "no_data") {
                 meta.noData = true;
                 meta.nextTime = response.nextTime;
-            } else {
+            }
+            else {
                 const volumePresent = response.v !== undefined;
                 const ohlPresent = response.o !== undefined;
                 for (let i = 0; i < response.t.length; ++i) {
                     const barValue = {
-                        time: response.t[i] * 1000, // K线强制转毫秒
+                        time: response.t[i] * 1000,
                         close: response.c[i],
                         open: response.c[i],
                         high: response.c[i],
@@ -211,149 +203,98 @@
                     }
                     bars.push(barValue);
                 }
-
+                // 设置保存的key
                 const res_key = requestParams["symbol"].toString().toLowerCase() +
                     requestParams["resolution"].toString().toLowerCase();
-
+                // 保存数据
                 let obj_res = this.bars_result.get(res_key);
-
-                const raw_times = (response.t || []).map(t => t * 1000);
-                const macd_dif = response.macd_dif || [];
-                const macd_dea = response.macd_dea || [];
-                const macd_hist = response.macd_hist || [];
-                const macd_area = response.macd_area || [];
-                const higher_macd_dif = response.higher_macd_dif || [];
-                const higher_macd_dea = response.higher_macd_dea || [];
-                const higher_macd_hist = response.higher_macd_hist || [];
-
-                // [DEBUG LOG] 1. 打印接收到的原始数据情况
-                const bisLen = response.bis ? response.bis.length : 0;
-                const fxsLen = response.fxs ? response.fxs.length : 0;
-                console.log(`[DEBUG-BUNDLE] <Recv> Key: ${res_key} | Bars: ${bars.length} | Bis: ${bisLen} | Fxs: ${fxsLen}`);
-
-                // [DEBUG LOG] 2. 检查 Chanlun 数据的时间戳样例（第一笔）
-                if (bisLen > 0) {
-                    console.log(`[DEBUG-BUNDLE] Sample Bi Time: ${response.bis[0].points[0].time} (Raw)`);
-                }
-
-                const mergeAlignedArrays = (existingTimes = [], existingArr = [], newTimes = [], newArr = []) => {
-                    const map = new Map();
-                    existingTimes.forEach((t, i) => {
-                        map.set(t, existingArr[i] !== undefined ? existingArr[i] : NaN);
-                    });
-                    newTimes.forEach((t, i) => {
-                        let val = NaN;
-                        if (newArr && i < newArr.length) val = newArr[i];
-                        if (val === null || val === undefined) val = NaN;
-                        map.set(t, val);
-                    });
-                    const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
-                    return {
-                        times: allTimes,
-                        values: allTimes.map(t => {
-                            const v = map.get(t);
-                            return (v === undefined || v === null) ? NaN : v;
-                        })
-                    };
-                };
-
-                // 定义合并函数
-                const updateTextPoints = (existingPoints, newPoints) => {
-                    if (!newPoints || newPoints.length === 0) return existingPoints || [];
-                    if (!existingPoints || existingPoints.length === 0) return newPoints;
-                    const combined = [...existingPoints];
-                    for (const p of newPoints) {
-                        const exists = combined.some(ep => JSON.stringify(ep.points) === JSON.stringify(p.points) && ep.text === p.text);
-                        if (!exists) combined.push(p);
-                    }
-                    const getPointTime = (point) => (Array.isArray(point.points) ? point.points[0].time : point.points.time);
-                    return combined.sort((a, b) => getPointTime(a) - getPointTime(b));
-                };
-
-                const updateLineSegments = (existingSegments, newSegments) => {
-                    if (!newSegments || newSegments.length === 0) return existingSegments || [];
-                    if (!existingSegments || existingSegments.length === 0) return newSegments;
-
-                    // [修复] 先过滤掉 existingSegments 中所有历史遗留的“未完成”段 (linestyle == '1')
-                    // 我们假设 newSegments 中包含最新的未完成段状态，所以旧的可以全部丢弃
-                    const cleanExisting = existingSegments.filter(s => s.linestyle != '1' && s.linestyle != 1);
-
-                    const combined = [...cleanExisting];
-
-                    for (const s of newSegments) {
-                        const exists = combined.some(es => JSON.stringify(es.points) === JSON.stringify(s.points));
-                        if (!exists) combined.push(s);
-                    }
-
-                    return combined.sort((a, b) => {
-                        if (!a.points || a.points.length === 0) return -1;
-                        if (!b.points || b.points.length === 0) return 1;
-                        return a.points[0].time - b.points[0].time;
-                    });
-                };
-
-                if (obj_res === undefined) {
-                    const difObj = mergeAlignedArrays([], [], raw_times, macd_dif);
-                    const deaObj = mergeAlignedArrays([], [], raw_times, macd_dea);
-                    const histObj = mergeAlignedArrays([], [], raw_times, macd_hist);
-                    const areaObj = mergeAlignedArrays([], [], raw_times, macd_area);
-
-                    const newCache = {
+                if (response.update == false || obj_res == undefined) {
+                    this.bars_result.set(res_key, {
                         bars: bars,
                         meta: meta,
-                        times: difObj.times,
-                        macd_dif: difObj.values,
-                        macd_dea: deaObj.values,
-                        macd_hist: histObj.values,
-                        macd_area: areaObj.values,
-                        higher_macd_dif: mergeAlignedArrays([], [], raw_times, higher_macd_dif).values,
-                        higher_macd_dea: mergeAlignedArrays([], [], raw_times, higher_macd_dea).values,
-                        higher_macd_hist: mergeAlignedArrays([], [], raw_times, higher_macd_hist).values,
-                        fxs: response.fxs || [],
-                        bis: response.bis || [],
-                        xds: response.xds || [],
-                        zsds: response.zsds || [],
-                        bi_zss: response.bi_zss || [],
-                        xd_zss: response.xd_zss || [],
-                        zsd_zss: response.zsd_zss || [],
-                        bcs: response.bcs || [],
-                        mmds: response.mmds || [],
+                        fxs: response.fxs,
+                        bis: response.bis,
+                        xds: response.xds,
+                        zsds: response.zsds,
+                        bi_zss: response.bi_zss,
+                        xd_zss: response.xd_zss,
+                        zsd_zss: response.zsd_zss,
+                        bcs: response.bcs,
+                        mmds: response.mmds,
                         chart_color: response.chart_color,
-                    };
-                    this.bars_result.set(res_key, newCache);
-                    console.log(`[DEBUG-BUNDLE] <Init> Cache created for ${res_key}. Bis: ${newCache.bis.length}`);
+                    });
                 }
                 else {
-                    const oldTimes = obj_res.times || [];
-
-                    // Bars 合并
-                    const oldBars = obj_res.bars || [];
-                    const barMap = new Map();
-                    oldBars.forEach(b => barMap.set(b.time, b));
-                    bars.forEach(b => barMap.set(b.time, b));
-                    const mergedBars = Array.from(barMap.values()).sort((a, b) => a.time - b.time);
-                    obj_res.bars = mergedBars;
-
-                    // MACD 合并
-                    const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);
-                    const deaObj = mergeAlignedArrays(oldTimes, obj_res.macd_dea, raw_times, macd_dea);
-                    const histObj = mergeAlignedArrays(oldTimes, obj_res.macd_hist, raw_times, macd_hist);
-                    const areaObj = mergeAlignedArrays(oldTimes, obj_res.macd_area, raw_times, macd_area);
-
-                    obj_res.times = difObj.times;
-                    obj_res.macd_dif = difObj.values;
-                    obj_res.macd_dea = deaObj.values;
-                    obj_res.macd_hist = histObj.values;
-                    obj_res.macd_area = areaObj.values;
-
-                    const hDifObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dif, raw_times, higher_macd_dif);
-                    const hDeaObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dea, raw_times, higher_macd_dea);
-                    const hHistObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_hist, raw_times, higher_macd_hist);
-                    obj_res.higher_macd_dif = hDifObj.values;
-                    obj_res.higher_macd_dea = hDeaObj.values;
-                    obj_res.higher_macd_hist = hHistObj.values;
-
-                    // Chanlun 数据合并
+                    // 更新存在的数据
+                    // 更新逻辑，找到大于等于返回的第一个时间的所有数据；
+                    // 保留小于返回的第一个时间的所有数据；
+                    // 然后添加返回的数据；
+                    // 最后按时间排序；
+                    // 1. 更新其他数据结构（如分型、笔、线段等）
+                    // 处理TextPoint类型数据（fxs, bcs, mmds）
+                    const updateTextPoints = (existingPoints, newPoints) => {
+                        if (!newPoints || newPoints.length === 0)
+                            return existingPoints || [];
+                        if (!existingPoints || existingPoints.length === 0)
+                            return newPoints;
+                        // 获取点位时间的辅助函数，处理points可能是对象或数组的情况
+                        const getPointTime = (point) => {
+                            if (Array.isArray(point.points)) {
+                                // 如果是数组，取第一个元素的time
+                                return point.points[0].time;
+                            }
+                            else {
+                                // 如果是单个对象，直接取time
+                                return point.points.time;
+                            }
+                        };
+                        const minResponseTime = Math.min(...newPoints.map(getPointTime));
+                        const updatedPoints = [];
+                        // 保留小于最小时间点的数据
+                        for (const point of existingPoints) {
+                            if (getPointTime(point) < minResponseTime) {
+                                updatedPoints.push(point);
+                            }
+                        }
+                        // 添加返回数据中剩余的新点位
+                        for (const point of newPoints) {
+                            updatedPoints.push(point);
+                        }
+                        // 按时间排序，使用getPointTime辅助函数获取时间
+                        return updatedPoints.sort((a, b) => getPointTime(a) - getPointTime(b));
+                    };
+                    // 处理LineSegment类型数据（bis, xds, zsds, bi_zss, xd_zss, zsd_zss）
+                    const updateLineSegments = (existingSegments, newSegments) => {
+                        if (!newSegments || newSegments.length === 0)
+                            return existingSegments || [];
+                        if (!existingSegments || existingSegments.length === 0)
+                            return newSegments;
+                        const minResponseTime = Math.min(...newSegments.map((segment) => segment.points[0].time));
+                        const updatedSegments = [];
+                        // 保留起始时间小于最小时间点的线段
+                        for (const segment of existingSegments) {
+                            if (segment.points.length > 0) {
+                                if (segment.points[0].time < minResponseTime) {
+                                    updatedSegments.push(segment);
+                                }
+                            }
+                        }
+                        // 添加返回数据中剩余的新线段
+                        for (const segment of newSegments) {
+                            updatedSegments.push(segment);
+                        }
+                        // 按起始时间排序
+                        return updatedSegments.sort((a, b) => {
+                            if (a.points.length === 0 && b.points.length === 0)
+                                return 0;
+                            if (a.points.length === 0)
+                                return -1;
+                            if (b.points.length === 0)
+                                return 1;
+                            return a.points[0].time - b.points[0].time;
+                        });
+                    };
+                    // 更新所有数据
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
                     obj_res.bis = updateLineSegments(obj_res.bis, response.bis);
                     obj_res.xds = updateLineSegments(obj_res.xds, response.xds);
@@ -364,12 +305,9 @@
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
                     obj_res.chart_color = response.chart_color;
-
                     this.bars_result.set(res_key, obj_res);
-                    console.log(`[DEBUG-BUNDLE] <Merge> Cache updated for ${res_key}. Total Bars: ${obj_res.bars.length}, Total Bis: ${obj_res.bis.length}`);
                 }
             }
-
             const result = {
                 bars: bars,
                 meta: meta,
@@ -396,50 +334,76 @@
             setInterval(this._updateData.bind(this), updateFrequency);
         }
         subscribeBars(symbolInfo, resolution, newDataCallback, listenerGuid) {
-            if (this._subscribers.hasOwnProperty(listenerGuid)) return;
+            if (this._subscribers.hasOwnProperty(listenerGuid)) {
+                return;
+            }
             this._subscribers[listenerGuid] = {
                 lastBarTime: null,
                 listener: newDataCallback,
                 resolution: resolution,
                 symbolInfo: symbolInfo,
             };
+            logMessage(`DataPulseProvider: subscribed for #${listenerGuid} - {${symbolInfo.name}, ${resolution}}`);
         }
         unsubscribeBars(listenerGuid) {
             delete this._subscribers[listenerGuid];
         }
         _updateData() {
-            if (this._requestsPending > 0) return;
+            if (this._requestsPending > 0) {
+                return;
+            }
             this._requestsPending = 0;
+            // eslint-disable-next-line guard-for-in
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending += 1;
                 this._updateDataForSubscriber(listenerGuid)
-                    .then(() => { this._requestsPending -= 1; })
-                    .catch((reason) => { this._requestsPending -= 1; });
+                    .then(() => {
+                    this._requestsPending -= 1;
+                    logMessage(`DataPulseProvider: data for #${listenerGuid} updated successfully, pending=${this._requestsPending}`);
+                })
+                    .catch((reason) => {
+                    this._requestsPending -= 1;
+                    logMessage(`DataPulseProvider: data for #${listenerGuid} updated with error=${getErrorMessage(reason)}, pending=${this._requestsPending}`);
+                });
             }
         }
         _updateDataForSubscriber(listenerGuid) {
             const subscriptionRecord = this._subscribers[listenerGuid];
             const rangeEndTime = parseInt((Date.now() / 1000).toString());
+            // BEWARE: please note we really need 2 bars, not the only last one
+            // see the explanation below. `10` is the `large enough` value to work around holidays
             const rangeStartTime = rangeEndTime - periodLengthSeconds(subscriptionRecord.resolution, 10);
             return this._historyProvider.getBars(subscriptionRecord.symbolInfo, subscriptionRecord.resolution, {
                 from: rangeStartTime,
                 to: rangeEndTime,
                 countBack: 2,
                 firstDataRequest: false,
-            }).then((result) => {
+            })
+                .then((result) => {
                 this._onSubscriberDataReceived(listenerGuid, result);
             });
         }
         _onSubscriberDataReceived(listenerGuid, result) {
-            if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
+            // means the subscription was cancelled while waiting for data
+            if (!this._subscribers.hasOwnProperty(listenerGuid)) {
+                return;
+            }
             const bars = result.bars;
-            if (bars.length === 0) return;
+            if (bars.length === 0) {
+                return;
+            }
             const lastBar = bars[bars.length - 1];
             const subscriptionRecord = this._subscribers[listenerGuid];
-            if (subscriptionRecord.lastBarTime !== null && lastBar.time < subscriptionRecord.lastBarTime) return;
+            if (subscriptionRecord.lastBarTime !== null && lastBar.time < subscriptionRecord.lastBarTime) {
+                return;
+            }
             const isNewBar = subscriptionRecord.lastBarTime !== null && lastBar.time > subscriptionRecord.lastBarTime;
+            // Pulse updating may miss some trades data (ie, if pulse period = 10 secods and new bar is started 5 seconds later after the last update, the
+            // old bar's last 5 seconds trades will be lost). Thus, at fist we should broadcast old bar updates when it's ready.
             if (isNewBar) {
-                if (bars.length < 2) throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
+                if (bars.length < 2) {
+                    throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
+                }
                 const previousBar = bars[bars.length - 2];
                 subscriptionRecord.listener(previousBar);
             }
@@ -447,13 +411,20 @@
             subscriptionRecord.listener(lastBar);
         }
     }
-
     function periodLengthSeconds(resolution, requiredPeriodsCount) {
         let daysCount = 0;
-        if (resolution === 'D' || resolution === '1D') daysCount = requiredPeriodsCount;
-        else if (resolution === 'M' || resolution === '1M') daysCount = 31 * requiredPeriodsCount;
-        else if (resolution === 'W' || resolution === '1W') daysCount = 7 * requiredPeriodsCount;
-        else daysCount = requiredPeriodsCount * parseInt(resolution) / (24 * 60);
+        if (resolution === 'D' || resolution === '1D') {
+            daysCount = requiredPeriodsCount;
+        }
+        else if (resolution === 'M' || resolution === '1M') {
+            daysCount = 31 * requiredPeriodsCount;
+        }
+        else if (resolution === 'W' || resolution === '1W') {
+            daysCount = 7 * requiredPeriodsCount;
+        }
+        else {
+            daysCount = requiredPeriodsCount * parseInt(resolution) / (24 * 60);
+        }
         return daysCount * 24 * 60 * 60;
     }
 
@@ -480,8 +451,8 @@
         }
         _createTimersIfRequired() {
             if (this._timers === null) {
-                const fastTimer = window.setInterval(this._updateQuotes.bind(this, 1), 10000);
-                const generalTimer = window.setInterval(this._updateQuotes.bind(this, 0), 60000);
+                const fastTimer = window.setInterval(this._updateQuotes.bind(this, 1 /* SymbolsType.Fast */), 10000 /* UpdateTimeouts.Fast */);
+                const generalTimer = window.setInterval(this._updateQuotes.bind(this, 0 /* SymbolsType.General */), 60000 /* UpdateTimeouts.General */);
                 this._timers = { fastTimer, generalTimer };
             }
         }
@@ -493,32 +464,46 @@
             }
         }
         _updateQuotes(updateType) {
-            if (this._requestsPending > 0) return;
+            if (this._requestsPending > 0) {
+                return;
+            }
+            // eslint-disable-next-line guard-for-in
             for (const listenerGuid in this._subscribers) {
                 this._requestsPending++;
                 const subscriptionRecord = this._subscribers[listenerGuid];
-                this._quotesProvider.getQuotes(updateType === 1 ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
+                this._quotesProvider.getQuotes(updateType === 1 /* SymbolsType.Fast */ ? subscriptionRecord.fastSymbols : subscriptionRecord.symbols)
                     .then((data) => {
-                        this._requestsPending--;
-                        if (!this._subscribers.hasOwnProperty(listenerGuid)) return;
-                        subscriptionRecord.listener(data);
-                    }).catch((reason) => {
-                        this._requestsPending--;
-                    });
+                    this._requestsPending--;
+                    if (!this._subscribers.hasOwnProperty(listenerGuid)) {
+                        return;
+                    }
+                    subscriptionRecord.listener(data);
+                    logMessage(`QuotesPulseProvider: data for #${listenerGuid} (${updateType}) updated successfully, pending=${this._requestsPending}`);
+                })
+                    .catch((reason) => {
+                    this._requestsPending--;
+                    logMessage(`QuotesPulseProvider: data for #${listenerGuid} (${updateType}) updated with error=${getErrorMessage(reason)}, pending=${this._requestsPending}`);
+                });
             }
         }
     }
 
     function extractField$1(data, field, arrayIndex, valueIsArray) {
-        if (!(field in data)) return undefined;
+        if (!(field in data)) {
+            // eslint-disable-next-line no-console
+            console.warn(`Field "${String(field)}" not present in response`);
+            return undefined;
+        }
         const value = data[field];
-        if (Array.isArray(value) && (!valueIsArray || Array.isArray(value[0]))) return value[arrayIndex];
+        if (Array.isArray(value) && (!valueIsArray || Array.isArray(value[0]))) {
+            return value[arrayIndex];
+        }
         return value;
     }
     function symbolKey(symbol, currency, unit) {
+        // here we're using a separator that quite possible shouldn't be in a real symbol name
         return symbol + (currency !== undefined ? '_%|#|%_' + currency : '') + (unit !== undefined ? '_%|#|%_' + unit : '');
     }
-
     class SymbolsStorage {
         constructor(datafeedUrl, datafeedSupportedResolutions, requester) {
             this._exchangesList = ['NYSE', 'FOREX', 'AMEX'];
@@ -529,13 +514,18 @@
             this._requester = requester;
             this._readyPromise = this._init();
             this._readyPromise.catch((error) => {
+                // seems it is impossible
+                // eslint-disable-next-line no-console
                 console.error(`SymbolsStorage: Cannot init, error=${error.toString()}`);
             });
         }
+        // BEWARE: this function does not consider symbol's exchange
         resolveSymbol(symbolName, currencyCode, unitId) {
             return this._readyPromise.then(() => {
                 const symbolInfo = this._symbolsInfo[symbolKey(symbolName, currencyCode, unitId)];
-                if (symbolInfo === undefined) return Promise.reject('invalid symbol');
+                if (symbolInfo === undefined) {
+                    return Promise.reject('invalid symbol');
+                }
                 return Promise.resolve(symbolInfo);
             });
         }
@@ -546,9 +536,15 @@
                 searchString = searchString.toUpperCase();
                 for (const symbolName of this._symbolsList) {
                     const symbolInfo = this._symbolsInfo[symbolName];
-                    if (symbolInfo === undefined) continue;
-                    if (symbolType.length > 0 && symbolInfo.type !== symbolType) continue;
-                    if (exchange && exchange.length > 0 && symbolInfo.exchange !== exchange) continue;
+                    if (symbolInfo === undefined) {
+                        continue;
+                    }
+                    if (symbolType.length > 0 && symbolInfo.type !== symbolType) {
+                        continue;
+                    }
+                    if (exchange && exchange.length > 0 && symbolInfo.exchange !== exchange) {
+                        continue;
+                    }
                     const positionInName = symbolInfo.name.toUpperCase().indexOf(searchString);
                     const positionInDescription = symbolInfo.description.toUpperCase().indexOf(searchString);
                     if (queryIsEmpty || positionInName >= 0 || positionInDescription >= 0) {
@@ -563,17 +559,17 @@
                     .sort((item1, item2) => item1.weight - item2.weight)
                     .slice(0, maxSearchResults)
                     .map((item) => {
-                        const symbolInfo = item.symbolInfo;
-                        return {
-                            symbol: symbolInfo.name,
-                            full_name: `${symbolInfo.exchange}:${symbolInfo.name}`,
-                            description: symbolInfo.description,
-                            exchange: symbolInfo.exchange,
-                            params: [],
-                            type: symbolInfo.type,
-                            ticker: symbolInfo.name,
-                        };
-                    });
+                    const symbolInfo = item.symbolInfo;
+                    return {
+                        symbol: symbolInfo.name,
+                        full_name: `${symbolInfo.exchange}:${symbolInfo.name}`,
+                        description: symbolInfo.description,
+                        exchange: symbolInfo.exchange,
+                        params: [],
+                        type: symbolInfo.type,
+                        ticker: symbolInfo.name,
+                    };
+                });
                 return Promise.resolve(result);
             });
         }
@@ -581,24 +577,39 @@
             const promises = [];
             const alreadyRequestedExchanges = {};
             for (const exchange of this._exchangesList) {
-                if (alreadyRequestedExchanges[exchange]) continue;
+                if (alreadyRequestedExchanges[exchange]) {
+                    continue;
+                }
                 alreadyRequestedExchanges[exchange] = true;
                 promises.push(this._requestExchangeData(exchange));
             }
-            return Promise.all(promises).then(() => { this._symbolsList.sort(); });
+            return Promise.all(promises)
+                .then(() => {
+                this._symbolsList.sort();
+            });
         }
         _requestExchangeData(exchange) {
             return new Promise((resolve, reject) => {
                 this._requester.sendRequest(this._datafeedUrl, 'symbol_info', { group: exchange })
                     .then((response) => {
-                        try { this._onExchangeDataReceived(exchange, response); }
-                        catch (error) { reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`)); return; }
-                        resolve();
-                    }).catch((reason) => { resolve(); });
+                    try {
+                        this._onExchangeDataReceived(exchange, response);
+                    }
+                    catch (error) {
+                        reject(error instanceof Error ? error : new Error(`SymbolsStorage: Unexpected exception ${error}`));
+                        return;
+                    }
+                    resolve();
+                })
+                    .catch((reason) => {
+                    logMessage(`SymbolsStorage: Request data for exchange '${exchange}' failed, reason=${getErrorMessage(reason)}`);
+                    resolve();
+                });
             });
         }
         _onExchangeDataReceived(exchange, data) {
             let symbolIndex = 0;
+            let fullName;
             try {
                 const symbolsCount = data.symbol.length;
                 const tickerPresent = data.ticker !== undefined;
@@ -606,7 +617,19 @@
                     const symbolName = data.symbol[symbolIndex];
                     const listedExchange = extractField$1(data, 'exchange-listed', symbolIndex);
                     const tradedExchange = extractField$1(data, 'exchange-traded', symbolIndex);
+                    if (listedExchange !== undefined || tradedExchange !== undefined) {
+                        // eslint-disable-next-line no-console
+                        console.warn('Starting from v30, both "exchange-listed" and "exchange-traded" fields are deprecated. Please use "exchange_listed_name" instead.');
+                        fullName = tradedExchange + ':' + symbolName;
+                    }
                     const exchangeListedName = extractField$1(data, 'exchange_listed_name', symbolIndex);
+                    if (exchangeListedName === undefined) {
+                        // eslint-disable-next-line no-console
+                        console.warn('Starting from v30, both "exchange-listed" and "exchange-traded" fields are deprecated. Please use "exchange_listed_name" instead.');
+                    }
+                    else {
+                        fullName = exchangeListedName + ':' + symbolName;
+                    }
                     const currencyCode = extractField$1(data, 'currency-code', symbolIndex);
                     const unitId = extractField$1(data, 'unit-id', symbolIndex);
                     const ticker = tickerPresent ? extractField$1(data, 'ticker', symbolIndex) : symbolName;
@@ -643,13 +666,22 @@
                     };
                     this._symbolsInfo[ticker] = symbolInfo;
                     this._symbolsInfo[symbolName] = symbolInfo;
+                    if (fullName !== undefined) {
+                        this._symbolsInfo[fullName] = symbolInfo;
+                    }
                     if (currencyCode !== undefined || unitId !== undefined) {
                         this._symbolsInfo[symbolKey(ticker, currencyCode, unitId)] = symbolInfo;
                         this._symbolsInfo[symbolKey(symbolName, currencyCode, unitId)] = symbolInfo;
+                        if (fullName !== undefined) {
+                            this._symbolsInfo[symbolKey(fullName, currencyCode, unitId)] = symbolInfo;
+                        }
                     }
                     this._symbolsList.push(symbolName);
                 }
-            } catch (error) { throw new Error(`SymbolsStorage: API error: ${Object(error).message}`); }
+            }
+            catch (error) {
+                throw new Error(`SymbolsStorage: API error when processing exchange ${exchange} symbol #${symbolIndex} (${data.symbol[symbolIndex]}): ${Object(error).message}`);
+            }
         }
     }
     function definedValueOrDefault(value, defaultValue) {
@@ -660,7 +692,10 @@
         const value = data[field];
         return Array.isArray(value) ? value[arrayIndex] : value;
     }
-
+    /**
+     * This class implements interaction with UDF-compatible datafeed.
+     * See [UDF protocol reference](@docs/connecting_data/UDF.md)
+     */
     class UDFCompatibleDatafeedBase {
         constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse) {
             this._configuration = defaultConfiguration();
@@ -673,12 +708,16 @@
             this._quotesPulseProvider = new QuotesPulseProvider(this._quotesProvider);
             this._configurationReadyPromise = this._requestConfiguration()
                 .then((configuration) => {
-                    if (configuration === null) configuration = defaultConfiguration();
-                    this._setupWithConfiguration(configuration);
-                });
+                if (configuration === null) {
+                    configuration = defaultConfiguration();
+                }
+                this._setupWithConfiguration(configuration);
+            });
         }
         onReady(callback) {
-            this._configurationReadyPromise.then(() => { callback(this._configuration); });
+            this._configurationReadyPromise.then(() => {
+                callback(this._configuration);
+            });
         }
         getQuotes(symbols, onDataCallback, onErrorCallback) {
             this._quotesProvider.getQuotes(symbols).then(onDataCallback).catch(onErrorCallback);
@@ -690,14 +729,17 @@
             this._quotesPulseProvider.unsubscribeQuotes(listenerGuid);
         }
         getMarks(symbolInfo, from, to, onDataCallback, resolution) {
-            if (!this._configuration.supports_marks) return;
+            if (!this._configuration.supports_marks) {
+                return;
+            }
             const requestParams = {
                 symbol: symbolInfo.ticker || '',
                 from: from,
                 to: to,
                 resolution: resolution,
             };
-            this._send('marks', requestParams).then((response) => {
+            this._send('marks', requestParams)
+                .then((response) => {
                 if (!Array.isArray(response)) {
                     const result = [];
                     for (let i = 0; i < response.id.length; ++i) {
@@ -718,17 +760,24 @@
                     response = result;
                 }
                 onDataCallback(response);
-            }).catch((error) => { onDataCallback([]); });
+            })
+                .catch((error) => {
+                logMessage(`UdfCompatibleDatafeed: Request marks failed: ${getErrorMessage(error)}`);
+                onDataCallback([]);
+            });
         }
         getTimescaleMarks(symbolInfo, from, to, onDataCallback, resolution) {
-            if (!this._configuration.supports_timescale_marks) return;
+            if (!this._configuration.supports_timescale_marks) {
+                return;
+            }
             const requestParams = {
                 symbol: symbolInfo.ticker || '',
                 from: from,
                 to: to,
                 resolution: resolution,
             };
-            this._send('timescale_marks', requestParams).then((response) => {
+            this._send('timescale_marks', requestParams)
+                .then((response) => {
                 if (!Array.isArray(response)) {
                     const result = [];
                     for (let i = 0; i < response.id.length; ++i) {
@@ -745,42 +794,79 @@
                     response = result;
                 }
                 onDataCallback(response);
-            }).catch((error) => { onDataCallback([]); });
+            })
+                .catch((error) => {
+                logMessage(`UdfCompatibleDatafeed: Request timescale marks failed: ${getErrorMessage(error)}`);
+                onDataCallback([]);
+            });
         }
         getServerTime(callback) {
-            if (!this._configuration.supports_time) return;
-            this._send('time').then((response) => {
+            if (!this._configuration.supports_time) {
+                return;
+            }
+            this._send('time')
+                .then((response) => {
                 const time = parseInt(response);
-                if (!isNaN(time)) callback(time);
-            }).catch((error) => { });
+                if (!isNaN(time)) {
+                    callback(time);
+                }
+            })
+                .catch((error) => {
+                logMessage(`UdfCompatibleDatafeed: Fail to load server time, error=${getErrorMessage(error)}`);
+            });
         }
         searchSymbols(userInput, exchange, symbolType, onResult) {
             if (this._configuration.supports_search) {
                 const params = {
-                    limit: 30,
+                    limit: 30 /* Constants.SearchItemsLimit */,
                     query: userInput.toUpperCase(),
                     type: symbolType,
                     exchange: exchange,
                 };
-                this._send('search', params).then((response) => {
-                    if (response.s !== undefined) { onResult([]); return; }
+                this._send('search', params)
+                    .then((response) => {
+                    if (response.s !== undefined) {
+                        logMessage(`UdfCompatibleDatafeed: search symbols error=${response.errmsg}`);
+                        onResult([]);
+                        return;
+                    }
                     onResult(response);
-                }).catch((reason) => { onResult([]); });
-            } else {
-                if (this._symbolsStorage === null) throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
-                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30).then(onResult).catch(onResult.bind(null, []));
+                })
+                    .catch((reason) => {
+                    logMessage(`UdfCompatibleDatafeed: Search symbols for '${userInput}' failed. Error=${getErrorMessage(reason)}`);
+                    onResult([]);
+                });
+            }
+            else {
+                if (this._symbolsStorage === null) {
+                    throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
+                }
+                this._symbolsStorage.searchSymbols(userInput, exchange, symbolType, 30 /* Constants.SearchItemsLimit */)
+                    .then(onResult)
+                    .catch(onResult.bind(null, []));
             }
         }
         resolveSymbol(symbolName, onResolve, onError, extension) {
             const currencyCode = extension && extension.currencyCode;
             const unitId = extension && extension.unitId;
-            function onResultReady(symbolInfo) { onResolve(symbolInfo); }
+            function onResultReady(symbolInfo) {
+                onResolve(symbolInfo);
+            }
             if (!this._configuration.supports_group_request) {
-                const params = { symbol: symbolName };
-                if (currencyCode !== undefined) params.currencyCode = currencyCode;
-                if (unitId !== undefined) params.unitId = unitId;
-                this._send('symbols', params).then((response) => {
-                    if (response.s !== undefined) onError('unknown_symbol');
+                const params = {
+                    symbol: symbolName,
+                };
+                if (currencyCode !== undefined) {
+                    params.currencyCode = currencyCode;
+                }
+                if (unitId !== undefined) {
+                    params.unitId = unitId;
+                }
+                this._send('symbols', params)
+                    .then((response) => {
+                    if (response.s !== undefined) {
+                        onError('unknown_symbol');
+                    }
                     else {
                         const symbol = response.name;
                         const listedExchange = response.listed_exchange ?? response['exchange-listed'];
@@ -813,16 +899,25 @@
                         };
                         onResultReady(result);
                     }
-                }).catch((reason) => { onError('unknown_symbol'); });
-            } else {
-                if (this._symbolsStorage === null) throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
+                })
+                    .catch((reason) => {
+                    logMessage(`UdfCompatibleDatafeed: Error resolving symbol: ${getErrorMessage(reason)}`);
+                    onError('unknown_symbol');
+                });
+            }
+            else {
+                if (this._symbolsStorage === null) {
+                    throw new Error('UdfCompatibleDatafeed: inconsistent configuration (symbols storage)');
+                }
                 this._symbolsStorage.resolveSymbol(symbolName, currencyCode, unitId).then(onResultReady).catch(onError);
             }
         }
         getBars(symbolInfo, resolution, periodParams, onResult, onError) {
-            this._historyProvider.getBars(symbolInfo, resolution, periodParams).then((result) => {
+            this._historyProvider.getBars(symbolInfo, resolution, periodParams)
+                .then((result) => {
                 onResult(result.bars, result.meta);
-            }).catch(onError);
+            })
+                .catch(onError);
         }
         subscribeBars(symbolInfo, resolution, onTick, listenerGuid, _onResetCacheNeededCallback) {
             this._dataPulseProvider.subscribeBars(symbolInfo, resolution, onTick, listenerGuid);
@@ -831,25 +926,43 @@
             this._dataPulseProvider.unsubscribeBars(listenerGuid);
         }
         _requestConfiguration() {
-            return this._send('config').catch((reason) => { return null; });
+            return this._send('config')
+                .catch((reason) => {
+                logMessage(`UdfCompatibleDatafeed: Cannot get datafeed configuration - use default, error=${getErrorMessage(reason)}`);
+                return null;
+            });
         }
         _send(urlPath, params) {
             return this._requester.sendRequest(this._datafeedURL, urlPath, params);
         }
         _setupWithConfiguration(configurationData) {
             this._configuration = configurationData;
-            if (configurationData.exchanges === undefined) configurationData.exchanges = [];
-            if (!configurationData.supports_search && !configurationData.supports_group_request) throw new Error('Unsupported datafeed configuration. Must either support search, or support group request');
+            if (configurationData.exchanges === undefined) {
+                configurationData.exchanges = [];
+            }
+            if (!configurationData.supports_search && !configurationData.supports_group_request) {
+                throw new Error('Unsupported datafeed configuration. Must either support search, or support group request');
+            }
             if (configurationData.supports_group_request || !configurationData.supports_search) {
                 this._symbolsStorage = new SymbolsStorage(this._datafeedURL, configurationData.supported_resolutions || [], this._requester);
             }
+            logMessage(`UdfCompatibleDatafeed: Initialized with ${JSON.stringify(configurationData)}`);
         }
     }
     function defaultConfiguration() {
         return {
             supports_search: false,
             supports_group_request: true,
-            supported_resolutions: ['1', '5', '15', '30', '60', '1D', '1W', '1M'],
+            supported_resolutions: [
+                '1',
+                '5',
+                '15',
+                '30',
+                '60',
+                '1D',
+                '1W',
+                '1M',
+            ],
             supports_marks: false,
             supports_timescale_marks: false,
         };
