@@ -59,6 +59,18 @@ MARKET_30M_TO_D_RATIO = {
     "fx": 48,            # 外汇
 }
 
+# 日线 → 周线的倍率
+MARKET_D_TO_W_RATIO = {
+    "a": 5,              # 5个交易日
+    "hk": 5,
+    "us": 5,
+    "futures": 5,
+    "ny_futures": 5,
+    "currency": 7,       # 数字货币 7天
+    "currency_spot": 7,
+    "fx": 5,             # 外汇通常 5天
+}
+
 # 基础数据缓存
 stock_cache = TTLCache(maxsize=100, ttl=3600)
 
@@ -418,6 +430,12 @@ def tv_history():
                 ratio = HIGHER_MACD_RATIO.get(frequency)
                 if ratio is None and frequency == "30m":
                     ratio = MARKET_30M_TO_D_RATIO.get(market, 8)
+                elif ratio is None and frequency == "d":
+                    ratio = MARKET_D_TO_W_RATIO.get(market, 5)
+                elif ratio is None and frequency == "w":
+                    ratio = 4  # 1个月约4周
+                elif ratio is None and frequency == "m":
+                    ratio = 12 # 1年12个月
 
                 if ratio is not None:
                     try:

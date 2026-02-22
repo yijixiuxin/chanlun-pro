@@ -184,10 +184,6 @@ class ChartManager {
         };
 
         this.widget.headerReady().then(function () {
-            // ... 原有按钮保持不变 ...
-            
-            
-            
             var btnDisplay = global_widget.createButton();
             btnDisplay.textContent = "缠论显示设置 ▾";
             btnDisplay.addEventListener("click", function () {
