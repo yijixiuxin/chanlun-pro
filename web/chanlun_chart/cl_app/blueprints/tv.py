@@ -10,6 +10,8 @@ import numpy as np
 import talib
 from cachetools import TTLCache
 from threading import RLock
+from collections import defaultdict
+import bisect
 from flask import Blueprint, request
 from flask_login import login_required
 import pinyin
@@ -79,7 +81,7 @@ chart_data_cache = TTLCache(maxsize=50, ttl=10)
 
 cache_lock = RLock()
 req_lock = RLock()
-chart_calc_lock = RLock()
+chart_calc_locks = defaultdict(RLock)
 
 @tv_bp.route("/tv/config")
 @login_required
@@ -350,10 +352,7 @@ def tv_history():
 
     frequency = resolution_maps[resolution]
     cl_config = query_cl_chart_config(market, code)
-    if firstDataRequest == "false":
-        cache_key = f"{market}_{code}_{frequency}_{_from}_{_to}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
-    else:
-        cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
+    cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
 
     cl_chart_data = None
     is_cache_hit = False
@@ -364,7 +363,7 @@ def tv_history():
         is_cache_hit = True
 
     if cl_chart_data is None:
-        with chart_calc_lock:
+        with chart_calc_locks[cache_key]:
             if cache_key in chart_data_cache:
                 cl_chart_data = chart_data_cache[cache_key]
                 is_cache_hit = True
@@ -451,15 +450,12 @@ def tv_history():
                             signalperiod=signal
                         )
                         # NaN 转 None 方便 JSON 序列化
-                        cl_chart_data["higher_macd_dif"] = [
-                            None if np.isnan(v) else round(float(v), 6) for v in h_dif
-                        ]
-                        cl_chart_data["higher_macd_dea"] = [
-                            None if np.isnan(v) else round(float(v), 6) for v in h_dea
-                        ]
-                        cl_chart_data["higher_macd_hist"] = [
-                            None if np.isnan(v) else round(float(v), 6) for v in h_hist
-                        ]
+                        h_dif_rounded = np.round(h_dif, 6)
+                        h_dea_rounded = np.round(h_dea, 6)
+                        h_hist_rounded = np.round(h_hist, 6)
+                        cl_chart_data["higher_macd_dif"] = np.where(np.isnan(h_dif_rounded), None, h_dif_rounded).tolist()
+                        cl_chart_data["higher_macd_dea"] = np.where(np.isnan(h_dea_rounded), None, h_dea_rounded).tolist()
+                        cl_chart_data["higher_macd_hist"] = np.where(np.isnan(h_hist_rounded), None, h_hist_rounded).tolist()
                         LogUtil.info(
                             f"[tv_history] Scaled MACD ({frequency}, ratio={ratio}) "
                             f"params=({fast},{slow},{signal}), {len(closes)} bars"
@@ -479,6 +475,51 @@ def tv_history():
     # 关键：直接返回全量数据，不根据 _from 进行切片或过滤
     # 前端 bundle.js 会处理数据去重和合并
     # =================================================
+    if firstDataRequest == "false" and cl_chart_data["t"]:
+        try:
+            from_ts = int(_from)
+            start_idx = bisect.bisect_left(cl_chart_data["t"], from_ts)
+            
+            def filter_shapes(shapes):
+                res = []
+                for s in shapes:
+                    if isinstance(s, dict) and 'points' in s:
+                        pts = s['points']
+                        if isinstance(pts, list) and len(pts) > 0:
+                            if pts[-1].get('time', 0) >= from_ts:
+                                res.append(s)
+                        elif isinstance(pts, dict):
+                            if pts.get('time', 0) >= from_ts:
+                                res.append(s)
+                return res
+
+            cl_chart_data = {
+                "t": cl_chart_data["t"][start_idx:],
+                "c": cl_chart_data["c"][start_idx:],
+                "o": cl_chart_data["o"][start_idx:],
+                "h": cl_chart_data["h"][start_idx:],
+                "l": cl_chart_data["l"][start_idx:],
+                "v": cl_chart_data["v"][start_idx:],
+                "macd_dif": cl_chart_data.get("macd_dif", [])[start_idx:] if cl_chart_data.get("macd_dif") else [],
+                "macd_dea": cl_chart_data.get("macd_dea", [])[start_idx:] if cl_chart_data.get("macd_dea") else [],
+                "macd_hist": cl_chart_data.get("macd_hist", [])[start_idx:] if cl_chart_data.get("macd_hist") else [],
+                "macd_area": cl_chart_data.get("macd_area", [])[start_idx:] if cl_chart_data.get("macd_area") else [],
+                "higher_macd_dif": cl_chart_data.get("higher_macd_dif", [])[start_idx:] if cl_chart_data.get("higher_macd_dif") else [],
+                "higher_macd_dea": cl_chart_data.get("higher_macd_dea", [])[start_idx:] if cl_chart_data.get("higher_macd_dea") else [],
+                "higher_macd_hist": cl_chart_data.get("higher_macd_hist", [])[start_idx:] if cl_chart_data.get("higher_macd_hist") else [],
+                "fxs": filter_shapes(cl_chart_data.get("fxs", [])),
+                "bis": filter_shapes(cl_chart_data.get("bis", [])),
+                "xds": filter_shapes(cl_chart_data.get("xds", [])),
+                "zsds": filter_shapes(cl_chart_data.get("zsds", [])),
+                "bi_zss": filter_shapes(cl_chart_data.get("bi_zss", [])),
+                "xd_zss": filter_shapes(cl_chart_data.get("xd_zss", [])),
+                "zsd_zss": filter_shapes(cl_chart_data.get("zsd_zss", [])),
+                "bcs": filter_shapes(cl_chart_data.get("bcs", [])),
+                "mmds": filter_shapes(cl_chart_data.get("mmds", [])),
+            }
+        except Exception as e:
+            LogUtil.error(f"Slice data failed: {e}")
+
     info = {
         "s": s,
         "t": cl_chart_data["t"],

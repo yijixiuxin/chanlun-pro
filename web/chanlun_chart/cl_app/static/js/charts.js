@@ -341,7 +341,7 @@ class ChartManager {
         } else if (item.points?.time !== undefined) {
             return `${item.points.time}_${item.points.price}_${item.text || ''}`;
         }
-        return JSON.stringify(item);
+        return `${item.id || Math.random()}`;
     }
 
     getUniqueRenderList(sourceList) {
