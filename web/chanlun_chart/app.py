@@ -50,6 +50,7 @@ from tornado.ioloop import IOLoop
 from tornado.wsgi import WSGIContainer
 from chanlun import config
 from cl_app import create_app
+from cl_app.blueprints.tv import start_symbol_preload_thread
 
 def main() -> None:
     """Start the Tornado HTTP server hosting the Flask app."""
@@ -66,6 +67,9 @@ def main() -> None:
 
         LogUtil.info("启动成功")
         s.start(1)
+
+        # 启动 symbol 预加载线程
+        start_symbol_preload_thread()
 
         if len(sys.argv) >= 2 and sys.argv[1] == "nobrowser":
             pass

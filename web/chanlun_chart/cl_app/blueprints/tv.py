@@ -74,7 +74,7 @@ MARKET_D_TO_W_RATIO = {
 }
 
 # 基础数据缓存
-stock_cache = TTLCache(maxsize=100, ttl=3600)
+stock_cache = TTLCache(maxsize=100, ttl=7200)
 
 # 图表数据计算结果缓存 (10秒缓存，防止短时间重复计算)
 chart_data_cache = TTLCache(maxsize=50, ttl=10)
@@ -82,6 +82,30 @@ chart_data_cache = TTLCache(maxsize=50, ttl=10)
 cache_lock = RLock()
 req_lock = RLock()
 chart_calc_locks = defaultdict(RLock)
+
+import threading
+
+def preload_symbols():
+    exchanges = ["a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot"]
+    while True:
+        LogUtil.info("开始预加载并更新所有市场的 symbols...")
+        for exchange in exchanges:
+            try:
+                ex = get_exchange(Market(exchange))
+                all_stocks = ex.all_stocks()
+                processed_stocks = _process_stock_list(all_stocks)
+                with cache_lock:
+                    stock_cache[exchange] = processed_stocks
+                LogUtil.info(f"市场 {exchange} symbols 预加载完成，共 {len(processed_stocks)} 条")
+            except Exception as e:
+                LogUtil.error(f"预加载市场 {exchange} symbols 失败: {e}")
+        
+        # 每小时更新一次
+        time.sleep(3600)
+
+def start_symbol_preload_thread():
+    t = threading.Thread(target=preload_symbols, daemon=True, name="SymbolPreloadThread")
+    t.start()
 
 @tv_bp.route("/tv/config")
 @login_required
