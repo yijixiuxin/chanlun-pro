@@ -208,10 +208,56 @@
                     requestParams["resolution"].toString().toLowerCase();
                 // 保存数据
                 let obj_res = this.bars_result.get(res_key);
+                const raw_times = (response.t || []).map((t) => t * 1000);
+                const macd_dif = response.macd_dif || [];
+                const macd_dea = response.macd_dea || [];
+                const macd_hist = response.macd_hist || [];
+                const macd_area = response.macd_area || [];
+                const higher_macd_dif = response.higher_macd_dif || [];
+                const higher_macd_dea = response.higher_macd_dea || [];
+                const higher_macd_hist = response.higher_macd_hist || [];
+                const mergeAlignedArrays = (existingTimes = [], existingArr = [], newTimes = [], newArr = []) => {
+                    const map = new Map();
+                    existingTimes.forEach((t, i) => {
+                        let val = existingArr[i];
+                        if (val === null || val === undefined)
+                            val = NaN;
+                        map.set(t, val);
+                    });
+                    newTimes.forEach((t, i) => {
+                        let val = newArr[i];
+                        if (val === null || val === undefined)
+                            val = NaN;
+                        map.set(t, val);
+                    });
+                    const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
+                    return {
+                        times: allTimes,
+                        values: allTimes.map(t => {
+                            const v = map.get(t);
+                            return (v === undefined || v === null) ? NaN : v;
+                        })
+                    };
+                };
                 if (response.update == false || obj_res == undefined) {
+                    const difObj = mergeAlignedArrays([], [], raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays([], [], raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays([], [], raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays([], [], raw_times, macd_area);
+                    const hDifObj = mergeAlignedArrays([], [], raw_times, higher_macd_dif);
+                    const hDeaObj = mergeAlignedArrays([], [], raw_times, higher_macd_dea);
+                    const hHistObj = mergeAlignedArrays([], [], raw_times, higher_macd_hist);
                     this.bars_result.set(res_key, {
                         bars: bars,
                         meta: meta,
+                        times: difObj.times,
+                        macd_dif: difObj.values,
+                        macd_dea: deaObj.values,
+                        macd_hist: histObj.values,
+                        macd_area: areaObj.values,
+                        higher_macd_dif: hDifObj.values,
+                        higher_macd_dea: hDeaObj.values,
+                        higher_macd_hist: hHistObj.values,
                         fxs: response.fxs,
                         bis: response.bis,
                         xds: response.xds,
@@ -305,6 +351,22 @@
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
                     obj_res.chart_color = response.chart_color;
+                    const oldTimes = obj_res.times || [];
+                    const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays(oldTimes, obj_res.macd_dea, raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays(oldTimes, obj_res.macd_hist, raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays(oldTimes, obj_res.macd_area, raw_times, macd_area);
+                    const hDifObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dif, raw_times, higher_macd_dif);
+                    const hDeaObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dea, raw_times, higher_macd_dea);
+                    const hHistObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_hist, raw_times, higher_macd_hist);
+                    obj_res.times = difObj.times;
+                    obj_res.macd_dif = difObj.values;
+                    obj_res.macd_dea = deaObj.values;
+                    obj_res.macd_hist = histObj.values;
+                    obj_res.macd_area = areaObj.values;
+                    obj_res.higher_macd_dif = hDifObj.values;
+                    obj_res.higher_macd_dea = hDeaObj.values;
+                    obj_res.higher_macd_hist = hHistObj.values;
                     this.bars_result.set(res_key, obj_res);
                 }
             }
