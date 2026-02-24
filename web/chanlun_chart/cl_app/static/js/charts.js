@@ -187,8 +187,13 @@ class ChartManager {
             var btnDisplay = global_widget.createButton();
             btnDisplay.textContent = "缠论显示设置 ▾";
             btnDisplay.addEventListener("click", function () {
+                if ($('#cl_display_menu').length > 0) {
+                    $('#cl_display_menu').remove();
+                    return;
+                }
+                
                 let html = `
-                    <div style="padding: 15px; line-height: 28px; font-size: 14px;">
+                    <div id="cl_display_menu" style="position: absolute; z-index: 99999999; background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 4px; padding: 10px; line-height: 28px; font-size: 14px; color: #333;">
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_fx" ${window.cl_show_config.fx ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 分型</label>
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bi" ${window.cl_show_config.bi ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 笔</label>
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_xd" ${window.cl_show_config.xd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 线段</label>
@@ -198,24 +203,35 @@ class ChartManager {
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_mmd" ${window.cl_show_config.mmd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 买卖点</label>
                     </div>
                 `;
-                layer.open({
-                    type: 1,
-                    title: '缠论显示/隐藏',
-                    area: ['200px', '320px'],
-                    shade: 0,
-                    offset: 'rt',
-                    content: html,
-                    success: function() {
-                        const keys = ['fx', 'bi', 'xd', 'zsd', 'zs', 'bc', 'mmd'];
-                        keys.forEach(k => {
-                            $('#cl_cb_' + k).change(function() {
-                                window.cl_show_config[k] = $(this).is(':checked');
-                                localStorage.setItem('cl_show_config', JSON.stringify(window.cl_show_config));
-                                self.debouncedDrawChanlun();
-                            });
-                        });
-                    }
+                $('body').append(html);
+                
+                // Get the button's position
+                const btnRect = btnDisplay.getBoundingClientRect();
+                
+                // Position the menu right below the button
+                $('#cl_display_menu').css({
+                    top: (btnRect.bottom + window.scrollY + 5) + 'px',
+                    left: (btnRect.left + window.scrollX) + 'px'
                 });
+
+                const keys = ['fx', 'bi', 'xd', 'zsd', 'zs', 'bc', 'mmd'];
+                keys.forEach(k => {
+                    $('#cl_cb_' + k).change(function() {
+                        window.cl_show_config[k] = $(this).is(':checked');
+                        localStorage.setItem('cl_show_config', JSON.stringify(window.cl_show_config));
+                        self.debouncedDrawChanlun();
+                    });
+                });
+
+                // Close when clicking outside
+                setTimeout(() => {
+                    $(document).on('click.cl_menu_close', function(e) {
+                        if (!$(e.target).closest('#cl_display_menu').length && !$(e.target).closest(btnDisplay).length) {
+                            $('#cl_display_menu').remove();
+                            $(document).off('click.cl_menu_close');
+                        }
+                    });
+                }, 10);
             });
 
             var buttonReload = global_widget.createButton();
@@ -437,7 +453,7 @@ class ChartManager {
 
         // Reconcile each type
         this.reconcile('fxs', window.cl_show_config.fx ? barsResult.fxs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
-        this.reconcile('bis', window.cl_show_config.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 1 }), 'bi'));
+        this.reconcile('bis', window.cl_show_config.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 2 }), 'bi'));
         this.reconcile('xds', window.cl_show_config.xd ? barsResult.xds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
         this.reconcile('zsds', window.cl_show_config.zsd ? barsResult.zsds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
         this.reconcile('bi_zss', window.cl_show_config.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs'));
