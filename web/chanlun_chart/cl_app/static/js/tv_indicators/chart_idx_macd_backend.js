@@ -130,6 +130,11 @@ var TvIdxMACDBackend = (function () {
                   // 检查 widget 是否就绪并获取周期
                   if (window.tvWidget.symbolInterval) {
                     const realRes = window.tvWidget.symbolInterval().interval.toString().toLowerCase();
+                    const realSymbol = window.tvWidget.symbolInterval().symbol.toString().toLowerCase();
+                    if (!rawTicker || rawTicker === "") {
+                        rawTicker = realSymbol;
+                        targetCode = rawTicker;
+                    }
                     if (realRes && realRes !== rawInterval) {
                       // 仅当 context 是纯数字 (如 "1") 而 realRes 是复杂周期 (如 "1d") 时才覆盖
                       // 或者当 realRes 包含 'd'/'w' 时强制覆盖
@@ -155,12 +160,11 @@ var TvIdxMACDBackend = (function () {
               }
 
               // 3. 解析目标
-              let targetCode = rawTicker;
-              const parts = rawTicker.split(':');
-              if (parts.length > 1) {
-                targetCode = parts[1].replace(/[^\d]/g, '');
-              } else {
-                targetCode = rawTicker.replace(/[^\d]/g, '');
+              let targetCode = rawTicker; // 直接使用完整的 ticker 进行匹配，例如 a:sh.000001
+              
+              // 增加调试日志，方便排查 MACD 数据是否成功匹配
+              if (Math.random() < 0.01) { // 降低日志频率
+                  // console.log("[MACD-DEBUG] Searching for:", targetCode, "Interval:", rawInterval);
               }
 
               let targetInterval = rawInterval;
@@ -196,6 +200,7 @@ var TvIdxMACDBackend = (function () {
               }
 
               // 5. 提取数据 (优先使用跨周期 higher_macd 数据)
+
               if (barsResult && barsResult.times) {
                 // 判断是否有跨周期 MACD 数据
                 const hasHigherMacd = barsResult.higher_macd_dif &&
