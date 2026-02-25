@@ -76,12 +76,24 @@ MARKET_D_TO_W_RATIO = {
 # 基础数据缓存
 stock_cache = TTLCache(maxsize=100, ttl=7200)
 
-# 图表数据计算结果缓存 (10秒缓存，防止短时间重复计算)
-chart_data_cache = TTLCache(maxsize=50, ttl=10)
+# 图表数据计算结果缓存 (30秒缓存，防止短时间重复计算，减少快速切换周期时的重复计算)
+chart_data_cache = TTLCache(maxsize=100, ttl=300)
 
 cache_lock = RLock()
 req_lock = RLock()
-chart_calc_locks = defaultdict(RLock)
+
+class _LimitedLockDict(defaultdict):
+    """带大小限制的锁字典，防止 cache_key 变化导致的内存泄漏"""
+    _MAX_SIZE = 200
+
+    def __missing__(self, key):
+        if len(self) >= self._MAX_SIZE:
+            oldest_key = next(iter(self))
+            del self[oldest_key]
+        self[key] = RLock()
+        return self[key]
+
+chart_calc_locks = _LimitedLockDict()
 
 import threading
 
@@ -489,6 +501,9 @@ def tv_history():
 
                 # 存入缓存
                 chart_data_cache[cache_key] = cl_chart_data
+
+    if cl_chart_data is None:
+        return {"s": "no_data"}
 
     if not is_cache_hit:
         LogUtil.info(f"[tv_history] Calc Finish & Cached. Returning {len(cl_chart_data['t'])} bars (Full).")

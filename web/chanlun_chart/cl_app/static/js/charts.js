@@ -94,6 +94,7 @@ class ChartManager {
         this.chart = null;
         this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
         this.macdStudyId = null;
+        this._intervalVersion = 0;
     }
 
     init() {
@@ -546,7 +547,8 @@ class ChartManager {
     handleIntervalChange(interval) {
         if (!interval) return;
         const market = Utils.get_market(); if (!market) return;
-        console.log("[DEBUG-CHARTS] Interval Changed to:", interval);
+        this._intervalVersion++;
+        console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
         this.clear_draw_chanlun();
         if (this.chart) {
@@ -571,27 +573,29 @@ class ChartManager {
                 this._is_switching_interval = false;
             }
         }
-        this.debouncedDrawChanlun();
+        // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
     }
     handleDataReady() { this.debouncedDrawChanlun(); }
     handleTick() { this.debouncedDrawChanlun(); }
     handleVisibleRangeChange() { this.debouncedDrawChanlun(); }
 
     safeRemove(entityId) {
-        if (!entityId) return;
+        if (!entityId) return Promise.resolve();
         if (typeof entityId.then === 'function') {
-            entityId.then(id => {
+            return entityId.then(id => {
                 if (id) {
                     try { this.chart.removeEntity(id); } catch (e) { }
                 }
             }).catch(e => { });
         } else {
             try { this.chart.removeEntity(entityId); } catch (e) { }
+            return Promise.resolve();
         }
     }
 
     clear_draw_chanlun(clear_type) {
         this._is_drawing_chanlun = true;
+        const removePromises = [];
         if (clear_type == "last") {
             for (const symbolKey in this.obj_charts) {
                 for (const chartType in this.obj_charts[symbolKey]) {
@@ -600,7 +604,7 @@ class ChartManager {
                     for (const _i in this.obj_charts[symbolKey][chartType]) {
                         const item = this.obj_charts[symbolKey][chartType][_i];
                         if (item.time == maxTime) {
-                            this.safeRemove(item.id);
+                            removePromises.push(this.safeRemove(item.id));
                         }
                     }
                     this.obj_charts[symbolKey][chartType] = this.obj_charts[symbolKey][chartType].filter((item) => item.time != maxTime);
@@ -610,13 +614,16 @@ class ChartManager {
             Object.values(this.obj_charts).forEach((symbolData) => {
                 Object.values(symbolData).forEach((chartItems) => {
                     chartItems.forEach((item) => {
-                        this.safeRemove(item.id);
+                        removePromises.push(this.safeRemove(item.id));
                     });
                 });
             });
             this.obj_charts = {};
         }
-        this._is_drawing_chanlun = false;
+        // 异步等待所有删除完成后再恢复标志
+        Promise.allSettled(removePromises).then(() => {
+            this._is_drawing_chanlun = false;
+        });
     }
 
     getChartData() {
@@ -689,14 +696,17 @@ class ChartManager {
             }
         });
 
-        // 1. Remove items not in new list or outside window
-        for (let i = container.length - 1; i >= 0; i--) {
-            const existing = container[i];
-            if (!newKeys.has(existing.key) || existing.time < from) {
+        // 1. Remove items not in new list or outside window (batch filter for O(n) performance)
+        const toKeep = [];
+        for (const existing of container) {
+            if (newKeys.has(existing.key) && existing.time >= from) {
+                toKeep.push(existing);
+            } else {
                 this.safeRemove(existing.id);
-                container.splice(i, 1);
             }
         }
+        container.length = 0;
+        toKeep.forEach(item => container.push(item));
 
         // 2. Create new items
         const existingKeys = new Set(container.map(item => item.key));
@@ -757,6 +767,7 @@ class ChartManager {
     }
 
     draw_chanlun() {
+        const capturedVersion = this._intervalVersion;
         if (!this.chart) {
             try {
                 this.chart = this.widget.activeChart();
@@ -769,6 +780,11 @@ class ChartManager {
         const chartData = this.getChartData();
         if (!chartData) {
             console.warn("[DEBUG-CHARTS] draw_chanlun aborted: No chart data or chart not ready.");
+            return;
+        }
+        // 版本号不匹配说明已经切换到新周期，跳过旧数据绘制
+        if (capturedVersion !== this._intervalVersion) {
+            console.log("[DEBUG-CHARTS] draw_chanlun skipped: interval version mismatch (stale data)");
             return;
         }
         const symbolInterval = this.widget.symbolInterval();
