@@ -53,6 +53,14 @@ futures_contracts = {
         "fee_rate_close": 0.00005107,  # 平仓 手续费
         "fee_rate_close_today": 0.00005107,  # 平今 手续费
     },
+    "SHFE.ag": {  # 白银
+        "symbol_size": 15,  # 每手数量
+        "margin_rate_long": 0.18,  # 买开 保证金率
+        "margin_rate_short": 0.18,  # 卖开 保证金率
+        "fee_rate_open": 0.00005107,  # 开仓 手续费
+        "fee_rate_close": 0.00005107,  # 平仓 手续费
+        "fee_rate_close_today": 0.00005107,  # 平今 手续费
+    },
     "SHFE.BU": {  # 沥青
         "symbol_size": 10,  # 每手数量
         "margin_rate_long": 0.16,  # 买开 保证金率

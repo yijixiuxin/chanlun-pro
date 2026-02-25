@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
     market = "a"
     start = "2015-01-01 00:00:00"
-    end = "2024-05-01 00:00:00"
+    end = "2026-01-30 00:00:00"
     code = "SH.000001"
     frequencys = ["w", "d", "30m"]
     cl_config = {}

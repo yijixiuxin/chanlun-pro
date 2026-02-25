@@ -408,17 +408,115 @@ class Strategy(ABC):
         return atr
 
     @staticmethod
-    def idx_cci(cd: ICL, period=14):
+    def idx_cci(cd: ICL, period=14, slow_period=40):
         # 指标说明：
         # 按市场的通行的标准，CCI指标的运行区间可分为三大类：大于﹢100、小于 - 100 和﹢100——-100 之间。
         # 1. 当CCI＞﹢100 时，表明股价已经进入非常态区间——超买区间，股价的异动现象应多加关注。
         # 2. 当CCI＜-100 时，表明股价已经进入另一个非常态区间——超卖区间，投资者可以逢低吸纳股票。
         # 3. 当CCI介于﹢100——-100 之间时表明股价处于窄幅振荡整理的区间——常态区间，投资者应以观望为主。
-        close_prices = np.array([k.c for k in cd.get_klines()[-(period + 120) :]])
-        high_prices = np.array([k.h for k in cd.get_klines()[-(period + 120) :]])
-        low_prices = np.array([k.l for k in cd.get_klines()[-(period + 120) :]])
+        close_prices = np.array([k.c for k in cd.get_klines()[-(max(period, slow_period) + 120) :]])
+        high_prices = np.array([k.h for k in cd.get_klines()[-(max(period, slow_period) + 120) :]])
+        low_prices = np.array([k.l for k in cd.get_klines()[-(max(period, slow_period) + 120) :]])
         cci = talib.CCI(high_prices, low_prices, close_prices, timeperiod=period)
-        return cci
+        cci_slow = talib.CCI(high_prices, low_prices, close_prices, timeperiod=slow_period)
+        return {"cci": cci, "cci_slow": cci_slow}
+
+    @staticmethod
+    def idx_dpo(cd: ICL, period=20, ma_period=6):
+        """
+        DPO 指标
+        """
+        close_prices = np.array([k.c for k in cd.get_klines()[-(period + 200) :]])
+        # DPO = Close - SMA(Close, period) shifted (period/2 + 1)
+        ma = talib.MA(close_prices, timeperiod=period)
+        shift = int(period / 2 + 1)
+        # Shift ma forward by shift
+        dpo = np.full_like(close_prices, np.nan)
+        if len(close_prices) > shift:
+            # dpo[i] = close[i] - ma[i-shift]
+            dpo[shift:] = close_prices[shift:] - ma[:-shift]
+        
+        dpo_ma = talib.MA(dpo, timeperiod=ma_period)
+        return {"dpo": dpo, "dpo_ma": dpo_ma}
+
+    @staticmethod
+    def idx_obv(cd: ICL, ma_period=20):
+        """
+        OBV 指标
+        """
+        close_prices = np.array([k.c for k in cd.get_klines()[-(ma_period + 200) :]])
+        volumes = np.array([k.v for k in cd.get_klines()[-(ma_period + 200) :]])
+        obv = talib.OBV(close_prices, volumes)
+        obv_ma = talib.MA(obv, timeperiod=ma_period)
+        return {"obv": obv, "obv_ma": obv_ma}
+
+    @staticmethod
+    def idx_asi(cd: ICL, limit_move=0, ma_period=20):
+        """
+        ASI 指标 (Accumulative Swing Index)
+        """
+        klines = cd.get_klines()
+        opens = np.array([k.o for k in klines])
+        highs = np.array([k.h for k in klines])
+        lows = np.array([k.l for k in klines])
+        closes = np.array([k.c for k in klines])
+
+        prev_closes = np.roll(closes, 1)
+        prev_opens = np.roll(opens, 1)
+        # First element adjustment
+        prev_closes[0] = closes[0]
+        prev_opens[0] = opens[0]
+
+        limit_moves = np.full_like(closes, float(limit_move))
+        if limit_move == 0:
+            # If limit_move is 0, default to 10% of previous close (approx for stocks)
+            # Or maybe just use max(High-Low)? 
+            # Using 10% of price is a reasonable default for standard ASI behavior
+            limit_moves = prev_closes * 0.1
+        
+        # Ensure limit_moves is not 0 to avoid division by zero
+        limit_moves[limit_moves == 0] = prev_closes[limit_moves == 0] * 0.1
+        
+        A = np.abs(highs - prev_closes)
+        B = np.abs(lows - prev_closes)
+        C = np.abs(highs - lows)
+        D = np.abs(prev_closes - prev_opens)
+        
+        R = np.zeros_like(closes)
+        cond1 = (A > B) & (A > C)
+        cond2 = (B > A) & (B > C)
+        cond3 = (~cond1) & (~cond2)
+        
+        R[cond1] = A[cond1] + 0.5 * B[cond1] + 0.25 * D[cond1]
+        R[cond2] = B[cond2] + 0.5 * A[cond2] + 0.25 * D[cond2]
+        R[cond3] = C[cond3] + 0.25 * D[cond3]
+        
+        # Avoid division by zero
+        R[R == 0] = 1e-10
+
+        K = np.maximum(A, B)
+        
+        X = closes - prev_closes + 0.5 * (closes - opens) + 0.25 * (prev_closes - prev_opens)
+        SI = 50 * (X / R) * (K / limit_moves)
+        
+        # First SI is usually 0 or undefined due to roll
+        SI[0] = 0
+        
+        ASI = np.cumsum(SI)
+        ASI_MA = talib.MA(ASI, timeperiod=ma_period)
+        
+        return {"asi": ASI, "asi_ma": ASI_MA}
+
+    @staticmethod
+    def idx_roc(cd: ICL, period=12, ma_period=6, slow_period=25):
+        """
+        ROC 指标
+        """
+        close_prices = np.array([k.c for k in cd.get_klines()[-(max(period, slow_period) + 200) :]])
+        roc = talib.ROC(close_prices, timeperiod=period)
+        roc_ma = talib.MA(roc, timeperiod=ma_period)
+        roc_slow = talib.ROC(close_prices, timeperiod=slow_period)
+        return {"roc": roc, "roc_ma": roc_ma, "roc_slow": roc_slow}
 
     @staticmethod
     def idx_kdj(cd: ICL, period=9, M1=3, M2=3, end_datetime=None):
