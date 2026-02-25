@@ -1015,6 +1015,26 @@ class DB(object):
     ):
         # 保存图表布局，并返回 id
         with self.Session() as session:
+            # 如果是 drawing 或 study_template，先尝试根据名称查找并更新，实现覆盖保存
+            if chart_type in ["drawing", "study_template"]:
+                chart = (
+                    session.query(TableByTVCharts)
+                    .filter(
+                        TableByTVCharts.name == name,
+                        TableByTVCharts.chart_type == chart_type,
+                        TableByTVCharts.client_id == client_id,
+                        TableByTVCharts.user_id == user_id,
+                    )
+                    .first()
+                )
+                if chart:
+                    chart.content = content
+                    chart.symbol = symbol
+                    chart.resolution = resolution
+                    chart.timestamp = int(time.time())
+                    session.commit()
+                    return chart.id
+
             chart = TableByTVCharts(
                 chart_type=chart_type,
                 client_id=client_id,
@@ -1028,6 +1048,7 @@ class DB(object):
             session.add(chart)
             session.commit()
             return chart.id
+
 
     def tv_chart_update(
         self, chart_type, id, client_id, user_id, name, content, symbol, resolution
@@ -1076,6 +1097,7 @@ class DB(object):
                     TableByTVCharts.client_id == client_id,
                     TableByTVCharts.user_id == user_id,
                 )
+                .order_by(TableByTVCharts.timestamp.desc())
                 .first()
             )
 

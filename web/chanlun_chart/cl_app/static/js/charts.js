@@ -1,4 +1,5 @@
 window.cl_show_config = JSON.parse(localStorage.getItem('cl_show_config')) || { fx: true, bi: true, xd: true, zsd: true, zs: true, bc: true, mmd: true };
+window.cl_independent_drawings = JSON.parse(localStorage.getItem('cl_independent_drawings')) || false;
 // -----------------------------------------------------------------------
 // 文件名: charts.js
 // 修复版: V48_Registry_And_Fix
@@ -110,6 +111,182 @@ class ChartManager {
         window.tvDatafeed = this.udf_datafeed; // 兼容旧代码
         // ---------------------------------------
 
+        const self = this;
+        const client_id = "chanlun_pro_" + Utils.get_market() + "_" + this.id;
+        const user_id = "999";
+        const save_load_adapter = {
+            getAllCharts: function () {
+                return fetch("/tv/1.1/charts?client=" + client_id + "&user=" + user_id)
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok' ? res.data : []);
+            },
+            removeChart: function (chartId) {
+                return fetch("/tv/1.1/charts?client=" + client_id + "&user=" + user_id + "&chart=" + chartId, { method: "DELETE" })
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok');
+            },
+            saveChart: function (chartData) {
+                console.log("[DEBUG-CHARTS] saveChart called", chartData);
+                return fetch("/tv/1.1/charts?client=" + client_id + "&user=" + user_id + (chartData.id ? "&chart=" + chartData.id : ""), {
+                    method: "POST",
+                    body: new URLSearchParams({
+                        name: chartData.name,
+                        symbol: chartData.symbol,
+                        resolution: chartData.resolution,
+                        content: chartData.content
+                    })
+                })
+                    .then(res => res.json())
+                    .then(res => {
+                        console.log("[DEBUG-CHARTS] saveChart response", res);
+                        return res.status === 'ok' ? (res.id || chartData.id || "default") : null;
+                    })
+                    .catch(err => {
+                        console.error("[DEBUG-CHARTS] saveChart error", err);
+                        return null;
+                    });
+            },
+            getChartContent: function (chartId) {
+                console.log("[DEBUG-CHARTS] getChartContent called", chartId);
+                return fetch("/tv/1.1/charts?client=" + client_id + "&user=" + user_id + "&chart=" + chartId)
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok' ? res.data.content : null);
+            },
+            getAllStudyTemplates: function () {
+                return fetch("/tv/1.1/study_templates?client=" + client_id + "&user=" + user_id)
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok' ? res.data : []);
+            },
+            removeStudyTemplate: function (templateData) {
+                return fetch("/tv/1.1/study_templates?client=" + client_id + "&user=" + user_id + "&template=" + templateData.name, { method: "DELETE" })
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok');
+            },
+            saveStudyTemplate: function (templateData) {
+                return fetch("/tv/1.1/study_templates?client=" + client_id + "&user=" + user_id, {
+                    method: "POST",
+                    body: new URLSearchParams({
+                        name: templateData.name,
+                        content: templateData.content
+                    })
+                })
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok');
+            },
+            getStudyTemplateContent: function (templateData) {
+                return fetch("/tv/1.1/study_templates?client=" + client_id + "&user=" + user_id + "&template=" + templateData.name)
+                    .then(res => res.json())
+                    .then(res => res.status === 'ok' ? res.data.content : null);
+            },
+            saveLineToolsAndGroups: function (layoutId, chartId, state) {
+                console.log("[DEBUG-CHARTS] saveLineToolsAndGroups called", { layoutId, chartId, state });
+                return new Promise((resolve) => {
+                    if (self._is_switching_interval) {
+                        console.log("[DEBUG-CHARTS] Skip saveLineToolsAndGroups during interval switch");
+                        return resolve();
+                    }
+                    if (self._is_drawing_chanlun) {
+                        console.log("[DEBUG-CHARTS] Skip saveLineToolsAndGroups during chanlun redraw");
+                        return resolve();
+                    }
+                    const rawResolution = self.chart ? self.chart.resolution() : Utils.get_local_data(Utils.get_market() + "_interval_" + self.id);
+                    const resolution = window.cl_independent_drawings ? rawResolution : 'all';
+                    const symbol = self.chart ? self.chart.symbol() : Utils.get_market() + ":" + Utils.get_code();
+
+                    // 核心修复：处理 state.sources 可能为 Map 的情况
+                    let processedState = { ...state };
+
+                    // TradingView 有时返回的 state.sources 并不是原生的 Map，而是带有内部结构的自定义对象
+                    // 无论如何，我们需要确保它被转换为一个可以被 JSON.stringify 序列化的普通对象
+                    if (state.sources) {
+                        if (state.sources instanceof Map || typeof state.sources.entries === 'function') {
+                            try {
+                                processedState.sources = Object.fromEntries(state.sources);
+                            } catch (e) {
+                                // Fallback if fromEntries fails
+                                processedState.sources = {};
+                                for (let [k, v] of state.sources.entries()) {
+                                    processedState.sources[k] = v;
+                                }
+                            }
+                        } else if (typeof state.sources === 'object') {
+                            // 尝试深度克隆以去除不可序列化的内部方法/属性
+                            try {
+                                processedState.sources = JSON.parse(JSON.stringify(state.sources));
+                            } catch (e) {
+                                processedState.sources = state.sources;
+                            }
+                        }
+                    }
+
+                    console.log("[DEBUG-CHARTS] Saving drawings for", { symbol, resolution, sourcesCount: Object.keys(processedState.sources || {}).length, rawSources: state.sources });
+
+                    fetch("/tv/1.1/drawings?client=" + client_id + "&user=" + user_id + "&chart=" + chartId + "&layout=" + layoutId + "&symbol=" + symbol + "&resolution=" + resolution, {
+                        method: "POST",
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ state: processedState })
+                    }).then(res => res.json()).then(res => {
+                        console.log("[DEBUG-CHARTS] saveLineToolsAndGroups response", res);
+                        resolve();
+                    }).catch(err => {
+                        console.error("[DEBUG-CHARTS] saveLineToolsAndGroups error", err);
+                        resolve();
+                    });
+                });
+            },
+            loadLineToolsAndGroups: function (layoutId, chartId, requestType, requestContext) {
+                console.log("[DEBUG-CHARTS] loadLineToolsAndGroups called", { layoutId, chartId, requestType, requestContext });
+                return new Promise((resolve) => {
+                    const resolution = requestContext.resolution;
+                    const symbol = requestContext.symbol;
+
+                    // mainSeriesLineTools 和 load 类型需要加载画线数据
+                    // lineToolsWithoutSymbol、studiesLineTools 等类型直接返回 null
+                    if (requestType !== 'mainSeriesLineTools' && requestType !== 'load') {
+                        return resolve(null);
+                    }
+                    // load 类型可能没有 symbol/resolution，从 chart 实例获取 fallback
+                    const loadSymbol = symbol || (self.chart ? self.chart.symbol() : '');
+                    const rawResolution = resolution || (self.chart ? self.chart.resolution() : '');
+                    const loadResolution = window.cl_independent_drawings ? rawResolution : 'all';
+                    if (!loadSymbol || !loadResolution) {
+                        return resolve(null);
+                    }
+
+                    fetch("/tv/1.1/drawings?client=" + client_id + "&user=" + user_id + "&chart=" + chartId + "&layout=" + layoutId + "&symbol=" + loadSymbol + "&resolution=" + loadResolution)
+                        .then(res => res.json())
+                        .then(res => {
+                            if (res.status === 'ok' && res.data && Object.keys(res.data).length > 0) {
+                                // TradingView's applyLineToolsState expects sources to be a Map.
+                                // We must manually construct the Map from the parsed JSON object.
+                                let loadedState = res.data;
+                                const sources = new Map();
+                                if (loadedState.sources) {
+                                    for (let [key, state] of Object.entries(loadedState.sources)) {
+                                        sources.set(key, state);
+                                    }
+                                }
+                                const groups = new Map();
+                                if (loadedState.groups) {
+                                    for (let [key, state] of Object.entries(loadedState.groups)) {
+                                        groups.set(key, state);
+                                    }
+                                }
+                                resolve({ sources, groups });
+                            } else {
+                                resolve(null);
+                            }
+                        }).catch(err => {
+                            console.error("[DEBUG-CHARTS] loadLineToolsAndGroups error:", err);
+                            resolve(null);
+                        });
+                });
+            }
+        };
+        this.save_load_adapter = save_load_adapter;
+
         this.widget = window.tvWidget = new TradingView.widget({
             debug: false, autosize: true, fullscreen: false,
             container: "tv_chart_container_" + this.id,
@@ -122,9 +299,9 @@ class ChartManager {
             time_frames: [], timezone: "Asia/Shanghai", locale: "zh",
             symbol_search_request_delay: 100, auto_save_delay: 5, study_count_limit: 100,
             disabled_features: ["go_to_date"],
-            enabled_features: ["study_templates", "seconds_resolution"],
+            enabled_features: ["study_templates", "seconds_resolution", "saveload_separate_drawings_storage"],
             saved_data_meta_info: { uid: 1, name: "default", description: "default" },
-            charts_storage_url: "/tv", charts_storage_api_version: "1.1",
+            save_load_adapter: save_load_adapter,
             client_id: "chanlun_pro_" + Utils.get_market() + "_" + this.id,
             user_id: "999", load_last_chart: true,
             custom_indicators_getter: this.getCustomIndicators,
@@ -189,9 +366,10 @@ class ChartManager {
             btnDisplay.addEventListener("click", function () {
                 if ($('#cl_display_menu').length > 0) {
                     $('#cl_display_menu').remove();
+                    $('#cl_menu_backdrop').remove();
                     return;
                 }
-                
+
                 let html = `
                     <div id="cl_display_menu" style="position: absolute; z-index: 99999999; background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 4px; padding: 10px; line-height: 28px; font-size: 14px; color: #333;">
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_fx" ${window.cl_show_config.fx ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 分型</label>
@@ -201,13 +379,15 @@ class ChartManager {
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_zs" ${window.cl_show_config.zs ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 中枢</label>
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bc" ${window.cl_show_config.bc ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 背驰</label>
                         <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_mmd" ${window.cl_show_config.mmd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 买卖点</label>
+                        <hr style="margin: 5px 0;">
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_independent_drawings" ${window.cl_independent_drawings ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 独立周期画线</label>
                     </div>
                 `;
                 $('body').append(html);
-                
+
                 // Get the button's position
                 const btnRect = btnDisplay.getBoundingClientRect();
-                
+
                 // Position the menu right below the button
                 $('#cl_display_menu').css({
                     top: (btnRect.bottom + window.scrollY + 5) + 'px',
@@ -216,22 +396,42 @@ class ChartManager {
 
                 const keys = ['fx', 'bi', 'xd', 'zsd', 'zs', 'bc', 'mmd'];
                 keys.forEach(k => {
-                    $('#cl_cb_' + k).change(function() {
+                    $('#cl_cb_' + k).change(function () {
                         window.cl_show_config[k] = $(this).is(':checked');
                         localStorage.setItem('cl_show_config', JSON.stringify(window.cl_show_config));
                         self.debouncedDrawChanlun();
                     });
                 });
 
-                // Close when clicking outside
-                setTimeout(() => {
-                    $(document).on('click.cl_menu_close', function(e) {
-                        if (!$(e.target).closest('#cl_display_menu').length && !$(e.target).closest(btnDisplay).length) {
-                            $('#cl_display_menu').remove();
-                            $(document).off('click.cl_menu_close');
-                        }
-                    });
-                }, 10);
+                $('#cl_cb_independent_drawings').change(function () {
+                    window.cl_independent_drawings = $(this).is(':checked');
+                    localStorage.setItem('cl_independent_drawings', JSON.stringify(window.cl_independent_drawings));
+                    // 动态切换：重新加载当前周期的画线数据
+                    if (self.chart && self.save_load_adapter) {
+                        self._is_switching_interval = true;
+                        self.chart.removeAllShapes();
+                        const interval = self.chart.resolution();
+                        const symbol = self.chart.symbol();
+                        self.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
+                            if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
+                                self.chart.applyLineToolsState(state);
+                            }
+                            setTimeout(() => { self._is_switching_interval = false; }, 1000);
+                        }).catch(e => {
+                            console.error("Error reloading drawings after mode switch", e);
+                            self._is_switching_interval = false;
+                        });
+                    }
+                    layer.msg(window.cl_independent_drawings ? '已切换为独立周期画线' : '已切换为共享画线', { time: 1000 });
+                });
+
+                // 点击非弹框区域时关闭菜单（使用透明遮罩确保可靠捕获点击）
+                const backdrop = $('<div id="cl_menu_backdrop" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999998;background:transparent;"></div>');
+                $('body').append(backdrop);
+                backdrop.on('click', function () {
+                    $('#cl_display_menu').remove();
+                    $(this).remove();
+                });
             });
 
             var buttonReload = global_widget.createButton();
@@ -261,6 +461,57 @@ class ChartManager {
             this.chart.dataReady(() => this.handleDataReady());
             this.widget.subscribe("onTick", () => this.handleTick());
             this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
+
+            // 页面加载时手动触发一次 loadLineToolsAndGroups（两种模式都需要）
+            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
+                const interval = this.chart.resolution();
+                const symbol = this.chart.symbol();
+                console.log("[DEBUG-CHARTS] Initial loadLineToolsAndGroups", { symbol, interval });
+                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
+                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
+                        this.chart.applyLineToolsState(state);
+                    }
+                }).catch(e => {
+                    console.error("Error loading drawings on chart ready", e);
+                });
+            }
+
+
+            // 订阅画图事件，强制保存（但排除缠论重绘期间的事件）
+            this.widget.subscribe('drawing_event', (id, eventType) => {
+                console.log("[DEBUG-CHARTS] drawing_event", id, eventType);
+                if (this._is_drawing_chanlun) return;
+                if (this.chart) {
+                    setTimeout(() => {
+                        if (this._is_drawing_chanlun) return;
+                        if (typeof this.chart.getLineToolsState === 'function') {
+                            const state = this.chart.getLineToolsState();
+                            if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
+                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state);
+                            }
+                        } else if (typeof this.widget.saveChartToServer === 'function') {
+                            this.widget.saveChartToServer();
+                        }
+                    }, 500);
+                }
+            });
+            this.widget.subscribe('onAutoSaveNeeded', () => {
+                console.log("[DEBUG-CHARTS] onAutoSaveNeeded");
+                if (this._is_drawing_chanlun) return;
+                if (this.chart) {
+                    setTimeout(() => {
+                        if (this._is_drawing_chanlun) return;
+                        if (typeof this.chart.getLineToolsState === 'function') {
+                            const state = this.chart.getLineToolsState();
+                            if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
+                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state);
+                            }
+                        } else if (typeof this.widget.saveChartToServer === 'function') {
+                            this.widget.saveChartToServer();
+                        }
+                    }, 500);
+                }
+            });
         });
     }
 
@@ -271,6 +522,24 @@ class ChartManager {
         if (Utils.get_market() !== market) { Utils.set_local_data("market", market); location.reload(); return; }
         Utils.set_local_data("market", market); Utils.set_local_data(`${market}_code`, code);
         this.clear_draw_chanlun();
+        if (this.chart) {
+            this._is_switching_interval = true;
+            this.chart.removeAllShapes();
+            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
+                const interval = this.chart.resolution();
+                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol.ticker }).then(state => {
+                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
+                        this.chart.applyLineToolsState(state);
+                    }
+                    setTimeout(() => { this._is_switching_interval = false; }, 1000);
+                }).catch(e => {
+                    console.error("Error loading drawings on symbol change", e);
+                    this._is_switching_interval = false;
+                });
+            } else {
+                this._is_switching_interval = false;
+            }
+        }
         if (typeof ZiXuan.render_zixuan_opts === "function") ZiXuan.render_zixuan_opts();
         this.debouncedDrawChanlun();
     }
@@ -280,6 +549,28 @@ class ChartManager {
         console.log("[DEBUG-CHARTS] Interval Changed to:", interval);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
         this.clear_draw_chanlun();
+        if (this.chart) {
+            // 在清除旧周期画线前，先禁用自动保存，防止空画布覆盖数据库内容
+            this._is_switching_interval = true;
+            this.chart.removeAllShapes();
+            // 重新加载当前周期的画线数据（独立模式按周期加载，共享模式加载 'all'）
+            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
+                const code = Utils.get_code();
+                const symbol = market + ":" + code;
+                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
+                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
+                        this.chart.applyLineToolsState(state);
+                    }
+                    // 延迟恢复，确保 applyLineToolsState 完成且没有触发后续的自动保存覆盖
+                    setTimeout(() => { this._is_switching_interval = false; }, 1000);
+                }).catch(e => {
+                    console.error("Error loading drawings on interval change", e);
+                    this._is_switching_interval = false;
+                });
+            } else {
+                this._is_switching_interval = false;
+            }
+        }
         this.debouncedDrawChanlun();
     }
     handleDataReady() { this.debouncedDrawChanlun(); }
@@ -300,6 +591,7 @@ class ChartManager {
     }
 
     clear_draw_chanlun(clear_type) {
+        this._is_drawing_chanlun = true;
         if (clear_type == "last") {
             for (const symbolKey in this.obj_charts) {
                 for (const chartType in this.obj_charts[symbolKey]) {
@@ -324,6 +616,7 @@ class ChartManager {
             });
             this.obj_charts = {};
         }
+        this._is_drawing_chanlun = false;
     }
 
     getChartData() {
@@ -482,7 +775,9 @@ class ChartManager {
         if (!symbolInterval) return;
 
         console.log("[DEBUG-CHARTS] draw_chanlun executing for", symbolInterval.interval);
+        this._is_drawing_chanlun = true;
         this.drawChartElements(chartData, symbolInterval.interval);
+        this._is_drawing_chanlun = false;
     }
 }
 

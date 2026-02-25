@@ -804,13 +804,33 @@ def tv_study_templates(version):
 def tv_drawings(version):
     client_id = str(request.args.get("client"))
     user_id = str(request.args.get("user"))
-    chart_id = request.args.get("chart")
-    layout_id = request.args.get("layout")
+    chart_id = request.args.get("chart", "default")
+    layout_id = request.args.get("layout", "default")
+    symbol = request.args.get("symbol", "")
+    resolution = request.args.get("resolution", "")
+
+    # drawings are tied to symbol + resolution
+    drawing_name = f"drawings_{symbol}_{resolution}"
+
+    if request.method == "POST":
+        content = request.json.get("state", {})
+        import json
+        db.tv_chart_save("drawing", client_id, user_id, drawing_name, json.dumps(content), symbol, resolution)
+        return {"status": "ok"}
 
     if request.method == "GET":
+        drawing = db.tv_chart_get_by_name("drawing", drawing_name, client_id, user_id)
+        if drawing:
+            import json
+            try:
+                data = json.loads(drawing.content)
+            except:
+                data = {}
+            return {
+                "status": "ok",
+                "data": data,
+            }
         return {
             "status": "ok",
             "data": {},
         }
-    else:
-        return {"status": "ok"}
