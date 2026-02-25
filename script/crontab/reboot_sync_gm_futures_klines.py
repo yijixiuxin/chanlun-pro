@@ -78,10 +78,25 @@ sync_frequencys = {
             datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d 09:00:00"
         )
     },
+    "5m": {
+        "start": fun.datetime_to_str(
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d 09:00:00"
+        )
+    },
+    "30m": {
+        "start": fun.datetime_to_str(
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d 09:00:00"
+        )
+    },
+    "d": {
+        "start": fun.datetime_to_str(
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d 09:00:00"
+        )
+    },
 }
 print(sync_frequencys)
 # 本地周期与掘金周期对应关系
-fre_maps = {"1m": "60s"}
+fre_maps = {"1m": "60s", "5m": "300s", "30m": "1800s", "d": "1d"}
 
 
 error_codes = []
@@ -96,16 +111,15 @@ def sync_code(code):
                 if last_dt is None:
                     last_dt = dt["start"]
 
-                last_dt = fun.datetime_to_str(
-                    fun.str_to_datetime(last_dt, "%Y-%m-%d %H:%M:%S")
-                    - datetime.timedelta(days=1),
-                    "%Y-%m-%d",
-                )
+                last_dt_dt = fun.str_to_datetime(last_dt, "%Y-%m-%d %H:%M:%S") - datetime.timedelta(days=1)
+                start_dt_dt = fun.str_to_datetime(dt["start"], "%Y-%m-%d %H:%M:%S")
+                if last_dt_dt < start_dt_dt:
+                    last_dt_dt = start_dt_dt
                 now_datetime = datetime.datetime.now()
                 klines = history(
                     code,
                     fre_maps[f],
-                    start_time=fun.str_to_datetime(last_dt, "%Y-%m-%d"),
+                    start_time=last_dt_dt,
                     end_time=now_datetime,
                     fields="symbol,frequency,open,close,low,high,volume,position,eob",
                     adjust=ADJUST_NONE,

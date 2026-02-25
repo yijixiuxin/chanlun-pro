@@ -35,16 +35,26 @@ set_token(config.GM_TOKEN)
 
 symbols = get_symbols(sec_type1=1010, sec_type2=101001)
 run_codes = [_s["exchange"] + "." + _s["sec_id"] for _s in symbols]
-# run_codes = []
+
+# 如果需要测试，可以只同步少量代码，取消下面的注释
+# run_codes = run_codes[:10]
+
+# 额外同步的指数代码
 for _c in [
     "SH.000001",  # 上证指数
     "SZ.399001",  # 深圳指数
     "SZ.399006",  # 创业板指
     "SH.000852",  # 中证1000
+    "SH.000688",  # 科创50
+    "SH.000300",  # 沪深300
 ]:
-    run_codes.append(_c.replace("SZ.", "SZSE.").replace("SH.", "SHSE."))
+    idx_code = _c.replace("SZ.", "SZSE.").replace("SH.", "SHSE.")
+    if idx_code not in run_codes:
+        run_codes.append(idx_code)
 
-# run_codes = ["SHSE.603959"]
+# 转换代码格式为标准格式
+run_codes = [code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.") for code in run_codes]
+
 print("Sync Len : ", len(run_codes))
 
 
@@ -57,25 +67,33 @@ sync_frequencys = {
     "d": {
         "start": "1992-01-01",
     },
-    "5m": {
+    "30m": {
         "start": fun.datetime_to_str(
-            datetime.datetime.now() - datetime.timedelta(days=170), "%Y-%m-%d"
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d"
         )
     },
-    # "1m": {
-    #     "start": fun.datetime_to_str(
-    #         datetime.datetime.now() - datetime.timedelta(days=170), "%Y-%m-%d"
-    #     )
-    # },
+    "5m": {
+        "start": fun.datetime_to_str(
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d"
+        )
+    },
+    "1m": {
+        "start": fun.datetime_to_str(
+            datetime.datetime.now() - datetime.timedelta(days=180), "%Y-%m-%d"
+        )
+    },
 }
 
 
 print(sync_frequencys)
 # 本地周期与掘金周期对应关系
-fre_maps = {"d": "1d", "5m": "300s", "1m": "60s"}
+fre_maps = {"d": "1d", "30m": "1800s", "5m": "300s", "1m": "60s"}
 
 
 def sync_code(code):
+    # 掘金使用 SHSE/SZSE，项目数据库使用 SH/SZ，需要进行转换
+    gm_code = code.replace("SH.", "SHSE.").replace("SZ.", "SZSE.")
+    
     for f, dt in sync_frequencys.items():
         try:
             last_dt = db_ex.query_last_datetime(code, f)
@@ -85,20 +103,25 @@ def sync_code(code):
                 fun.str_to_datetime(last_dt, "%Y-%m-%d") - datetime.timedelta(days=1),
                 "%Y-%m-%d",
             )
+            last_dt_dt = fun.str_to_datetime(last_dt, "%Y-%m-%d")
+            start_dt_dt = fun.str_to_datetime(dt["start"], "%Y-%m-%d")
+            if last_dt_dt < start_dt_dt:
+                last_dt_dt = start_dt_dt
             # print(f'{code} query last datetime use time: ', time.time() - s_time)
 
             now_datetime = datetime.datetime.now()
             klines = history(
-                code,
+                gm_code,
                 fre_maps[f],
-                start_time=last_dt,
+                start_time=last_dt_dt,
                 end_time=now_datetime,
                 adjust=ADJUST_NONE,
                 df=True,
             )
             if len(klines) == 0:
                 break
-            klines.loc[:, "code"] = klines["symbol"]
+            # 存入数据库的代码使用标准格式
+            klines.loc[:, "code"] = code
             klines.loc[:, "date"] = pd.to_datetime(klines["eob"])
             klines = klines[["code", "date", "open", "close", "high", "low", "volume"]]
             # print(f'{code} query history use time: ', time.time() - s_time)
@@ -118,6 +141,18 @@ def sync_code(code):
             # utils.send_dd_msg('a', '执行 %s 同步K线异常' % code)
 
     return True
+
+
+def sync_codes(codes):
+    for code in codes:
+        sync_code(code)
+    return True
+
+
+def chunk_codes(codes, group_size):
+    if group_size <= 0:
+        return [codes]
+    return [codes[i : i + group_size] for i in range(0, len(codes), group_size)]
 
 
 def convert_code(code):
@@ -197,8 +232,13 @@ def convert_code(code):
 
 
 if __name__ == "__main__":
-    for _code in tqdm(run_codes, desc="同步进度"):
-        sync_code(_code)
+    group_size = 100
+    code_groups = chunk_codes(run_codes, group_size)
+    bar = tqdm(total=len(run_codes), desc="同步进度")
+    with ProcessPoolExecutor(max_workers=6) as ex:
+        for group, _ in zip(code_groups, ex.map(sync_codes, code_groups)):
+            bar.update(len(group))
+    bar.close()
 
     # 转换周期（测试）
     # convert_code("SHSE.600519")
