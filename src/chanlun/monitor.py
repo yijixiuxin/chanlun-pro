@@ -444,7 +444,7 @@ def monitoring_code(
                 if cd and is_fresh:
                     current_k_index = cd.get_src_klines()[-1].index
                     # 信号产生于笔的结束分型处
-                    signal_k_index = bi.end.k.index
+                    signal_k_index = bi.end.get_end_src_k().index
                     # 阈值设为 9 (可根据需求调整)
                     if current_k_index - signal_k_index > 9:
                         is_fresh = False
@@ -469,7 +469,7 @@ def monitoring_code(
                 # 规则3: 距离限制
                 if cd and is_fresh:
                    current_k_index = cd.get_src_klines()[-1].index
-                   signal_k_index = xd.end.k.index
+                   signal_k_index = xd.end.get_end_src_k().index
                    # 阈值设为 20 (可根据需求调整)
                    if current_k_index - signal_k_index > 20:
                        is_fresh = False
