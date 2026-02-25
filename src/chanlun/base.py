@@ -14,6 +14,7 @@ class Market(Enum):
     CURRENCY_SPOT = "currency_spot"  # 数字货币现货
     US = "us"  # 美股
     FX = "fx"  # 外汇
+    OPTION = "option"  # 期权
 
 
 if __name__ == "__main__":

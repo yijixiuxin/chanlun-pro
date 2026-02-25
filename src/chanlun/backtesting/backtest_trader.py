@@ -21,7 +21,7 @@ class BackTestTrader(Trader):
         mode="signal",
         market="a",
         init_balance=100000,
-        fee_rate=0.0005,
+        fee_rate=0.0008,
         max_pos=10,
         log=None,
     ):
@@ -57,6 +57,10 @@ class BackTestTrader(Trader):
         if self.market == "futures":
             self.can_close_today = True
             self.can_short = True
+        if self.market == "option":
+            self.can_close_today = True
+            self.can_short = True
+        
 
         self.allow_mmds = None
 

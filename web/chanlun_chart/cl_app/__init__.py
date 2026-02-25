@@ -132,6 +132,7 @@ def create_app(test_config=None):
         "fx": list(get_exchange(Market.FX).support_frequencys().keys()),
         "us": list(get_exchange(Market.US).support_frequencys().keys()),
         "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
+        "option": list(get_exchange(Market.OPTION).support_frequencys().keys()),
         "ny_futures": list(get_exchange(Market.NY_FUTURES).support_frequencys().keys()),
         "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
         "currency_spot": list(
@@ -146,6 +147,7 @@ def create_app(test_config=None):
         "fx": get_exchange(Market.FX).default_code(),
         "us": get_exchange(Market.US).default_code(),
         "futures": get_exchange(Market.FUTURES).default_code(),
+        "option": get_exchange(Market.OPTION).default_code(),
         "ny_futures": get_exchange(Market.NY_FUTURES).default_code(),
         "currency": get_exchange(Market.CURRENCY).default_code(),
         "currency_spot": get_exchange(Market.CURRENCY_SPOT).default_code(),
@@ -158,6 +160,7 @@ def create_app(test_config=None):
         "fx": "24x7",
         "us": "24x7",
         "futures": "24x7",
+        "option": "24x7",
         "ny_futures": "24x7",
         "currency": "24x7",
         "currency_spot": "24x7",
@@ -170,6 +173,7 @@ def create_app(test_config=None):
         "fx": "Asia/Shanghai",
         "us": "America/New_York",
         "futures": "Asia/Shanghai",
+        "option": "Asia/Shanghai",
         "ny_futures": "Asia/Shanghai",
         "currency": str(get_localzone()),
         "currency_spot": str(get_localzone()),
@@ -181,6 +185,7 @@ def create_app(test_config=None):
         "fx": "stock",
         "us": "stock",
         "futures": "futures",
+        "option": "futures",
         "ny_futures": "futures",
         "currency": "crypto",
         "currency_spot": "crypto",
@@ -283,6 +288,7 @@ def create_app(test_config=None):
                 {"value": "fx", "name": "外汇", "desc": "外汇"},
                 {"value": "us", "name": "美股", "desc": "美股"},
                 {"value": "futures", "name": "国内期货", "desc": "国内期货"},
+                {"value": "option", "name": "期权", "desc": "期权"},
                 {"value": "ny_futures", "name": "纽约期货", "desc": "纽约期货"},
                 {
                     "value": "currency",
@@ -329,6 +335,14 @@ def create_app(test_config=None):
 
         ex = get_exchange(Market(market))
         stocks = ex.stock_info(code)
+        
+        # 兼容性处理：如果找不到股票信息，可能是 undefined 或其他异常代码，构造一个默认的返回
+        if stocks is None:
+            stocks = {
+                "code": code,
+                "name": code,
+                "precision": 2, # 默认精度
+            }
 
         sector = ""
         industry = ""

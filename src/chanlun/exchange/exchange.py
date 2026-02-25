@@ -161,10 +161,16 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
     period_maps = {
         "1m": "1min",
         "2m": "2min",
+        "3m": "3min",
         "5m": "5min",
         "10m": "10min",
         "15m": "15min",
         "30m": "30min",
+        "60m": "60min",
+        "2h": "2H",
+        "4h": "4H",
+        "6h": "6H",
+        "1d": "D",
         "d": "D",
         "w": "W",
         "m": "M",
@@ -210,7 +216,7 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
                 period_klines["date"]
             ).dt.tz_localize(__tz)
 
-        if to_f in ["2m", "5m", "10m", "15m", "30m"]:
+        if to_f in ["2m", "3m", "5m", "10m", "15m", "30m", "60m", "2h", "4h", "6h"]:
             period_klines.loc[:, "date"] = period_klines.index
             period_klines["date"] = period_klines["date"] + pd.to_timedelta(
                 period_maps[to_f]

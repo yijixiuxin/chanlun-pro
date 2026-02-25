@@ -202,7 +202,7 @@ class TableByAIAnalyse(Base):
     market = Column(String(20), comment="市场")  # 市场
     stock_code = Column(String(20), comment="标的")  # 标的
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), comment="分析周期")
+    frequency = Column(String(100), comment="分析周期")
     dt = Column(DateTime, comment="分析时间")
     model = Column(String(100), comment="分析模型")
     prompt = Column(Text, comment="缠论当下说明")
@@ -260,6 +260,12 @@ class DB(object):
                             conn.execute(text("ALTER TABLE cl_alert_task ADD COLUMN is_send_img INTEGER DEFAULT 0"))
                         else:
                             conn.execute(text("ALTER TABLE cl_alert_task ADD COLUMN is_send_img INTEGER DEFAULT 0"))
+                
+                # 检查 cl_ai_analyses 表 frequency 字段长度
+                if "cl_ai_analyses" in inspector.get_table_names():
+                    if config.DB_TYPE == "mysql":
+                         conn.execute(text("ALTER TABLE cl_ai_analyses MODIFY COLUMN frequency VARCHAR(100)"))
+                         
         except Exception as e:
             print(f"检查并更新表结构异常：{e}")
 
@@ -313,8 +319,8 @@ class DB(object):
                 "mysql_collate": "utf8mb4_general_ci",
             }
 
-        if market == Market.FUTURES.value:
-            # 期货市场，添加持仓列
+        if market == Market.FUTURES.value or market == Market.OPTION.value:
+            # 期货/期权市场，添加持仓列
             TableByKlines.p = Column(Float, comment="持仓量")
 
         self.__cache_tables[table_name] = TableByKlines
