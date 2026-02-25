@@ -226,6 +226,11 @@ class ChartManager {
       TvIdxVegasMA.idx(PineJS),
       TvIdxVOL.idx(PineJS),
       TvIdxZhixing.idx(PineJS),
+      TvIdxDPO.idx(PineJS),
+      TvIdxCCI.idx(PineJS),
+      TvIdxOBV.idx(PineJS),
+      TvIdxROC.idx(PineJS),
+      TvIdxASI.idx(PineJS),
     ]);
   }
 
