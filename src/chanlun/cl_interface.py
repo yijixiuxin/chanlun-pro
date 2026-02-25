@@ -186,47 +186,75 @@ class FX:
             # 第三个缠论K线要一根单阴线
             if len(three_k.klines) > 1:
                 return ld
-            if three_k.klines[0].c > three_k.klines[0].o:
+            if three_k.c > three_k.o:
                 return ld
-            # 第三个K线的高点，低于第二根的 50% 以下
-            if three_k.h < (two_k.h - ((two_k.h - two_k.l) * 0.5)):
+
+            # 1. 破低：第三根破第一根低点，或者第二根是阴线且破第一根低点
+            if three_k.l < one_k.l or (two_k.c < two_k.o and two_k.l < one_k.l):
                 ld += 1
-            # 第三个最低点是三根中最低的
-            if three_k.l < one_k.l and three_k.l < two_k.l:
+
+            # 2. 破中：第三根破第二根低点
+            if three_k.l < two_k.l:
                 ld += 1
-            # 第三根的K线的收盘价要低于前两个K线
-            if three_k.klines[0].c < one_k.l and three_k.klines[0].c < two_k.l:
+
+            # 3. 收盘低：第三根收盘低于第一根低点，或者第二根是阴线且收盘低于第一根低点
+            if three_k.c < one_k.l or (
+                two_k.c < two_k.o and two_k.c < one_k.l
+            ):
                 ld += 1
-            # 第三个缠论K线的实体，要大于第二根缠论K线
-            if (three_k.h - three_k.l) > (two_k.h - two_k.l):
+
+            # 4. 力度/实体：
+            # 情况A: 第三根实体大于第二根
+            # 情况B: 第二根是阴线，且实体大于第一根 (大阴线顶分型)
+            two_body = abs(two_k.h - two_k.l)
+            one_body = abs(one_k.h - one_k.l)
+            three_body = abs(three_k.h - three_k.l)
+
+            if three_body > two_body:
                 ld += 1
-            # 第三个K线不能有太大的下影线
-            if (three_k.klines[0].h - three_k.klines[0].l) != 0 and (
-                three_k.klines[0].c - three_k.klines[0].l
-            ) / (three_k.klines[0].h - three_k.klines[0].l) < 0.3:
+            elif two_k.c < two_k.o and two_body > one_body:
+                ld += 1
+
+            # 5. 第三个K线不能有太大的下影线
+            if (three_k.h - three_k.l) != 0 and (
+                three_k.c - three_k.l
+            ) / (three_k.h - three_k.l) < 0.3:
                 ld += 1
         elif self.type == "di":
             # 第三个缠论K线要一根单阳线
             if len(three_k.klines) > 1:
                 return ld
-            if three_k.klines[0].c < three_k.klines[0].o:
+            if three_k.c < three_k.o:
                 return ld
-            # 第三个K线的低点，高于第二根的 50% 之上
-            if three_k.l > (two_k.l + ((two_k.h - two_k.l) * 0.5)):
+
+            # 1. 破高：第三根破第一根高点，或者第二根是阳线且破第一根高点
+            if three_k.h > one_k.h or (two_k.c > two_k.o and two_k.h > one_k.h):
                 ld += 1
-            # 第三个最高点是三根中最高的
-            if three_k.h > one_k.h and three_k.h > two_k.h:
+
+            # 2. 破中：第三根破第二根高点
+            if three_k.h > two_k.h:
                 ld += 1
-            # 第三根的K线的收盘价要高于前两个K线
-            if three_k.klines[0].c > one_k.h and three_k.klines[0].c > two_k.h:
+
+            # 3. 收盘高：第三根收盘高于第一根高点，或者第二根是阳线且收盘高于第一根高点
+            if three_k.c > one_k.h or (
+                two_k.c > two_k.o and two_k.c > one_k.h
+            ):
                 ld += 1
-            # 第三个缠论K线的实体，要大于第二根缠论K线
-            if (three_k.h - three_k.l) > (two_k.h - two_k.l):
+
+            # 4. 力度/实体：
+            two_body = abs(two_k.h - two_k.l)
+            one_body = abs(one_k.h - one_k.l)
+            three_body = abs(three_k.h - three_k.l)
+
+            if three_body > two_body:
                 ld += 1
-            # 第三个K线不能有太大的上影线
-            if (three_k.klines[0].h - three_k.klines[0].l) != 0 and (
-                three_k.klines[0].h - three_k.klines[0].c
-            ) / (three_k.klines[0].h - three_k.klines[0].l) < 0.3:
+            elif two_k.c > two_k.o and two_body > one_body:
+                ld += 1
+
+            # 5. 第三个K线不能有太大的上影线
+            if (three_k.h - three_k.l) != 0 and (
+                three_k.h - three_k.c
+            ) / (three_k.h - three_k.l) < 0.3:
                 ld += 1
         return ld
 

@@ -633,6 +633,59 @@ def render_charts(
     )
 
     # 画 未完成笔
+    # 2026-01-11 Update: 前端动态计算虚拟笔（虚线）
+    # 如果最后一笔已完成 (is_done=True)，则连接其结束点到当前最新价格（或极值）
+    # 如果最后一笔未完成 (is_done=False)，它本身就是虚线（因为 line_xu_bis 包含了未完成笔），无需额外处理
+    
+    # 检查最后一笔状态
+    if cl_data.get_bis():
+        last_bi = cl_data.get_bis()[-1]
+        if last_bi.is_done():
+            # 获取剩余K线（从最后一笔结束点之后开始）
+            # 注意：cl_data.get_src_klines() 返回的是原始K线，我们需要找到对应的索引
+            # 这里简化处理，直接连接最后一笔结束点到最新K线的收盘价（或根据方向找极值）
+            # 为了准确，我们遍历 cl_data.get_cl_klines()
+            
+            # 找到最后一笔结束分型对应的 K 线索引
+            last_fx_index = last_bi.end.index
+            cl_klines = cl_data.get_cl_klines()
+            
+            if last_fx_index < len(cl_klines) - 1:
+                # 有后续 K 线
+                remaining_klines = cl_klines[last_fx_index + 1:]
+                target_k = None
+                
+                if last_bi.type == "up":
+                    # 上笔结束，找后续最低点
+                    min_low = float('inf')
+                    for k in remaining_klines:
+                        if k.l < min_low:
+                            min_low = k.l
+                            target_k = k
+                else:
+                    # 下笔结束，找后续最高点
+                    max_high = float('-inf')
+                    for k in remaining_klines:
+                        if k.h > max_high:
+                            max_high = k.h
+                            target_k = k
+                
+                if target_k:
+                    # 添加这段虚线到 line_xu_bis
+                    # 起点
+                    start_dt = datetime_convert_frequency(last_bi.end.k.date, target_dates)
+                    start_val = last_bi.end.val
+                    # 终点
+                    end_dt = datetime_convert_frequency(target_k.date, target_dates)
+                    end_val = target_k.l if last_bi.type == "up" else target_k.h
+                    
+                    line_xu_bis["index"].append(start_dt)
+                    line_xu_bis["val"].append(start_val)
+                    # pyecharts Line 需要连续的点，所以这里添加终点，并通过 None 断开（如果有前一段）
+                    # 但 line_xu_bis 是一个列表，直接追加即可
+                    line_xu_bis["index"].append(end_dt)
+                    line_xu_bis["val"].append(end_val)
+
     overlap_kline = overlap_kline.overlap(
         (
             Line()

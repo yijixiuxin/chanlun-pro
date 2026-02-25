@@ -206,6 +206,8 @@ class CL(ICL):
         self._cal_zs()
         self._cal_mmd_bc()
 
+        return self
+
     def _cal_idx(self):
         close_prices = np.array([k.c for k in self.klines])
         if len(close_prices) < 35:
@@ -649,6 +651,7 @@ class CL(ICL):
             return
 
         bi_type = self.config["bi_type"]
+        default_zs_type = self.config.get("zs_bi_type", ["common"])[0]
 
         # 增量更新：清理失效的笔
         # 笔依赖于分型，如果分型被清理了，对应的笔也要清理
@@ -697,7 +700,8 @@ class CL(ICL):
                         start=start_fx,
                         end=end_fx,
                         _type="down" if start_fx.type == "ding" else "up",
-                        index=len(self.bis)
+                        index=len(self.bis),
+                        default_zs_type=default_zs_type
                     )
                     bi.high, bi.low = self._bi_high_low(start_fx, end_fx)
                     self.bis.append(bi)
@@ -803,7 +807,8 @@ class CL(ICL):
                         start=start_fx,
                         end=next_fx,
                         _type="down" if start_fx.type == "ding" else "up",
-                        index=len(self.bis)
+                        index=len(self.bis),
+                        default_zs_type=default_zs_type
                     )
                     bi.high, bi.low = self._bi_high_low(start_fx, next_fx)
                     self.bis.append(bi)
@@ -813,52 +818,9 @@ class CL(ICL):
                 
             curr_fx_idx += 1
 
-        # 2026-01-11 Update: 恢复虚拟笔逻辑（未完成笔）
-        # 用于在图表上画出当前价格连接线（虚线），但不参与买卖点计算（除非有分型）
-        if self.bis:
-            last_bi = self.bis[-1]
-            last_k_index = last_bi.end.k.index
-            
-            # 检查是否还有剩余K线
-            if last_k_index < len(self.cl_klines) - 1:
-                # 寻找剩余K线中的极值点
-                remaining_klines = self.cl_klines[last_k_index + 1:]
-                target_k = None
-                
-                if last_bi.type == "up":
-                    # 上笔结束，找后续最低点
-                    min_low = float('inf')
-                    for k in remaining_klines:
-                        if k.l < min_low:
-                            min_low = k.l
-                            target_k = k
-                else:
-                    # 下笔结束，找后续最高点
-                    max_high = float('-inf')
-                    for k in remaining_klines:
-                        if k.h > max_high:
-                            max_high = k.h
-                            target_k = k
-                
-                if target_k:
-                    # 创建虚拟分型（done=False, klines不足3根）
-                    # 这样会被 _cal_mmd_bc 中的 check (len < 3) 过滤，不参与买卖点计算
-                    virtual_fx = FX(
-                        _type="di" if last_bi.type == "up" else "ding",
-                        k=target_k,
-                        klines=[target_k],
-                        val=target_k.l if last_bi.type == "up" else target_k.h,
-                        index=target_k.index,
-                        done=False
-                    )
-                    virtual_bi = BI(
-                        start=last_bi.end,
-                        end=virtual_fx,
-                        _type="down" if last_bi.type == "up" else "up",
-                        index=len(self.bis)
-                    )
-                    virtual_bi.high, virtual_bi.low = self._bi_high_low(last_bi.end, virtual_fx)
-                    self.bis.append(virtual_bi)
+        # 2026-01-11 Update: 移除后端虚拟笔逻辑
+        # 虚拟笔（虚线）将由前端 kcharts.py 负责渲染，不再污染后端数据结构
+        # 这样可以保证 strategy 和 monitor 获取到的 bis 是纯净的缠论结构
 
     def _check_xd_basic_overlap(self, start_bi: BI, end_bi: BI) -> bool:
         """
@@ -1936,21 +1898,38 @@ class CL(ICL):
                 else:
                     break
 
-            # 检查笔是否有效：未完成的笔，如果没有形成 valid 的分型（end.klines < 3），不进行买卖点计算
-            # 只有当笔的分型构造完成后（至少3根K线），才认为具备判断买卖点的基础
-            # 2025-01-05 Update: 增加严格的几何形态检查，确保未完成笔的端点具备分型结构
+            # 2026-01-11 Update: 严格检查未完成笔的合法性
+            # 1. 顶底分型不能共用 K 线
+            # 2. 顶底分型之间至少有一个独立的 K 线 (对于新笔规则)
+            # 3. 分型结构完整 (至少3根缠论K线)
             if not bi.is_done():
                 if not bi.end.klines or len(bi.end.klines) < 3:
                     continue
+                
                 # 严格检查分型几何形态
                 k1, k2, k3 = bi.end.klines[0], bi.end.klines[1], bi.end.klines[2]
                 if bi.end.type == "ding":
-                    # 顶分型：中间高点最高
                     if not (k2.h > k1.h and k2.h > k3.h):
                         continue
                 elif bi.end.type == "di":
-                    # 底分型：中间低点最低
                     if not (k2.l < k1.l and k2.l < k3.l):
+                        continue
+                
+                # 检查顶底分型是否共用 K 线
+                # 获取起始分型的结束K线索引和结束分型的起始K线索引
+                start_fx_end_idx = bi.start.klines[-1].index
+                end_fx_start_idx = bi.end.klines[0].index
+                
+                # 共用 K 线检查: 结束分型的第一根 K 线索引必须大于起始分型的最后一根 K 线索引
+                # 即 end_fx_start_idx > start_fx_end_idx
+                if end_fx_start_idx <= start_fx_end_idx:
+                    continue
+                
+                # 对于新笔规则，要求中间至少有一根独立的 K 线
+                # 即 end_fx_start_idx - start_fx_end_idx >= 2
+                # 如果 bi_type 是 new，则严格检查
+                if self.config.get("bi_type", "new") == "new":
+                    if end_fx_start_idx - start_fx_end_idx < 2:
                         continue
 
             # 1. 基本背驰判断（笔背驰）
