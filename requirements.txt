@@ -26,15 +26,24 @@ pyarmor
 setuptools
 
 futu-api
-ccxt
+ccxt==4.5.22
 baostock
 polygon-api-client
 alpaca-py
 ib_insync
 akshare
 tqsdk
-openai
+openai==2.8.1
 playwright
 
 pyfolio-reloaded
 dtaidistance
+
+# Conflicting packages pinned to environment versions
+websockets==15.0.1
+pillow==12.0.0
+pydantic==2.12.5
+protobuf==3.20.3
+cryptography==46.0.3
+ipython==9.7.0
+TA-Lib==0.4.25
