@@ -130,7 +130,7 @@ class StrategyDemo(Strategy):
                     next_bi_now.mmd_exists(
                         ["1sell", "2sell", "l2sell", "3sell", "l3sell"]
                     )
-                    or next_bi_now.bc_exists(["bi", "pz", "qs"])
+                    and next_bi_now.bc_exists(["bi", "pz", "qs"])
                 )
             ):
                 return Operation(
@@ -154,7 +154,7 @@ class StrategyDemo(Strategy):
                 and self.bi_td(next_bi_now, data_now)
                 and (
                     next_bi_now.mmd_exists(["1buy", "2buy", "l2buy", "3buy", "l3buy"])
-                    or next_bi_now.bc_exists(["bi", "pz", "qs"])
+                    and next_bi_now.bc_exists(["bi", "pz", "qs"])
                 )
             ):
                 return Operation(

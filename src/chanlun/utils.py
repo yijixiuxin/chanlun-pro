@@ -34,7 +34,7 @@ def config_get_dingding_keys(market):
         return db_dd_key
     if market == "a":
         return config.DINGDING_KEY_A
-    if market == "a":
+    if market == "hk":
         return config.DINGDING_KEY_HK
     if market == "us":
         return config.DINGDING_KEY_US
@@ -64,6 +64,7 @@ def config_get_feishu_keys(market):
         keys = config.FEISHU_KEYS[market]
     keys["user_id"] = config.FEISHU_KEYS["user_id"]
     keys["webhook_url"] = config.FEISHU_KEYS.get("webhook_url", "")
+    keys["webhook_url_hk"] = config.FEISHU_KEYS.get("webhook_url_hk", "")
     return keys
 
 
@@ -181,17 +182,27 @@ def send_fs_msg(market, title, contents: Union[str, list]):
             lark.logger.error(
                 f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
             )
-
+    if market == "futures":
     # 发送飞书群机器人webhook消息 https://open.feishu.cn/open-apis/bot/v2/hook/ffa2a92a-5ed4-4f0e-8c58-5a4068977288
-    if fs_key.get("webhook_url", "") != "":
-        try:
-            requests.post(
-                fs_key["webhook_url"],
-                json={"msg_type": "post", "content": {"post": msg_content}},
-            )
-        except Exception as e:
-            print(f"Send Feishu Webhook Msg Error: {e}")
-
+        if fs_key.get("webhook_url", "") != "":
+            try:
+                requests.post(
+                    fs_key["webhook_url"],
+                    json={"msg_type": "post", "content": {"post": msg_content}},
+                )
+            except Exception as e:
+                print(f"Send Feishu Webhook Msg Error: {e}")
+    if market == "hk":
+        # 发送飞书群机器人webhook消息（港股） https://open.feishu.cn/open-apis/bot/v2/hook/545d1411-c43e-499b-a7ca-adc22abd7414
+        if fs_key.get("webhook_url_hk", "") != "":
+            try:
+                requests.post(
+                    fs_key["webhook_url_hk"],
+                    json={"msg_type": "post", "content": {"post": msg_content}},
+                )
+            except Exception as e:
+                print(f"Send Feishu Webhook Msg Error: {e}")
+    
     return True
 
 

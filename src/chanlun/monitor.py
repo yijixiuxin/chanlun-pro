@@ -404,33 +404,75 @@ def monitoring_code(
             if "bi" in jh.keys():
                 # 笔信号
                 bi = jh["bi"]
-                # 规则1: 只提示未完成笔的信号 (已完成的笔信号属于历史信号)
-                if bi.is_done():
-                    is_fresh = False
+                # 规则1: 只提示未完成笔的信号，或者如果是已完成的笔，必须是最后一笔
+                # 用户反馈：is_done 过滤掉了刚完成但还没被新笔替代的信号，导致提醒不出来
+                # 逻辑修正：
+                # 1. 如果笔未完成 (is_done=False)，必然是最新信号 -> 提醒
+                # 2. 如果笔已完成 (is_done=True)，但它是最后一笔 (index == last_bi.index) -> 提醒
+                # 3. 只有当笔已完成且不是最后一笔时 -> 不提醒 (历史信号)
                 
-                # 规则2: 如果未完成笔之后已经出现了反向的一笔（哪怕未完成，只要有分型），则不再提示当前笔的信号
-                # 检查当前笔是否是最后一笔
                 # 获取数据对象
                 cd = jh.get("cd")
                 if cd and is_fresh:
                     last_bi = cd.get_bis()[-1]
-                    # 如果当前触发信号的笔不是最后一笔，说明后面已经有新的一笔生成（即使未完成）
-                    if bi.index != last_bi.index:
-                         is_fresh = False
+                    
+                    if bi.is_done():
+                        # 如果已完成，必须是最后一笔才提醒
+                        # 2025-01-11 Fix: 用户反馈部分信号仍未提醒
+                        # 原因可能是 last_bi 获取到了后续还未成笔的分型结构（如果有虚拟笔逻辑的话，但现在虚拟笔逻辑已移除）
+                        # 或者是数据更新不及时
+                        # 这里放宽条件：只要 index 大于等于倒数第二笔，就尝试提醒（防止数据更新时恰好生成了新的一笔但还没完全确认）
+                        # 还是严格一点：index == last_bi.index
+                        if bi.index != last_bi.index:
+                            is_fresh = False
+                    else:
+                        # 如果未完成，肯定是最后一笔（或者倒数第二笔被虚拟笔顶了一下，但虚拟笔不参与计算）
+                        # 只要后面没有更晚的有效笔结构，就是新鲜的
+                        # 简单起见，未完成的笔我们都认为是新鲜的（配合距离检查）
+                        pass
+
+                    # 额外检查：如果当前笔虽然是最后一笔，但后面已经有新的分型（虚拟笔或正在生成的笔）
+                    # 导致当前笔不再是“最前沿”的信号？
+                    # 实际上，如果后面有新笔生成，当前笔的 index 就不会等于 last_bi.index
+                    # 所以上述逻辑已经覆盖了。
+                
+                # 规则2: 如果未完成笔之后已经出现了反向的一笔（哪怕未完成，只要有分型），则不再提示当前笔的信号
+                # 这个逻辑其实已经被 "bi.index != last_bi.index" 覆盖了。
+                # 如果后面出了反向一笔，last_bi 就是那个反向笔，bi.index != last_bi.index 成立，is_fresh = False
+                
+                # 规则3: 距离限制 (防止信号过旧)
+                if cd and is_fresh:
+                    current_k_index = cd.get_src_klines()[-1].index
+                    # 信号产生于笔的结束分型处
+                    signal_k_index = bi.end.k.index
+                    # 阈值设为 9 (可根据需求调整)
+                    if current_k_index - signal_k_index > 9:
+                        is_fresh = False
 
             elif "xd" in jh.keys():
-                 # 线段信号
-                 xd = jh["xd"]
-                 # 规则1: 只提示未完成线段的信号
-                 if xd.is_done():
-                     is_fresh = False
-                 
-                 # 规则2: 检查是否是最后一段
-                 cd = jh.get("cd")
-                 if cd and is_fresh:
-                     last_xd = cd.get_xds()[-1]
-                     if xd.index != last_xd.index:
-                         is_fresh = False
+                # 线段信号
+                xd = jh["xd"]
+                # 规则1: 只提示未完成线段的信号，或者如果是已完成的线段，必须是最后一段
+                # 逻辑同笔
+
+                # 获取数据对象
+                cd = jh.get("cd")
+                if cd and is_fresh:
+                    last_xd = cd.get_xds()[-1]
+
+                    if xd.is_done():
+                        if xd.index != last_xd.index:
+                            is_fresh = False
+                    else:
+                        pass
+
+                # 规则3: 距离限制
+                if cd and is_fresh:
+                   current_k_index = cd.get_src_klines()[-1].index
+                   signal_k_index = xd.end.k.index
+                   # 阈值设为 20 (可根据需求调整)
+                   if current_k_index - signal_k_index > 20:
+                       is_fresh = False
             
             if is_fresh:
                 send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
