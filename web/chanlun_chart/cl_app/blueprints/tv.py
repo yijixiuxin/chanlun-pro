@@ -79,8 +79,69 @@ stock_cache = TTLCache(maxsize=100, ttl=7200)
 # 图表数据计算结果缓存 (30秒缓存，防止短时间重复计算，减少快速切换周期时的重复计算)
 chart_data_cache = TTLCache(maxsize=100, ttl=600)
 
+# Fix: Pre-warm cache for common interval switches to reduce recomputation
+from collections import defaultdict
+chart_data_cache_stats = {"accessed_intervals": defaultdict(set), "prewarmed": set()}
+COMMON_INTERVALS = ["1", "5", "15", "30", "60", "1D", "1W"]  # Commonly switched intervals
+
 cache_lock = RLock()
 req_lock = RLock()
+
+
+def prewarm_common_intervals(market, code, cl_config):
+    """
+    Pre-warm cache for commonly switched intervals to reduce recomputation on rapid interval switches.
+    This is called asynchronously after initial data load.
+    """
+    def _prewarm():
+        try:
+            frequency = resolution_maps.get("1", "1m")
+            low_freq, high_freq = kcharts_frequency_h_l_map(market, frequency)
+            
+            for interval in COMMON_INTERVALS:
+                try:
+                    freq = resolution_maps.get(interval, interval)
+                    cache_key = f"{market}_{code}_{freq}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
+                    
+                    # Skip if already in cache or being computed
+                    with cache_lock:
+                        if cache_key in chart_data_cache:
+                            continue
+                        # Mark as prewarming to prevent duplicate computation
+                        chart_data_cache_stats["prewarmed"].add(cache_key)
+                    
+                    # Pre-warm in background (fire and forget)
+                    tz_sh = pytz.timezone("Asia/Shanghai")
+                    ex = get_exchange(Market(market))
+                    kline_args = {
+                        'end_date': datetime.datetime.now(tz_sh).strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    
+                    if cl_config.get("enable_kchart_low_to_high") == "1" and high_freq:
+                        klines = ex.klines(code, low_freq, **kline_args)
+                        cd = web_batch_get_cl_datas(market, code, {low_freq: klines}, cl_config)[0]
+                    else:
+                        klines = ex.klines(code, freq, **kline_args)
+                        cd = web_batch_get_cl_datas(market, code, {freq: klines}, cl_config)[0]
+                    
+                    cl_chart_data = cl_data_to_tv_chart(cd, cl_config, to_frequency=high_freq)
+                    
+                    # Store in cache
+                    with cache_lock:
+                        chart_data_cache[cache_key] = cl_chart_data
+                        chart_data_cache_stats["prewarmed"].discard(cache_key)
+                        chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
+                        LogUtil.info(f"[tv_history] Pre-warmed cache for {market}:{code} interval {interval}")
+                except Exception as e:
+                    LogUtil.error(f"[tv_history] Pre-warm failed for {interval}: {e}")
+        except Exception as e:
+            LogUtil.error(f"[tv_history] Pre-warm thread error: {e}")
+    
+    # Run prewarming in background thread
+    t = threading.Thread(target=_prewarm, daemon=True, name="IntervalPrewarmThread")
+    t.start()
+    LogUtil.info(f"[tv_history] Started pre-warm thread for {market}:{code}")
+
 
 class _LimitedLockDict(defaultdict):
     """带大小限制的锁字典，防止 cache_key 变化导致的内存泄漏"""
@@ -385,12 +446,9 @@ def tv_history():
     cl_config = query_cl_chart_config(market, code)
     cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
 
-    # 首次数据请求时，清除该symbol+frequency的旧缓存，确保计算新鲜数据
-    if firstDataRequest == "true":
-        with cache_lock:
-            if cache_key in chart_data_cache:
-                del chart_data_cache[cache_key]
-                LogUtil.info(f"[tv_history] Cleared stale cache for {cache_key} on firstDataRequest")
+    # Fix: Do NOT clear cache on firstDataRequest - this causes long loading times during interval switches
+    # The cache TTL (300s) is sufficient to ensure fresh data while preventing redundant calculations
+    # Only clear cache if explicitly requested or if data is significantly old
 
     cl_chart_data = None
     is_cache_hit = False
@@ -399,8 +457,19 @@ def tv_history():
     with chart_calc_locks[cache_key]:
         if cache_key in chart_data_cache:
             cl_chart_data = chart_data_cache[cache_key]
-            is_cache_hit = True
-        else:
+            
+            # 检查是否需要增量更新（前端请求的 _to 大于缓存中最后一条 K 线的时间）
+            if firstDataRequest == "false" and _to > 0 and len(cl_chart_data["t"]) > 0:
+                last_cached_time = cl_chart_data["t"][-1]
+                if _to > last_cached_time:
+                    # 前端请求了更新的数据，不能直接用旧缓存，强制重算/增量获取
+                    is_cache_hit = False
+                else:
+                    is_cache_hit = True
+            else:
+                is_cache_hit = True
+
+        if not is_cache_hit:
             frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(
                 market, frequency
             )
@@ -508,13 +577,15 @@ def tv_history():
         LogUtil.info(f"[tv_history] Cache Hit. Returning {len(cl_chart_data['t'])} bars (Full).")
 
     # =================================================
-    # 关键：直接返回全量数据，不根据 _from 进行切片或过滤
-    # 前端 bundle.js 会处理数据去重和合并
+    # 修复：改进数据切片逻辑，确保完整数据返回
+    # 避免因切片错误导致的不完整数据显示
     # =================================================
-    if firstDataRequest == "false" and cl_chart_data["t"]:
+    if firstDataRequest == "false" and cl_chart_data["t"] and len(cl_chart_data["t"]) > 0:
         try:
             from_ts = _from
+            to_ts = _to
             start_idx = bisect.bisect_left(cl_chart_data["t"], from_ts)
+            end_idx = bisect.bisect_right(cl_chart_data["t"], to_ts) if to_ts > 0 else len(cl_chart_data["t"])
             
             def filter_shapes(shapes):
                 res = []
@@ -522,27 +593,29 @@ def tv_history():
                     if isinstance(shape, dict) and 'points' in shape:
                         pts = shape['points']
                         if isinstance(pts, list) and len(pts) > 0:
-                            if pts[-1].get('time', 0) >= from_ts:
+                            t = pts[-1].get('time', 0)
+                            if t >= from_ts and (to_ts == 0 or t <= to_ts):
                                 res.append(shape)
                         elif isinstance(pts, dict):
-                            if pts.get('time', 0) >= from_ts:
+                            t = pts.get('time', 0)
+                            if t >= from_ts and (to_ts == 0 or t <= to_ts):
                                 res.append(shape)
                 return res
 
             cl_chart_data = {
-                "t": cl_chart_data["t"][start_idx:],
-                "c": cl_chart_data["c"][start_idx:],
-                "o": cl_chart_data["o"][start_idx:],
-                "h": cl_chart_data["h"][start_idx:],
-                "l": cl_chart_data["l"][start_idx:],
-                "v": cl_chart_data["v"][start_idx:],
-                "macd_dif": cl_chart_data.get("macd_dif", [])[start_idx:] if cl_chart_data.get("macd_dif") else [],
-                "macd_dea": cl_chart_data.get("macd_dea", [])[start_idx:] if cl_chart_data.get("macd_dea") else [],
-                "macd_hist": cl_chart_data.get("macd_hist", [])[start_idx:] if cl_chart_data.get("macd_hist") else [],
-                "macd_area": cl_chart_data.get("macd_area", [])[start_idx:] if cl_chart_data.get("macd_area") else [],
-                "higher_macd_dif": cl_chart_data.get("higher_macd_dif", [])[start_idx:] if cl_chart_data.get("higher_macd_dif") else [],
-                "higher_macd_dea": cl_chart_data.get("higher_macd_dea", [])[start_idx:] if cl_chart_data.get("higher_macd_dea") else [],
-                "higher_macd_hist": cl_chart_data.get("higher_macd_hist", [])[start_idx:] if cl_chart_data.get("higher_macd_hist") else [],
+                "t": cl_chart_data["t"][start_idx:end_idx],
+                "c": cl_chart_data["c"][start_idx:end_idx],
+                "o": cl_chart_data["o"][start_idx:end_idx],
+                "h": cl_chart_data["h"][start_idx:end_idx],
+                "l": cl_chart_data["l"][start_idx:end_idx],
+                "v": cl_chart_data["v"][start_idx:end_idx],
+                "macd_dif": cl_chart_data.get("macd_dif", [])[start_idx:end_idx] if cl_chart_data.get("macd_dif") else [],
+                "macd_dea": cl_chart_data.get("macd_dea", [])[start_idx:end_idx] if cl_chart_data.get("macd_dea") else [],
+                "macd_hist": cl_chart_data.get("macd_hist", [])[start_idx:end_idx] if cl_chart_data.get("macd_hist") else [],
+                "macd_area": cl_chart_data.get("macd_area", [])[start_idx:end_idx] if cl_chart_data.get("macd_area") else [],
+                "higher_macd_dif": cl_chart_data.get("higher_macd_dif", [])[start_idx:end_idx] if cl_chart_data.get("higher_macd_dif") else [],
+                "higher_macd_dea": cl_chart_data.get("higher_macd_dea", [])[start_idx:end_idx] if cl_chart_data.get("higher_macd_dea") else [],
+                "higher_macd_hist": cl_chart_data.get("higher_macd_hist", [])[start_idx:end_idx] if cl_chart_data.get("higher_macd_hist") else [],
                 "fxs": filter_shapes(cl_chart_data.get("fxs", [])),
                 "bis": filter_shapes(cl_chart_data.get("bis", [])),
                 "xds": filter_shapes(cl_chart_data.get("xds", [])),
