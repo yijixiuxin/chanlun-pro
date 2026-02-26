@@ -77,7 +77,7 @@ MARKET_D_TO_W_RATIO = {
 stock_cache = TTLCache(maxsize=100, ttl=7200)
 
 # 图表数据计算结果缓存 (30秒缓存，防止短时间重复计算，减少快速切换周期时的重复计算)
-chart_data_cache = TTLCache(maxsize=100, ttl=300)
+chart_data_cache = TTLCache(maxsize=100, ttl=600)
 
 cache_lock = RLock()
 req_lock = RLock()
