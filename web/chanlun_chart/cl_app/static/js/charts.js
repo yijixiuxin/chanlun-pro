@@ -95,6 +95,8 @@ class ChartManager {
         this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
         this.macdStudyId = null;
         this._intervalVersion = 0;
+        this._drawingsCache = new Map();  // Lightweight cache for drawings per interval
+        this._intervalSwitchSeq = 0;
     }
 
     init() {
@@ -550,17 +552,34 @@ class ChartManager {
         this._intervalVersion++;
         console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
+        
+        // Fix: Pre-check if drawings already exist in cache before forcing server fetch
+        const code = Utils.get_code();
+        const symbol = market + ":" + code;
+        const cacheKey = `${symbol}_${interval}`;
+        const cachedDrawings = this._drawingsCache[cacheKey];
+        
         this.clear_draw_chanlun();
         if (this.chart) {
             // 在清除旧周期画线前，先禁用自动保存，防止空画布覆盖数据库内容
             this._is_switching_interval = true;
             this.chart.removeAllShapes();
+            
+            // Fix: If we have cached drawings and they're valid, apply them directly without server fetch
+            if (cachedDrawings && cachedDrawings.sources && (cachedDrawings.sources.size > 0 || Object.keys(cachedDrawings.sources).length > 0)) {
+                console.log("[DEBUG-CHARTS] Using cached drawings for interval:", interval);
+                this.chart.applyLineToolsState(cachedDrawings);
+                this._is_switching_interval = false;
+                // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
+                return;
+            }
+            
             // 重新加载当前周期的画线数据（独立模式按周期加载，共享模式加载 'all'）
             if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
-                const code = Utils.get_code();
-                const symbol = market + ":" + code;
                 this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
+                    // Fix: Cache the loaded drawings for future interval switches
                     if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
+                        this._drawingsCache.set(cacheKey, state);
                         this.chart.applyLineToolsState(state);
                     }
                     // 延迟恢复，确保 applyLineToolsState 完成且没有触发后续的自动保存覆盖
@@ -575,6 +594,7 @@ class ChartManager {
         }
         // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
     }
+
     handleDataReady() { this.debouncedDrawChanlun(); }
     handleTick() { this.debouncedDrawChanlun(); }
     handleVisibleRangeChange() { this.debouncedDrawChanlun(); }
