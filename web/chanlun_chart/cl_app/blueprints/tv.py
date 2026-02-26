@@ -88,8 +88,7 @@ class _LimitedLockDict(defaultdict):
 
     def __missing__(self, key):
         if len(self) >= self._MAX_SIZE:
-            oldest_key = next(iter(self))
-            del self[oldest_key]
+            LogUtil.warning(f"chart_calc_locks 已达上限 {self._MAX_SIZE}，跳过清理避免删除正在使用的锁")
         self[key] = RLock()
         return self[key]
 
@@ -257,10 +256,6 @@ def _process_stock_list(all_stocks):
 
 
 def get_cached_processed_stocks(exchange):
-    try:
-        return stock_cache[exchange]
-    except KeyError:
-        pass
     with cache_lock:
         try:
             return stock_cache[exchange]
@@ -340,17 +335,17 @@ def tv_history():
     LogUtil.info(f"tv_history request args: {args}")
 
     symbol = request.args.get("symbol")
-    _from = request.args.get("from")
-    _to = request.args.get("to")
+    _from = int(request.args.get("from", "0"))
+    _to = int(request.args.get("to", "0"))
     resolution = request.args.get("resolution")
     firstDataRequest = request.args.get("firstDataRequest", "false")
 
     _symbol_res_old_k_time_key = f"{symbol}_{resolution}"
     now_time = time.time()
 
-    s = "ok"
-    if int(_from) < 0 and int(_to) < 0:
-        s = "no_data"
+    status = "ok"
+    if _from < 0 and _to < 0:
+        status = "no_data"
 
     # 请求频率限制 (适当放宽)
     if firstDataRequest == "false":
@@ -366,7 +361,7 @@ def tv_history():
                         "counter": 0,
                         "tm": now_time,
                     }
-                    s = "no_data"
+                    status = "no_data"
                 elif (
                     now_time - __history_req_counter[_symbol_res_old_k_time_key]["tm"]
                     <= 5
@@ -383,124 +378,126 @@ def tv_history():
     code = symbol.split(":")[1]
     ex = get_exchange(Market(market))
 
-    if firstDataRequest == "false" and ex.now_trading() is False:
-        pass
+    # now_trading() 已移除：该调用会因外部API超时阻塞请求30秒+，
+    # 且 is False: pass 分支没有实际逻辑，属于无效代码。
 
     frequency = resolution_maps[resolution]
     cl_config = query_cl_chart_config(market, code)
     cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
 
+    # 首次数据请求时，清除该symbol+frequency的旧缓存，确保计算新鲜数据
+    if firstDataRequest == "true":
+        with cache_lock:
+            if cache_key in chart_data_cache:
+                del chart_data_cache[cache_key]
+                LogUtil.info(f"[tv_history] Cleared stale cache for {cache_key} on firstDataRequest")
+
     cl_chart_data = None
     is_cache_hit = False
 
-    # 简单策略：仅对全量请求做持久缓存，增量请求做短缓存或直接查询
-    if cache_key in chart_data_cache:
-        cl_chart_data = chart_data_cache[cache_key]
-        is_cache_hit = True
+    # 线程安全：TTLCache 读写均在锁内进行
+    with chart_calc_locks[cache_key]:
+        if cache_key in chart_data_cache:
+            cl_chart_data = chart_data_cache[cache_key]
+            is_cache_hit = True
+        else:
+            frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(
+                market, frequency
+            )
 
-    if cl_chart_data is None:
-        with chart_calc_locks[cache_key]:
-            if cache_key in chart_data_cache:
-                cl_chart_data = chart_data_cache[cache_key]
-                is_cache_hit = True
+            # ==================================================
+            #  核心修改：准备 args 参数，处理时间范围
+            # ==================================================
+            kline_args = {}
+
+            # 定义时区，TV 传过来的是 UTC 时间戳，我们需要转为上海时间供 klines 使用
+            tz_sh = pytz.timezone("Asia/Shanghai")
+
+            if firstDataRequest == "false":
+                # 增量/历史回读请求：使用前端传入的具体时间范围
+                try:
+                    # 转换 _from 和 _to 为带时区的 datetime 字符串
+                    # TV 传入的是秒级时间戳
+                    dt_from = datetime.datetime.fromtimestamp(_from, tz=tz_sh)
+                    dt_to = datetime.datetime.fromtimestamp(_to, tz=tz_sh)
+
+                    kline_args['start_date'] = dt_from.strftime("%Y-%m-%d %H:%M:%S")
+                    kline_args['end_date'] = dt_to.strftime("%Y-%m-%d %H:%M:%S")
+
+                    LogUtil.info(f"增量请求: {code} range: {kline_args['start_date']} -> {kline_args['end_date']}")
+                except Exception as e:
+                    LogUtil.error(f"时间戳转换失败: {e}")
             else:
-                frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(
-                    market, frequency
-                )
+                # 首次请求：不传 start_date，让 klines 方法使用默认的 Lookback (获取足够多的数据计算缠论)
+                # end_date 设为现在
+                kline_args['end_date'] = datetime.datetime.now(tz_sh).strftime("%Y-%m-%d %H:%M:%S")
 
-                # ==================================================
-                #  核心修改：准备 args 参数，处理时间范围
-                # ==================================================
-                kline_args = {}
+            # ==================================================
 
-                # 定义时区，TV 传过来的是 UTC 时间戳，我们需要转为上海时间供 klines 使用
-                tz_sh = pytz.timezone("Asia/Shanghai")
+            if (cl_config["enable_kchart_low_to_high"] == "1" and kchart_to_frequency is not None):
+                # 低频转高频模式 (注意：这里如果增量请求低频数据，可能需要更复杂的计算，暂时透传参数)
+                klines = ex.klines(code, frequency_low, **kline_args)
+                cd = web_batch_get_cl_datas(
+                    market, code, {frequency_low: klines}, cl_config
+                )[0]
+            else:
+                kchart_to_frequency = None
+                # 直接调用 klines，传入 args
+                klines = ex.klines(code, frequency, **kline_args)
+                cd = web_batch_get_cl_datas(market, code, {frequency: klines}, cl_config)[0]
 
-                if firstDataRequest == "false":
-                    # 增量/历史回读请求：使用前端传入的具体时间范围
-                    try:
-                        # 转换 _from 和 _to 为带时区的 datetime 字符串
-                        # TV 传入的是秒级时间戳
-                        dt_from = datetime.datetime.fromtimestamp(int(_from), tz=tz_sh)
-                        dt_to = datetime.datetime.fromtimestamp(int(_to), tz=tz_sh)
+            if len(klines) > 0 and _to < fun.datetime_to_int(klines.iloc[0]["date"]):
+                return {"s": "no_data"}
 
-                        kline_args['start_date'] = dt_from.strftime("%Y-%m-%d %H:%M:%S")
-                        kline_args['end_date'] = dt_to.strftime("%Y-%m-%d %H:%M:%S")
+            cl_chart_data = cl_data_to_tv_chart(
+                cd, cl_config, to_frequency=kchart_to_frequency
+            )
+            if cl_chart_data is None:
+                return {"s": "no_data"}
 
-                        LogUtil.info(f"增量请求: {code} range: {kline_args['start_date']} -> {kline_args['end_date']}")
-                    except Exception as e:
-                        LogUtil.error(f"时间戳转换失败: {e}")
-                else:
-                    # 首次请求：不传 start_date，让 klines 方法使用默认的 Lookback (获取足够多的数据计算缠论)
-                    # end_date 设为现在
-                    kline_args['end_date'] = datetime.datetime.now(tz_sh).strftime("%Y-%m-%d %H:%M:%S")
+            # ==================================================
+            #  跨周期 MACD：用倍率放大参数，在当前K线收盘价上计算
+            #  例如 1m→5m: MACD(12*5, 26*5, 9*5) = MACD(60, 130, 45)
+            # ==================================================
+            ratio = HIGHER_MACD_RATIO.get(frequency)
+            if ratio is None and frequency == "30m":
+                ratio = MARKET_30M_TO_D_RATIO.get(market, 8)
+            elif ratio is None and frequency == "d":
+                ratio = MARKET_D_TO_W_RATIO.get(market, 5)
+            elif ratio is None and frequency == "w":
+                ratio = 4  # 1个月约4周
+            elif ratio is None and frequency == "m":
+                ratio = 12 # 1年12个月
 
-                # ==================================================
+            if ratio is not None:
+                try:
+                    closes = np.array(cl_chart_data["c"], dtype=float)
+                    fast = int(cl_config.get("idx_macd_fast", 12)) * ratio
+                    slow = int(cl_config.get("idx_macd_slow", 26)) * ratio
+                    signal = int(cl_config.get("idx_macd_signal", 9)) * ratio
 
-                if (cl_config["enable_kchart_low_to_high"] == "1" and kchart_to_frequency is not None):
-                    # 低频转高频模式 (注意：这里如果增量请求低频数据，可能需要更复杂的计算，暂时透传参数)
-                    klines = ex.klines(code, frequency_low, **kline_args)
-                    cd = web_batch_get_cl_datas(
-                        market, code, {frequency_low: klines}, cl_config
-                    )[0]
-                else:
-                    kchart_to_frequency = None
-                    # 直接调用 klines，传入 args
-                    klines = ex.klines(code, frequency, **kline_args)
-                    cd = web_batch_get_cl_datas(market, code, {frequency: klines}, cl_config)[0]
+                    h_dif, h_dea, h_hist = talib.MACD(
+                        closes,
+                        fastperiod=fast,
+                        slowperiod=slow,
+                        signalperiod=signal
+                    )
+                    # NaN 转 None 方便 JSON 序列化
+                    h_dif_rounded = np.round(h_dif, 6)
+                    h_dea_rounded = np.round(h_dea, 6)
+                    h_hist_rounded = np.round(h_hist, 6)
+                    cl_chart_data["higher_macd_dif"] = np.where(np.isnan(h_dif_rounded), None, h_dif_rounded).tolist()
+                    cl_chart_data["higher_macd_dea"] = np.where(np.isnan(h_dea_rounded), None, h_dea_rounded).tolist()
+                    cl_chart_data["higher_macd_hist"] = np.where(np.isnan(h_hist_rounded), None, h_hist_rounded).tolist()
+                    LogUtil.info(
+                        f"[tv_history] Scaled MACD ({frequency}, ratio={ratio}) "
+                        f"params=({fast},{slow},{signal}), {len(closes)} bars"
+                    )
+                except Exception as e:
+                    LogUtil.error(f"[tv_history] Scaled MACD calc failed: {e}")
 
-                if len(klines) > 0 and int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
-                    return {"s": "no_data"}
-
-                cl_chart_data = cl_data_to_tv_chart(
-                    cd, cl_config, to_frequency=kchart_to_frequency
-                )
-                if cl_chart_data is None:
-                    return {"s": "no_data"}
-
-                # ==================================================
-                #  跨周期 MACD：用倍率放大参数，在当前K线收盘价上计算
-                #  例如 1m→5m: MACD(12*5, 26*5, 9*5) = MACD(60, 130, 45)
-                # ==================================================
-                ratio = HIGHER_MACD_RATIO.get(frequency)
-                if ratio is None and frequency == "30m":
-                    ratio = MARKET_30M_TO_D_RATIO.get(market, 8)
-                elif ratio is None and frequency == "d":
-                    ratio = MARKET_D_TO_W_RATIO.get(market, 5)
-                elif ratio is None and frequency == "w":
-                    ratio = 4  # 1个月约4周
-                elif ratio is None and frequency == "m":
-                    ratio = 12 # 1年12个月
-
-                if ratio is not None:
-                    try:
-                        closes = np.array(cl_chart_data["c"], dtype=float)
-                        fast = int(cl_config.get("idx_macd_fast", 12)) * ratio
-                        slow = int(cl_config.get("idx_macd_slow", 26)) * ratio
-                        signal = int(cl_config.get("idx_macd_signal", 9)) * ratio
-
-                        h_dif, h_dea, h_hist = talib.MACD(
-                            closes,
-                            fastperiod=fast,
-                            slowperiod=slow,
-                            signalperiod=signal
-                        )
-                        # NaN 转 None 方便 JSON 序列化
-                        h_dif_rounded = np.round(h_dif, 6)
-                        h_dea_rounded = np.round(h_dea, 6)
-                        h_hist_rounded = np.round(h_hist, 6)
-                        cl_chart_data["higher_macd_dif"] = np.where(np.isnan(h_dif_rounded), None, h_dif_rounded).tolist()
-                        cl_chart_data["higher_macd_dea"] = np.where(np.isnan(h_dea_rounded), None, h_dea_rounded).tolist()
-                        cl_chart_data["higher_macd_hist"] = np.where(np.isnan(h_hist_rounded), None, h_hist_rounded).tolist()
-                        LogUtil.info(
-                            f"[tv_history] Scaled MACD ({frequency}, ratio={ratio}) "
-                            f"params=({fast},{slow},{signal}), {len(closes)} bars"
-                        )
-                    except Exception as e:
-                        LogUtil.error(f"[tv_history] Scaled MACD calc failed: {e}")
-
-                # 存入缓存
-                chart_data_cache[cache_key] = cl_chart_data
+            # 存入缓存
+            chart_data_cache[cache_key] = cl_chart_data
 
     if cl_chart_data is None:
         return {"s": "no_data"}
@@ -516,20 +513,20 @@ def tv_history():
     # =================================================
     if firstDataRequest == "false" and cl_chart_data["t"]:
         try:
-            from_ts = int(_from)
+            from_ts = _from
             start_idx = bisect.bisect_left(cl_chart_data["t"], from_ts)
             
             def filter_shapes(shapes):
                 res = []
-                for s in shapes:
-                    if isinstance(s, dict) and 'points' in s:
-                        pts = s['points']
+                for shape in shapes:
+                    if isinstance(shape, dict) and 'points' in shape:
+                        pts = shape['points']
                         if isinstance(pts, list) and len(pts) > 0:
                             if pts[-1].get('time', 0) >= from_ts:
-                                res.append(s)
+                                res.append(shape)
                         elif isinstance(pts, dict):
                             if pts.get('time', 0) >= from_ts:
-                                res.append(s)
+                                res.append(shape)
                 return res
 
             cl_chart_data = {
@@ -560,7 +557,7 @@ def tv_history():
             LogUtil.error(f"Slice data failed: {e}")
 
     info = {
-        "s": s,
+        "s": status,
         "t": cl_chart_data["t"],
         "c": cl_chart_data["c"],
         "o": cl_chart_data["o"],
@@ -829,17 +826,15 @@ def tv_drawings(version):
 
     if request.method == "POST":
         content = request.json.get("state", {})
-        import json
         db.tv_chart_save("drawing", client_id, user_id, drawing_name, json.dumps(content), symbol, resolution)
         return {"status": "ok"}
 
     if request.method == "GET":
         drawing = db.tv_chart_get_by_name("drawing", drawing_name, client_id, user_id)
         if drawing:
-            import json
             try:
                 data = json.loads(drawing.content)
-            except:
+            except Exception:
                 data = {}
             return {
                 "status": "ok",
