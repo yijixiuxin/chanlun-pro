@@ -52,7 +52,7 @@ class CL(ICL):
         # 实例化MACD计算器
         self.macd_calculator = MACD()
         # 实例化笔计算器
-        self.bi_calculator = BiCalculator()
+        self.bi_calculator = BiCalculator(bi_mode = 'new')
         # 实例化线段计算器
         self.xd_calculator = XdCalculator(self.config)
 
