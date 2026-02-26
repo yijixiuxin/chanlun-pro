@@ -92,7 +92,7 @@ class ChartManager {
         this.widget = null;
         this.udf_datafeed = null;
         this.chart = null;
-        this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 500);
+        this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 300);
         this.macdStudyId = null;
         this._intervalVersion = 0;
         this._drawingsCache = new Map();  // Lightweight cache for drawings per interval
@@ -482,35 +482,35 @@ class ChartManager {
 
             // 订阅画图事件，强制保存（但排除缠论重绘期间的事件）
             this.widget.subscribe('drawing_event', (id, eventType) => {
+                if (this._is_switching_interval || this._is_drawing_chanlun) return;
                 console.log("[DEBUG-CHARTS] drawing_event", id, eventType);
-                if (this._is_drawing_chanlun) return;
                 if (this.chart) {
                     setTimeout(() => {
-                        if (this._is_drawing_chanlun) return;
+                        if (this._is_switching_interval || this._is_drawing_chanlun) return;
                         if (typeof this.chart.getLineToolsState === 'function') {
                             const state = this.chart.getLineToolsState();
                             if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
-                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state);
+                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state).catch(e => console.debug('drawing save skipped', e));
                             }
                         } else if (typeof this.widget.saveChartToServer === 'function') {
-                            this.widget.saveChartToServer();
+                            this.widget.saveChartToServer().catch(e => console.debug('drawing save skipped', e));
                         }
                     }, 500);
                 }
             });
             this.widget.subscribe('onAutoSaveNeeded', () => {
+                if (this._is_switching_interval || this._is_drawing_chanlun) return;
                 console.log("[DEBUG-CHARTS] onAutoSaveNeeded");
-                if (this._is_drawing_chanlun) return;
                 if (this.chart) {
                     setTimeout(() => {
-                        if (this._is_drawing_chanlun) return;
+                        if (this._is_switching_interval || this._is_drawing_chanlun) return;
                         if (typeof this.chart.getLineToolsState === 'function') {
                             const state = this.chart.getLineToolsState();
                             if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
-                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state);
+                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state).catch(e => console.debug('drawing save skipped', e));
                             }
                         } else if (typeof this.widget.saveChartToServer === 'function') {
-                            this.widget.saveChartToServer();
+                            this.widget.saveChartToServer().catch(e => console.debug('drawing save skipped', e));
                         }
                     }, 500);
                 }
@@ -549,8 +549,11 @@ class ChartManager {
     handleIntervalChange(interval) {
         if (!interval) return;
         const market = Utils.get_market(); if (!market) return;
+        
+        // Fix: Capture the sequence number for debouncing rapid interval switches
+        const currentSeq = ++this._intervalSwitchSeq;
         this._intervalVersion++;
-        console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion);
+        console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion, "seq:", currentSeq);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
         
         // Fix: Pre-check if drawings already exist in cache before forcing server fetch
@@ -786,8 +789,10 @@ class ChartManager {
         this.reconcile('mmds', window.cl_show_config.mmd ? barsResult.mmds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
     }
 
-    draw_chanlun() {
-        const capturedVersion = this._intervalVersion;
+    async draw_chanlun() {
+        const currentVersion = this._intervalVersion;
+        const capturedSeq = this._intervalSwitchSeq;
+        
         if (!this.chart) {
             try {
                 this.chart = this.widget.activeChart();
@@ -797,16 +802,20 @@ class ChartManager {
             }
         }
 
+        // Yield to event loop to allow pending interval changes to process
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        if (this._intervalVersion !== currentVersion || capturedSeq !== this._intervalSwitchSeq) {
+            console.warn("周期已切换，丢弃过期的缠论渲染任务");
+            return;
+        }
+
         const chartData = this.getChartData();
         if (!chartData) {
             console.warn("[DEBUG-CHARTS] draw_chanlun aborted: No chart data or chart not ready.");
             return;
         }
-        // 版本号不匹配说明已经切换到新周期，跳过旧数据绘制
-        if (capturedVersion !== this._intervalVersion) {
-            console.log("[DEBUG-CHARTS] draw_chanlun skipped: interval version mismatch (stale data)");
-            return;
-        }
+        
         const symbolInterval = this.widget.symbolInterval();
         if (!symbolInterval) return;
 

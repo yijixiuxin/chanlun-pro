@@ -130,33 +130,42 @@ class ExchangeChangQiao(Exchange):
         if pytz is None:
             return False
 
-        try:
-            et_timezone = pytz.timezone('America/New_York')
-            now_et = datetime.now(et_timezone).time()
-            sessions = self.quote_ctx.trading_session()
+        def _do_check():
+            try:
+                et_timezone = pytz.timezone('America/New_York')
+                now_et = datetime.now(et_timezone).time()
+                sessions = self.quote_ctx.trading_session()
 
-            for session in sessions:
-                if session.market == Market.US:
-                    for trade_info in session.trade_sessions:
-                        try:
-                            start_time = trade_info.begin_time
-                            end_time = trade_info.end_time
+                for session in sessions:
+                    if session.market == Market.US:
+                        for trade_info in session.trade_sessions:
+                            try:
+                                start_time = trade_info.begin_time
+                                end_time = trade_info.end_time
 
-                            if not isinstance(start_time, datetime_time) or not isinstance(end_time, datetime_time):
+                                if not isinstance(start_time, datetime_time) or not isinstance(end_time, datetime_time):
+                                    continue
+
+                                if start_time > end_time:
+                                    if now_et >= start_time or now_et < end_time:
+                                        return True
+                                else:
+                                    if start_time <= now_et and now_et < end_time:
+                                        return True
+                            except AttributeError:
                                 continue
+                        return False
+                return False
+            except Exception as e:
+                LogUtil.info(f"Error checking trading session: {e}")
+                return False
 
-                            if start_time > end_time:
-                                if now_et >= start_time or now_et < end_time:
-                                    return True
-                            else:
-                                if start_time <= now_et and now_et < end_time:
-                                    return True
-                        except AttributeError:
-                            continue
-                    return False
-            return False
+        # Add timeout wrapper to prevent blocking the main thread
+        try:
+            future = self.executor.submit(_do_check)
+            return future.result(timeout=2.0)
         except Exception as e:
-            LogUtil.info(f"Error checking trading session: {e}")
+            LogUtil.error(f"now_trading timeout or error: {e}")
             return False
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -420,31 +429,40 @@ class ExchangeChangQiao(Exchange):
         """
         获取 Ticks
         """
+        def _do_ticks():
+            try:
+                quotes = self.quote_ctx.quote(codes)
+                res = {}
+                for q in quotes:
+                    last_done = float(q.last_done)
+                    prev_close = float(q.prev_close)
+
+                    cal_rate = 0.0
+                    if prev_close > 0:
+                        cal_rate = round(((last_done - prev_close) / prev_close) * 100, 2)
+
+                    res[q.symbol] = Tick(
+                        code=q.symbol,
+                        last=last_done,
+                        buy1=0.0,
+                        sell1=0.0,
+                        high=float(q.high),
+                        low=float(q.low),
+                        open=float(q.open),
+                        volume=float(q.volume),
+                        rate=cal_rate
+                    )
+                return res
+            except Exception as e:
+                LogUtil.error(f"Error in ticks: {e}")
+                return {}
+
+        # Add timeout wrapper to prevent blocking the main thread
         try:
-            quotes = self.quote_ctx.quote(codes)
-            res = {}
-            for q in quotes:
-                last_done = float(q.last_done)
-                prev_close = float(q.prev_close)
-
-                cal_rate = 0.0
-                if prev_close > 0:
-                    cal_rate = round(((last_done - prev_close) / prev_close) * 100, 2)
-
-                res[q.symbol] = Tick(
-                    code=q.symbol,
-                    last=last_done,
-                    buy1=0.0,
-                    sell1=0.0,
-                    high=float(q.high),
-                    low=float(q.low),
-                    open=float(q.open),
-                    volume=float(q.volume),
-                    rate=cal_rate
-                )
-            return res
+            future = self.executor.submit(_do_ticks)
+            return future.result(timeout=2.0)
         except Exception as e:
-            LogUtil.error(f"Error in ticks: {e}")
+            LogUtil.error(f"ticks timeout or error: {e}")
             return {}
 
     def stock_info(self, code: str) -> Union[Dict, None]:
