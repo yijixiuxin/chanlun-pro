@@ -9,12 +9,13 @@ class BiCalculator:
     修复了增量计算时可能丢失待定笔（pending_bi）的问题。
     """
 
-    def __init__(self):
+    def __init__(self, bi_mode: str = 'strict'):
         self.bis: List[BI] = []
         self.fxs: List[FX] = []
         self.pending_bi: Optional[BI] = None
         self.bi_index: int = 0
         self.cl_klines: List[CLKline] = []
+        self.bi_mode = bi_mode  # 'strict' (严格笔) 或 'new' (新笔)
         # Snapshot of the last processed kline: (index, high, low)
         self._last_kline_snapshot: Optional[tuple] = None
 
@@ -24,8 +25,11 @@ class BiCalculator:
         if fx1.type == fx2.type:
             return False
 
-        # 2. 顶分型与底分型之间至少隔一根K线 (索引差 >= 4)
-        if abs(fx2.k.index - fx1.k.index) < 4:
+        # 2. 顶分型与底分型之间的距离要求
+        # 严格笔：包含一个及以上独立K线 (索引差 >= 4)
+        # 新笔：无独立K线要求，但不共用K线 (索引差 >= 3)
+        min_distance = 4 if self.bi_mode == 'strict' else 3
+        if abs(fx2.k.index - fx1.k.index) < min_distance:
             return False
 
         # 3. 顶底分型的高低点验证
