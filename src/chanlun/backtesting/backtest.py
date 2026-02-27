@@ -327,6 +327,7 @@ class BackTest:
             # 回测结果合并
             for f in tqdm(results, desc="结果汇总"):
                 BT = BackTest()
+                # print(f"f: {f}")
                 BT.load(f)
                 # 汇总结果
                 for mmd, res in BT.trader.results.items():
