@@ -962,6 +962,26 @@ def create_app(test_config=None):
         res = set_cl_chart_config(market, code, cl_config)
         return {"ok": res}
 
+    # 重置配置项（删除当前标的的独立配置）
+    @app.route("/reset_cl_config", methods=["POST"])
+    @login_required
+    def reset_cl_config():
+        market = request.form["market"]
+        res = del_cl_chart_config(market, "common")
+        return {"ok": res}
+
+    # 导出缠论配置（返回当前标的配置 JSON）
+    @app.route("/export_cl_config", methods=["GET"])
+    @login_required
+    def export_cl_config():
+        market = request.args.get("market")
+        code = request.args.get("code")
+        # 与查询接口保持一致的代码处理规则
+        if code is not None:
+            code = code.replace("__", "/")
+        cl_config = query_cl_chart_config(market, code)
+        return cl_config
+
     # 股票涨跌幅
     @app.route("/ticks", methods=["POST"])
     @login_required
