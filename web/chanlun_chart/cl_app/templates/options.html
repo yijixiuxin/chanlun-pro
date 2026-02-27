@@ -668,8 +668,27 @@
                 </div>
             </div>
             <div class="layui-form-item">
-                <button class="layui-btn layui-btn-fluid layui-bg-red" lay-submit
-                    lay-filter="save_cl_config">保存配置</button>
+                <div class="layui-row layui-col-space10">
+                    <div class="layui-col-xs6">
+                        <button class="layui-btn layui-btn-fluid layui-bg-red" lay-submit
+                            lay-filter="save_cl_config">保存配置</button>
+                    </div>
+                    <div class="layui-col-xs6">
+                        <button type="button" class="layui-btn layui-btn-fluid layui-btn-primary"
+                            id="reset_cl_config_btn">重置配置</button>
+                    </div>
+                </div>
+                <div class="layui-row layui-col-space10" style="margin-top: 10px;">
+                    <div class="layui-col-xs6">
+                        <button type="button" class="layui-btn layui-btn-fluid" id="export_cl_config_btn">导出配置</button>
+                    </div>
+                    <div class="layui-col-xs6">
+                        <button type="button" class="layui-btn layui-btn-fluid layui-btn-normal"
+                            id="import_cl_config_btn">导入配置</button>
+                        <input type="file" id="import_cl_config_file" accept="application/json"
+                            style="display: none;" />
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -724,7 +743,7 @@
                     save_cl_config();
                     return false; // 阻止默认 form 跳转
                 });
-                // 独立配置删除
+                // 独立配置删除（切换为通用配置时）
                 form.on('select(cl_config)', function (data) {
                     var config_use_type = '{{ config_use_type }}';
                     if (config_use_type === 'custom') {
@@ -752,6 +771,181 @@
                             });
                         }
                     }
+                });
+
+                // 重置配置按钮：删除当前标的的独立配置
+                $('#reset_cl_config_btn').on('click', function () {
+                    layer.confirm('确定重置当前的缠论配置吗？', {
+                        btn: ['确定', '取消']
+                    }, function () {
+                        $.ajax({
+                            type: "POST",
+                            url: "/reset_cl_config",
+                            data: { 'market': '{{ market }}' },
+                            dataType: 'json',
+                            traditional: true,
+                            success: function (result) {
+                                if (result['ok'] === true) {
+                                    layer.msg('缠论配置已重置', { time: 1500 }, function () {
+                                        location.reload();
+                                    });
+                                } else {
+                                    layer.msg('缠论配置重置失败');
+                                }
+                                layer.closeLast('dialog');
+                            }
+                        });
+                    }, function () {
+                        layer.closeLast('dialog');
+                    });
+                });
+
+                // 导出配置：获取当前配置 JSON 并下载到本地
+                $('#export_cl_config_btn').on('click', function () {
+                    $.ajax({
+                        type: "GET",
+                        url: "/export_cl_config",
+                        data: { 'market': '{{ market }}', 'code': '{{ code }}' },
+                        dataType: 'json',
+                        success: function (data) {
+                            try {
+                                var jsonStr = JSON.stringify(data, null, 2);
+                                var blob = new Blob([jsonStr], { type: "application/json" });
+                                var link = document.createElement("a");
+                                link.href = URL.createObjectURL(blob);
+                                link.download = "cl_config_{{ market }}.json";
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(link.href);
+                                layer.msg('缠论配置导出成功');
+                            } catch (e) {
+                                console.error(e);
+                                layer.msg('缠论配置导出失败');
+                            }
+                        },
+                        error: function () {
+                            layer.msg('缠论配置导出失败');
+                        }
+                    });
+                });
+
+                // 导入配置：选择本地 JSON 并调用后端设置接口
+                $('#import_cl_config_btn').on('click', function () {
+                    $('#import_cl_config_file').val('');
+                    $('#import_cl_config_file').click();
+                });
+
+                $('#import_cl_config_file').on('change', function (e) {
+                    var file = e.target.files[0];
+                    if (!file) {
+                        return;
+                    }
+                    var reader = new FileReader();
+                    reader.onload = function (evt) {
+                        try {
+                            var cfg = JSON.parse(evt.target.result || '{}');
+                            var keys = [
+                                "config_use_type",
+                                "kline_qk",
+                                "judge_zs_qs_level",
+                                "kline_type",
+                                "fx_qy",
+                                "fx_qj",
+                                "fx_bh",
+                                "bi_type",
+                                "bi_bzh",
+                                "bi_qj",
+                                "bi_fx_cgd",
+                                "bi_split_k_cross_nums",
+                                "fx_check_k_nums",
+                                "allow_bi_fx_strict",
+                                "xd_qj",
+                                "zsd_qj",
+                                "xd_zs_max_lines_split",
+                                "xd_allow_bi_pohuai",
+                                "xd_allow_split_no_highlow",
+                                "xd_allow_split_zs_kz",
+                                "xd_allow_split_zs_more_line",
+                                "xd_allow_split_zs_no_direction",
+                                "zs_bi_type",
+                                "zs_xd_type",
+                                "zs_qj",
+                                "zs_cd",
+                                "zs_wzgx",
+                                "idx_macd_fast",
+                                "idx_macd_slow",
+                                "idx_macd_signal",
+                                "cl_mmd_cal_qs_1mmd",
+                                "cl_mmd_cal_not_qs_3mmd_1mmd",
+                                "cl_mmd_cal_qs_3mmd_1mmd",
+                                "cl_mmd_cal_qs_not_lh_2mmd",
+                                "cl_mmd_cal_qs_bc_2mmd",
+                                "cl_mmd_cal_3mmd_not_lh_bc_2mmd",
+                                "cl_mmd_cal_1mmd_not_lh_2mmd",
+                                "cl_mmd_cal_3mmd_xgxd_not_bc_2mmd",
+                                "cl_mmd_cal_not_in_zs_3mmd",
+                                "cl_mmd_cal_not_in_zs_gt_9_3mmd",
+                                "enable_kchart_low_to_high",
+                                "chart_show_fx",
+                                "chart_show_bi",
+                                "chart_show_xd",
+                                "chart_show_zsd",
+                                "chart_show_qsd",
+                                "chart_show_bi_zs",
+                                "chart_show_xd_zs",
+                                "chart_show_zsd_zs",
+                                "chart_show_qsd_zs",
+                                "chart_show_bi_mmd",
+                                "chart_show_xd_mmd",
+                                "chart_show_zsd_mmd",
+                                "chart_show_qsd_mmd",
+                                "chart_show_bi_bc",
+                                "chart_show_xd_bc",
+                                "chart_show_zsd_bc",
+                                "chart_show_qsd_bc"
+                            ];
+                            var postData = {
+                                'market': '{{ market }}',
+                                'code': '{{ code }}',
+                                'is_del': 'false'
+                            };
+                            for (var i = 0; i < keys.length; i++) {
+                                var k = keys[i];
+                                var v = cfg[k];
+                                if (Array.isArray(v)) {
+                                    v = v.join(',');
+                                }
+                                if (v === undefined || v === null) {
+                                    v = '';
+                                }
+                                postData[k] = v;
+                            }
+                            $.ajax({
+                                type: "POST",
+                                url: "/set_cl_config",
+                                data: postData,
+                                dataType: 'json',
+                                traditional: true,
+                                success: function (result) {
+                                    if (result['ok'] === true) {
+                                        layer.msg('缠论配置导入成功', { time: 1500 }, function () {
+                                            location.reload();
+                                        });
+                                    } else {
+                                        layer.msg('缠论配置导入失败');
+                                    }
+                                },
+                                error: function () {
+                                    layer.msg('缠论配置导入失败');
+                                }
+                            });
+                        } catch (err) {
+                            console.error(err);
+                            layer.msg('导入的配置文件格式错误');
+                        }
+                    };
+                    reader.readAsText(file, 'utf-8');
                 });
             });
 
