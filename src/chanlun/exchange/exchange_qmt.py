@@ -56,7 +56,7 @@ class ExchangeQMT(Exchange):
         }
 
         self.DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=60),
+            "1m": timedelta(days=30),
             "5m": timedelta(days=150),
             "15m": timedelta(days=90),
             "30m": timedelta(days=365 * 5),

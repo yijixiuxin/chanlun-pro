@@ -1,4 +1,7 @@
 import math
+import copy
+import time
+from threading import RLock
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
@@ -9,6 +12,43 @@ from chanlun.core.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config,
 from chanlun.db import db
 from chanlun.exchange import exchange
 from chanlun.file_db import FileCacheDB
+from chanlun.tools.log_util import LogUtil
+
+
+_cl_config_cache = {}
+_cl_config_cache_lock = RLock()
+_cl_config_cache_ttl = 300
+_cl_config_db_backoff_until = 0.0
+
+
+def _cl_config_cache_get(cache_key: str):
+    now = time.time()
+    with _cl_config_cache_lock:
+        item = _cl_config_cache.get(cache_key)
+        if item is None:
+            return None
+        if item["expire_at"] <= now:
+            _cl_config_cache.pop(cache_key, None)
+            return None
+        return copy.deepcopy(item["config"])
+
+
+def _cl_config_cache_set(cache_key: str, config: dict):
+    with _cl_config_cache_lock:
+        _cl_config_cache[cache_key] = {
+            "expire_at": time.time() + _cl_config_cache_ttl,
+            "config": copy.deepcopy(config),
+        }
+
+
+def _cl_config_cache_invalidate(prefix: str = None):
+    with _cl_config_cache_lock:
+        if prefix is None:
+            _cl_config_cache.clear()
+            return
+        for k in list(_cl_config_cache.keys()):
+            if k.startswith(prefix):
+                _cl_config_cache.pop(k, None)
 
 
 def web_batch_get_cl_datas(
@@ -290,9 +330,10 @@ def query_cl_chart_config(
         code = code.upper().replace("KQ.M@", "")
         code = "".join([i for i in code if not i.isdigit()])
 
-    config: dict = db.cache_get(f"cl_config_{market}_{code}{suffix}")
-    if config is None:
-        config: dict = db.cache_get(f"cl_config_{market}_common{suffix}")
+    local_cache_key = f"{market}:{code}:{suffix}"
+    cached_config = _cl_config_cache_get(local_cache_key)
+    if cached_config is not None:
+        return cached_config
     # 默认配置设置，用于在前台展示设置值
     default_config = {
         "config_use_type": "common",
@@ -392,13 +433,36 @@ def query_cl_chart_config(
         "chart_qstd": "xd,0",
     }
 
-    if config is None:
-        return default_config
-    for _key, _val in default_config.items():
-        if _key not in config.keys():
-            config[_key] = _val
+    config = None
+    now = time.time()
+    should_skip_db = False
+    global _cl_config_db_backoff_until
+    with _cl_config_cache_lock:
+        if now < _cl_config_db_backoff_until:
+            should_skip_db = True
 
-    return config
+    if not should_skip_db:
+        try:
+            config = db.cache_get(f"cl_config_{market}_{code}{suffix}")
+            if config is None:
+                config = db.cache_get(f"cl_config_{market}_common{suffix}")
+            with _cl_config_cache_lock:
+                _cl_config_db_backoff_until = 0.0
+        except Exception as e:
+            with _cl_config_cache_lock:
+                _cl_config_db_backoff_until = time.time() + 30
+            LogUtil.error(
+                f"[query_cl_chart_config] db cache_get failed market={market} code={code} err={e}",
+                exc_info=True,
+            )
+
+    result_config = copy.deepcopy(default_config)
+    if isinstance(config, dict):
+        for _key, _val in config.items():
+            result_config[_key] = _val
+
+    _cl_config_cache_set(local_cache_key, result_config)
+    return result_config
 
 
 def set_cl_chart_config(
@@ -429,6 +493,7 @@ def set_cl_chart_config(
         f"cl_config_{market}_{code if config['config_use_type'] == 'custom' else 'common'}{suffix}",
         old_config,
     )
+    _cl_config_cache_invalidate(f"{market}:")
     return True
 
 
@@ -442,6 +507,7 @@ def del_cl_chart_config(market: str, code: str, suffix: str = "") -> bool:
         code = "".join([i for i in code if not i.isdigit()])
 
     db.cache_del(f"cl_config_{market}_{code}{suffix}")
+    _cl_config_cache_invalidate(f"{market}:")
     return True
 
 

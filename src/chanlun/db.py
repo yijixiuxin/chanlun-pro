@@ -74,11 +74,18 @@ class DB(object):
                 f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
                 echo=False,
                 poolclass=QueuePool,
-                pool_recycle=3600,
+                pool_recycle=1800,
                 pool_pre_ping=True,
+                pool_use_lifo=True,
+                pool_reset_on_return="rollback",
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
+                connect_args={
+                    "connect_timeout": 5,
+                    "read_timeout": 10,
+                    "write_timeout": 10,
+                },
             )
         else:
             raise Exception("DB_TYPE 配置错误")
@@ -1126,21 +1133,43 @@ class DB(object):
         return True
 
     def cache_get(self, key: str):
-        with self.Session() as session:
-            # 获取当前时间戳
-            now = int(time.time())
-            # 获取缓存数据
-            cache = session.query(TableByCache).filter(TableByCache.k == key).first()
-            # 缓存数据存在，且缓存数据未过期
-            if cache and (cache.expire == 0 or cache.expire > now):
-                return json.loads(cache.v)
-            # 缓存数据不存在，或缓存数据已过期
-            # 删除过期缓存数据，expire_time != 0 and expire_time < now
-            session.query(TableByCache).filter(
-                TableByCache.expire != 0, TableByCache.expire < now
-            ).delete()
-            session.commit()
+        for attempt in range(2):
+            try:
+                with self.Session() as session:
+                    now = int(time.time())
+                    cache = (
+                        session.query(TableByCache)
+                        .filter(TableByCache.k == key)
+                        .first()
+                    )
+                    if cache and (cache.expire == 0 or cache.expire > now):
+                        return json.loads(cache.v)
 
+                    session.query(TableByCache).filter(
+                        TableByCache.expire != 0, TableByCache.expire < now
+                    ).delete()
+                    session.commit()
+                return None
+            except Exception as e:
+                err = str(e)
+                retryable = (
+                    "Packet sequence number wrong" in err
+                    or "MySQL server has gone away" in err
+                    or "Lost connection to MySQL server" in err
+                    or "server has gone away" in err
+                )
+                if attempt == 0 and retryable:
+                    LogUtil.warning(
+                        f"[db.cache_get] retry key={key} because db connection error: {e}"
+                    )
+                    try:
+                        self.engine.dispose()
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+                    continue
+                LogUtil.error(f"[db.cache_get] failed key={key}: {e}", exc_info=True)
+                return None
         return None
 
     def cache_set(self, key: str, val: dict, expire: int = 0):
