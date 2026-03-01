@@ -222,7 +222,7 @@ class FileCacheDB(object):
 
                 if len(cached_klines) > 0 and len(klines) > 0:
                     # 1. 连续性校验：判断缓存末尾是否在给定数据时间范围之外
-                    if cached_klines[-1].date < klines.iloc[0]["date"] or cached_klines[0].date > klines.iloc[0][
+                    if cached_klines[-1].date < klines.iloc[0]["date"] or cached_klines[0].date > klines.iloc[-1][
                         "date"]:
                         logger.warning(f"{log_id} 历史数据错位/不连续，将全量重算")
                         need_recompute = True
