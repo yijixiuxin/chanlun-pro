@@ -99,6 +99,22 @@ class ChartManager {
         this._intervalSwitchSeq = 0;
     }
 
+    getDrawingsCacheKey(symbol, interval) {
+        const mode = window.cl_independent_drawings ? "ind" : "shared";
+        const resolutionKey = window.cl_independent_drawings ? interval : "all";
+        return `${symbol}_${resolutionKey}_${mode}`;
+    }
+
+    setDrawingsCache(key, state) {
+        this._drawingsCache.set(key, state);
+        if (this._drawingsCache.size > 200) {
+            const oldestKey = this._drawingsCache.keys().next().value;
+            if (oldestKey !== undefined) {
+                this._drawingsCache.delete(oldestKey);
+            }
+        }
+    }
+
     init() {
         this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 3000);
 
@@ -195,6 +211,7 @@ class ChartManager {
                     const rawResolution = self.chart ? self.chart.resolution() : Utils.get_local_data(Utils.get_market() + "_interval_" + self.id);
                     const resolution = window.cl_independent_drawings ? rawResolution : 'all';
                     const symbol = self.chart ? self.chart.symbol() : Utils.get_market() + ":" + Utils.get_code();
+                    const cacheKey = self.getDrawingsCacheKey(symbol, rawResolution);
 
                     // 核心修复：处理 state.sources 可能为 Map 的情况
                     let processedState = { ...state };
@@ -232,6 +249,9 @@ class ChartManager {
                         body: JSON.stringify({ state: processedState })
                     }).then(res => res.json()).then(res => {
                         console.log("[DEBUG-CHARTS] saveLineToolsAndGroups response", res);
+                        if (state && state.sources) {
+                            self.setDrawingsCache(cacheKey, state);
+                        }
                         resolve();
                     }).catch(err => {
                         console.error("[DEBUG-CHARTS] saveLineToolsAndGroups error", err);
@@ -409,6 +429,7 @@ class ChartManager {
                 $('#cl_cb_independent_drawings').change(function () {
                     window.cl_independent_drawings = $(this).is(':checked');
                     localStorage.setItem('cl_independent_drawings', JSON.stringify(window.cl_independent_drawings));
+                    self._drawingsCache.clear();
                     // 动态切换：重新加载当前周期的画线数据
                     if (self.chart && self.save_load_adapter) {
                         self._is_switching_interval = true;
@@ -530,7 +551,11 @@ class ChartManager {
             this.chart.removeAllShapes();
             if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
                 const interval = this.chart.resolution();
-                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol.ticker }).then(state => {
+                const expectedSymbol = symbol.ticker;
+                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: expectedSymbol }).then(state => {
+                    if (!this.chart || this.chart.symbol() !== expectedSymbol) {
+                        return;
+                    }
                     if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
                         this.chart.applyLineToolsState(state);
                     }
@@ -559,8 +584,8 @@ class ChartManager {
         // Fix: Pre-check if drawings already exist in cache before forcing server fetch
         const code = Utils.get_code();
         const symbol = market + ":" + code;
-        const cacheKey = `${symbol}_${interval}`;
-        const cachedDrawings = this._drawingsCache[cacheKey];
+        const cacheKey = this.getDrawingsCacheKey(symbol, interval);
+        const cachedDrawings = this._drawingsCache.get(cacheKey);
         
         this.clear_draw_chanlun();
         if (this.chart) {
@@ -580,16 +605,28 @@ class ChartManager {
             // 重新加载当前周期的画线数据（独立模式按周期加载，共享模式加载 'all'）
             if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
                 this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
+                    // Ignore stale async responses from previous interval switches.
+                    if (currentSeq !== this._intervalSwitchSeq) {
+                        console.log("[DEBUG-CHARTS] Drop stale drawings response:", { interval, symbol, currentSeq, latestSeq: this._intervalSwitchSeq });
+                        return;
+                    }
+                    const currentSymbolInterval = this.widget && this.widget.symbolInterval ? this.widget.symbolInterval() : null;
+                    if (!currentSymbolInterval || currentSymbolInterval.interval !== interval || currentSymbolInterval.symbol !== symbol) {
+                        console.log("[DEBUG-CHARTS] Drop mismatched drawings response:", { expected: { interval, symbol }, current: currentSymbolInterval });
+                        return;
+                    }
                     // Fix: Cache the loaded drawings for future interval switches
                     if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
-                        this._drawingsCache.set(cacheKey, state);
+                        this.setDrawingsCache(cacheKey, state);
                         this.chart.applyLineToolsState(state);
                     }
                     // 延迟恢复，确保 applyLineToolsState 完成且没有触发后续的自动保存覆盖
                     setTimeout(() => { this._is_switching_interval = false; }, 1000);
                 }).catch(e => {
                     console.error("Error loading drawings on interval change", e);
-                    this._is_switching_interval = false;
+                    if (currentSeq === this._intervalSwitchSeq) {
+                        this._is_switching_interval = false;
+                    }
                 });
             } else {
                 this._is_switching_interval = false;

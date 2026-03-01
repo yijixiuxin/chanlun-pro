@@ -283,64 +283,56 @@
                             return existingPoints || [];
                         if (!existingPoints || existingPoints.length === 0)
                             return newPoints;
-                        // 获取点位时间的辅助函数，处理points可能是对象或数组的情况
                         const getPointTime = (point) => {
+                            if (!point || !point.points)
+                                return null;
                             if (Array.isArray(point.points)) {
-                                // 如果是数组，取第一个元素的time
+                                if (!point.points[0])
+                                    return null;
                                 return point.points[0].time;
                             }
-                            else {
-                                // 如果是单个对象，直接取time
-                                return point.points.time;
-                            }
+                            return point.points.time;
                         };
-                        const minResponseTime = Math.min(...newPoints.map(getPointTime));
+                        const validNewPoints = newPoints.filter((point) => getPointTime(point) !== null && getPointTime(point) !== undefined);
+                        if (validNewPoints.length === 0)
+                            return existingPoints || [];
+                        const minResponseTime = Math.min(...validNewPoints.map(getPointTime));
                         const updatedPoints = [];
-                        // 保留小于最小时间点的数据
                         for (const point of existingPoints) {
-                            if (getPointTime(point) < minResponseTime) {
+                            const pointTime = getPointTime(point);
+                            if (pointTime !== null && pointTime !== undefined && pointTime < minResponseTime) {
                                 updatedPoints.push(point);
                             }
                         }
-                        // 添加返回数据中剩余的新点位
-                        for (const point of newPoints) {
+                        for (const point of validNewPoints) {
                             updatedPoints.push(point);
                         }
-                        // 按时间排序，使用getPointTime辅助函数获取时间
                         return updatedPoints.sort((a, b) => getPointTime(a) - getPointTime(b));
                     };
-                    // 处理LineSegment类型数据（bis, xds, zsds, bi_zss, xd_zss, zsd_zss）
                     const updateLineSegments = (existingSegments, newSegments) => {
                         if (!newSegments || newSegments.length === 0)
                             return existingSegments || [];
                         if (!existingSegments || existingSegments.length === 0)
                             return newSegments;
-                        const minResponseTime = Math.min(...newSegments.map((segment) => segment.points[0].time));
+                        const validNewSegments = newSegments.filter((segment) => Array.isArray(segment.points) && segment.points.length > 0 && segment.points[0] && segment.points[0].time !== undefined && segment.points[0].time !== null);
+                        if (validNewSegments.length === 0)
+                            return existingSegments || [];
+                        const minResponseTime = Math.min(...validNewSegments.map((segment) => segment.points[0].time));
                         const updatedSegments = [];
-                        // 保留起始时间小于最小时间点的线段
                         for (const segment of existingSegments) {
-                            if (segment.points.length > 0) {
-                                if (segment.points[0].time < minResponseTime) {
-                                    updatedSegments.push(segment);
-                                }
+                            if (Array.isArray(segment.points) && segment.points.length > 0 && segment.points[0].time < minResponseTime) {
+                                updatedSegments.push(segment);
                             }
                         }
-                        // 添加返回数据中剩余的新线段
-                        for (const segment of newSegments) {
+                        for (const segment of validNewSegments) {
                             updatedSegments.push(segment);
                         }
-                        // 按起始时间排序
                         return updatedSegments.sort((a, b) => {
-                            if (a.points.length === 0 && b.points.length === 0)
-                                return 0;
-                            if (a.points.length === 0)
-                                return -1;
-                            if (b.points.length === 0)
-                                return 1;
-                            return a.points[0].time - b.points[0].time;
+                            const at = (Array.isArray(a.points) && a.points[0]) ? a.points[0].time : -Infinity;
+                            const bt = (Array.isArray(b.points) && b.points[0]) ? b.points[0].time : -Infinity;
+                            return at - bt;
                         });
                     };
-                    // 更新所有数据
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
                     obj_res.bis = updateLineSegments(obj_res.bis, response.bis);
                     obj_res.xds = updateLineSegments(obj_res.xds, response.xds);
