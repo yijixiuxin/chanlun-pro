@@ -302,7 +302,9 @@ class ExchangeQMT(Exchange):
         df["divid_date"] = pd.to_datetime(df["time"] / 1000, unit="s")
         return df
 
-    def subscribe_all_ticks(self, callback):
+    def subscribe_all_ticks(
+        self, callback, market_list: List[str] = ["SH", "SZ", "BJ"]
+    ):
         all_stocks = self.all_stocks()
         all_codes = [_s["code"] for _s in all_stocks]
 
@@ -313,7 +315,7 @@ class ExchangeQMT(Exchange):
                     continue
                 callback(_tdx_code, _tick)
 
-        xtdata.subscribe_whole_quote(["SH", "SZ", "BJ"], on_tick)
+        xtdata.subscribe_whole_quote(market_list, on_tick)
         xtdata.run()
 
     def subscribe_stocks_quotes(self, codes: List[str], callback):
@@ -364,3 +366,58 @@ class ExchangeQMT(Exchange):
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         raise Exception("QMT 交易功能在 trader 目录实现")
+
+
+if __name__ == "__main__":
+    ex = ExchangeQMT()
+
+    # stocks = ex.all_stocks()
+    # stock_maps = {}
+    # for _s in stocks:
+    #     stock_maps[_s["code"][0:5]] = _s
+    # for _t, _s in stock_maps.items():
+    #     print(_t, _s)
+    # print(len(stocks))
+
+    klines = ex.klines(
+        "SZ.002645",
+        "1m",
+    )
+
+    # 2026-02-04 日期的 volume 累加
+    klines["ddd"] = klines["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
+    volume = klines[klines["ddd"] == "2026-02-04"]["volume"].sum()
+
+    print(klines[klines["ddd"] == "2026-02-04"])
+    print(volume)
+
+    # stock = ex.stock_info("SH.000001")
+    # print(stock)
+
+    # df = ex.get_divid_factors("SH.600519")
+
+    # print(df)
+
+    # def on_klines(_qmt_code, tick):
+    #     if _qmt_code != "600519.SH":
+    #         return
+    #     print(
+    #         _qmt_code,
+    #         "最新价格",
+    #         tick["lastPrice"],
+    #         " 时间：",
+    #         fun.timeint_to_datetime(int(tick["time"] / 1000)),
+    #     )
+    #     _tdx_code = ex.code_to_tdx(_qmt_code)
+    #     print(tick)
+    #     # for _f in ["1m", "5m", "d"]:
+    #     #     print(f"周期：{_f}")
+    #     #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
+
+    #     #     print(klines_df)
+    #     print("-" * 20)
+
+    # ex.subscribe_all_ticks(on_klines)
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))

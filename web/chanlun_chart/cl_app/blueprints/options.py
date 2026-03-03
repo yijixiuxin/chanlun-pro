@@ -3,6 +3,8 @@
 
   - `/get_cl_config/<market>/<code>`
   - `/set_cl_config`
+  - `/reset_cl_config`
+  - `/export_cl_config`
 """
 
 from flask import Blueprint, render_template, request
@@ -114,3 +116,22 @@ def set_cl_config():
 
     res = set_cl_chart_config(market, code, cl_config)
     return {"ok": res}
+
+
+@options_bp.route("/reset_cl_config", methods=["POST"])
+@login_required
+def reset_cl_config():
+    market = request.form["market"]
+    res = del_cl_chart_config(market, "common")
+    return {"ok": res}
+
+
+@options_bp.route("/export_cl_config", methods=["GET"])
+@login_required
+def export_cl_config():
+    market = request.args.get("market")
+    code = request.args.get("code")
+    if code is not None:
+        code = code.replace("__", "/")
+    cl_config = query_cl_chart_config(market, code)
+    return cl_config

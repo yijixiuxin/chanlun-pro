@@ -25,6 +25,7 @@ ipywidgets
 pinyin
 pyarmor
 setuptools
+scipy
 
 futu-api
 ccxt

@@ -29,6 +29,9 @@ class StocksBKGN(object):
 
         self.file_name = self.file_path / "new_stocks_bkgn.json"
 
+        if self.file_name.exists() is False:
+            self.file_name = pathlib.Path(__file__).parent / "new_stocks_bkgn.json"
+
         self.cache_file_bk = None
 
         self.logger = fun.get_logger("stocks_bkgn.log")
@@ -60,7 +63,7 @@ class StocksBKGN(object):
             try_nums = 0
             while True:
                 try:
-                    time.sleep(1)
+                    time.sleep(3)
                     # 获取板块的成分股
                     b_stocks = ak.stock_board_industry_cons_em(b_name)
                     self.logger.info(f"{b_name} 行业成分股数量：{len(b_stocks)}")
@@ -86,7 +89,7 @@ class StocksBKGN(object):
             try_nums = 0
             while True:
                 try:
-                    time.sleep(1)
+                    time.sleep(3)
                     # 获取概念的成分股
                     b_stocks = ak.stock_board_concept_cons_em(b_name)
                     self.logger.info(f"{b_name} 概念成分股数量：{len(b_stocks)}")
@@ -257,6 +260,11 @@ class StocksBKGN(object):
             .replace("SH.", "")
             .replace("SZSE.", "")
             .replace("SHSE.", "")
+            .replace("BJ.", "")
+            .replace("BJSE.", "")
+            .replace(".SZ", "")
+            .replace(".SH", "")
+            .replace(".BJ", "")
         )
         bkgn_infos = self.file_bkgns()
         code_hys = []
@@ -313,12 +321,15 @@ if __name__ == "__main__":
     bkgn = StocksBKGN()
     # 重新更新并保存行业与板块信息
 
-    bkgn.reload_bkgn()
+    # bkgn.reload_bkgn()
 
     # 所有行业概念
     bkgn_infos = bkgn.file_bkgns()
     print("行业数量：", len(bkgn_infos["hys"]))
     print("概念数量：", len(bkgn_infos["gns"]))
+
+    # for _gn in bkgn_infos["hys"]:
+    #     print(f'"{_gn}",')
 
     # # 同步所有行业指数到数据库
     # from chanlun.exchange.exchange_db import ExchangeDB
