@@ -257,6 +257,13 @@ class FileCacheDB(object):
                             logger.warning(f"{log_id} 局部数据缺失 [Cache:{len(_v_cd)} vs Src:{len(_v_src)}]，重算")
                             need_recompute = True
 
+                    # 4. 数据量校验：缓存数据远少于输入数据，说明缓存可能由窄范围请求(如DataPulse)创建，需全量重算
+                    if not need_recompute and len(cached_klines) > 0 and len(klines) > len(cached_klines) * 2:
+                        logger.warning(
+                            f"{log_id} 缓存数据量({len(cached_klines)})远少于输入({len(klines)})，全量重算"
+                        )
+                        need_recompute = True
+
                 if need_recompute:
                     cd = cl.CL(code, frequency, cl_config)
 
