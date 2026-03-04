@@ -94,6 +94,7 @@ class ChartManager {
         this.chart = null;
         this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 300);
         this.macdStudyId = null;
+        this._initialLoadDone = false; // 标记初始数据加载完成，之后才响应 visibleRangeChange
         this._intervalVersion = 0;
         this._drawingsCache = new Map();  // Lightweight cache for drawings per interval
         this._intervalSwitchSeq = 0;
@@ -129,6 +130,13 @@ class ChartManager {
         window.GlobalTVDatafeeds.push(this.udf_datafeed);
         window.tvDatafeed = this.udf_datafeed; // 兼容旧代码
         // ---------------------------------------
+
+        // Listen for custom event from datafeed when bars_result is populated
+        // This is the most reliable trigger for draw_chanlun after interval changes
+        window.addEventListener('chanlun-bars-ready', (e) => {
+            this._initialLoadDone = true;
+            this.debouncedDrawChanlun();
+        });
 
         const self = this;
         const client_id = "chanlun_pro_" + Utils.get_market() + "_" + this.id;
@@ -481,7 +489,7 @@ class ChartManager {
             this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
             this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
             this.chart.onIntervalChanged().subscribe(null, (i) => this.handleIntervalChange(i));
-            this.chart.onDataLoaded().subscribe(null, () => { setTimeout(() => this.debouncedDrawChanlun(), 200); }, true);
+            this.chart.onDataLoaded().subscribe(null, () => { this._initialLoadDone = true; this.debouncedDrawChanlun(); }, true);
             this.chart.dataReady(() => this.handleDataReady());
             this.widget.subscribe("onTick", () => this.handleTick());
             this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
@@ -545,6 +553,7 @@ class ChartManager {
         if (!market || !code) return;
         if (Utils.get_market() !== market) { Utils.set_local_data("market", market); location.reload(); return; }
         Utils.set_local_data("market", market); Utils.set_local_data(`${market}_code`, code);
+        this._initialLoadDone = false; // 切换品种时重置，等待新数据 dataReady
         this.clear_draw_chanlun();
         if (this.chart) {
             this._is_switching_interval = true;
@@ -574,7 +583,9 @@ class ChartManager {
     handleIntervalChange(interval) {
         if (!interval) return;
         const market = Utils.get_market(); if (!market) return;
-        
+
+        this._initialLoadDone = false; // 切换周期时重置，等待新数据 dataReady
+        this._drawRetryCount = 0; // 重置重试计数器
         // Fix: Capture the sequence number for debouncing rapid interval switches
         const currentSeq = ++this._intervalSwitchSeq;
         this._intervalVersion++;
@@ -635,9 +646,9 @@ class ChartManager {
         // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
     }
 
-    handleDataReady() { this.debouncedDrawChanlun(); }
+    handleDataReady() { this._initialLoadDone = true; this.debouncedDrawChanlun(); }
     handleTick() { this.debouncedDrawChanlun(); }
-    handleVisibleRangeChange() { this.debouncedDrawChanlun(); }
+    handleVisibleRangeChange() { if (this._initialLoadDone) this.debouncedDrawChanlun(); }
 
     safeRemove(entityId) {
         if (!entityId) return Promise.resolve();
@@ -691,8 +702,11 @@ class ChartManager {
         const symbolResKey = `${symbolInterval.symbol.toString().toLowerCase()}${symbolInterval.interval.toString().toLowerCase()}`;
         const barsResult = this.udf_datafeed?._historyProvider?.bars_result?.get(symbolResKey);
 
-        console.log(`[DEBUG-CHARTS] getChartData for ${symbolResKey}: Found=${!!barsResult}`);
-        if (!barsResult) return null;
+        if (!barsResult) {
+            const availableKeys = this.udf_datafeed?._historyProvider?.bars_result ? Array.from(this.udf_datafeed._historyProvider.bars_result.keys()) : [];
+            console.warn(`[DEBUG-CHARTS] getChartData for ${symbolResKey}: NOT FOUND. Available keys:`, availableKeys);
+            return null;
+        }
 
         if (!this.chart) {
             console.warn("[DEBUG-CHARTS] getChartData aborted: this.chart is null.");
@@ -849,14 +863,33 @@ class ChartManager {
 
         const chartData = this.getChartData();
         if (!chartData) {
-            console.warn("[DEBUG-CHARTS] draw_chanlun aborted: No chart data or chart not ready.");
+            // Data might not be fully rendered yet after interval change.
+            // Retry up to 10 times with 500ms intervals.
+            if (!this._drawRetryCount) this._drawRetryCount = 0;
+            if (this._drawRetryCount < 10) {
+                this._drawRetryCount++;
+                setTimeout(() => this.debouncedDrawChanlun(), 500);
+            }
             return;
         }
+        this._drawRetryCount = 0;
         
         const symbolInterval = this.widget.symbolInterval();
-        if (!symbolInterval) return;
+        if (!symbolInterval) {
+            console.warn("[DEBUG-CHARTS] draw_chanlun aborted: symbolInterval is null");
+            return;
+        }
 
         console.log("[DEBUG-CHARTS] draw_chanlun executing for", symbolInterval.interval);
+        console.log("[DEBUG-CHARTS] barsResult shapes:", {
+            fxs: chartData.barsResult.fxs?.length || 0,
+            bis: chartData.barsResult.bis?.length || 0,
+            xds: chartData.barsResult.xds?.length || 0,
+            zsds: chartData.barsResult.zsds?.length || 0,
+            bi_zss: chartData.barsResult.bi_zss?.length || 0,
+            bcs: chartData.barsResult.bcs?.length || 0,
+            mmds: chartData.barsResult.mmds?.length || 0,
+        });
         this._is_drawing_chanlun = true;
         this.drawChartElements(chartData, symbolInterval.interval);
         this._is_drawing_chanlun = false;

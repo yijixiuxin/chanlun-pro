@@ -183,6 +183,31 @@
                 meta.nextTime = response.nextTime;
             }
             else {
+                // Trim future bars from response before processing
+                const nowSec = Math.floor(Date.now() / 1000);
+                let futureIdx = response.t.length;
+                for (let fi = 0; fi < response.t.length; fi++) {
+                    if (response.t[fi] > nowSec) {
+                        futureIdx = fi;
+                        break;
+                    }
+                }
+                if (futureIdx < response.t.length) {
+                    console.log(`HistoryProvider: trimmed ${response.t.length - futureIdx} future bar(s)`);
+                    response.t = response.t.slice(0, futureIdx);
+                    response.c = response.c.slice(0, futureIdx);
+                    if (response.o) response.o = response.o.slice(0, futureIdx);
+                    if (response.h) response.h = response.h.slice(0, futureIdx);
+                    if (response.l) response.l = response.l.slice(0, futureIdx);
+                    if (response.v) response.v = response.v.slice(0, futureIdx);
+                    if (response.macd_dif) response.macd_dif = response.macd_dif.slice(0, futureIdx);
+                    if (response.macd_dea) response.macd_dea = response.macd_dea.slice(0, futureIdx);
+                    if (response.macd_hist) response.macd_hist = response.macd_hist.slice(0, futureIdx);
+                    if (response.macd_area) response.macd_area = response.macd_area.slice(0, futureIdx);
+                    if (response.higher_macd_dif) response.higher_macd_dif = response.higher_macd_dif.slice(0, futureIdx);
+                    if (response.higher_macd_dea) response.higher_macd_dea = response.higher_macd_dea.slice(0, futureIdx);
+                    if (response.higher_macd_hist) response.higher_macd_hist = response.higher_macd_hist.slice(0, futureIdx);
+                }
                 const volumePresent = response.v !== undefined;
                 const ohlPresent = response.o !== undefined;
                 for (let i = 0; i < response.t.length; ++i) {
@@ -269,6 +294,8 @@
                         mmds: response.mmds,
                         chart_color: response.chart_color,
                     });
+                    // Notify chart layer that bars data (with chanlun shapes) is ready
+                    try { window.dispatchEvent(new CustomEvent('chanlun-bars-ready', { detail: { key: res_key } })); } catch(e) {}
                 }
                 else {
                     // 更新存在的数据
@@ -296,12 +323,17 @@
                         const validNewPoints = newPoints.filter((point) => getPointTime(point) !== null && getPointTime(point) !== undefined);
                         if (validNewPoints.length === 0)
                             return existingPoints || [];
-                        const minResponseTime = Math.min(...validNewPoints.map(getPointTime));
+                        const newTimes = validNewPoints.map(getPointTime);
+                        const minResponseTime = Math.min(...newTimes);
+                        const maxResponseTime = Math.max(...newTimes);
                         const updatedPoints = [];
                         for (const point of existingPoints) {
                             const pointTime = getPointTime(point);
-                            if (pointTime !== null && pointTime !== undefined && pointTime < minResponseTime) {
-                                updatedPoints.push(point);
+                            if (pointTime !== null && pointTime !== undefined) {
+                                // Keep points OUTSIDE the response window
+                                if (pointTime < minResponseTime || pointTime > maxResponseTime) {
+                                    updatedPoints.push(point);
+                                }
                             }
                         }
                         for (const point of validNewPoints) {
@@ -317,11 +349,17 @@
                         const validNewSegments = newSegments.filter((segment) => Array.isArray(segment.points) && segment.points.length > 0 && segment.points[0] && segment.points[0].time !== undefined && segment.points[0].time !== null);
                         if (validNewSegments.length === 0)
                             return existingSegments || [];
-                        const minResponseTime = Math.min(...validNewSegments.map((segment) => segment.points[0].time));
+                        const newTimes = validNewSegments.map((segment) => segment.points[0].time);
+                        const minResponseTime = Math.min(...newTimes);
+                        const maxResponseTime = Math.max(...newTimes);
                         const updatedSegments = [];
                         for (const segment of existingSegments) {
-                            if (Array.isArray(segment.points) && segment.points.length > 0 && segment.points[0].time < minResponseTime) {
-                                updatedSegments.push(segment);
+                            if (Array.isArray(segment.points) && segment.points.length > 0) {
+                                const segTime = segment.points[0].time;
+                                // Keep segments OUTSIDE the response window
+                                if (segTime < minResponseTime || segTime > maxResponseTime) {
+                                    updatedSegments.push(segment);
+                                }
                             }
                         }
                         for (const segment of validNewSegments) {
@@ -360,6 +398,8 @@
                     obj_res.higher_macd_dea = hDeaObj.values;
                     obj_res.higher_macd_hist = hHistObj.values;
                     this.bars_result.set(res_key, obj_res);
+                    // Notify chart layer that bars data (with chanlun shapes) is updated
+                    try { window.dispatchEvent(new CustomEvent('chanlun-bars-ready', { detail: { key: res_key } })); } catch(e) {}
                 }
             }
             const result = {
@@ -442,7 +482,10 @@
             if (!this._subscribers.hasOwnProperty(listenerGuid)) {
                 return;
             }
-            const bars = result.bars;
+            // Filter out future bars to prevent time order violations
+            // Exchange may return bars with end-of-period timestamps ahead of current time
+            const nowMs = Date.now();
+            const bars = result.bars.filter(b => b.time <= nowMs);
             if (bars.length === 0) {
                 return;
             }
@@ -455,11 +498,11 @@
             // Pulse updating may miss some trades data (ie, if pulse period = 10 secods and new bar is started 5 seconds later after the last update, the
             // old bar's last 5 seconds trades will be lost). Thus, at fist we should broadcast old bar updates when it's ready.
             if (isNewBar) {
-                if (bars.length < 2) {
-                    throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
+                if (bars.length >= 2) {
+                    const previousBar = bars[bars.length - 2];
+                    subscriptionRecord.listener(previousBar);
                 }
-                const previousBar = bars[bars.length - 2];
-                subscriptionRecord.listener(previousBar);
+                // If bars.length < 2 (e.g. future bar was filtered out), skip previous bar update
             }
             subscriptionRecord.lastBarTime = lastBar.time;
             subscriptionRecord.listener(lastBar);

@@ -83,6 +83,10 @@ chart_data_cache = TTLCache(maxsize=100, ttl=600)
 chart_data_cache_stats = {"accessed_intervals": defaultdict(set), "prewarmed": set()}
 COMMON_INTERVALS = ["1", "5", "15", "30", "60", "1D", "1W"]  # Commonly switched intervals
 
+# 缓存数据最近验证时间戳（防止非交易时段 DataPulse 反复 cache miss）
+_CACHE_REVALIDATION_INTERVAL = 30  # 秒，缓存在此时间内被验证过则视为有效
+chart_data_validated_at = {}
+
 cache_lock = RLock()
 req_lock = RLock()
 
@@ -176,6 +180,7 @@ def prewarm_common_intervals(market, code, cl_config):
                     # Store in cache
                     with cache_lock:
                         chart_data_cache[cache_key] = cl_chart_data
+                        chart_data_validated_at[cache_key] = time.time()
                         chart_data_cache_stats["prewarmed"].discard(cache_key)
                         chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
                         LogUtil.info(f"[tv_history] Pre-warmed cache for {market}:{code} interval {interval}")
@@ -529,7 +534,13 @@ def tv_history():
                     _cached_times = _cached.get("t", []) if isinstance(_cached, dict) else []
                     if _to > 0 and len(_cached_times) > 0:
                         if _to > _cached_times[-1]:
-                            cache_miss_reason = "cache_stale_to_exceeds_tail"
+                            # 若缓存在 _CACHE_REVALIDATION_INTERVAL 内刚被验证过，视为命中
+                            _last_validated = chart_data_validated_at.get(cache_key, 0)
+                            if (time.time() - _last_validated) < _CACHE_REVALIDATION_INTERVAL:
+                                cl_chart_data = _cached
+                                is_cache_hit = True
+                            else:
+                                cache_miss_reason = "cache_stale_to_exceeds_tail"
                         else:
                             cl_chart_data = _cached
                             is_cache_hit = True
@@ -569,6 +580,8 @@ def tv_history():
                 ):
                     klines = ex.klines(code, frequency_low, **kline_args)
                     if klines is None or len(klines) == 0:
+                        with cache_lock:
+                            chart_data_validated_at[cache_key] = time.time()
                         return {"s": "no_data"}
                     cd = web_batch_get_cl_datas(
                         market, code, {frequency_low: klines}, cl_config
@@ -577,6 +590,8 @@ def tv_history():
                     kchart_to_frequency = None
                     klines = ex.klines(code, frequency, **kline_args)
                     if klines is None or len(klines) == 0:
+                        with cache_lock:
+                            chart_data_validated_at[cache_key] = time.time()
                         return {"s": "no_data"}
                     cd = web_batch_get_cl_datas(
                         market, code, {frequency: klines}, cl_config
@@ -631,14 +646,22 @@ def tv_history():
 
                 with cache_lock:
                     chart_data_cache[cache_key] = cl_chart_data
+                    chart_data_validated_at[cache_key] = time.time()
+
+                # firstDataRequest 成功后，后台预热其他常用周期的缓存
+                if firstDataRequest == "true":
+                    prewarm_common_intervals(market, code, cl_config)
 
         if cl_chart_data is None:
             return {"s": "no_data"}
 
         bar_times = cl_chart_data.get("t", [])
         if not is_cache_hit:
+            _fxs_cnt = len(cl_chart_data.get("fxs", []))
+            _bis_cnt = len(cl_chart_data.get("bis", []))
+            _xds_cnt = len(cl_chart_data.get("xds", []))
             LogUtil.info(
-                f"[tv_history] Calc Finish & Cached req={req_tag}, bars={len(bar_times)}"
+                f"[tv_history] Calc Finish & Cached req={req_tag}, bars={len(bar_times)}, fxs={_fxs_cnt}, bis={_bis_cnt}, xds={_xds_cnt}"
             )
         else:
             LogUtil.info(f"[tv_history] Cache Hit req={req_tag}, bars={len(bar_times)}")
@@ -648,8 +671,10 @@ def tv_history():
                 from_ts = _from
                 to_ts = _to
                 start_idx = bisect.bisect_left(bar_times, from_ts)
+                # bisect_left 使 to_ts 为排他上界（与 TradingView UDF 协议一致），
+                # 避免 backward request 返回与请求 to 时间戳完全相同的 K 线（会导致重复 bar + 多余请求）
                 end_idx = (
-                    bisect.bisect_right(bar_times, to_ts)
+                    bisect.bisect_left(bar_times, to_ts)
                     if to_ts > 0
                     else len(bar_times)
                 )
@@ -661,11 +686,11 @@ def tv_history():
                             pts = shape["points"]
                             if isinstance(pts, list) and len(pts) > 0:
                                 t = pts[-1].get("time", 0)
-                                if t >= from_ts and (to_ts == 0 or t <= to_ts):
+                                if t >= from_ts and (to_ts == 0 or t < to_ts):
                                     res.append(shape)
                             elif isinstance(pts, dict):
                                 t = pts.get("time", 0)
-                                if t >= from_ts and (to_ts == 0 or t <= to_ts):
+                                if t >= from_ts and (to_ts == 0 or t < to_ts):
                                     res.append(shape)
                     return res
 
@@ -710,21 +735,43 @@ def tv_history():
             except Exception as e:
                 LogUtil.error(f"[tv_history] Slice data failed: {e}")
 
+        # 切片后无数据，返回 no_data 阻止 TradingView 继续向前请求
+        if len(cl_chart_data.get("t", [])) == 0:
+            return {"s": "no_data"}
+
+        # 裁剪超出请求 _to 的「未来」K 线
+        # 交易所可能返回尚未完成的下一根 K 线（时间戳 > 当前时间），
+        # TradingView 缓存后会导致 DataPulse 更新时 time order violation
+        _resp_times = cl_chart_data.get("t", [])
+        _resp_end = len(_resp_times)
+        if _to > 0 and _resp_times and _resp_times[-1] > _to:
+            _resp_end = bisect.bisect_right(_resp_times, _to)
+            if _resp_end < len(_resp_times):
+                LogUtil.info(
+                    f"[tv_history] Trimmed {len(_resp_times) - _resp_end} future bar(s) beyond to={_to}"
+                )
+
+        def _trim(arr):
+            """对列表做 [:_resp_end] 切片，不修改缓存原对象"""
+            if not arr or _resp_end >= len(arr):
+                return arr
+            return arr[:_resp_end]
+
         return {
             "s": "ok",
-            "t": cl_chart_data.get("t", []),
-            "c": cl_chart_data.get("c", []),
-            "o": cl_chart_data.get("o", []),
-            "h": cl_chart_data.get("h", []),
-            "l": cl_chart_data.get("l", []),
-            "v": cl_chart_data.get("v", []),
-            "macd_dif": cl_chart_data.get("macd_dif", []),
-            "macd_dea": cl_chart_data.get("macd_dea", []),
-            "macd_hist": cl_chart_data.get("macd_hist", []),
-            "macd_area": cl_chart_data.get("macd_area", []),
-            "higher_macd_dif": cl_chart_data.get("higher_macd_dif", []),
-            "higher_macd_dea": cl_chart_data.get("higher_macd_dea", []),
-            "higher_macd_hist": cl_chart_data.get("higher_macd_hist", []),
+            "t": _trim(cl_chart_data.get("t", [])),
+            "c": _trim(cl_chart_data.get("c", [])),
+            "o": _trim(cl_chart_data.get("o", [])),
+            "h": _trim(cl_chart_data.get("h", [])),
+            "l": _trim(cl_chart_data.get("l", [])),
+            "v": _trim(cl_chart_data.get("v", [])),
+            "macd_dif": _trim(cl_chart_data.get("macd_dif", [])),
+            "macd_dea": _trim(cl_chart_data.get("macd_dea", [])),
+            "macd_hist": _trim(cl_chart_data.get("macd_hist", [])),
+            "macd_area": _trim(cl_chart_data.get("macd_area", [])),
+            "higher_macd_dif": _trim(cl_chart_data.get("higher_macd_dif", [])),
+            "higher_macd_dea": _trim(cl_chart_data.get("higher_macd_dea", [])),
+            "higher_macd_hist": _trim(cl_chart_data.get("higher_macd_hist", [])),
             "fxs": cl_chart_data.get("fxs", []),
             "bis": cl_chart_data.get("bis", []),
             "xds": cl_chart_data.get("xds", []),
