@@ -385,6 +385,7 @@ class ExchangeQMTStock(ExchangeQMT):
     """
     QMT A股行情
     """
+    g_all_stocks = []
     def code_to_tdx(self, code: str):
         """
         QMT 格式：600519.SH
@@ -480,6 +481,7 @@ class ExchangeQMTFutures(ExchangeQMT):
     """
     QMT 期货行情
     """
+    g_all_stocks = []
     def default_code(self):
         return "SHFE.rb2310"
 
@@ -606,6 +608,7 @@ class ExchangeQMTOption(ExchangeQMT):
     """
     QMT 期权行情
     """
+    g_all_stocks = []
     def default_code(self):
         return "10005329.SHO" # 示例期权代码
 
@@ -655,8 +658,8 @@ class ExchangeQMTOption(ExchangeQMT):
             return self.g_all_stocks
 
         # 获取所有期权 tick
-        # 期权市场通常包括 沪深ETF期权(SH, SZ) 和 股指期权/商品期权(中金所IF, 郑商所ZF, 大商所DF, 上期所SF)
-        markets = ["SH", "SZ", "SF", "IF", "DF", "ZF", "INE", "GF"]
+        # 期权市场通常包括 沪深ETF期权(SHO, SZO) 和 股指期权/商品期权(中金所IF, 郑商所ZF, 大商所DF, 上期所SF)
+        markets = ["SHO", "SZO", "SF", "IF", "DF", "ZF", "INE", "GF"]
         ticks = xtdata.get_full_tick(markets)
         tick_codes = list(ticks.keys())
 
@@ -665,23 +668,23 @@ class ExchangeQMTOption(ExchangeQMT):
                        # 过滤掉组合合约
             if "&" in _c or " " in _c:
                 continue
-            # 过滤过期期权
-            if "-C-" in _c or "-P-" in _c :
-                # 标的编码和-C或-P之间是4位数字前2位不是当前年份26，剔除
-                if not re.match(r"^[0-9]{2}" + str(datetime.datetime.now().year)[2:] + r"[0-9]{2}$", _c.split("-")[0]):
-                    continue
-            # 必须是期权类型
-            # _stock_type: dict = xtdata.get_instrument_type(_c)
-            # if "2603-C" in _c or "SHO" in _c:
-            #     print(_c)
-            #     print(_stock_type)
-            # if not _stock_type.get("option"):
-            #     continue
-            
-            # 由于 get_instrument_type 对期权返回空字典，我们改用 get_instrument_detail 判断
-            # 或者简单通过合约代码特征过滤（如包含 -C- / -P- 或 .SHO / .SZO）
-            if ".SHO" not in _c and ".SZO" not in _c and "-C-" not in _c and "-P-" not in _c:
+            # 由于 get_instrument_type 对期权返回空字典，我们改用合约代码特征过滤
+            base_code = _c.split(".")[0]
+            digits_groups = re.findall(r"\d+", base_code)
+            has_cp_flag = "-C-" in _c or "-P-" in _c or re.search(r"[CP]", base_code, re.IGNORECASE)
+            is_etf_option = ".SHO" in _c or ".SZO" in _c
+            is_option = is_etf_option or (has_cp_flag and len(digits_groups) >= 2)
+            if not is_option:
                 continue
+
+            if not is_etf_option and has_cp_flag and digits_groups:
+                exp_num = digits_groups[0]
+                if len(exp_num) >= 4:
+                    year = int(exp_num[:2])
+                    now_year = int(datetime.datetime.now().strftime("%y"))
+                    next_year = (now_year + 1) % 100
+                    if year not in [now_year, next_year]:
+                        continue
             
             # 过滤掉过期合约? (可选)
             # 暂时保留所有
