@@ -46,6 +46,18 @@ function debounce(func, wait) {
     };
 }
 
+function getTVRegistry() {
+    if (!window.ChanlunTVRegistry) {
+        window.ChanlunTVRegistry = {
+            chartManagers: new Map(),
+            datafeeds: new Map(),
+            widgets: new Map(),
+            activeManagerId: null,
+        };
+    }
+    return window.ChanlunTVRegistry;
+}
+
 const ChartUtils = {
     createShape(chart, points, options = {}) {
         const defaults = {
@@ -88,6 +100,7 @@ const ChartUtils = {
 class ChartManager {
     constructor(id) {
         this.id = id;
+        this.instanceId = `chart-manager-${id}`;
         this.obj_charts = {};
         this.widget = null;
         this.udf_datafeed = null;
@@ -98,12 +111,74 @@ class ChartManager {
         this._intervalVersion = 0;
         this._drawingsCache = new Map();  // Lightweight cache for drawings per interval
         this._intervalSwitchSeq = 0;
+        this._drawingsRequestSeq = 0;
+        this._latestAppliedBarTime = null;
+        this._is_switching_interval = false;
+        this._is_drawing_chanlun = false;
+        this._drawingStatePhase = null;
+        this._activeDrawingMutations = new Set();
+        this.isApplyingDrawingState = false;
+        this._pendingSaveState = null;
+        this._saveScheduled = false;
+        this._saveInFlight = null;
+        this._barReadyHandler = null;
     }
 
     getDrawingsCacheKey(symbol, interval) {
         const mode = window.cl_independent_drawings ? "ind" : "shared";
         const resolutionKey = window.cl_independent_drawings ? interval : "all";
         return `${symbol}_${resolutionKey}_${mode}`;
+    }
+
+    getCurrentChartIdentity() {
+        if (!this.chart) return null;
+        return {
+            symbol: this.chart.symbol(),
+            interval: this.chart.resolution(),
+        };
+    }
+
+    createContextToken(symbol, interval) {
+        return `${this.instanceId}:${symbol}:${interval}:${++this._drawingsRequestSeq}`;
+    }
+
+    beginContextSwitch(reason, symbol, interval) {
+        const token = this.createContextToken(symbol, interval);
+        this._activeContextToken = token;
+        this._drawingsLoadToken = token;
+        this._is_switching_interval = true;
+        this._drawingStatePhase = reason;
+        return token;
+    }
+
+    isTokenCurrent(token) {
+        return !!token && token === this._activeContextToken;
+    }
+
+    finishContextSwitch(token) {
+        if (!this.isTokenCurrent(token)) return;
+        this._is_switching_interval = false;
+        this._drawingStatePhase = null;
+    }
+
+    markDrawingMutationStart(phase) {
+        const mutationPhase = phase || 'unknown';
+        this._activeDrawingMutations.add(mutationPhase);
+        this._is_drawing_chanlun = this._activeDrawingMutations.size > 0;
+        this._drawingStatePhase = mutationPhase;
+    }
+
+    markDrawingMutationEnd(phase) {
+        const mutationPhase = phase || 'unknown';
+        this._activeDrawingMutations.delete(mutationPhase);
+        this._is_drawing_chanlun = this._activeDrawingMutations.size > 0;
+        this._drawingStatePhase = this._is_drawing_chanlun
+            ? Array.from(this._activeDrawingMutations)[this._activeDrawingMutations.size - 1]
+            : null;
+    }
+
+    shouldSuppressDrawingSave() {
+        return this._is_switching_interval || this._activeDrawingMutations.size > 0 || this.isApplyingDrawingState;
     }
 
     setDrawingsCache(key, state) {
@@ -116,14 +191,163 @@ class ChartManager {
         }
     }
 
+    isDrawingStateEmpty(state) {
+        if (!state || !state.sources) return true;
+        if (state.sources instanceof Map) {
+            return state.sources.size === 0;
+        }
+        return Object.keys(state.sources).length === 0;
+    }
+
+    scheduleDrawingsSave(reason = 'unspecified') {
+        if (!this.chart || this.shouldSuppressDrawingSave()) return Promise.resolve();
+        if (typeof this.chart.getLineToolsState !== 'function') return Promise.resolve();
+
+        try {
+            this._pendingSaveState = this.chart.getLineToolsState();
+        } catch (e) {
+            console.debug('[DEBUG-CHARTS] getLineToolsState failed', e);
+            return Promise.resolve();
+        }
+
+        if (this._saveScheduled) {
+            return this._saveInFlight || Promise.resolve();
+        }
+
+        this._saveScheduled = true;
+        this._saveInFlight = new Promise((resolve) => {
+            setTimeout(async () => {
+                this._saveScheduled = false;
+                const state = this._pendingSaveState;
+                this._pendingSaveState = null;
+
+                if (!state || this.shouldSuppressDrawingSave()) {
+                    this._saveInFlight = null;
+                    resolve();
+                    return;
+                }
+
+                try {
+                    if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
+                        await this.save_load_adapter.saveLineToolsAndGroups('default', 'default', state, { reason });
+                    } else if (typeof this.widget?.saveChartToServer === 'function') {
+                        await this.widget.saveChartToServer();
+                    }
+                } catch (e) {
+                    console.debug('[DEBUG-CHARTS] drawing save skipped', e);
+                }
+
+                if (this._pendingSaveState && !this.shouldSuppressDrawingSave()) {
+                    this._saveInFlight = null;
+                    resolve(this.scheduleDrawingsSave(reason));
+                    return;
+                }
+
+                this._saveInFlight = null;
+                resolve();
+            }, 300);
+        });
+
+        return this._saveInFlight;
+    }
+
+    async applyUserDrawingsState(state, token, cacheKey) {
+        if (!state || !this.chart || !this.isTokenCurrent(token)) {
+            return false;
+        }
+        this.isApplyingDrawingState = true;
+        this.markDrawingMutationStart('apply-user-drawings');
+        try {
+            this.chart.removeAllShapes();
+            if (!this.isTokenCurrent(token)) {
+                return false;
+            }
+            this.chart.applyLineToolsState(state);
+            if (cacheKey) {
+                this.setDrawingsCache(cacheKey, state);
+            }
+            this.debouncedDrawChanlun();
+            return true;
+        } finally {
+            this.isApplyingDrawingState = false;
+            this.markDrawingMutationEnd('apply-user-drawings');
+        }
+    }
+
+    async reloadDrawingsForCurrentContext(reason) {
+        if (!this.chart || !this.save_load_adapter || typeof this.save_load_adapter.loadLineToolsAndGroups !== 'function') {
+            return;
+        }
+
+        const identity = this.getCurrentChartIdentity();
+        if (!identity) return;
+
+        const { symbol, interval } = identity;
+        const token = this.beginContextSwitch(reason, symbol, interval);
+        const cacheKey = this.getDrawingsCacheKey(symbol, interval);
+        const cachedDrawings = this._drawingsCache.get(cacheKey);
+
+        try {
+            if (!this.isDrawingStateEmpty(cachedDrawings)) {
+                await this.applyUserDrawingsState(cachedDrawings, token, cacheKey);
+                return;
+            }
+
+            if (this.chart) {
+                this.debouncedDrawChanlun();
+            }
+
+            const state = await this.save_load_adapter.loadLineToolsAndGroups('default', 'default', 'load', {
+                resolution: interval,
+                symbol,
+                token,
+            });
+
+            if (!this.isTokenCurrent(token)) {
+                return;
+            }
+
+            if (!this.isDrawingStateEmpty(state)) {
+                await this.applyUserDrawingsState(state, token, cacheKey);
+            }
+        } catch (e) {
+            console.error(`[DEBUG-CHARTS] Failed to reload drawings (${reason})`, e);
+        } finally {
+            this.finishContextSwitch(token);
+        }
+    }
+
+    handleBarsReadyEvent(event) {
+        const detail = event?.detail || {};
+        if (detail.managerId && detail.managerId !== this.instanceId) {
+            return;
+        }
+        const identity = this.getCurrentChartIdentity();
+        if (!identity) return;
+        if (detail.symbol && detail.symbol !== identity.symbol.toLowerCase()) {
+            return;
+        }
+        if (detail.resolution && detail.resolution !== identity.interval.toLowerCase()) {
+            return;
+        }
+        this._initialLoadDone = true;
+        this.debouncedDrawChanlun();
+    }
+
     init() {
-        this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 3000);
+        this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 3000, undefined, {
+            managerId: this.instanceId,
+        });
+
+        const registry = getTVRegistry();
+        registry.chartManagers.set(this.instanceId, this);
+        registry.datafeeds.set(this.instanceId, this.udf_datafeed);
+        registry.activeManagerId = this.instanceId;
 
         // --- 核心修复：多图表 Datafeed 注册机制 ---
         if (!window.GlobalTVDatafeeds) {
             window.GlobalTVDatafeeds = [];
         }
-        // 清理旧的
         if (window.GlobalTVDatafeeds.length > 10) {
             window.GlobalTVDatafeeds.shift();
         }
@@ -131,12 +355,8 @@ class ChartManager {
         window.tvDatafeed = this.udf_datafeed; // 兼容旧代码
         // ---------------------------------------
 
-        // Listen for custom event from datafeed when bars_result is populated
-        // This is the most reliable trigger for draw_chanlun after interval changes
-        window.addEventListener('chanlun-bars-ready', (e) => {
-            this._initialLoadDone = true;
-            this.debouncedDrawChanlun();
-        });
+        this._barReadyHandler = this.handleBarsReadyEvent.bind(this);
+        window.addEventListener('chanlun-bars-ready', this._barReadyHandler);
 
         const self = this;
         const client_id = "chanlun_pro_" + Utils.get_market() + "_" + this.id;
@@ -205,15 +425,11 @@ class ChartManager {
                     .then(res => res.json())
                     .then(res => res.status === 'ok' ? res.data.content : null);
             },
-            saveLineToolsAndGroups: function (layoutId, chartId, state) {
-                console.log("[DEBUG-CHARTS] saveLineToolsAndGroups called", { layoutId, chartId, state });
+            saveLineToolsAndGroups: function (layoutId, chartId, state, options = {}) {
+                console.log("[DEBUG-CHARTS] saveLineToolsAndGroups called", { layoutId, chartId, state, options });
                 return new Promise((resolve) => {
-                    if (self._is_switching_interval) {
-                        console.log("[DEBUG-CHARTS] Skip saveLineToolsAndGroups during interval switch");
-                        return resolve();
-                    }
-                    if (self._is_drawing_chanlun) {
-                        console.log("[DEBUG-CHARTS] Skip saveLineToolsAndGroups during chanlun redraw");
+                    if (self.shouldSuppressDrawingSave()) {
+                        console.log("[DEBUG-CHARTS] Skip saveLineToolsAndGroups due to active drawing mutation");
                         return resolve();
                     }
                     const rawResolution = self.chart ? self.chart.resolution() : Utils.get_local_data(Utils.get_market() + "_interval_" + self.id);
@@ -221,24 +437,18 @@ class ChartManager {
                     const symbol = self.chart ? self.chart.symbol() : Utils.get_market() + ":" + Utils.get_code();
                     const cacheKey = self.getDrawingsCacheKey(symbol, rawResolution);
 
-                    // 核心修复：处理 state.sources 可能为 Map 的情况
                     let processedState = { ...state };
-
-                    // TradingView 有时返回的 state.sources 并不是原生的 Map，而是带有内部结构的自定义对象
-                    // 无论如何，我们需要确保它被转换为一个可以被 JSON.stringify 序列化的普通对象
                     if (state.sources) {
                         if (state.sources instanceof Map || typeof state.sources.entries === 'function') {
                             try {
                                 processedState.sources = Object.fromEntries(state.sources);
                             } catch (e) {
-                                // Fallback if fromEntries fails
                                 processedState.sources = {};
                                 for (let [k, v] of state.sources.entries()) {
                                     processedState.sources[k] = v;
                                 }
                             }
                         } else if (typeof state.sources === 'object') {
-                            // 尝试深度克隆以去除不可序列化的内部方法/属性
                             try {
                                 processedState.sources = JSON.parse(JSON.stringify(state.sources));
                             } catch (e) {
@@ -247,7 +457,7 @@ class ChartManager {
                         }
                     }
 
-                    console.log("[DEBUG-CHARTS] Saving drawings for", { symbol, resolution, sourcesCount: Object.keys(processedState.sources || {}).length, rawSources: state.sources });
+                    console.log("[DEBUG-CHARTS] Saving drawings for", { symbol, resolution, sourcesCount: Object.keys(processedState.sources || {}).length, rawSources: state.sources, reason: options.reason });
 
                     fetch("/tv/1.1/drawings?client=" + client_id + "&user=" + user_id + "&chart=" + chartId + "&layout=" + layoutId + "&symbol=" + symbol + "&resolution=" + resolution, {
                         method: "POST",
@@ -267,18 +477,16 @@ class ChartManager {
                     });
                 });
             },
-            loadLineToolsAndGroups: function (layoutId, chartId, requestType, requestContext) {
+            loadLineToolsAndGroups: function (layoutId, chartId, requestType, requestContext = {}) {
                 console.log("[DEBUG-CHARTS] loadLineToolsAndGroups called", { layoutId, chartId, requestType, requestContext });
                 return new Promise((resolve) => {
                     const resolution = requestContext.resolution;
                     const symbol = requestContext.symbol;
+                    const token = requestContext.token;
 
-                    // mainSeriesLineTools 和 load 类型需要加载画线数据
-                    // lineToolsWithoutSymbol、studiesLineTools 等类型直接返回 null
                     if (requestType !== 'mainSeriesLineTools' && requestType !== 'load') {
                         return resolve(null);
                     }
-                    // load 类型可能没有 symbol/resolution，从 chart 实例获取 fallback
                     const loadSymbol = symbol || (self.chart ? self.chart.symbol() : '');
                     const rawResolution = resolution || (self.chart ? self.chart.resolution() : '');
                     const loadResolution = window.cl_independent_drawings ? rawResolution : 'all';
@@ -289,9 +497,10 @@ class ChartManager {
                     fetch("/tv/1.1/drawings?client=" + client_id + "&user=" + user_id + "&chart=" + chartId + "&layout=" + layoutId + "&symbol=" + loadSymbol + "&resolution=" + loadResolution)
                         .then(res => res.json())
                         .then(res => {
+                            if (token && !self.isTokenCurrent(token)) {
+                                return resolve(null);
+                            }
                             if (res.status === 'ok' && res.data && Object.keys(res.data).length > 0) {
-                                // TradingView's applyLineToolsState expects sources to be a Map.
-                                // We must manually construct the Map from the parsed JSON object.
                                 let loadedState = res.data;
                                 const sources = new Map();
                                 if (loadedState.sources) {
@@ -438,21 +647,8 @@ class ChartManager {
                     window.cl_independent_drawings = $(this).is(':checked');
                     localStorage.setItem('cl_independent_drawings', JSON.stringify(window.cl_independent_drawings));
                     self._drawingsCache.clear();
-                    // 动态切换：重新加载当前周期的画线数据
                     if (self.chart && self.save_load_adapter) {
-                        self._is_switching_interval = true;
-                        self.chart.removeAllShapes();
-                        const interval = self.chart.resolution();
-                        const symbol = self.chart.symbol();
-                        self.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
-                            if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
-                                self.chart.applyLineToolsState(state);
-                            }
-                            setTimeout(() => { self._is_switching_interval = false; }, 1000);
-                        }).catch(e => {
-                            console.error("Error reloading drawings after mode switch", e);
-                            self._is_switching_interval = false;
-                        });
+                        self.reloadDrawingsForCurrentContext('toggle-drawing-mode');
                     }
                     layer.msg(window.cl_independent_drawings ? '已切换为独立周期画线' : '已切换为共享画线', { time: 1000 });
                 });
@@ -487,62 +683,31 @@ class ChartManager {
             if (!this.chart) return;
             // 默认指标加载已移至 handleDataReady()，确保数据就绪后再创建
             this.chart.applyOverrides({ "mainSeriesProperties.candleStyle.upColor": "#ef5350", "mainSeriesProperties.candleStyle.downColor": "#26a69a" });
+            const registry = getTVRegistry();
+            registry.widgets.set(this.instanceId, this.widget);
+            registry.activeManagerId = this.instanceId;
+            window.tvWidget = this.widget;
+            this.widget._chanlunManagerId = this.instanceId;
+            this.udf_datafeed._chanlunManagerId = this.instanceId;
+
             this.chart.onSymbolChanged().subscribe(null, (s) => this.handleSymbolChange(s));
             this.chart.onIntervalChanged().subscribe(null, (i) => this.handleIntervalChange(i));
-            this.chart.onDataLoaded().subscribe(null, () => { this._initialLoadDone = true; this.debouncedDrawChanlun(); }, true);
+            this.chart.onDataLoaded().subscribe(null, () => this.handleDataReady(), true);
             this.chart.dataReady(() => this.handleDataReady());
             this.widget.subscribe("onTick", () => this.handleTick());
             this.chart.onVisibleRangeChanged().subscribe(null, () => this.handleVisibleRangeChange());
 
-            // 页面加载时手动触发一次 loadLineToolsAndGroups（两种模式都需要）
-            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
-                const interval = this.chart.resolution();
-                const symbol = this.chart.symbol();
-                console.log("[DEBUG-CHARTS] Initial loadLineToolsAndGroups", { symbol, interval });
-                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
-                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
-                        this.chart.applyLineToolsState(state);
-                    }
-                }).catch(e => {
-                    console.error("Error loading drawings on chart ready", e);
-                });
-            }
+            this.reloadDrawingsForCurrentContext('initial-load');
 
-
-            // 订阅画图事件，强制保存（但排除缠论重绘期间的事件）
             this.widget.subscribe('drawing_event', (id, eventType) => {
-                if (this._is_switching_interval || this._is_drawing_chanlun) return;
+                if (this.shouldSuppressDrawingSave()) return;
                 console.log("[DEBUG-CHARTS] drawing_event", id, eventType);
-                if (this.chart) {
-                    setTimeout(() => {
-                        if (this._is_switching_interval || this._is_drawing_chanlun) return;
-                        if (typeof this.chart.getLineToolsState === 'function') {
-                            const state = this.chart.getLineToolsState();
-                            if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
-                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state).catch(e => console.debug('drawing save skipped', e));
-                            }
-                        } else if (typeof this.widget.saveChartToServer === 'function') {
-                            this.widget.saveChartToServer().catch(e => console.debug('drawing save skipped', e));
-                        }
-                    }, 500);
-                }
+                this.scheduleDrawingsSave('drawing_event');
             });
             this.widget.subscribe('onAutoSaveNeeded', () => {
-                if (this._is_switching_interval || this._is_drawing_chanlun) return;
+                if (this.shouldSuppressDrawingSave()) return;
                 console.log("[DEBUG-CHARTS] onAutoSaveNeeded");
-                if (this.chart) {
-                    setTimeout(() => {
-                        if (this._is_switching_interval || this._is_drawing_chanlun) return;
-                        if (typeof this.chart.getLineToolsState === 'function') {
-                            const state = this.chart.getLineToolsState();
-                            if (this.save_load_adapter && typeof this.save_load_adapter.saveLineToolsAndGroups === 'function') {
-                                this.save_load_adapter.saveLineToolsAndGroups("default", "default", state).catch(e => console.debug('drawing save skipped', e));
-                            }
-                        } else if (typeof this.widget.saveChartToServer === 'function') {
-                            this.widget.saveChartToServer().catch(e => console.debug('drawing save skipped', e));
-                        }
-                    }, 500);
-                }
+                this.scheduleDrawingsSave('auto_save');
             });
         });
     }
@@ -553,101 +718,43 @@ class ChartManager {
         if (!market || !code) return;
         if (Utils.get_market() !== market) { Utils.set_local_data("market", market); location.reload(); return; }
         Utils.set_local_data("market", market); Utils.set_local_data(`${market}_code`, code);
-        this._initialLoadDone = false; // 切换品种时重置，等待新数据 dataReady
+        this._initialLoadDone = false;
+        this._latestAppliedBarTime = null;
         this.clear_draw_chanlun();
-        if (this.chart) {
-            this._is_switching_interval = true;
-            this.chart.removeAllShapes();
-            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
-                const interval = this.chart.resolution();
-                const expectedSymbol = symbol.ticker;
-                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: expectedSymbol }).then(state => {
-                    if (!this.chart || this.chart.symbol() !== expectedSymbol) {
-                        return;
-                    }
-                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
-                        this.chart.applyLineToolsState(state);
-                    }
-                    setTimeout(() => { this._is_switching_interval = false; }, 1000);
-                }).catch(e => {
-                    console.error("Error loading drawings on symbol change", e);
-                    this._is_switching_interval = false;
-                });
-            } else {
-                this._is_switching_interval = false;
-            }
-        }
+        this.reloadDrawingsForCurrentContext('symbol-change');
         if (typeof ZiXuan.render_zixuan_opts === "function") ZiXuan.render_zixuan_opts();
-        this.debouncedDrawChanlun();
     }
     handleIntervalChange(interval) {
         if (!interval) return;
         const market = Utils.get_market(); if (!market) return;
 
-        this._initialLoadDone = false; // 切换周期时重置，等待新数据 dataReady
-        this._drawRetryCount = 0; // 重置重试计数器
-        // Fix: Capture the sequence number for debouncing rapid interval switches
+        this._initialLoadDone = false;
+        this._drawRetryCount = 0;
+        this._latestAppliedBarTime = null;
         const currentSeq = ++this._intervalSwitchSeq;
         this._intervalVersion++;
         console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion, "seq:", currentSeq);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
-        
-        // Fix: Pre-check if drawings already exist in cache before forcing server fetch
-        const code = Utils.get_code();
-        const symbol = market + ":" + code;
-        const cacheKey = this.getDrawingsCacheKey(symbol, interval);
-        const cachedDrawings = this._drawingsCache.get(cacheKey);
-        
         this.clear_draw_chanlun();
-        if (this.chart) {
-            // 在清除旧周期画线前，先禁用自动保存，防止空画布覆盖数据库内容
-            this._is_switching_interval = true;
-            this.chart.removeAllShapes();
-            
-            // Fix: If we have cached drawings and they're valid, apply them directly without server fetch
-            if (cachedDrawings && cachedDrawings.sources && (cachedDrawings.sources.size > 0 || Object.keys(cachedDrawings.sources).length > 0)) {
-                console.log("[DEBUG-CHARTS] Using cached drawings for interval:", interval);
-                this.chart.applyLineToolsState(cachedDrawings);
-                this._is_switching_interval = false;
-                // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
-                return;
-            }
-            
-            // 重新加载当前周期的画线数据（独立模式按周期加载，共享模式加载 'all'）
-            if (this.save_load_adapter && typeof this.save_load_adapter.loadLineToolsAndGroups === 'function') {
-                this.save_load_adapter.loadLineToolsAndGroups("default", "default", "load", { resolution: interval, symbol: symbol }).then(state => {
-                    // Ignore stale async responses from previous interval switches.
-                    if (currentSeq !== this._intervalSwitchSeq) {
-                        console.log("[DEBUG-CHARTS] Drop stale drawings response:", { interval, symbol, currentSeq, latestSeq: this._intervalSwitchSeq });
-                        return;
-                    }
-                    const currentSymbolInterval = this.widget && this.widget.symbolInterval ? this.widget.symbolInterval() : null;
-                    if (!currentSymbolInterval || currentSymbolInterval.interval !== interval || currentSymbolInterval.symbol !== symbol) {
-                        console.log("[DEBUG-CHARTS] Drop mismatched drawings response:", { expected: { interval, symbol }, current: currentSymbolInterval });
-                        return;
-                    }
-                    // Fix: Cache the loaded drawings for future interval switches
-                    if (state && state.sources && (state.sources.size > 0 || Object.keys(state.sources).length > 0)) {
-                        this.setDrawingsCache(cacheKey, state);
-                        this.chart.applyLineToolsState(state);
-                    }
-                    // 延迟恢复，确保 applyLineToolsState 完成且没有触发后续的自动保存覆盖
-                    setTimeout(() => { this._is_switching_interval = false; }, 1000);
-                }).catch(e => {
-                    console.error("Error loading drawings on interval change", e);
-                    if (currentSeq === this._intervalSwitchSeq) {
-                        this._is_switching_interval = false;
-                    }
-                });
-            } else {
-                this._is_switching_interval = false;
-            }
-        }
-        // 不在此处调用 debouncedDrawChanlun()，由 onDataLoaded 事件在新数据就绪后自动触发
+        this.reloadDrawingsForCurrentContext('interval-change');
     }
 
-    handleDataReady() { this._initialLoadDone = true; this.debouncedDrawChanlun(); }
-    handleTick() { this.debouncedDrawChanlun(); }
+    handleDataReady() {
+        this._initialLoadDone = true;
+        this.debouncedDrawChanlun();
+    }
+    handleTick() {
+        const identity = this.getCurrentChartIdentity();
+        if (!identity) return;
+        const symbolResKey = `${identity.symbol.toString().toLowerCase()}${identity.interval.toString().toLowerCase()}`;
+        const barsResult = this.udf_datafeed?._historyProvider?.bars_result?.get(symbolResKey);
+        const latestBar = barsResult?.bars?.[barsResult.bars.length - 1];
+        if (!latestBar || latestBar.time === this._latestAppliedBarTime) {
+            return;
+        }
+        this._latestAppliedBarTime = latestBar.time;
+        this.debouncedDrawChanlun();
+    }
     handleVisibleRangeChange() { if (this._initialLoadDone) this.debouncedDrawChanlun(); }
 
     safeRemove(entityId) {
@@ -665,7 +772,7 @@ class ChartManager {
     }
 
     clear_draw_chanlun(clear_type) {
-        this._is_drawing_chanlun = true;
+        this.markDrawingMutationStart('chanlun-clear');
         const removePromises = [];
         if (clear_type == "last") {
             for (const symbolKey in this.obj_charts) {
@@ -691,9 +798,8 @@ class ChartManager {
             });
             this.obj_charts = {};
         }
-        // 异步等待所有删除完成后再恢复标志
         Promise.allSettled(removePromises).then(() => {
-            this._is_drawing_chanlun = false;
+            this.markDrawingMutationEnd('chanlun-clear');
         });
     }
 
@@ -843,7 +949,7 @@ class ChartManager {
     async draw_chanlun() {
         const currentVersion = this._intervalVersion;
         const capturedSeq = this._intervalSwitchSeq;
-        
+
         if (!this.chart) {
             try {
                 this.chart = this.widget.activeChart();
@@ -853,7 +959,6 @@ class ChartManager {
             }
         }
 
-        // Yield to event loop to allow pending interval changes to process
         await new Promise(resolve => setTimeout(resolve, 0));
 
         if (this._intervalVersion !== currentVersion || capturedSeq !== this._intervalSwitchSeq) {
@@ -863,8 +968,6 @@ class ChartManager {
 
         const chartData = this.getChartData();
         if (!chartData) {
-            // Data might not be fully rendered yet after interval change.
-            // Retry up to 10 times with 500ms intervals.
             if (!this._drawRetryCount) this._drawRetryCount = 0;
             if (this._drawRetryCount < 10) {
                 this._drawRetryCount++;
@@ -873,7 +976,7 @@ class ChartManager {
             return;
         }
         this._drawRetryCount = 0;
-        
+
         const symbolInterval = this.widget.symbolInterval();
         if (!symbolInterval) {
             console.warn("[DEBUG-CHARTS] draw_chanlun aborted: symbolInterval is null");
@@ -890,9 +993,26 @@ class ChartManager {
             bcs: chartData.barsResult.bcs?.length || 0,
             mmds: chartData.barsResult.mmds?.length || 0,
         });
-        this._is_drawing_chanlun = true;
-        this.drawChartElements(chartData, symbolInterval.interval);
-        this._is_drawing_chanlun = false;
+        this.markDrawingMutationStart('chanlun-redraw');
+        try {
+            this.drawChartElements(chartData, symbolInterval.interval);
+        } finally {
+            this.markDrawingMutationEnd('chanlun-redraw');
+        }
+    }
+
+    dispose() {
+        if (this._barReadyHandler) {
+            window.removeEventListener('chanlun-bars-ready', this._barReadyHandler);
+            this._barReadyHandler = null;
+        }
+        const registry = getTVRegistry();
+        registry.chartManagers.delete(this.instanceId);
+        registry.datafeeds.delete(this.instanceId);
+        registry.widgets.delete(this.instanceId);
+        if (registry.activeManagerId === this.instanceId) {
+            registry.activeManagerId = null;
+        }
     }
 }
 

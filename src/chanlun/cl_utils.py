@@ -9,9 +9,10 @@ import pandas as pd
 
 from chanlun import fun
 from chanlun.core.cl_interface import BI, FX, ICL, LINE, MACD_INFOS, ZS, Config, Kline
+from chanlun.core.macd import MACD
 from chanlun.db import db
 from chanlun.exchange import exchange
-from chanlun.file_db import FileCacheDB
+from chanlun.file_db import fdb
 from chanlun.tools.log_util import LogUtil
 
 
@@ -64,7 +65,6 @@ def web_batch_get_cl_datas(
     :return: 返回计算好的缠论数据对象，List 列表格式，按照传入的 klines.keys 顺序返回 如上调用：[0] 返回 30m 周期数据 [1] 返回 5m 数据
     """
     cls = []
-    fdb = FileCacheDB()
     for f, k in klines.items():
         cls.append(fdb.get_web_cl_data(market, code, f, cl_config, k))
     return cls
@@ -969,7 +969,28 @@ def cl_data_to_tv_chart(
     bc_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
     mmd_chart_data.sort(key=lambda v: v["points"]["time"], reverse=False)
     # 获取 MACD 数据
-    macd_idx = cd.get_idx()['macd']
+    if to_frequency is not None:
+        macd = MACD(
+            fast_period=int(config.get("idx_macd_fast", 12)),
+            slow_period=int(config.get("idx_macd_slow", 26)),
+            signal_period=int(config.get("idx_macd_signal", 9)),
+        )
+        macd_klines = [
+            Kline(
+                index=i,
+                date=row["date"],
+                h=float(row["high"]),
+                l=float(row["low"]),
+                o=float(row["open"]),
+                c=float(row["close"]),
+                a=float(row.get("volume") or 0.0),
+            )
+            for i, row in enumerate(klines.to_dict("records"))
+        ]
+        macd.process_macd(macd_klines)
+        macd_idx = macd.get_results()["macd"]
+    else:
+        macd_idx = cd.get_idx()['macd']
 
     _dif = macd_idx['dif']
     _dea = macd_idx['dea']

@@ -72,11 +72,42 @@
     }
 
     class HistoryProvider {
-        constructor(datafeedUrl, requester, limitedServerResponse) {
+        constructor(datafeedUrl, requester, limitedServerResponse, options = {}) {
             this._datafeedUrl = datafeedUrl;
             this._requester = requester;
             this._limitedServerResponse = limitedServerResponse;
+            this._options = options;
             this.bars_result = new Map();
+            this._barsResultMaxSize = options.barsResultMaxSize || 100;
+        }
+        _pruneBarsResult() {
+            while (this.bars_result.size > this._barsResultMaxSize) {
+                const oldestKey = this.bars_result.keys().next().value;
+                if (oldestKey === undefined) {
+                    break;
+                }
+                this.bars_result.delete(oldestKey);
+            }
+        }
+        _clearBarsResultForSymbolResolution(symbol, resolution) {
+            if (!symbol || !resolution) {
+                return;
+            }
+            const resKey = String(symbol).toLowerCase() + String(resolution).toLowerCase();
+            this.bars_result.delete(resKey);
+        }
+        _emitBarsReady(resKey, requestParams) {
+            try {
+                window.dispatchEvent(new CustomEvent('chanlun-bars-ready', {
+                    detail: {
+                        key: resKey,
+                        symbol: String(requestParams["symbol"] || '').toLowerCase(),
+                        resolution: String(requestParams["resolution"] || '').toLowerCase(),
+                        managerId: this._options.managerId || null,
+                    }
+                }));
+            }
+            catch (e) { }
         }
         getBars(symbolInfo, resolution, periodParams) {
             const requestParams = {
@@ -294,8 +325,8 @@
                         mmds: response.mmds,
                         chart_color: response.chart_color,
                     });
-                    // Notify chart layer that bars data (with chanlun shapes) is ready
-                    try { window.dispatchEvent(new CustomEvent('chanlun-bars-ready', { detail: { key: res_key } })); } catch(e) {}
+                    this._pruneBarsResult();
+                    this._emitBarsReady(res_key, requestParams);
                 }
                 else {
                     // 更新存在的数据
@@ -398,8 +429,8 @@
                     obj_res.higher_macd_dea = hDeaObj.values;
                     obj_res.higher_macd_hist = hHistObj.values;
                     this.bars_result.set(res_key, obj_res);
-                    // Notify chart layer that bars data (with chanlun shapes) is updated
-                    try { window.dispatchEvent(new CustomEvent('chanlun-bars-ready', { detail: { key: res_key } })); } catch(e) {}
+                    this._pruneBarsResult();
+                    this._emitBarsReady(res_key, requestParams);
                 }
             }
             const result = {
@@ -794,12 +825,13 @@
      * See [UDF protocol reference](@docs/connecting_data/UDF.md)
      */
     class UDFCompatibleDatafeedBase {
-        constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse) {
+        constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse, options = {}) {
             this._configuration = defaultConfiguration();
             this._symbolsStorage = null;
             this._datafeedURL = datafeedURL;
             this._requester = requester;
-            this._historyProvider = new HistoryProvider(datafeedURL, this._requester, limitedServerResponse);
+            this._options = options;
+            this._historyProvider = new HistoryProvider(datafeedURL, this._requester, limitedServerResponse, options);
             this._quotesProvider = quotesProvider;
             this._dataPulseProvider = new DataPulseProvider(this._historyProvider, updateFrequency);
             this._quotesPulseProvider = new QuotesPulseProvider(this._quotesProvider);
@@ -1018,9 +1050,21 @@
         }
         subscribeBars(symbolInfo, resolution, onTick, listenerGuid, _onResetCacheNeededCallback) {
             this._dataPulseProvider.subscribeBars(symbolInfo, resolution, onTick, listenerGuid);
+            if (_onResetCacheNeededCallback) {
+                const originalCallback = _onResetCacheNeededCallback;
+                this._subscribersResetCallbacks = this._subscribersResetCallbacks || {};
+                this._subscribersResetCallbacks[listenerGuid] = () => {
+                    this._historyProvider._clearBarsResultForSymbolResolution(symbolInfo.ticker || symbolInfo.name, resolution);
+                    originalCallback();
+                };
+                _onResetCacheNeededCallback = this._subscribersResetCallbacks[listenerGuid];
+            }
         }
         unsubscribeBars(listenerGuid) {
             this._dataPulseProvider.unsubscribeBars(listenerGuid);
+            if (this._subscribersResetCallbacks) {
+                delete this._subscribersResetCallbacks[listenerGuid];
+            }
         }
         _requestConfiguration() {
             return this._send('config')
@@ -1066,10 +1110,10 @@
     }
 
     class UDFCompatibleDatafeed extends UDFCompatibleDatafeedBase {
-        constructor(datafeedURL, updateFrequency = 10 * 1000, limitedServerResponse) {
+        constructor(datafeedURL, updateFrequency = 10 * 1000, limitedServerResponse, options = {}) {
             const requester = new Requester();
             const quotesProvider = new QuotesProvider(datafeedURL, requester);
-            super(datafeedURL, quotesProvider, requester, updateFrequency, limitedServerResponse);
+            super(datafeedURL, quotesProvider, requester, updateFrequency, limitedServerResponse, options);
         }
     }
 

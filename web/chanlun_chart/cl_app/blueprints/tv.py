@@ -129,6 +129,144 @@ def _parse_tv_symbol(symbol: str):
     return None, None
 
 
+def _build_chart_cache_entry(cl_chart_data: dict, is_full_snapshot: bool, validated_at: float = None):
+    validated_at = time.time() if validated_at is None else validated_at
+    bar_times = cl_chart_data.get("t", []) if isinstance(cl_chart_data, dict) else []
+    return {
+        "data": cl_chart_data,
+        "min_time": bar_times[0] if len(bar_times) > 0 else None,
+        "max_time": bar_times[-1] if len(bar_times) > 0 else None,
+        "validated_at": validated_at,
+        "is_full_snapshot": bool(is_full_snapshot),
+    }
+
+
+def _get_chart_cache_entry(cache_key: str):
+    cached = chart_data_cache.get(cache_key)
+    if cached is None:
+        return None
+    if isinstance(cached, dict) and "data" in cached and "validated_at" in cached:
+        return cached
+    if isinstance(cached, dict):
+        validated_at = chart_data_validated_at.get(cache_key, time.time())
+        return _build_chart_cache_entry(cached, is_full_snapshot=True, validated_at=validated_at)
+    return None
+
+
+def _set_chart_cache_entry(cache_key: str, cl_chart_data: dict, is_full_snapshot: bool):
+    entry = _build_chart_cache_entry(cl_chart_data, is_full_snapshot=is_full_snapshot)
+    chart_data_cache[cache_key] = entry
+    chart_data_validated_at[cache_key] = entry["validated_at"]
+    return entry
+
+
+def _mark_chart_cache_validated(cache_key: str):
+    validated_at = time.time()
+    entry = _get_chart_cache_entry(cache_key)
+    if entry is None:
+        chart_data_validated_at[cache_key] = validated_at
+        return
+    entry["validated_at"] = validated_at
+    chart_data_cache[cache_key] = entry
+    chart_data_validated_at[cache_key] = validated_at
+
+
+def _cache_entry_recently_validated(cache_entry: dict):
+    validated_at = cache_entry.get("validated_at", 0) if isinstance(cache_entry, dict) else 0
+    return (time.time() - validated_at) < _CACHE_REVALIDATION_INTERVAL
+
+
+def _shape_time(shape):
+    if not isinstance(shape, dict):
+        return None
+    points = shape.get("points")
+    if isinstance(points, list) and len(points) > 0:
+        last_point = points[-1]
+        if isinstance(last_point, dict):
+            return last_point.get("time")
+    if isinstance(points, dict):
+        return points.get("time")
+    return None
+
+
+def _merge_shape_lists(existing_shapes, new_shapes):
+    if not existing_shapes:
+        return list(new_shapes or [])
+    if not new_shapes:
+        return list(existing_shapes or [])
+
+    new_times = [t for t in (_shape_time(shape) for shape in new_shapes) if t is not None]
+    if len(new_times) == 0:
+        return list(existing_shapes or [])
+
+    min_time = min(new_times)
+    max_time = max(new_times)
+    merged = []
+    for shape in existing_shapes:
+        shape_time = _shape_time(shape)
+        if shape_time is None or shape_time < min_time or shape_time > max_time:
+            merged.append(shape)
+    merged.extend(new_shapes)
+    return sorted(merged, key=lambda shape: (_shape_time(shape) or 0))
+
+
+def _merge_chart_data(existing_data: dict, new_data: dict):
+    if not existing_data:
+        return new_data
+    if not new_data:
+        return existing_data
+
+    merged = dict(existing_data)
+    merged.update(new_data)
+
+    existing_times = existing_data.get("t", [])
+    new_times = new_data.get("t", [])
+    all_times = sorted(set(existing_times) | set(new_times))
+    merged["t"] = all_times
+
+    aligned_keys = [
+        "c",
+        "o",
+        "h",
+        "l",
+        "v",
+        "macd_dif",
+        "macd_dea",
+        "macd_hist",
+        "macd_area",
+        "higher_macd_dif",
+        "higher_macd_dea",
+        "higher_macd_hist",
+    ]
+    for key in aligned_keys:
+        existing_values = existing_data.get(key, [])
+        new_values = new_data.get(key, [])
+        if not existing_values and not new_values:
+            merged[key] = []
+            continue
+        merged_values = {}
+        for idx, bar_time in enumerate(existing_times):
+            if idx < len(existing_values):
+                merged_values[bar_time] = existing_values[idx]
+        for idx, bar_time in enumerate(new_times):
+            if idx < len(new_values):
+                merged_values[bar_time] = new_values[idx]
+        merged[key] = [merged_values.get(bar_time) for bar_time in all_times]
+
+    for key in ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "zsd_zss", "bcs", "mmds"]:
+        merged[key] = _merge_shape_lists(existing_data.get(key, []), new_data.get(key, []))
+
+    return merged
+
+
+def _drawing_storage_name(chart_id: str, layout_id: str, symbol: str, resolution: str):
+    return f"drawings_{layout_id}_{chart_id}_{symbol}_{resolution}"
+
+
+def _legacy_drawing_storage_name(symbol: str, resolution: str):
+    return f"drawings_{symbol}_{resolution}"
+
+
 def prewarm_common_intervals(market, code, cl_config):
     """
     Pre-warm cache for commonly switched intervals to reduce recomputation on rapid interval switches.
@@ -179,8 +317,7 @@ def prewarm_common_intervals(market, code, cl_config):
                     
                     # Store in cache
                     with cache_lock:
-                        chart_data_cache[cache_key] = cl_chart_data
-                        chart_data_validated_at[cache_key] = time.time()
+                        _set_chart_cache_entry(cache_key, cl_chart_data, is_full_snapshot=True)
                         chart_data_cache_stats["prewarmed"].discard(cache_key)
                         chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
                         LogUtil.info(f"[tv_history] Pre-warmed cache for {market}:{code} interval {interval}")
@@ -279,8 +416,11 @@ def tv_config():
 @login_required
 def tv_symbol_info():
     group = request.args.get("group")
-    ex = get_exchange(Market(group))
-    all_symbols = ex.all_stocks()
+    try:
+        all_symbols = get_cached_processed_stocks(group)
+    except Exception:
+        ex = get_exchange(Market(group))
+        all_symbols = ex.all_stocks()
 
     info = {
         "symbol": [s["code"] for s in all_symbols],
@@ -385,14 +525,17 @@ def _process_stock_list(all_stocks):
 
 def get_cached_processed_stocks(exchange):
     with cache_lock:
-        try:
-            return stock_cache[exchange]
-        except KeyError:
-            ex = get_exchange(Market(exchange))
-            all_stocks = ex.all_stocks()
-            processed_stocks = _process_stock_list(all_stocks)
-            stock_cache[exchange] = processed_stocks
-            return processed_stocks
+        cached = stock_cache.get(exchange)
+    if cached is not None:
+        return cached
+
+    ex = get_exchange(Market(exchange))
+    all_stocks = ex.all_stocks()
+    processed_stocks = _process_stock_list(all_stocks)
+
+    with cache_lock:
+        stock_cache[exchange] = processed_stocks
+    return processed_stocks
 
 
 @tv_bp.route("/tv/search")
@@ -526,26 +669,38 @@ def tv_history():
         cl_chart_data = None
         is_cache_hit = False
         cache_miss_reason = "cache_empty"
+        is_range_request = (
+            firstDataRequest == "false"
+            and _from > 0
+            and _to > 0
+            and _to >= _from
+        )
 
         with chart_calc_locks[cache_key]:
             with cache_lock:
-                if cache_key in chart_data_cache:
-                    _cached = chart_data_cache[cache_key]
-                    _cached_times = _cached.get("t", []) if isinstance(_cached, dict) else []
-                    if _to > 0 and len(_cached_times) > 0:
-                        if _to > _cached_times[-1]:
-                            # 若缓存在 _CACHE_REVALIDATION_INTERVAL 内刚被验证过，视为命中
-                            _last_validated = chart_data_validated_at.get(cache_key, 0)
-                            if (time.time() - _last_validated) < _CACHE_REVALIDATION_INTERVAL:
-                                cl_chart_data = _cached
-                                is_cache_hit = True
-                            else:
-                                cache_miss_reason = "cache_stale_to_exceeds_tail"
-                        else:
-                            cl_chart_data = _cached
+                cache_entry = _get_chart_cache_entry(cache_key)
+                if cache_entry is not None:
+                    cached_data = cache_entry.get("data", {})
+                    cache_min_time = cache_entry.get("min_time")
+                    cache_max_time = cache_entry.get("max_time")
+                    if not is_range_request:
+                        if cache_entry.get("is_full_snapshot", False):
+                            cl_chart_data = cached_data
                             is_cache_hit = True
+                        else:
+                            cache_miss_reason = "cache_partial_snapshot"
+                    elif cache_min_time is None or cache_max_time is None:
+                        cache_miss_reason = "cache_no_coverage"
+                    elif _from < cache_min_time:
+                        cache_miss_reason = "cache_head_gap"
+                    elif _to > cache_max_time:
+                        if _cache_entry_recently_validated(cache_entry):
+                            cl_chart_data = cached_data
+                            is_cache_hit = True
+                        else:
+                            cache_miss_reason = "cache_tail_gap"
                     else:
-                        cl_chart_data = _cached
+                        cl_chart_data = cached_data
                         is_cache_hit = True
 
             if not is_cache_hit:
@@ -553,12 +708,7 @@ def tv_history():
                 ex = get_exchange(Market(market))
                 frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(market, frequency)
                 kline_args = {}
-                if (
-                    firstDataRequest == "false"
-                    and _from > 0
-                    and _to > 0
-                    and _to >= _from
-                ):
+                if is_range_request:
                     kline_args["start_date"] = datetime.datetime.fromtimestamp(
                         _from, tz=tz_sh
                     ).strftime("%Y-%m-%d %H:%M:%S")
@@ -581,7 +731,7 @@ def tv_history():
                     klines = ex.klines(code, frequency_low, **kline_args)
                     if klines is None or len(klines) == 0:
                         with cache_lock:
-                            chart_data_validated_at[cache_key] = time.time()
+                            _mark_chart_cache_validated(cache_key)
                         return {"s": "no_data"}
                     cd = web_batch_get_cl_datas(
                         market, code, {frequency_low: klines}, cl_config
@@ -591,19 +741,23 @@ def tv_history():
                     klines = ex.klines(code, frequency, **kline_args)
                     if klines is None or len(klines) == 0:
                         with cache_lock:
-                            chart_data_validated_at[cache_key] = time.time()
+                            _mark_chart_cache_validated(cache_key)
                         return {"s": "no_data"}
                     cd = web_batch_get_cl_datas(
                         market, code, {frequency: klines}, cl_config
                     )[0]
 
                 if _to > 0 and len(klines) > 0 and _to < fun.datetime_to_int(klines.iloc[0]["date"]):
+                    with cache_lock:
+                        _mark_chart_cache_validated(cache_key)
                     return {"s": "no_data"}
 
                 cl_chart_data = cl_data_to_tv_chart(
                     cd, cl_config, to_frequency=kchart_to_frequency
                 )
                 if cl_chart_data is None:
+                    with cache_lock:
+                        _mark_chart_cache_validated(cache_key)
                     return {"s": "no_data"}
 
                 ratio = HIGHER_MACD_RATIO.get(frequency)
@@ -645,8 +799,16 @@ def tv_history():
                         LogUtil.error(f"[tv_history] Scaled MACD calc failed: {e}")
 
                 with cache_lock:
-                    chart_data_cache[cache_key] = cl_chart_data
-                    chart_data_validated_at[cache_key] = time.time()
+                    existing_entry = _get_chart_cache_entry(cache_key)
+                    if existing_entry is not None:
+                        cl_chart_data = _merge_chart_data(
+                            existing_entry.get("data", {}), cl_chart_data
+                        )
+                    _set_chart_cache_entry(
+                        cache_key,
+                        cl_chart_data,
+                        is_full_snapshot=(not is_range_request) or (existing_entry or {}).get("is_full_snapshot", False),
+                    )
 
                 # firstDataRequest 成功后，后台预热其他常用周期的缓存
                 if firstDataRequest == "true":
@@ -1028,16 +1190,40 @@ def tv_drawings(version):
     symbol = request.args.get("symbol", "")
     resolution = request.args.get("resolution", "")
 
-    # drawings are tied to symbol + resolution
-    drawing_name = f"drawings_{symbol}_{resolution}"
+    drawing_name = _drawing_storage_name(chart_id, layout_id, symbol, resolution)
+    legacy_drawing_name = _legacy_drawing_storage_name(symbol, resolution)
 
     if request.method == "POST":
-        content = request.json.get("state", {})
-        db.tv_chart_save("drawing", client_id, user_id, drawing_name, json.dumps(content), symbol, resolution)
+        payload = request.get_json(silent=True) or {}
+        content = payload.get("state", {})
+        db.tv_chart_save(
+            "drawing",
+            client_id,
+            user_id,
+            drawing_name,
+            json.dumps(content),
+            symbol,
+            resolution,
+        )
         return {"status": "ok"}
 
     if request.method == "GET":
         drawing = db.tv_chart_get_by_name("drawing", drawing_name, client_id, user_id)
+        if drawing is None:
+            drawing = db.tv_chart_get_by_name(
+                "drawing", legacy_drawing_name, client_id, user_id
+            )
+            if drawing is not None:
+                db.tv_chart_save(
+                    "drawing",
+                    client_id,
+                    user_id,
+                    drawing_name,
+                    drawing.content,
+                    symbol,
+                    resolution,
+                )
+
         if drawing:
             try:
                 data = json.loads(drawing.content)
