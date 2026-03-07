@@ -6,6 +6,67 @@
 
 var TvIdxMACDBackend = (function () {
 
+  function getTVRegistry() {
+    return window.ChanlunTVRegistry || null;
+  }
+
+  function getPreferredChartContext(rawTicker) {
+    const registry = getTVRegistry();
+    const preferredDatafeeds = [];
+    let preferredWidget = null;
+    const normalizedTicker = String(rawTicker || '').toLowerCase();
+
+    if (registry) {
+      if (normalizedTicker && registry.widgets instanceof Map) {
+        for (const widget of registry.widgets.values()) {
+          try {
+            if (widget && widget.symbolInterval) {
+              const symbolInterval = widget.symbolInterval();
+              if (symbolInterval && String(symbolInterval.symbol || '').toLowerCase() === normalizedTicker) {
+                preferredWidget = widget;
+                break;
+              }
+            }
+          } catch (e) { }
+        }
+      }
+
+      if (!preferredWidget && registry.activeManagerId && registry.widgets instanceof Map) {
+        preferredWidget = registry.widgets.get(registry.activeManagerId) || null;
+      }
+      if (!preferredWidget && registry.widgets instanceof Map && registry.widgets.size > 0) {
+        preferredWidget = registry.widgets.values().next().value || null;
+      }
+
+      if (registry.datafeeds instanceof Map) {
+        if (preferredWidget && preferredWidget._chanlunManagerId && registry.datafeeds.has(preferredWidget._chanlunManagerId)) {
+          preferredDatafeeds.push(registry.datafeeds.get(preferredWidget._chanlunManagerId));
+        }
+        for (const datafeed of registry.datafeeds.values()) {
+          if (datafeed && !preferredDatafeeds.includes(datafeed)) {
+            preferredDatafeeds.push(datafeed);
+          }
+        }
+      }
+    }
+
+    if (!preferredWidget && window.tvWidget) {
+      preferredWidget = window.tvWidget;
+    }
+    if (window.tvDatafeed && !preferredDatafeeds.includes(window.tvDatafeed)) {
+      preferredDatafeeds.push(window.tvDatafeed);
+    }
+    if (window.GlobalTVDatafeeds && window.GlobalTVDatafeeds.length > 0) {
+      for (const datafeed of window.GlobalTVDatafeeds) {
+        if (datafeed && !preferredDatafeeds.includes(datafeed)) {
+          preferredDatafeeds.push(datafeed);
+        }
+      }
+    }
+
+    return { widget: preferredWidget, datafeeds: preferredDatafeeds };
+  }
+
   // 智能时间搜索 (保持 5天 容错)
   function smartSearch(times, target, intervalStr) {
     if (target === undefined || target === null || isNaN(target)) return -1;
@@ -123,23 +184,21 @@ var TvIdxMACDBackend = (function () {
               let rawTicker = String(context.symbol.ticker || "").toLowerCase();
               let rawInterval = String(context.symbol.interval || "").toLowerCase();
 
-              // [FIX V31] 尝试从全局 Widget 获取真实的周期
-              // 解决 context 传入 "1" 但实际是 "1d" 的问题
-              if (window.tvWidget) {
+              const preferredContext = getPreferredChartContext(rawTicker);
+              const preferredWidget = preferredContext.widget;
+
+              // [FIX V31] 优先从实例级 Widget 获取真实的周期
+              if (preferredWidget) {
                 try {
-                  // 检查 widget 是否就绪并获取周期
-                  if (window.tvWidget.symbolInterval) {
-                    const realRes = window.tvWidget.symbolInterval().interval.toString().toLowerCase();
-                    const realSymbol = window.tvWidget.symbolInterval().symbol.toString().toLowerCase();
+                  if (preferredWidget.symbolInterval) {
+                    const symbolInterval = preferredWidget.symbolInterval();
+                    const realRes = symbolInterval.interval.toString().toLowerCase();
+                    const realSymbol = symbolInterval.symbol.toString().toLowerCase();
                     if (!rawTicker || rawTicker === "") {
-                        rawTicker = realSymbol;
-                        targetCode = rawTicker;
+                      rawTicker = realSymbol;
                     }
                     if (realRes && realRes !== rawInterval) {
-                      // 仅当 context 是纯数字 (如 "1") 而 realRes 是复杂周期 (如 "1d") 时才覆盖
-                      // 或者当 realRes 包含 'd'/'w' 时强制覆盖
                       if (/^\d+$/.test(rawInterval) && !/^\d+$/.test(realRes)) {
-                        // console.warn(`[MACD-FIX] Override Interval: ${rawInterval} -> ${realRes}`);
                         rawInterval = realRes;
                       } else if (realRes.includes('d') || realRes.includes('w')) {
                         rawInterval = realRes;
@@ -147,17 +206,11 @@ var TvIdxMACDBackend = (function () {
                     }
                   }
                 } catch (e) {
-                  // console.warn("[MACD-FIX] Widget access failed", e);
                 }
               }
 
               // 2. 获取数据源
-              let datafeeds = [];
-              if (window.GlobalTVDatafeeds && window.GlobalTVDatafeeds.length > 0) {
-                datafeeds = window.GlobalTVDatafeeds;
-              } else if (window.tvDatafeed) {
-                datafeeds = [window.tvDatafeed];
-              }
+              let datafeeds = preferredContext.datafeeds || [];
 
               // 3. 解析目标
               let targetCode = rawTicker; // 直接使用完整的 ticker 进行匹配，例如 a:sh.000001
