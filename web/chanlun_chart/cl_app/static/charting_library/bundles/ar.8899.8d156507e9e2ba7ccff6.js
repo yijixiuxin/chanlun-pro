@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[8899],{58899:e=>{e.exports={en:["change {title} text"],ar:["تغيير نص {title}"]}}}]);

@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[3789],{61880:e=>{e.exports={en:["Save template as"],ar:["حفظ القالب باسم"]}},54237:e=>{e.exports={en:["Template '{themeName}' already exists. Do you really want to replace it?"],ar:["القالب '{themeName}' موجود بالفعل. هل تريد حقًا استبدالها؟"]}},76465:e=>{e.exports={en:["Template name"],ar:["أسم القالب"]}}}]);

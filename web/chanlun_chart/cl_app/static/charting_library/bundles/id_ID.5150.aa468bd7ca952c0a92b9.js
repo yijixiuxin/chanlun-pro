@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5150],{26663:e=>{e.exports={en:["Add column to right"],id_ID:["Tambahkan kolom ke kanan"]}},16989:e=>{e.exports={en:["Add row below"],id_ID:["Tambahkan row ke bawah"]}},91227:e=>{e.exports={en:["Remove column"],id_ID:["Hapus Kolom"]}},15398:e=>{e.exports={en:["Remove row"],id_ID:["Hapus row"]}}}]);
