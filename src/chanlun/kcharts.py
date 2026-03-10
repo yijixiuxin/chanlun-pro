@@ -16,7 +16,7 @@ from pyecharts.globals import CurrentConfig
 
 from chanlun.backtesting.base import Strategy
 from chanlun.cl_analyse import LinesFormAnalyse
-from chanlun.cl_interface import ICL, LINE, ZS
+from chanlun.core.cl_interface import ICL, LINE, ZS
 from chanlun.cl_utils import cl_qstd, klines_to_heikin_ashi_klines
 from chanlun.exchange import exchange
 from chanlun.fun import str_to_datetime

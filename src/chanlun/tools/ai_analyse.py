@@ -1,17 +1,14 @@
-import time
 from typing import Union
-import MyTT
-import numpy as np
 import openai
 import requests
-import talib
 
-from chanlun.cl_interface import BI, ICL, XD
+from chanlun.core.cl_interface import BI, ICL, XD
+from chanlun.db_models.ai_analyse import TableByAIAnalyse
 from chanlun.exchange import get_exchange, Market
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from chanlun import config, fun
 import json, datetime
-from chanlun.db import db, TableByAIAnalyse
+from chanlun.db import db
 
 
 class AIAnalyse:
@@ -201,9 +198,6 @@ class AIAnalyse:
         """
         根据配置，调用不同的大模型服务
         """
-        # TODO 这里直接返回成功的消息
-        # return {"ok": True, "msg": "已读乱回", "model": "No Model"}
-
         if config.OPENROUTER_AI_KEYS != "" and config.OPENROUTER_AI_MODEL != "":
             return self.req_openrouter_ai_model(prompt)
         if config.AI_TOKEN != "" and config.AI_MODEL != "":

@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
     create_engine,
     func,
 )
@@ -24,188 +25,30 @@ from sqlalchemy.pool import QueuePool
 from chanlun import config, fun
 from chanlun.base import Market
 from chanlun.config import get_data_path
+from chanlun.tools.log_util import LogUtil
 
 warnings.filterwarnings("ignore")
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+from chanlun.db_models.alert_record import TableByAlertRecord
+from chanlun.db_models.alert_task import TableByAlertTask
+from chanlun.db_models.cache import TableByCache
+from chanlun.db_models.order import TableByOrder
+from chanlun.db_models.tv_charts import TableByTVCharts
+from chanlun.db_models.tv_marks import TableByTVMarks
+from chanlun.db_models.tv_marks_price import TableByTVMarksPrice
+from chanlun.db_models.zixuan import TableByZixuan
+from chanlun.db_models.zixuan_group import TableByZxGroup
+frequency = Column(String(10), comment="分析周期")
+dt = Column(DateTime, comment="分析时间")
+model = Column(String(100), comment="分析模型")
+prompt = Column(Text, comment="缠论当下说明")
+msg = Column(Text, comment="分析结果")
 
-
-class TableByCache(Base):
-    # 各种乱七八杂的信息
-    __tablename__ = "cl_cache"
-    k = Column(String(100), unique=True, primary_key=True)  # 唯一值
-    v = Column(Text, comment="存储内容")  # 存储内容
-    expire = Column(
-        Integer, default=0, comment="过期时间戳，0为永不过期"
-    )  # 过期时间戳，0为永不过期
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByZxGroup(Base):
-    # 自选组列表
-    __tablename__ = "cl_zixuan_groups"
-    __table_args__ = (
-        UniqueConstraint("market", "zx_group", name="table_market_group_unique"),
-    )
-    market = Column(String(20), primary_key=True, comment="市场")
-    zx_group = Column(String(20), primary_key=True, comment="自选组名称")
-    add_dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByZixuan(Base):
-    # 自选表
-    __tablename__ = "cl_zixuan_watchlist"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    zx_group = Column(String(20), comment="自选组")  # 自选组
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    position = Column(Integer, comment="位置")  # 位置
-    add_datetime = Column(DateTime, comment="添加时间")  # 添加时间
-    stock_color = Column(String(20), comment="自选颜色")  # 自选颜色
-    stock_memo = Column(String(100), comment="附加信息")  # 附加信息
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAlertTask(Base):
-    # 提醒任务
-    __tablename__ = "cl_alert_task"
-    __table_args__ = (
-        UniqueConstraint("market", "task_name", name="table_market_task_name_unique"),
-    )
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    task_name = Column(String(100), comment="任务名称")  # 任务名称
-    zx_group = Column(String(20), comment="自选组")  # 自选组
-    frequency = Column(String(20), comment="检查周期")  # 检查周期
-    interval_minutes = Column(Integer, comment="检查间隔分钟")  # 检查间隔分钟
-    check_bi_type = Column(String(20), comment="检查笔的类型")  # 检查笔的类型
-    check_bi_beichi = Column(String(200), comment="检查笔的背驰")  # 检查笔的背驰
-    check_bi_mmd = Column(String(200), comment="检查笔的买卖点")  # 检查笔的买卖点
-    check_xd_type = Column(String(20), comment="检查线段的类型")  # 检查线段的类型
-    check_xd_beichi = Column(String(200), comment="检查线段的背驰")  # 检查线段的背驰
-    check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
-    check_idx_ma_info = Column(String(200), comment="检查指数的均线")
-    check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
-    is_run = Column(Integer, comment="是否运行")  # 是否运行
-    is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
-    dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAlertRecord(Base):
-    # 提醒记录
-    __tablename__ = "cl_alert_record"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    task_name = Column(String(100), comment="任务名称")  # 任务名称
-    stock_code = Column(String(20), comment="标的")  # 标的
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), comment="提醒周期")  # 提醒周期
-    line_type = Column(String(5), comment="提醒线段的类型")  # 提醒线段的类型
-    alert_msg = Column(Text, comment="提醒消息")  # 提醒消息
-    bi_is_done = Column(
-        String(10), comment="笔是否完成,如果是指标，则记录上穿或下穿"
-    )  # 笔是否完成
-    bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
-    line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
-    alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVMarks(Base):
-    # TV 图表的 mark 标记 (在时间轴上的标记)
-    __tablename__ = "cl_tv_marks"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
-    mark_time = Column(Integer, comment="标签时间戳")  # 标签时间戳
-    mark_label = Column(String(2), comment="标签")  # 标签
-    mark_tooltip = Column(String(100), comment="提示")  # 提示
-    mark_shape = Column(String(20), comment="形状")  # 形状
-    mark_color = Column(String(20), comment="颜色")  # 颜色
-    dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVMarksPrice(Base):
-    # TV 图表的 mark 标记 (在价格主图的标记)
-    __tablename__ = "cl_tv_marks_price"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), default="", comment="展示周期")  # 展示周期
-    mark_time = Column(Integer, comment="标签时间戳")  # 标签时间戳
-    mark_color = Column(String(20), comment="颜色")  # 颜色
-    mark_text = Column(String(100), comment="提示")  # 提示
-    mark_label = Column(String(2), comment="标签")  # 标签
-    mark_label_font_color = Column(String(20), comment="标签字体颜色")  # 标签字体颜色
-    mark_min_size = Column(Integer, comment="最小尺寸")  # 最小尺寸
-
-    dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByOrder(Base):
-    # 订单
-    __tablename__ = "cl_order"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的代码")  # 标的代码
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    order_type = Column(String(20), comment="订单类型")  # 订单类型
-    order_price = Column(Float, comment="订单价格")  # 订单价格
-    order_amount = Column(Float, comment="订单数量")  # 订单数量
-    order_memo = Column(String(200), comment="订单备注")  # 订单备注
-    dt = Column(DateTime, comment="添加时间")  # 添加时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByTVCharts(Base):
-    # TV 图表的布局
-    __tablename__ = "cl_tv_charts"
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
-    client_id = Column(String(50), comment="客户端id")
-    user_id = Column(Integer, comment="用户id")
-    chart_type = Column(String(20), comment="布局类型")
-    symbol = Column(String(50), comment="标的")
-    resolution = Column(String(20), comment="周期")
-    content = Column(Text, comment="布局内容")
-    timestamp = Column(Integer, comment="时间戳")
-    name = Column(String(50), comment="布局名称")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
-class TableByAIAnalyse(Base):
-    # AI 分析结果记录
-    __tablename__ = "cl_ai_analyses"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    stock_code = Column(String(20), comment="标的")  # 标的
-    stock_name = Column(String(100), comment="标的名称")  # 标的名称
-    frequency = Column(String(10), comment="分析周期")
-    dt = Column(DateTime, comment="分析时间")
-    model = Column(String(100), comment="分析模型")
-    prompt = Column(Text, comment="缠论当下说明")
-    msg = Column(Text, comment="分析结果")
-
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+# 添加配置设置编码
+__table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 @fun.singleton
@@ -224,26 +67,37 @@ class DB(object):
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
+                connect_args={"check_same_thread": False},
             )
         elif config.DB_TYPE == "mysql":
             self.engine = create_engine(
                 f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
                 echo=False,
                 poolclass=QueuePool,
-                pool_recycle=3600,
+                pool_recycle=1800,
                 pool_pre_ping=True,
+                pool_use_lifo=True,
+                pool_reset_on_return="rollback",
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
+                connect_args={
+                    "connect_timeout": 5,
+                    "read_timeout": 10,
+                    "write_timeout": 10,
+                },
             )
         else:
             raise Exception("DB_TYPE 配置错误")
 
-        self.Session = sessionmaker(bind=self.engine)
+        # 避免提交后对象过期导致二次加载，提高查询性能
+        self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
 
         Base.metadata.create_all(self.engine)
 
         self.__cache_tables = {}
+        # 轻量级缓存：最后一根K线时间，降低重复查询成本
+        self._last_dt_cache = {}
 
     def klines_tables(self, market: str, stock_code: str):
         stock_code = (
@@ -258,7 +112,7 @@ class DB(object):
         elif market == Market.A.value:
             table_name = f"{market}_klines_{stock_code[:7]}"
         elif market == Market.US.value:
-            table_name = f"{market}_klines_{stock_code[0]}"
+            table_name = f"{market}_klines_{stock_code}"
         elif market == Market.FX.value:
             table_name = f"{market}_klines_{stock_code}"
         elif market == Market.CURRENCY.value:
@@ -278,6 +132,9 @@ class DB(object):
             __tablename__ = table_name
             __table_args__ = (
                 UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
+                # 频繁的 (code,f,dt) 查询与排序，建立复合索引
+                Index("idx_code_f_dt", "code", "f", "dt"),
+                {"mysql_collate": "utf8mb4_general_ci"},
             )
             # 表结构
             code = Column(String(20), primary_key=True, comment="标的代码")
@@ -288,10 +145,7 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
-            # 添加配置设置编码
-            __table_args__ = {
-                "mysql_collate": "utf8mb4_general_ci",
-            }
+            # 注意：__table_args__ 已在上方统一声明，避免覆盖
 
         if market == Market.FUTURES.value:
             # 期货市场，添加持仓列
@@ -347,6 +201,11 @@ class DB(object):
         :param frequency:
         :return:
         """
+        # 命中轻量级缓存，减少数据库查询
+        _cache_key = (market, code, frequency)
+        if _cache_key in self._last_dt_cache:
+            return self._last_dt_cache[_cache_key]
+
         with self.Session() as session:
             table = self.klines_tables(market, code)
             last_date = (
@@ -359,39 +218,70 @@ class DB(object):
             if last_date is None:
                 return None
             if market == "a":
-                return last_date[0].strftime("%Y-%m-%d")
+                _res = last_date[0].strftime("%Y-%m-%d")
             else:
-                return last_date[0].strftime("%Y-%m-%d %H:%M:%S")
+                _res = last_date[0].strftime("%Y-%m-%d %H:%M:%S")
+
+        # 写入缓存
+        self._last_dt_cache[_cache_key] = _res
+        return _res
 
     def klines_insert(
-        self, market: str, code: str, frequency: str, klines: pd.DataFrame
+            self, market: str, code: str, frequency: str, klines: pd.DataFrame
     ):
         """
-        插入k线
-        :param market:
-        :param code:
-        :param frequency:
-        :param klines:
-        :return:
+        插入k线 (性能优化版)
         """
+        if klines.empty:
+            return True
+
+        # 1. 数据预处理 (Pandas 向量化操作，替代 iterrows)
+        # 复制一份以防修改原数据
+        df = klines.copy()
+
+        # 统一处理时间：去除时区信息
+        if df["date"].dt.tz is not None:
+            df["dt"] = df["date"].dt.tz_localize(None)
+        else:
+            df["dt"] = df["date"]
+
+        # 映射列名：API返回的列名 -> 数据库列名
+        # 假设 API 列名为: open, close, high, low, volume, position
+        # 数据库列名为: o, c, h, l, v, p
+        rename_map = {
+            "open": "o",
+            "close": "c",
+            "high": "h",
+            "low": "l",
+            "volume": "v",
+            "position": "p"
+        }
+        df.rename(columns=rename_map, inplace=True)
+
+        # 填充必要的索引列
+        df["code"] = code
+        df["f"] = frequency
+
+        # 筛选需要入库的列
+        db_columns = ["code", "dt", "f", "o", "c", "h", "l", "v"]
+        if "p" in df.columns:
+            db_columns.append("p")
+
+        # 确保只包含存在的列，防止 KeyError
+        final_columns = [col for col in db_columns if col in df.columns]
+
+        # 【核心优化点】直接转换为字典列表，极快
+        data_to_insert = df[final_columns].to_dict(orient="records")
+
         with self.Session() as session:
             table = self.klines_tables(market, code)
 
-            # 如果是 sqlite ，则慢慢更新吧
+            # 如果是 SQLite，依然使用 ORM 的 merge 方式或者简化的 upsert
             if config.DB_TYPE == "sqlite":
-                for _, _k in klines.iterrows():
-                    _in_k = {
-                        "code": code,
-                        "f": frequency,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if "position" in _k.keys():
-                        _in_k["p"] = _k["position"]
+                # SQLite 处理逻辑保持现状，或者优化为 execute_many
+                # 这里为了稳妥，暂保持原有的逐行检查逻辑，但数据源已经是 dict list 了
+                # 如果对 SQLite 也有性能要求，建议改用 core insert + on_conflict_do_update
+                for _in_k in data_to_insert:
                     db_k = (
                         session.query(table)
                         .filter(
@@ -410,40 +300,43 @@ class DB(object):
                             table.dt == _in_k["dt"],
                         ).update(_in_k)
                 session.commit()
+                self._last_dt_cache.pop((market, code, frequency), None)
                 return True
 
-            # 将 klines 数据拆分为每 500 条一组，批量插入
-            group = np.arange(len(klines)) // 500
-            groups = [
-                group.reset_index(drop=True) for _, group in klines.groupby(group)
-            ]
-            in_position = "position" in klines.columns
-            for g_klines in groups:
-                insert_klines = []
-                for _, _k in g_klines.iterrows():
-                    _insert_k = {
-                        "code": code,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
+            # MySQL 批量插入优化
+            # 增大 Batch Size (500 -> 20000)
+            batch_size = 20000
+
+            try:
+                # 分块处理
+                for i in range(0, len(data_to_insert), batch_size):
+                    batch = data_to_insert[i: i + batch_size]
+
+                    # 构建 Insert 语句
+                    insert_stmt = insert(table).values(batch)
+
+                    # 构建 On Duplicate Key Update 语句
+                    # 排除主键/唯一索引列 (code, dt, f)
+                    update_columns = {
+                        x.name: x for x in insert_stmt.inserted
+                        if x.name not in ["code", "dt", "f"]
                     }
-                    if in_position:
-                        _insert_k["p"] = _k["position"]
-                    insert_klines.append(_insert_k)
-                insert_stmt = insert(table).values(insert_klines)
-                update_keys = ["o", "c", "h", "l", "v"]
-                if in_position:
-                    update_keys.append("p")
-                update_columns = {
-                    x.name: x for x in insert_stmt.inserted if x.name in update_keys
-                }
-                upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-                session.execute(upsert_stmt)
+
+                    upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
+
+                    # 执行
+                    session.execute(upsert_stmt)
+
+                # 所有批次执行完再一次性提交，极大提升速度
                 session.commit()
+
+            except Exception as e:
+                session.rollback()
+                LogUtil.error(f"Batch Insert Error: {e}")
+                raise e
+
+            # 失效缓存
+            self._last_dt_cache.pop((market, code, frequency), None)
 
         return True
 
@@ -471,6 +364,9 @@ class DB(object):
                 q = q.filter(table.dt == dt)
             q.delete()
             session.commit()
+        # 删除后失效缓存
+        if frequency is not None:
+            self._last_dt_cache.pop((market, code, frequency), None)
 
         return True
 
@@ -1126,6 +1022,26 @@ class DB(object):
     ):
         # 保存图表布局，并返回 id
         with self.Session() as session:
+            # 如果是 drawing 或 study_template，先尝试根据名称查找并更新，实现覆盖保存
+            if chart_type in ["drawing", "study_template"]:
+                chart = (
+                    session.query(TableByTVCharts)
+                    .filter(
+                        TableByTVCharts.name == name,
+                        TableByTVCharts.chart_type == chart_type,
+                        TableByTVCharts.client_id == client_id,
+                        TableByTVCharts.user_id == user_id,
+                    )
+                    .first()
+                )
+                if chart:
+                    chart.content = content
+                    chart.symbol = symbol
+                    chart.resolution = resolution
+                    chart.timestamp = int(time.time())
+                    session.commit()
+                    return chart.id
+
             chart = TableByTVCharts(
                 chart_type=chart_type,
                 client_id=client_id,
@@ -1139,6 +1055,7 @@ class DB(object):
             session.add(chart)
             session.commit()
             return chart.id
+
 
     def tv_chart_update(
         self, chart_type, id, client_id, user_id, name, content, symbol, resolution
@@ -1187,6 +1104,7 @@ class DB(object):
                     TableByTVCharts.client_id == client_id,
                     TableByTVCharts.user_id == user_id,
                 )
+                .order_by(TableByTVCharts.timestamp.desc())
                 .first()
             )
 
@@ -1215,21 +1133,43 @@ class DB(object):
         return True
 
     def cache_get(self, key: str):
-        with self.Session() as session:
-            # 获取当前时间戳
-            now = int(time.time())
-            # 获取缓存数据
-            cache = session.query(TableByCache).filter(TableByCache.k == key).first()
-            # 缓存数据存在，且缓存数据未过期
-            if cache and (cache.expire == 0 or cache.expire > now):
-                return json.loads(cache.v)
-            # 缓存数据不存在，或缓存数据已过期
-            # 删除过期缓存数据，expire_time != 0 and expire_time < now
-            session.query(TableByCache).filter(
-                TableByCache.expire != 0, TableByCache.expire < now
-            ).delete()
-            session.commit()
+        for attempt in range(2):
+            try:
+                with self.Session() as session:
+                    now = int(time.time())
+                    cache = (
+                        session.query(TableByCache)
+                        .filter(TableByCache.k == key)
+                        .first()
+                    )
+                    if cache and (cache.expire == 0 or cache.expire > now):
+                        return json.loads(cache.v)
 
+                    session.query(TableByCache).filter(
+                        TableByCache.expire != 0, TableByCache.expire < now
+                    ).delete()
+                    session.commit()
+                return None
+            except Exception as e:
+                err = str(e)
+                retryable = (
+                    "Packet sequence number wrong" in err
+                    or "MySQL server has gone away" in err
+                    or "Lost connection to MySQL server" in err
+                    or "server has gone away" in err
+                )
+                if attempt == 0 and retryable:
+                    LogUtil.warning(
+                        f"[db.cache_get] retry key={key} because db connection error: {e}"
+                    )
+                    try:
+                        self.engine.dispose()
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+                    continue
+                LogUtil.error(f"[db.cache_get] failed key={key}: {e}", exc_info=True)
+                return None
         return None
 
     def cache_set(self, key: str, val: dict, expire: int = 0):

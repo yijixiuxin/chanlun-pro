@@ -1,4 +1,5 @@
 import datetime
+import os
 import hashlib
 import pathlib
 import pickle
@@ -10,13 +11,14 @@ from typing import Union
 import pandas as pd
 import pytz
 
-from chanlun import cl, fun
+from chanlun import fun
+from chanlun.core import cl
 from chanlun.base import Market
-from chanlun.cl_interface import ICL
+from chanlun.core.cl_interface import ICL
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import Exchange
-
+from chanlun.tools.log_util import LogUtil
 
 class FileCacheDB(object):
     """
@@ -29,26 +31,19 @@ class FileCacheDB(object):
         """
         self.home_path = pathlib.Path.home()
         self.project_path = get_data_path()
-        if self.project_path.is_dir() is False:
-            self.project_path.mkdir()
+        # 更健壮的目录创建方式（支持多级）
+        self.project_path.mkdir(parents=True, exist_ok=True)
         self.cl_data_path = self.project_path / "cl_data"
-        if self.cl_data_path.is_dir() is False:
-            self.cl_data_path.mkdir()
+        self.cl_data_path.mkdir(parents=True, exist_ok=True)
         self.klines_path = self.project_path / "klines"
-        if self.klines_path.is_dir() is False:
-            self.klines_path.mkdir()
+        self.klines_path.mkdir(parents=True, exist_ok=True)
         self.cache_pkl_path = self.project_path / "cache_pkl"
-        if self.cache_pkl_path.is_dir() is False:
-            self.cache_pkl_path.mkdir()
+        self.cache_pkl_path.mkdir(parents=True, exist_ok=True)
 
         # 遍历 enum 中的值
         for market in Market:
-            market_cl_data_path = self.cl_data_path / market.value
-            if market_cl_data_path.is_dir() is False:
-                market_cl_data_path.mkdir()
-            market_klines_path = self.klines_path / market.value
-            if market_klines_path.is_dir() is False:
-                market_klines_path.mkdir()
+            (self.cl_data_path / market.value).mkdir(parents=True, exist_ok=True)
+            (self.klines_path / market.value).mkdir(parents=True, exist_ok=True)
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
@@ -105,6 +100,37 @@ class FileCacheDB(object):
             db.cache_set("__cl_update_date", self.cl_update_date)
             self.clear_all_cl_data()
 
+    def _config_md5(self, cl_config: dict) -> str:
+        """
+        生成稳定的配置 MD5：严格按照 self.config_keys 顺序生成，避免 dict 插入顺序差异。
+        列表类型做字符串化处理以保持一致性。
+        """
+        parts = []
+        for k in self.config_keys:
+            v = cl_config.get(k, "0")
+            if isinstance(v, list):
+                v = ",".join(v)
+            parts.append(f"{k}:{v}")
+        unique_str = "|".join(parts)
+        return hashlib.md5(unique_str.encode("UTF-8")).hexdigest()
+
+    def _atomic_write_pickle(self, path: pathlib.Path, obj: object):
+        """
+        原子化写入 pickle，避免并发读到半写入文件。
+        """
+        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        with open(tmp, "wb") as fp:
+            pickle.dump(obj, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, path)
+
+    def _atomic_write_csv(self, path: pathlib.Path, df: pd.DataFrame):
+        """
+        原子化写入 CSV，先写入临时文件再替换，保证读侧一致性。
+        """
+        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        df.to_csv(tmp, index=False)
+        os.replace(tmp, path)
+
     def get_tdx_klines(
         self, market: str, code: str, frequency: str
     ) -> Union[None, pd.DataFrame]:
@@ -117,12 +143,11 @@ class FileCacheDB(object):
         if file_pathname.is_file() is False:
             return None
         try:
-            _klines = pd.read_csv(file_pathname)
+            _klines = pd.read_csv(file_pathname, parse_dates=["date"])  # 直接解析日期列
         except Exception:
             file_pathname.unlink()
             return None
         if len(_klines) > 0:
-            _klines["date"] = pd.to_datetime(_klines["date"])
             # 如果 date 有 Nan 则返回 None
             if _klines["date"].isnull().any():
                 return None
@@ -143,7 +168,7 @@ class FileCacheDB(object):
         file_pathname = (
             self.klines_path / market / f"{code.replace('.', '_')}_{frequency}.csv"
         )
-        kline.to_csv(file_pathname, index=False)
+        self._atomic_write_csv(file_pathname, kline)
         return True
 
     def clear_tdx_old_klines(self, market):
@@ -162,114 +187,114 @@ class FileCacheDB(object):
         return True
 
     def get_web_cl_data(
-        self,
-        market: str,
-        code: str,
-        frequency: str,
-        cl_config: dict,
-        klines: pd.DataFrame,
-    ) -> ICL:
+            self,
+            market: str,
+            code: str,
+            frequency: str,
+            cl_config: dict,
+            klines: pd.DataFrame,
+    ) -> 'ICL':
         """
         获取web缓存的的缠论数据对象
         """
-        unique_md5_str = (
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'
-        )
-        key = hashlib.md5(unique_md5_str.encode("UTF-8")).hexdigest()
+        logger = LogUtil.get_logger()  # 获取日志实例
+        key = self._config_md5(cl_config)
+
+        # 统一标识符用于日志输出
+        log_id = f"[{market}-{code}-{frequency}-{key}]"
 
         file_pathname = (
-            self.cl_data_path
-            / market
-            / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
+                self.cl_data_path
+                / market
+                / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
         )
-        cd: ICL = cl.CL(code, frequency, cl_config)
-        try:
-            if file_pathname.is_file():
-                # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
-                try_num = 0
-                while True:
-                    try:
-                        with open(file_pathname, "rb") as fp:
-                            cd = pickle.load(fp)
-                        break
-                    except Exception as e:
-                        try_num += 1
-                        time.sleep(0.5)
-                        if try_num > 5:
-                            raise e
-                # 判断缓存中的最后k线是否大于给定的最新一根k线时间，如果小于说明直接有断档，不连续，重新全量重新计算
-                if (
-                    len(cd.get_src_klines()) > 0
-                    and len(klines) > 0
-                    and (
-                        cd.get_src_klines()[-1].date < klines.iloc[0]["date"]
-                        or cd.get_src_klines()[0].date > klines.iloc[0]["date"]
-                    )
-                ):
-                    # print(
-                    #     f"{market}-{code}-{frequency} {key} K-Nums {len(klines)} 历史数据有错位，重新计算"
-                    # )
+
+        cd: 'ICL' = cl.CL(code, frequency, cl_config)
+        need_recompute = False
+
+        if file_pathname.is_file():
+            try:
+                with open(file_pathname, "rb") as fp:
+                    cd = pickle.load(fp)
+
+                # --- 校验逻辑 ---
+                cached_klines = cd.get_src_klines()
+
+                if len(cached_klines) > 0 and len(klines) > 0:
+                    # 1. 连续性校验：判断缓存末尾是否在给定数据时间范围之外
+                    if cached_klines[-1].date < klines.iloc[0]["date"] or cached_klines[0].date > klines.iloc[-1][
+                        "date"]:
+                        logger.warning(f"{log_id} 历史数据错位/不连续，将全量重算")
+                        need_recompute = True
+
+                    # 2. 数据一致性校验（防止复权导致的历史数据变更）
+                    if not need_recompute and len(cached_klines) >= 2 and len(klines) >= 2:
+                        cd_pre_kline = cached_klines[-2]
+                        target_rows = klines[klines["date"] == cd_pre_kline.date]
+
+                        if len(target_rows) == 0:
+                            logger.warning(f"{log_id} 缓存参考点日期在输入数据中不存在，重算")
+                            need_recompute = True
+                        else:
+                            row = target_rows.iloc[0]
+                            # 校验 OHLCVA
+                            is_diff = (
+                                    Decimal(str(row["close"])) != Decimal(str(cd_pre_kline.c)) or
+                                    Decimal(str(row["high"])) != Decimal(str(cd_pre_kline.h)) or
+                                    Decimal(str(row["low"])) != Decimal(str(cd_pre_kline.l)) or
+                                    Decimal(str(row["open"])) != Decimal(str(cd_pre_kline.o)) or
+                                    Decimal(str(row["volume"])) != Decimal(str(cd_pre_kline.a))
+                            )
+                            if is_diff:
+                                logger.warning(f"{log_id} 检测到历史数据差异（可能发生复权），重算")
+                                need_recompute = True
+
+                    # 3. 密度校验：检查最近100根K线数量是否对得上
+                    if not need_recompute and len(cached_klines) >= 100 and len(klines) >= 100:
+                        _v_cd = cached_klines[-100:]
+                        _v_src = klines[(klines["date"] >= _v_cd[0].date) & (klines["date"] <= _v_cd[-1].date)]
+                        if len(_v_cd) != len(_v_src):
+                            logger.warning(f"{log_id} 局部数据缺失 [Cache:{len(_v_cd)} vs Src:{len(_v_src)}]，重算")
+                            need_recompute = True
+
+                    # 4. 数据量校验：缓存数据远少于输入数据，说明缓存可能由窄范围请求(如DataPulse)创建，需全量重算
+                    if not need_recompute and len(cached_klines) > 0 and len(klines) > len(cached_klines) * 2:
+                        logger.warning(
+                            f"{log_id} 缓存数据量({len(cached_klines)})远少于输入({len(klines)})，全量重算"
+                        )
+                        need_recompute = True
+
+                if need_recompute:
                     cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的数据，与给定的K线数据是否有差异，有则表示数据有变（比如复权会产生变化），则重新全量计算
-                if len(cd.get_src_klines()) >= 2 and len(klines) >= 2:
-                    cd_pre_kline = cd.get_src_klines()[-2]
-                    src_klines = klines[klines["date"] == cd_pre_kline.date]
-                    # 计算后的数据没有最开始的日期或者 开高低收其中有不同的，则重新计算
-                    if (
-                        len(src_klines) == 0
-                        or Decimal(src_klines.iloc[0]["close"])
-                        != Decimal(cd_pre_kline.c)
-                        or Decimal(src_klines.iloc[0]["high"])
-                        != Decimal(cd_pre_kline.h)
-                        or Decimal(src_klines.iloc[0]["low"]) != Decimal(cd_pre_kline.l)
-                        or Decimal(src_klines.iloc[0]["open"])
-                        != Decimal(cd_pre_kline.o)
-                        or Decimal(src_klines.iloc[0]["volume"])
-                        != Decimal(cd_pre_kline.a)
-                    ):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key}",
-                        #     cd_pre_kline,
-                        #     src_klines.iloc[0].to_dict(),
-                        # )
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算前的数据有差异，重新计算"
-                        # )
-                        # print(cd_pre_kline, src_klines)
-                        cd = cl.CL(code, frequency, cl_config)
-                # 判断缓存中的最近一百根时间范围内的数量是否一致
-                if len(cd.get_src_klines()) >= 100 and len(klines) >= 100:
-                    _valid_cd_klines = cd.get_src_klines()[-100:]
-                    _valid_src_klines = klines[
-                        (klines["date"] >= _valid_cd_klines[0].date)
-                        & (klines["date"] <= _valid_cd_klines[-1].date)
-                    ]
-                    if len(_valid_cd_klines) != len(_valid_src_klines):
-                        # print(
-                        #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
-                        # )
-                        cd = cl.CL(code, frequency, cl_config)
-        except Exception:
-            if file_pathname.is_file():
-                # print(
-                #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
-                # )
+
+            except Exception as e:
+                logger.error(f"{log_id} 读取缓存或校验过程异常: {str(e)}", exc_info=True)
                 try:
-                    file_pathname.unlink()
-                except Exception:
-                    pass
+                    if file_pathname.exists():
+                        file_pathname.unlink()
+                except Exception as un_e:
+                    logger.error(f"{log_id} 尝试删除损坏缓存失败: {str(un_e)}")
+                cd = cl.CL(code, frequency, cl_config)
 
-        cd.process_klines(klines)
-
+        # 增量计算
         try:
-            with open(file_pathname, "wb") as fp:
-                pickle.dump(cd, fp)
+            cd.process_klines(klines)
         except Exception as e:
-            print(f"写入缓存异常 {market} {code} {frequency} - {e}")
+            logger.error(f"{log_id} 执行缠论计算 process_klines 失败: {str(e)}", exc_info=True)
+            return cd  # 或者按需抛出
 
-        # 加一个随机概率，去清理历史的缓存，避免太多占用空间
+        # 写入缓存
+        try:
+            self._atomic_write_pickle(file_pathname, cd)
+        except Exception as e:
+            logger.error(f"{log_id} 写入缓存异常: {str(e)}")
+
+        # 随机清理旧数据
         if random.randint(0, 1000) <= 5:
-            self.clear_old_web_cl_data()
+            try:
+                self.clear_old_web_cl_data()
+            except Exception as e:
+                logger.error(f"清理旧缓存数据异常: {str(e)}")
 
         return cd
 
@@ -325,11 +350,7 @@ class FileCacheDB(object):
         建议定时频繁的进行读取，保持更新，避免太多时间不读取，后续造成数据缺失情况
         """
 
-        key = hashlib.md5(
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'.encode(
-                "UTF-8"
-            )
-        ).hexdigest()
+        key = self._config_md5(cl_config)
         filename = (
             self.cl_data_path
             / f'{market}_{code.replace("/", "_")}_{frequency}_{key}.pkl'
@@ -345,16 +366,14 @@ class FileCacheDB(object):
             limit = 1000
         klines = db_ex.klines(code, frequency, args={"limit": limit})
         cd.process_klines(klines)
-        with open(filename, "wb") as fp:
-            pickle.dump(cd, fp)
+        self._atomic_write_pickle(filename, cd)
         return cd
 
     def cache_pkl_to_file(self, filename: str, data: object):
         """
         将缓存数据持久化到文件中
         """
-        with open(self.cache_pkl_path / filename, "wb") as fp:
-            pickle.dump(data, fp)
+        self._atomic_write_pickle(self.cache_pkl_path / filename, data)
 
     def cache_pkl_from_file(self, filename: str) -> object:
         """

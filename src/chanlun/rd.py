@@ -1,9 +1,7 @@
-import json
-
 import redis
 
 from chanlun import config
-from chanlun.cl_interface import *
+from chanlun.core.cl_interface import *
 
 r = None
 rb = None

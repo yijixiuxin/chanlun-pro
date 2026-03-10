@@ -72,11 +72,42 @@
     }
 
     class HistoryProvider {
-        constructor(datafeedUrl, requester, limitedServerResponse) {
+        constructor(datafeedUrl, requester, limitedServerResponse, options = {}) {
             this._datafeedUrl = datafeedUrl;
             this._requester = requester;
             this._limitedServerResponse = limitedServerResponse;
+            this._options = options;
             this.bars_result = new Map();
+            this._barsResultMaxSize = options.barsResultMaxSize || 100;
+        }
+        _pruneBarsResult() {
+            while (this.bars_result.size > this._barsResultMaxSize) {
+                const oldestKey = this.bars_result.keys().next().value;
+                if (oldestKey === undefined) {
+                    break;
+                }
+                this.bars_result.delete(oldestKey);
+            }
+        }
+        _clearBarsResultForSymbolResolution(symbol, resolution) {
+            if (!symbol || !resolution) {
+                return;
+            }
+            const resKey = String(symbol).toLowerCase() + String(resolution).toLowerCase();
+            this.bars_result.delete(resKey);
+        }
+        _emitBarsReady(resKey, requestParams) {
+            try {
+                window.dispatchEvent(new CustomEvent('chanlun-bars-ready', {
+                    detail: {
+                        key: resKey,
+                        symbol: String(requestParams["symbol"] || '').toLowerCase(),
+                        resolution: String(requestParams["resolution"] || '').toLowerCase(),
+                        managerId: this._options.managerId || null,
+                    }
+                }));
+            }
+            catch (e) { }
         }
         getBars(symbolInfo, resolution, periodParams) {
             const requestParams = {
@@ -183,6 +214,31 @@
                 meta.nextTime = response.nextTime;
             }
             else {
+                // Trim future bars from response before processing
+                const nowSec = Math.floor(Date.now() / 1000);
+                let futureIdx = response.t.length;
+                for (let fi = 0; fi < response.t.length; fi++) {
+                    if (response.t[fi] > nowSec) {
+                        futureIdx = fi;
+                        break;
+                    }
+                }
+                if (futureIdx < response.t.length) {
+                    console.log(`HistoryProvider: trimmed ${response.t.length - futureIdx} future bar(s)`);
+                    response.t = response.t.slice(0, futureIdx);
+                    response.c = response.c.slice(0, futureIdx);
+                    if (response.o) response.o = response.o.slice(0, futureIdx);
+                    if (response.h) response.h = response.h.slice(0, futureIdx);
+                    if (response.l) response.l = response.l.slice(0, futureIdx);
+                    if (response.v) response.v = response.v.slice(0, futureIdx);
+                    if (response.macd_dif) response.macd_dif = response.macd_dif.slice(0, futureIdx);
+                    if (response.macd_dea) response.macd_dea = response.macd_dea.slice(0, futureIdx);
+                    if (response.macd_hist) response.macd_hist = response.macd_hist.slice(0, futureIdx);
+                    if (response.macd_area) response.macd_area = response.macd_area.slice(0, futureIdx);
+                    if (response.higher_macd_dif) response.higher_macd_dif = response.higher_macd_dif.slice(0, futureIdx);
+                    if (response.higher_macd_dea) response.higher_macd_dea = response.higher_macd_dea.slice(0, futureIdx);
+                    if (response.higher_macd_hist) response.higher_macd_hist = response.higher_macd_hist.slice(0, futureIdx);
+                }
                 const volumePresent = response.v !== undefined;
                 const ohlPresent = response.o !== undefined;
                 for (let i = 0; i < response.t.length; ++i) {
@@ -208,10 +264,56 @@
                     requestParams["resolution"].toString().toLowerCase();
                 // 保存数据
                 let obj_res = this.bars_result.get(res_key);
+                const raw_times = (response.t || []).map((t) => t * 1000);
+                const macd_dif = response.macd_dif || [];
+                const macd_dea = response.macd_dea || [];
+                const macd_hist = response.macd_hist || [];
+                const macd_area = response.macd_area || [];
+                const higher_macd_dif = response.higher_macd_dif || [];
+                const higher_macd_dea = response.higher_macd_dea || [];
+                const higher_macd_hist = response.higher_macd_hist || [];
+                const mergeAlignedArrays = (existingTimes = [], existingArr = [], newTimes = [], newArr = []) => {
+                    const map = new Map();
+                    existingTimes.forEach((t, i) => {
+                        let val = existingArr[i];
+                        if (val === null || val === undefined)
+                            val = NaN;
+                        map.set(t, val);
+                    });
+                    newTimes.forEach((t, i) => {
+                        let val = newArr[i];
+                        if (val === null || val === undefined)
+                            val = NaN;
+                        map.set(t, val);
+                    });
+                    const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
+                    return {
+                        times: allTimes,
+                        values: allTimes.map(t => {
+                            const v = map.get(t);
+                            return (v === undefined || v === null) ? NaN : v;
+                        })
+                    };
+                };
                 if (response.update == false || obj_res == undefined) {
+                    const difObj = mergeAlignedArrays([], [], raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays([], [], raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays([], [], raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays([], [], raw_times, macd_area);
+                    const hDifObj = mergeAlignedArrays([], [], raw_times, higher_macd_dif);
+                    const hDeaObj = mergeAlignedArrays([], [], raw_times, higher_macd_dea);
+                    const hHistObj = mergeAlignedArrays([], [], raw_times, higher_macd_hist);
                     this.bars_result.set(res_key, {
                         bars: bars,
                         meta: meta,
+                        times: difObj.times,
+                        macd_dif: difObj.values,
+                        macd_dea: deaObj.values,
+                        macd_hist: histObj.values,
+                        macd_area: areaObj.values,
+                        higher_macd_dif: hDifObj.values,
+                        higher_macd_dea: hDeaObj.values,
+                        higher_macd_hist: hHistObj.values,
                         fxs: response.fxs,
                         bis: response.bis,
                         xds: response.xds,
@@ -223,6 +325,8 @@
                         mmds: response.mmds,
                         chart_color: response.chart_color,
                     });
+                    this._pruneBarsResult();
+                    this._emitBarsReady(res_key, requestParams);
                 }
                 else {
                     // 更新存在的数据
@@ -237,64 +341,67 @@
                             return existingPoints || [];
                         if (!existingPoints || existingPoints.length === 0)
                             return newPoints;
-                        // 获取点位时间的辅助函数，处理points可能是对象或数组的情况
                         const getPointTime = (point) => {
+                            if (!point || !point.points)
+                                return null;
                             if (Array.isArray(point.points)) {
-                                // 如果是数组，取第一个元素的time
+                                if (!point.points[0])
+                                    return null;
                                 return point.points[0].time;
                             }
-                            else {
-                                // 如果是单个对象，直接取time
-                                return point.points.time;
-                            }
+                            return point.points.time;
                         };
-                        const minResponseTime = Math.min(...newPoints.map(getPointTime));
+                        const validNewPoints = newPoints.filter((point) => getPointTime(point) !== null && getPointTime(point) !== undefined);
+                        if (validNewPoints.length === 0)
+                            return existingPoints || [];
+                        const newTimes = validNewPoints.map(getPointTime);
+                        const minResponseTime = Math.min(...newTimes);
+                        const maxResponseTime = Math.max(...newTimes);
                         const updatedPoints = [];
-                        // 保留小于最小时间点的数据
                         for (const point of existingPoints) {
-                            if (getPointTime(point) < minResponseTime) {
-                                updatedPoints.push(point);
+                            const pointTime = getPointTime(point);
+                            if (pointTime !== null && pointTime !== undefined) {
+                                // Keep points OUTSIDE the response window
+                                if (pointTime < minResponseTime || pointTime > maxResponseTime) {
+                                    updatedPoints.push(point);
+                                }
                             }
                         }
-                        // 添加返回数据中剩余的新点位
-                        for (const point of newPoints) {
+                        for (const point of validNewPoints) {
                             updatedPoints.push(point);
                         }
-                        // 按时间排序，使用getPointTime辅助函数获取时间
                         return updatedPoints.sort((a, b) => getPointTime(a) - getPointTime(b));
                     };
-                    // 处理LineSegment类型数据（bis, xds, zsds, bi_zss, xd_zss, zsd_zss）
                     const updateLineSegments = (existingSegments, newSegments) => {
                         if (!newSegments || newSegments.length === 0)
                             return existingSegments || [];
                         if (!existingSegments || existingSegments.length === 0)
                             return newSegments;
-                        const minResponseTime = Math.min(...newSegments.map((segment) => segment.points[0].time));
+                        const validNewSegments = newSegments.filter((segment) => Array.isArray(segment.points) && segment.points.length > 0 && segment.points[0] && segment.points[0].time !== undefined && segment.points[0].time !== null);
+                        if (validNewSegments.length === 0)
+                            return existingSegments || [];
+                        const newTimes = validNewSegments.map((segment) => segment.points[0].time);
+                        const minResponseTime = Math.min(...newTimes);
+                        const maxResponseTime = Math.max(...newTimes);
                         const updatedSegments = [];
-                        // 保留起始时间小于最小时间点的线段
                         for (const segment of existingSegments) {
-                            if (segment.points.length > 0) {
-                                if (segment.points[0].time < minResponseTime) {
+                            if (Array.isArray(segment.points) && segment.points.length > 0) {
+                                const segTime = segment.points[0].time;
+                                // Keep segments OUTSIDE the response window
+                                if (segTime < minResponseTime || segTime > maxResponseTime) {
                                     updatedSegments.push(segment);
                                 }
                             }
                         }
-                        // 添加返回数据中剩余的新线段
-                        for (const segment of newSegments) {
+                        for (const segment of validNewSegments) {
                             updatedSegments.push(segment);
                         }
-                        // 按起始时间排序
                         return updatedSegments.sort((a, b) => {
-                            if (a.points.length === 0 && b.points.length === 0)
-                                return 0;
-                            if (a.points.length === 0)
-                                return -1;
-                            if (b.points.length === 0)
-                                return 1;
-                            return a.points[0].time - b.points[0].time;
+                            const at = (Array.isArray(a.points) && a.points[0]) ? a.points[0].time : -Infinity;
+                            const bt = (Array.isArray(b.points) && b.points[0]) ? b.points[0].time : -Infinity;
+                            return at - bt;
                         });
                     };
-                    // 更新所有数据
                     obj_res.fxs = updateTextPoints(obj_res.fxs, response.fxs);
                     obj_res.bis = updateLineSegments(obj_res.bis, response.bis);
                     obj_res.xds = updateLineSegments(obj_res.xds, response.xds);
@@ -305,7 +412,25 @@
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
                     obj_res.chart_color = response.chart_color;
+                    const oldTimes = obj_res.times || [];
+                    const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);
+                    const deaObj = mergeAlignedArrays(oldTimes, obj_res.macd_dea, raw_times, macd_dea);
+                    const histObj = mergeAlignedArrays(oldTimes, obj_res.macd_hist, raw_times, macd_hist);
+                    const areaObj = mergeAlignedArrays(oldTimes, obj_res.macd_area, raw_times, macd_area);
+                    const hDifObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dif, raw_times, higher_macd_dif);
+                    const hDeaObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_dea, raw_times, higher_macd_dea);
+                    const hHistObj = mergeAlignedArrays(oldTimes, obj_res.higher_macd_hist, raw_times, higher_macd_hist);
+                    obj_res.times = difObj.times;
+                    obj_res.macd_dif = difObj.values;
+                    obj_res.macd_dea = deaObj.values;
+                    obj_res.macd_hist = histObj.values;
+                    obj_res.macd_area = areaObj.values;
+                    obj_res.higher_macd_dif = hDifObj.values;
+                    obj_res.higher_macd_dea = hDeaObj.values;
+                    obj_res.higher_macd_hist = hHistObj.values;
                     this.bars_result.set(res_key, obj_res);
+                    this._pruneBarsResult();
+                    this._emitBarsReady(res_key, requestParams);
                 }
             }
             const result = {
@@ -388,7 +513,10 @@
             if (!this._subscribers.hasOwnProperty(listenerGuid)) {
                 return;
             }
-            const bars = result.bars;
+            // Filter out future bars to prevent time order violations
+            // Exchange may return bars with end-of-period timestamps ahead of current time
+            const nowMs = Date.now();
+            const bars = result.bars.filter(b => b.time <= nowMs);
             if (bars.length === 0) {
                 return;
             }
@@ -401,11 +529,11 @@
             // Pulse updating may miss some trades data (ie, if pulse period = 10 secods and new bar is started 5 seconds later after the last update, the
             // old bar's last 5 seconds trades will be lost). Thus, at fist we should broadcast old bar updates when it's ready.
             if (isNewBar) {
-                if (bars.length < 2) {
-                    throw new Error('Not enough bars in history for proper pulse update. Need at least 2.');
+                if (bars.length >= 2) {
+                    const previousBar = bars[bars.length - 2];
+                    subscriptionRecord.listener(previousBar);
                 }
-                const previousBar = bars[bars.length - 2];
-                subscriptionRecord.listener(previousBar);
+                // If bars.length < 2 (e.g. future bar was filtered out), skip previous bar update
             }
             subscriptionRecord.lastBarTime = lastBar.time;
             subscriptionRecord.listener(lastBar);
@@ -697,12 +825,13 @@
      * See [UDF protocol reference](@docs/connecting_data/UDF.md)
      */
     class UDFCompatibleDatafeedBase {
-        constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse) {
+        constructor(datafeedURL, quotesProvider, requester, updateFrequency = 10 * 1000, limitedServerResponse, options = {}) {
             this._configuration = defaultConfiguration();
             this._symbolsStorage = null;
             this._datafeedURL = datafeedURL;
             this._requester = requester;
-            this._historyProvider = new HistoryProvider(datafeedURL, this._requester, limitedServerResponse);
+            this._options = options;
+            this._historyProvider = new HistoryProvider(datafeedURL, this._requester, limitedServerResponse, options);
             this._quotesProvider = quotesProvider;
             this._dataPulseProvider = new DataPulseProvider(this._historyProvider, updateFrequency);
             this._quotesPulseProvider = new QuotesPulseProvider(this._quotesProvider);
@@ -921,9 +1050,21 @@
         }
         subscribeBars(symbolInfo, resolution, onTick, listenerGuid, _onResetCacheNeededCallback) {
             this._dataPulseProvider.subscribeBars(symbolInfo, resolution, onTick, listenerGuid);
+            if (_onResetCacheNeededCallback) {
+                const originalCallback = _onResetCacheNeededCallback;
+                this._subscribersResetCallbacks = this._subscribersResetCallbacks || {};
+                this._subscribersResetCallbacks[listenerGuid] = () => {
+                    this._historyProvider._clearBarsResultForSymbolResolution(symbolInfo.ticker || symbolInfo.name, resolution);
+                    originalCallback();
+                };
+                _onResetCacheNeededCallback = this._subscribersResetCallbacks[listenerGuid];
+            }
         }
         unsubscribeBars(listenerGuid) {
             this._dataPulseProvider.unsubscribeBars(listenerGuid);
+            if (this._subscribersResetCallbacks) {
+                delete this._subscribersResetCallbacks[listenerGuid];
+            }
         }
         _requestConfiguration() {
             return this._send('config')
@@ -969,10 +1110,10 @@
     }
 
     class UDFCompatibleDatafeed extends UDFCompatibleDatafeedBase {
-        constructor(datafeedURL, updateFrequency = 10 * 1000, limitedServerResponse) {
+        constructor(datafeedURL, updateFrequency = 10 * 1000, limitedServerResponse, options = {}) {
             const requester = new Requester();
             const quotesProvider = new QuotesProvider(datafeedURL, requester);
-            super(datafeedURL, quotesProvider, requester, updateFrequency, limitedServerResponse);
+            super(datafeedURL, quotesProvider, requester, updateFrequency, limitedServerResponse, options);
         }
     }
 
