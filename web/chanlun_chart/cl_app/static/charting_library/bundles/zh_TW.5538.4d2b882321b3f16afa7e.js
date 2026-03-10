@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5538],{5538:a=>{a.exports={en:["Last available bar"],zh_TW:["最後一根可用的K線"]}}}]);

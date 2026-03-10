@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[4020],{84020:e=>{e.exports={en:["All sources"],ar:["كل المصادر"]}}}]);

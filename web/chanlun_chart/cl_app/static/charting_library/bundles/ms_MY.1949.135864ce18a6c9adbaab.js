@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[1949,5753,8899],{3443:e=>{e.exports={en:["Add text"],ms_MY:["Tambah teks"]}},58899:e=>{e.exports={en:["change {title} text"],ms_MY:["tukar {title} teks"]}},44597:e=>{e.exports={en:["distance: {number} px"],ms_MY:["jarak: {number} px"]}}}]);

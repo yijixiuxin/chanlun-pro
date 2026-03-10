@@ -1,0 +1,9 @@
+.checkbox-vyj6oJxw{align-items:center;display:flex;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;cursor:default;font-size:14px;font-stretch:normal;font-style:normal;font-weight:400;gap:8px;letter-spacing:normal;line-height:normal}.checkbox-vyj6oJxw.reverse-vyj6oJxw{flex-direction:row-reverse;justify-content:flex-end}.checkbox-vyj6oJxw.baseline-vyj6oJxw{align-items:flex-start}.label-vyj6oJxw{min-width:0}.disabled-vyj6oJxw{opacity:.5}.primary-vyj6oJxw{color:var(--color-text-primary)}.danger-vyj6oJxw{color:var(--color-control-intent-danger)}.primary-ywH2tsV_{--ui-lib-private-checkboxViewImpl-color-border:var(--color-container-fill-primary-neutral-extra-bold);--ui-lib-private-checkboxViewImpl-color-box:var(
+		--ui-lib-checkbox-color,var(--color-container-fill-primary-neutral-extra-bold)
+	);--ui-lib-private-checkboxViewImpl-color-mark:var(
+		--ui-lib-checkbox-mark-color,var(--color-container-fill-quinary-inverse)
+	)}.danger-ywH2tsV_{--ui-lib-private-checkboxViewImpl-color-border:var(--color-container-fill-primary-danger-bold);--ui-lib-private-checkboxViewImpl-color-box:var(
+		--ui-lib-checkbox-color,var(--color-container-fill-primary-danger-bold)
+	);--ui-lib-private-checkboxViewImpl-color-mark:var(
+		--ui-lib-checkbox-mark-color,var(--color-container-fill-quaternary-inverse)
+	)}

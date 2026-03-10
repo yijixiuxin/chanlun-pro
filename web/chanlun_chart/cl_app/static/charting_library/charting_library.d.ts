@@ -15,6 +15,7 @@ declare const dateFormatFunctions: {
 	readonly "dd MMM 'yy": (date: Date, local: boolean) => string;
 	readonly "MMM 'yy": (date: Date, local: boolean) => string;
 	readonly "MMM dd, yyyy": (date: Date, local: boolean) => string;
+	readonly "MMM d, yyyy": (date: Date, local: boolean) => string;
 	readonly "MMM yyyy": (date: Date, local: boolean) => string;
 	readonly "MMM dd": (date: Date, local: boolean) => string;
 	readonly "dd MMM": (date: Date, local: boolean) => string;
@@ -82,6 +83,23 @@ export declare const enum SearchInitiationPoint {
 	Compare = "compare",
 	IndicatorInputs = "indicatorInputs"
 }
+export declare const enum Status {
+	Offline = 0,
+	Resolving = 1,
+	Loading = 2,
+	Ready = 3,
+	InvalidSymbol = 4,
+	Snapshot = 5,
+	EOD = 6,
+	Pulse = 7,
+	Delayed = 8,
+	DelayedSteaming = 9,
+	NoBars = 10,
+	Replay = 11,
+	Error = 12,
+	CalculationError = 13,
+	UnsupportedResolution = 14
+}
 export declare const widget: ChartingLibraryWidgetConstructor;
 export declare enum ActionId {
 	ChartAddIndicatorToAllCharts = "Chart.AddIndicatorToAllCharts",
@@ -112,6 +130,7 @@ export declare enum ActionId {
 	ChartIndicatorShowSettingsDialog = "Chart.Indicator.ShowSettingsDialog",
 	ChartLegendToggleLastDayChangeValuesVisibility = "Chart.Legend.ToggleLastDayChangeValuesVisibility",
 	ChartLegendToggleBarChangeValuesVisibility = "Chart.Legend.ToggleBarChangeValuesVisibility",
+	ChartLegendToggleBarChangeColor = "Chart.Legend.ToggleBarChangeColor",
 	ChartLegendTogglePriceSourceVisibility = "Chart.Legend.TogglePriceSourceVisibility",
 	ChartLegendToggleIndicatorArgumentsVisibility = "Chart.Legend.ToggleIndicatorArgumentsVisibility",
 	ChartLegendToggleIndicatorTitlesVisibility = "Chart.Legend.ToggleIndicatorTitlesVisibility",
@@ -224,6 +243,7 @@ export declare enum ActionId {
 	ChartSourceVisualOrderSendBackward = "Chart.Source.VisualOrder.SendBackward",
 	ChartSourceVisualOrderSendToBack = "Chart.Source.VisualOrder.SendToBack",
 	ChartSourceResetInputPoints = "Chart.Source.ResetInputPoints",
+	ChartOpenTableView = "Chart.OpenTableView",
 	ChartTimeScaleReset = "Chart.TimeScale.Reset",
 	ChartUndo = "Chart.Undo",
 	ChartSourceIntervalsVisibility = "Chart.Source.IntervalsVisibility",
@@ -537,6 +557,7 @@ export declare enum StandardFormatterName {
 	FormatQuantity = "formatQuantity",
 	FormatPrice = "formatPrice",
 	FormatPriceForexSup = "formatPriceForexSup",
+	FormatExitLevels = "formatExitLevels",
 	FormatPriceInCurrency = "formatPriceInCurrency",
 	IntegerSeparated = "integerSeparated",
 	LocalDate = "localDate",
@@ -576,7 +597,7 @@ export declare enum StudyPlotDisplayTarget {
 	DataWindow = 2,
 	PriceScale = 4,
 	StatusLine = 8,
-	All = 15
+	All = 4294967295
 }
 export declare enum StudyPlotType {
 	Line = "line",
@@ -2065,6 +2086,8 @@ export interface BracketOrderBase extends PlacedOrderBase {
 	parentId: string;
 	/** Type of the bracket's parent. */
 	parentType: ParentType;
+	/** Exit level ID. The way we distinguish exit levels */
+	exitLevelId?: string;
 }
 export interface Brackets {
 	/** Stop loss */
@@ -2075,6 +2098,11 @@ export interface Brackets {
 	takeProfit?: number;
 	/** Trailing Stop Pips */
 	trailingStopPips?: number;
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the position/order.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevel[];
 }
 export interface BrokerConfigFlags {
 	/**
@@ -2124,6 +2152,9 @@ export interface BrokerConfigFlags {
 	 * Enables brackets for individual positions: take-profit and stop-loss orders.
 	 * If you set this flag to `true`, the library displays an _Edit_ button for individual positions and _Edit position..._ in the individual position's context menu.
 	 * This flag requires the {@link IBrokerTerminal.editIndividualPositionBrackets} method to be implemented.
+	 *
+	 * Ensure {@link BrokerConfigFlags.supportPositionBrackets} is set to `false`.
+	 * If `supportPositionBrackets` is enabled, it takes precedence, and individual positions will not be displayed on the chart.
 	 * @default false
 	 */
 	supportIndividualPositionBrackets?: boolean;
@@ -2151,20 +2182,26 @@ export interface BrokerConfigFlags {
 	supportCloseIndividualPosition?: boolean;
 	/**
 	 * Enables order price editing.
-	 * If you set this flag to `false`, the price control in the _Order Ticket_ will be disabled when users modify orders.
+	 * If you set this flag to `false`, the price control in the [_Order Ticket_](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) will be disabled when users modify orders.
+	 *
+	 * To completely disable the ability to modify an order (including hiding the _Modify_ button and disabling drag-and-drop actions on the chart), this flag must be set to `false` in conjunction with {@link BrokerConfigFlags.supportEditAmount} and {@link BrokerConfigFlags.supportModifyBrackets}.
 	 * @default true
 	 */
 	supportModifyOrderPrice?: boolean;
 	/**
 	 * Enables order quantity editing.
-	 * If you set this flag to `false`, the quantity control in the _Order Ticket_ will be disabled when users modify orders.
+	 * If you set this flag to `false`, the quantity control in the [_Order Ticket_](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) will be disabled when users modify orders.
+	 *
+	 * To completely disable the ability to modify an order (including hiding the _Modify_ button and disabling drag-and-drop actions on the chart), this flag must be set to `false` in conjunction with {@link BrokerConfigFlags.supportModifyOrderPrice} and {@link BrokerConfigFlags.supportModifyBrackets}.
 	 * @default true
 	 */
 	supportEditAmount?: boolean;
 	/**
-	 * Enables order brackets editing.
-	 * If you set this flag to `false`, the bracket's control in the Order Ticket will be disabled,
+	 * Enables [order brackets](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets) editing.
+	 * If you set this flag to `false`, the bracket's control in the [_Order Ticket_](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) will be disabled,
 	 * and the _Modify_ button will be hidden from the chart and in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/).
+	 *
+	 * To completely disable the ability to modify an order (including hiding the _Modify_ button and disabling drag-and-drop actions on the chart), this flag must be set to `false` in conjunction with {@link BrokerConfigFlags.supportModifyOrderPrice} and {@link BrokerConfigFlags.supportEditAmount}.
 	 * @default true
 	 */
 	supportModifyBrackets?: boolean;
@@ -2336,6 +2373,11 @@ export interface BrokerConfigFlags {
 	 */
 	supportCryptoExchangeOrderTicket?: boolean;
 	/**
+	 * This flag automatically switches Order Ticket to the Crypto Exchange mode if symbol type is `crypto`
+	 * @default false
+	 */
+	supportSymbolSpecificCryptoOrderTicket?: boolean;
+	/**
 	 * Enables displaying Profit & Loss values in instrument currency.
 	 * @default false
 	 */
@@ -2410,6 +2452,11 @@ export interface BrokerConfigFlags {
 	 */
 	requiresFIFOCloseIndividualPositions?: boolean;
 	/**
+	 * Enables [multiple exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) (multiple take-profit and stop-loss orders) for a single parent order or position.
+	 * When enabled, the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) allows users to *Add level* for brackets.
+	 */
+	supportMultipleExitLevels?: boolean;
+	/**
 	 * Allows brokers to add their own parameters that will be displayed in Order info.
 	 * @default false
 	 */
@@ -2453,12 +2500,10 @@ export interface BrokerCustomUI {
 /**
  * Override properties that can be used within {@link TradingCustomization.brokerOrder} of the {@link TradingTerminalWidgetOptions.trading_customization} object.
  *
- * In a property name, "normal" indicates the line is active and visible in the UI, while "disabled" means the line is inactive, such as when another dialog is open.
+ * These properties follow a hierarchical naming pattern: `{Side}.{State}.{Element}.{Property}`.
+ * Refer to [Override properties](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/trading-overrides#override-properties) section for a detailed explanation of this naming pattern.
  */
 export interface BrokerOrderOverrides {
-	"buy.normal.anchor.backgroundColor": string;
-	"buy.normal.anchor.borderColor": string;
-	"buy.normal.anchor.shadowColor": string;
 	"buy.normal.borderBackgroundColor": string;
 	"buy.normal.borderColor": string;
 	"buy.normal.close.activeColor": string;
@@ -2473,7 +2518,6 @@ export interface BrokerOrderOverrides {
 	"buy.normal.disabledLineColor": string;
 	"buy.normal.informer.backgroundColor": string;
 	"buy.normal.informer.iconColor": string;
-	"buy.normal.labelTickColor": string;
 	"buy.normal.lineColor": string;
 	"buy.normal.negativePlColor": string;
 	"buy.normal.pointBackgroundColor": string;
@@ -2488,9 +2532,6 @@ export interface BrokerOrderOverrides {
 	"buy.normal.text.dividerColor": string;
 	"buy.normal.text.textColor": string;
 	"buy.normal.text.activeColor": string;
-	"buy.disabled.anchor.backgroundColor": string;
-	"buy.disabled.anchor.borderColor": string;
-	"buy.disabled.anchor.shadowColor": string;
 	"buy.disabled.borderBackgroundColor": string;
 	"buy.disabled.borderColor": string;
 	"buy.disabled.close.activeColor": string;
@@ -2505,7 +2546,6 @@ export interface BrokerOrderOverrides {
 	"buy.disabled.disabledLineColor": string;
 	"buy.disabled.informer.backgroundColor": string;
 	"buy.disabled.informer.iconColor": string;
-	"buy.disabled.labelTickColor": string;
 	"buy.disabled.lineColor": string;
 	"buy.disabled.negativePlColor": string;
 	"buy.disabled.pointBackgroundColor": string;
@@ -2520,9 +2560,6 @@ export interface BrokerOrderOverrides {
 	"buy.disabled.text.dividerColor": string;
 	"buy.disabled.text.textColor": string;
 	"buy.disabled.text.activeColor": string;
-	"sell.normal.anchor.backgroundColor": string;
-	"sell.normal.anchor.borderColor": string;
-	"sell.normal.anchor.shadowColor": string;
 	"sell.normal.borderBackgroundColor": string;
 	"sell.normal.borderColor": string;
 	"sell.normal.close.activeColor": string;
@@ -2537,7 +2574,6 @@ export interface BrokerOrderOverrides {
 	"sell.normal.disabledLineColor": string;
 	"sell.normal.informer.backgroundColor": string;
 	"sell.normal.informer.iconColor": string;
-	"sell.normal.labelTickColor": string;
 	"sell.normal.lineColor": string;
 	"sell.normal.negativePlColor": string;
 	"sell.normal.pointBackgroundColor": string;
@@ -2552,9 +2588,6 @@ export interface BrokerOrderOverrides {
 	"sell.normal.text.dividerColor": string;
 	"sell.normal.text.textColor": string;
 	"sell.normal.text.activeColor": string;
-	"sell.disabled.anchor.backgroundColor": string;
-	"sell.disabled.anchor.borderColor": string;
-	"sell.disabled.anchor.shadowColor": string;
 	"sell.disabled.borderBackgroundColor": string;
 	"sell.disabled.borderColor": string;
 	"sell.disabled.close.activeColor": string;
@@ -2569,7 +2602,6 @@ export interface BrokerOrderOverrides {
 	"sell.disabled.disabledLineColor": string;
 	"sell.disabled.informer.backgroundColor": string;
 	"sell.disabled.informer.iconColor": string;
-	"sell.disabled.labelTickColor": string;
 	"sell.disabled.lineColor": string;
 	"sell.disabled.negativePlColor": string;
 	"sell.disabled.pointBackgroundColor": string;
@@ -2584,9 +2616,6 @@ export interface BrokerOrderOverrides {
 	"sell.disabled.text.dividerColor": string;
 	"sell.disabled.text.textColor": string;
 	"sell.disabled.text.activeColor": string;
-	"takeProfit.normal.anchor.backgroundColor": string;
-	"takeProfit.normal.anchor.borderColor": string;
-	"takeProfit.normal.anchor.shadowColor": string;
 	"takeProfit.normal.borderBackgroundColor": string;
 	"takeProfit.normal.borderColor": string;
 	"takeProfit.normal.close.activeColor": string;
@@ -2601,7 +2630,6 @@ export interface BrokerOrderOverrides {
 	"takeProfit.normal.disabledLineColor": string;
 	"takeProfit.normal.informer.backgroundColor": string;
 	"takeProfit.normal.informer.iconColor": string;
-	"takeProfit.normal.labelTickColor": string;
 	"takeProfit.normal.lineColor": string;
 	"takeProfit.normal.negativePlColor": string;
 	"takeProfit.normal.pointBackgroundColor": string;
@@ -2618,9 +2646,6 @@ export interface BrokerOrderOverrides {
 	"takeProfit.normal.text.activeColor": string;
 	"takeProfit.normal.text.hintAreaColor": string;
 	"takeProfit.normal.movingBackgroundColor": string;
-	"takeProfit.disabled.anchor.backgroundColor": string;
-	"takeProfit.disabled.anchor.borderColor": string;
-	"takeProfit.disabled.anchor.shadowColor": string;
 	"takeProfit.disabled.borderBackgroundColor": string;
 	"takeProfit.disabled.borderColor": string;
 	"takeProfit.disabled.close.activeColor": string;
@@ -2635,7 +2660,6 @@ export interface BrokerOrderOverrides {
 	"takeProfit.disabled.disabledLineColor": string;
 	"takeProfit.disabled.informer.backgroundColor": string;
 	"takeProfit.disabled.informer.iconColor": string;
-	"takeProfit.disabled.labelTickColor": string;
 	"takeProfit.disabled.lineColor": string;
 	"takeProfit.disabled.negativePlColor": string;
 	"takeProfit.disabled.pointBackgroundColor": string;
@@ -2652,9 +2676,6 @@ export interface BrokerOrderOverrides {
 	"takeProfit.disabled.text.activeColor": string;
 	"takeProfit.disabled.text.hintAreaColor": string;
 	"takeProfit.disabled.movingBackgroundColor": string;
-	"stopLoss.normal.anchor.backgroundColor": string;
-	"stopLoss.normal.anchor.borderColor": string;
-	"stopLoss.normal.anchor.shadowColor": string;
 	"stopLoss.normal.borderBackgroundColor": string;
 	"stopLoss.normal.borderColor": string;
 	"stopLoss.normal.close.activeColor": string;
@@ -2669,7 +2690,6 @@ export interface BrokerOrderOverrides {
 	"stopLoss.normal.disabledLineColor": string;
 	"stopLoss.normal.informer.backgroundColor": string;
 	"stopLoss.normal.informer.iconColor": string;
-	"stopLoss.normal.labelTickColor": string;
 	"stopLoss.normal.lineColor": string;
 	"stopLoss.normal.negativePlColor": string;
 	"stopLoss.normal.pointBackgroundColor": string;
@@ -2686,9 +2706,6 @@ export interface BrokerOrderOverrides {
 	"stopLoss.normal.text.activeColor": string;
 	"stopLoss.normal.text.hintAreaColor": string;
 	"stopLoss.normal.movingBackgroundColor": string;
-	"stopLoss.disabled.anchor.backgroundColor": string;
-	"stopLoss.disabled.anchor.borderColor": string;
-	"stopLoss.disabled.anchor.shadowColor": string;
 	"stopLoss.disabled.borderBackgroundColor": string;
 	"stopLoss.disabled.borderColor": string;
 	"stopLoss.disabled.close.activeColor": string;
@@ -2703,7 +2720,6 @@ export interface BrokerOrderOverrides {
 	"stopLoss.disabled.disabledLineColor": string;
 	"stopLoss.disabled.informer.backgroundColor": string;
 	"stopLoss.disabled.informer.iconColor": string;
-	"stopLoss.disabled.labelTickColor": string;
 	"stopLoss.disabled.lineColor": string;
 	"stopLoss.disabled.negativePlColor": string;
 	"stopLoss.disabled.pointBackgroundColor": string;
@@ -2724,7 +2740,8 @@ export interface BrokerOrderOverrides {
 /**
  * Override properties that can be used within {@link TradingCustomization.brokerPosition} of the {@link TradingTerminalWidgetOptions.trading_customization} object.
  *
- * In a property name, "normal" indicates the line is active and visible in the UI, while "disabled" means the line is inactive, such as when another dialog is open.
+ * These properties follow a hierarchical naming pattern: `{Side}.{State}.{Element}.{Property}`.
+ * Refer to [Override properties](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/trading-overrides#override-properties) section for a detailed explanation of this naming pattern.
  */
 export interface BrokerPositionOverrides {
 	"buy.normal.borderBackgroundColor": string;
@@ -2894,17 +2911,21 @@ export interface CalloutLineToolOverrides {
 	/** Default value: `200` */
 	"linetoolcallout.wordWrapWidth": number;
 }
-export interface CandleStylePreferences {
-	/** Body color for an up candle */
-	upColor: string;
-	/** Body color for a down candle */
-	downColor: string;
+export interface CandleStyleNonThemePreferences {
 	/** Whether to draw the candle wick */
 	drawWick: boolean;
 	/** Whether to draw the candle body border */
 	drawBorder: boolean;
+	/** Bar color determined by previous close value */
+	barColorsOnPrevClose: boolean;
 	/** Whether to draw the candle body */
 	drawBody: boolean;
+}
+export interface CandleStylePreferences extends CandleStyleNonThemePreferences {
+	/** Body color for an up candle */
+	upColor: string;
+	/** Body color for a down candle */
+	downColor: string;
 	/** Candle border color */
 	borderColor: string;
 	/** Up candle border color */
@@ -2917,8 +2938,6 @@ export interface CandleStylePreferences {
 	wickUpColor: string;
 	/** Down candle wick color */
 	wickDownColor: string;
-	/** Bar color determined by previous close value */
-	barColorsOnPrevClose: boolean;
 }
 /**
  * Overrides for the 'Chaikin Money Flow' indicator.
@@ -4688,11 +4707,11 @@ export interface ChartingLibraryWidgetOptions {
 	 * library_path: "charting_library/",
 	 * ```
 	 *
-	 * * If you would like to host the library on a separate origin to the page containing the chart then please view the following guide: [Hosting the library on a separate origin](https://www.tradingview.com/charting-library-docs/latest/getting_started/Hosting-Library-Cross-Origin).
+	 * * If you would like to host the library on a separate origin to the page containing the chart then please view the following guide: [Hosting the library on a separate origin](https://www.tradingview.com/charting-library-docs/latest/configuration/Hosting-Library-Cross-Origin).
 	 */
 	library_path?: string;
 	/**
-	 * Locale to be used by the library. See [Localization](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Localization) section for details.
+	 * Locale to be used by the library. See [Localization](https://www.tradingview.com/charting-library-docs/latest/configuration/Localization) section for details.
 	 *
 	 * ```javascript
 	 * locale: 'en',
@@ -5009,7 +5028,7 @@ export interface ChartingLibraryWidgetOptions {
 	 * If you want to customize fonts outside the chart, for example, within [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) or another widget,
 	 * you should use the {@link ChartingLibraryWidgetOptions.custom_css_url} property to provide custom CSS styles.
 	 *
-	 * Specify `custom_font_family` in [Widget Constructor](https://www.tradingview.com/charting-library-docs/latest/core_concepts/Widget-Constructor) as follows:
+	 * Specify `custom_font_family` in [Widget Constructor](https://www.tradingview.com/charting-library-docs/latest/configuration/Widget-Constructor) as follows:
 	 *
 	 * ```javascript
 	 * custom_font_family: "'Inconsolata', monospace",
@@ -7208,6 +7227,8 @@ export interface Execution extends CustomFields {
 	time: number;
 	/** Commission amount for executed trade */
 	commission?: number;
+	/** Fee amount for executed trade */
+	fee?: number;
 	/** Net amount for executed trade */
 	netAmount?: number;
 }
@@ -7241,6 +7262,37 @@ export interface ExecutionLineToolOverrides {
 	"linetoolexecution.textTransparency": number;
 	/** Default value: `undefined` */
 	"linetoolexecution.tooltip": string;
+}
+/**
+ * Describes a specific [exit level](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) (bracket) for an order or position.
+ * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+ */
+export interface ExitLevel {
+	/** Unique identifier for the exit level. */
+	id: string;
+	/** Quantity to close at this level. */
+	qty: number;
+	/** Take profit price. */
+	takeProfit?: number;
+	/** Stop loss price. */
+	stopLoss?: number;
+	/** Guaranteed stop loss price. */
+	guaranteedStop?: number;
+	/** Trailing stop value in pips. */
+	trailingStopPips?: number;
+	/**
+	 * Indicates whether the exit level already exists.
+	 * @default true
+	 */
+	isExisting?: boolean;
+}
+export interface ExitLevelTemplate extends ExitLevel {
+	tpPips?: number;
+	slPips?: number;
+	tpRiskInPercent?: number;
+	slRiskInPercent?: number;
+	tpParentPricePercent?: number;
+	slParentPricePercent?: number;
 }
 export interface ExportDataOptions {
 	/**
@@ -10646,7 +10698,7 @@ export interface IChartWidgetApi {
 	 */
 	onSymbolChanged(): ISubscription<(symbol: LibrarySymbolInfo) => void>;
 	/**
-	 * Get a subscription object for the chart resolution (interval) changing. This method also allows you to track whether the chart's [date range](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#date-range) is changed.
+	 * Get a subscription object for the chart resolution (interval) changing. This method also allows you to track whether the chart's [date range](https://www.tradingview.com/charting-library-docs/latest/resources/glossary#date-range) is changed.
 	 * The `timeframe` argument represents if a user clicks on the [time frame toolbar](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale#time-frame-toolbar) or changes the date range manually.
 	 * If `timeframe` is `undefined`, you can change a date range before data loading starts.
 	 * To do this, you can specify a time frame value or a certain date range.
@@ -11402,22 +11454,22 @@ export interface IChartWidgetApi {
 	 */
 	exportData(options?: Partial<ExportDataOptions>): Promise<ExportedData>;
 	/**
-	 * Enable or disable drag-to-export feature.
+	 * Enable or disable [drag-to-export feature](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Chart#enable-drag-to-export-feature).
 	 *
 	 * **Example**
 	 * ```javascript
 	 * // Enable drag-to-export, disable default chart drag to scroll
 	 * widget.activeChart().setDragExportEnabled(true);
 	 * widget.subscribe('dragstart', (params) => {
-	 * 		// create a HTML element for drag image
-	 * 		const dragImage = createDragImage();
-	 * 		// set drag image
-	 *      params.setDragImage(dragImage, 0, 0);
-	 *      const exportData = widget.activeChart().exportData();
-	 *  	// transform export data to csv
-	 * 		const csvData = transformExportDataToCsv(exportData);
-	 *      params.setData('text/plain', csvData);
-	 *  });
+	 *     // create a HTML element for drag image
+	 *     const dragImage = createDragImage();
+	 *     // set drag image
+	 *     params.setDragImage(dragImage, 0, 0);
+	 *     const exportData = widget.activeChart().exportData();
+	 *     // transform export data to csv
+	 *     const csvData = transformExportDataToCsv(exportData);
+	 *     params.setData('text/plain', csvData);
+	 * });
 	 * ```
 	 * To implement drag-to-export, you need to handle the `dragstart` event in your application and set the data to the `dataTransfer` object.
 	 * @param enabled `true` to enable drag-to-export, `false` to disable.
@@ -11487,6 +11539,19 @@ export interface IChartWidgetApi {
 	 * @param  {number} unixTime - date timestamp
 	 */
 	endOfPeriodToBarTime(unixTime: number): number;
+	/**
+	 * Apply overrides to a specific chart instance without reloading. See also {@link ChartingLibraryWidgetOptions.overrides}.
+	 *
+	 * **Example**
+	 * ```javascript
+	 * widget.chart(0).applyOverrides({"paneProperties.legendProperties.showLegend": false});
+	 * ```
+	 *
+	 * If you want to apply overrides to all charts, use {@link IChartingLibraryWidget.applyOverrides} instead.
+	 *
+	 * @param overrides An object of overrides to apply to the chart.
+	 */
+	applyOverrides(props: object): void;
 	/**
 	 * Get an API object for interacting with the timescale.
 	 *
@@ -11593,7 +11658,7 @@ export interface IChartWidgetApi {
 }
 /**
  * The main interface for interacting with the library, returned by {@link ChartingLibraryWidgetConstructor}.
- * For more information, refer to the [Widget methods](https://www.tradingview.com/charting-library-docs/latest/core_concepts/widget-methods) article.
+ * For more information, refer to the [Widget methods](https://www.tradingview.com/charting-library-docs/latest/configuration/widget-methods) article.
  */
 export interface IChartingLibraryWidget {
 	/**
@@ -11619,7 +11684,7 @@ export interface IChartingLibraryWidget {
 	 * To do this, pass a keyboard shortcut and a callback function as parameters.
 	 * The library invokes the callback when the `shortCut` keys are pressed.
 	 *
-	 * Note that the `shortCut` argument depends on the key types. Refer to the [Manage shortcuts](https://www.tradingview.com/charting-library-docs/latest/getting_started/Shortcuts#manage-shortcuts) section for more information and examples.
+	 * Note that the `shortCut` argument depends on the key types. Refer to the [Manage shortcuts](https://www.tradingview.com/charting-library-docs/latest/configuration/Shortcuts#manage-shortcuts) section for more information and examples.
 	 *
 	 * @param shortCut A number, a string, or an array of numbers and strings.
 	 * @param callback A function that is called when the `shortCut` keys are pressed.
@@ -11941,9 +12006,16 @@ export interface IChartingLibraryWidget {
 	 */
 	addCustomCSSFile(url: string): void;
 	/**
-	 * Apply overrides to the chart without reloading. See also {@link ChartingLibraryWidgetOptions.overrides}.
+	 * Apply overrides to all charts currently in the widget without reloading. See also {@link ChartingLibraryWidgetOptions.overrides}.
 	 *
-	 * @param overrides An object of overrides to apply to the chart.
+	 * **Example**
+	 * ```javascript
+	 * widget.applyOverrides({"paneProperties.legendProperties.showLegend": false});
+	 * ```
+	 *
+	 * If you want to apply overrides to a specific chart only, use {@link IChartWidgetApi.applyOverrides} instead.
+	 *
+	 * @param overrides An object of overrides to apply to the chart(s).
 	 */
 	applyOverrides<TOverrides extends Partial<ChartPropertiesOverrides>>(overrides: TOverrides): void;
 	/**
@@ -12601,6 +12673,19 @@ export interface IDatafeedChartApi {
 	 */
 	searchSymbols(userInput: string, exchange: string, symbolType: string, onResult: SearchSymbolsCallback, searchSource?: SearchInitiationPoint): void;
 	/**
+	 * Provides a list of symbols that match the user's search query.
+	 *
+	 * Optional. If defined, the library uses this method instead of the non-paginated `searchSymbols`.
+	 *
+	 * Use the `start` property from `options` to determine which "page" of results to return.
+	 * For example, if the first call returns 50 results with 10 remaining, the second call will have `start` set to `50`.
+	 * When no more results are available on the server, set the `symbolsRemaining` parameter of the callback to `0`.
+	 *
+	 * @param options Object containing the user input, exchange, symbol type, and search source ({@link SearchInitiationPoint}).
+	 * @param onResult Callback function that returns an array of results ({@link SearchSymbolResultItem}) or an empty array if no symbols are found.
+	 */
+	searchSymbolsPaginated?(options: SymbolSearchPaginatedOptions, onResult: SearchSymbolsPaginatedCallback): void;
+	/**
 	 * The library will call this function when it needs to get SymbolInfo by symbol name.
 	 *
 	 * @param symbolName Symbol name or `ticker`
@@ -13064,7 +13149,7 @@ export interface IMenuItem {
 	/** Menu item type */
 	readonly type: MenuItemType;
 	/**
-	 * An unique ID of an action item. Could be used to distinguish actions between each other.
+	 * A unique ID of an action item.
 	 */
 	readonly id: string;
 }
@@ -14074,6 +14159,10 @@ export interface ISeriesApi {
 	chartStyleProperties<T extends ChartStyle>(chartStyle: T): SeriesPreferencesMap[T];
 	/** Sets properties for a specific chart style */
 	setChartStyleProperties<T extends ChartStyle>(chartStyle: T, newPrefs: DeepPartial<SeriesPreferencesMap[T]>): void;
+	/**
+	 * Returns a watched value representing the current series status.
+	 */
+	statusVW(): IWatchedValueReadonly<Status>;
 }
 /**
  * Properties of the {@link ChartingLibraryWidgetOptions.settings_adapter} property that allows saving [user settings](https://www.tradingview.com/charting-library-docs/latest/saving_loading/user-settings) to your preferred storage, including server-side.
@@ -14517,9 +14606,9 @@ export interface ITimeScaleApi {
 	rightOffsetChanged(): ISubscription<(rightOffset: number) => void>;
 	/** To set a new right offset */
 	setRightOffset(offset: number): void;
-	/** Sets a new [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). You can call {@link barSpacing} to get the current value. */
+	/** Sets a new [bar spacing](https://www.tradingview.com/charting-library-docs/latest/resources/glossary#bar-spacing). You can call {@link barSpacing} to get the current value. */
 	setBarSpacing(newBarSpacing: number): void;
-	/** Returns the current [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). */
+	/** Returns the current [bar spacing](https://www.tradingview.com/charting-library-docs/latest/resources/glossary#bar-spacing). */
 	barSpacing(): number;
 	/** Returns the current right offset */
 	rightOffset(): number;
@@ -14908,6 +14997,11 @@ export interface IndividualPositionBase {
 	price: number;
 	/** Determines whether individual position can be closed */
 	canBeClosed?: boolean;
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the position.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevel[];
 }
 /**
  * Override properties for the Infoline drawing tool.
@@ -15336,6 +15430,16 @@ export interface LeastSquaresMovingAverageIndicatorOverrides {
 	/** Default value: `#2196F3` */
 	"plot.color": string;
 	[key: string]: StudyOverrideValueType;
+}
+export interface LevelsFormatterProperties {
+	base: [
+		priceProperty: string
+	];
+	withLevels: [
+		priceProperty: string,
+		exitLevels: string,
+		qty: string
+	];
 }
 /**
  * An API object representing leverage info for an order.
@@ -17123,6 +17227,11 @@ export interface OrderRule {
  * This information is not sufficient to place an order.
  */
 export interface OrderTemplate extends OrderTemplateBase {
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the order template.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevelTemplate[];
 }
 export interface OrderTemplateBase {
 	/** Symbol identifier */
@@ -18549,6 +18658,11 @@ export interface PlacedOrderBase {
 	stopType?: StopType;
 	/** Take profit price (double). Available when Brackets are enabled */
 	takeProfit?: number;
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the placed order.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevel[];
 	/** Order duration */
 	duration?: OrderDuration;
 	/**
@@ -18654,6 +18768,11 @@ export interface PositionBase {
 	updateTime?: number;
 	/** Message describing the state of the position */
 	message?: OrderOrPositionMessage;
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the position.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevel[];
 }
 export interface PositionDialogOptions extends TradingDialogOptions {
 }
@@ -18785,6 +18904,11 @@ export interface PreOrder extends OrderTemplateBase {
 	 * It is set to `true`, if the order closes a position.
 	 */
 	isClose?: boolean;
+	/**
+	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the order.
+	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
+	 */
+	exitLevels?: ExitLevel[];
 }
 /**
  * Override properties for the Prediction drawing tool.
@@ -20002,7 +20126,7 @@ export interface ScriptContext {
 }
 /**
  * [Symbol Search](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Symbol-Search) result item.
- * Pass the resulting array of symbols as a parameter to {@link SearchSymbolsCallback} of the [`searchSymbols`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/datafeed-api/required-methods#searchsymbols) method.
+ * Pass the resulting array to the callback for [`searchSymbols`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/datafeed-api/required-methods#searchsymbols) or [`searchSymbolsPaginated`](https://www.tradingview.com/charting-library-docs/latest/connecting_data/datafeed-api/additional-methods#searchsymbolspaginated).
  *
  * @example
  * ```
@@ -20218,6 +20342,13 @@ export interface SingleBrokerMetaInfo {
 	 * Broker Configuration Flags
 	 */
 	configFlags: BrokerConfigFlags;
+	/**
+	 * A traded group is a combination of elements that are drawn on the chart for single position or order.
+	 *
+	 * It represents a position or order along with its brackets, plus all the UI controls—such as TP/SL buttons,
+	 * various lines, and dots—that indicate where the position's brackets are located and what is currently selected.
+	 */
+	tradedGroupConfig?: TradedGroupConfig;
 	/**
 	 * Optional field. You can use it if you have custom fields in orders or positions that should be taken into account when showing notifications.
 	 *
@@ -20465,6 +20596,7 @@ export interface StandardFormattersDependenciesMapping {
 	[StandardFormatterName.FormatPriceForexSup]: [
 		priceProperty: string
 	];
+	[StandardFormatterName.FormatExitLevels]: LevelsFormatterProperties[keyof LevelsFormatterProperties];
 	[StandardFormatterName.FormatPriceInCurrency]: [
 		priceProperty: string,
 		currencyProperty: string
@@ -20705,6 +20837,14 @@ export interface StudyBandBackgroundPreferences {
 	/** Whether the background area should be filled with the `backgroundColor` */
 	fillBackground: boolean;
 }
+export interface StudyBandDefaultStyle extends Omit<StudyBandStyle, "color"> {
+	/**
+	 * Color.
+	 *
+	 * @example '#ffffff'.
+	 */
+	color: string | null;
+}
 /**
  * A description of a study band.
  */
@@ -20808,6 +20948,16 @@ export interface StudyCandleWickColorerPlotInfo extends StudyPalettedPlotInfo, S
 	/** @inheritDoc */
 	readonly type: StudyPlotType.CandleWickColorer;
 }
+export interface StudyCharsPlotDefaultPreferences extends Omit<StudyCharsPlotPreferences, "color" | "textColor"> {
+	/**
+	 * Color.
+	 */
+	color: string | null;
+	/**
+	 * Text color.
+	 */
+	textColor: string | null;
+}
 /**
  * A description of a study characters plot.
  */
@@ -20858,7 +21008,7 @@ export interface StudyDefaults {
 	/** Defaults for the bands background */
 	bandsBackground: StudyBandBackgroundPreferences;
 	/** Defaults for the bands */
-	bands: readonly Required<StudyBandStyle>[];
+	bands: readonly Required<StudyBandDefaultStyle>[];
 	/** Defaults for the filled area styles */
 	filledAreasStyle: MappedObject<StudyFilledAreaStyle>;
 	/** Defaults for the study inputs */
@@ -20868,9 +21018,9 @@ export interface StudyDefaults {
 	/** Default for the study precision */
 	precision: number | string;
 	/** Defaults for the study styles */
-	styles: MappedObject<StudyPlotPreferences>;
+	styles: MappedObject<StudyPlotDefaultPreferences>;
 	/** Defaults for the OHLC plots */
-	ohlcPlots: MappedObject<StudyOhlcPlotPreferences>;
+	ohlcPlots: MappedObject<StudyOhlcPlotDefaultPreferences>;
 	/** Defaults for the study graphics */
 	graphics: StudyGraphicsDefaults;
 }
@@ -21006,7 +21156,7 @@ export interface StudyFilledAreaInfo {
  */
 export interface StudyFilledAreaSolidColorStyle extends StudyFilledAreaStyleBase {
 	/** Solid Fill type */
-	fillType: undefined;
+	fillType?: undefined;
 	/**
 	 * Color.
 	 *
@@ -21055,6 +21205,8 @@ export interface StudyInputBaseInfo {
 	readonly isHidden?: boolean;
 	/** Is the input visible */
 	readonly visible?: string;
+	/** Is the input always visible in the legend, even when the user hides indicator inputs in the legend */
+	readonly isAlwaysShownInLegend?: boolean;
 	/** An array of plot ids, upon the hiding of which, this input should also be hidden within the legend */
 	readonly hideWhenPlotsHidden?: string[];
 	/** Whether the input should be rendered based on user inputs */
@@ -21099,6 +21251,12 @@ export interface StudyInputValueItem {
 }
 export interface StudyInputsSimple {
 	[inputId: string]: StudyInputValue;
+}
+export interface StudyLinePlotDefaultPreferences extends Omit<StudyLinePlotPreferences, "color"> {
+	/**
+	 * Line color.
+	 */
+	color: string | null;
 }
 /**
  * A description of a study line plot.
@@ -21178,6 +21336,10 @@ export interface StudyOhlcPlotCandlesStylePreferences extends StudyOhlcPlotBaseS
 	wickColor: string;
 	/** Candle border color */
 	borderColor: string;
+}
+export interface StudyOhlcPlotDefaultPreferences extends Omit<StudyOhlcPlotPreferences, "color"> {
+	/** OHLC plot color */
+	color: string | null;
 }
 /**
  * A description of an OHLC plot.
@@ -26473,6 +26635,16 @@ export interface StudySessionInputInfo extends StudyInputBaseInfo {
 	/** Options for Input Titles */
 	readonly optionsTitles?: StudyInputOptionsTitles;
 }
+export interface StudyShapesPlotDefaultPreferences extends Omit<StudyShapesPlotPreferences, "color" | "textColor"> {
+	/**
+	 * Color.
+	 */
+	color: string | null;
+	/**
+	 * Text color.
+	 */
+	textColor: string | null;
+}
 /**
  * A description of a study shapes plot.
  */
@@ -26547,7 +26719,7 @@ export interface StudyStyleInfoDefaults {
 	/**
 	 * Default study bands style preferences.
 	 */
-	bands?: readonly StudyBandStyle[];
+	bands?: readonly StudyBandDefaultStyle[];
 	/**
 	 * Default study filled areas style preferences.
 	 */
@@ -26559,11 +26731,11 @@ export interface StudyStyleInfoDefaults {
 	/**
 	 * Default study styles.
 	 */
-	styles?: Record<string, StudyPlotPreferences | undefined>;
+	styles?: Record<string, StudyPlotDefaultPreferences | undefined>;
 	/**
 	 * Default study OHLC plot style preferences.
 	 */
-	ohlcPlots?: Record<string, StudyOhlcPlotPreferences | undefined>;
+	ohlcPlots?: Record<string, StudyOhlcPlotDefaultPreferences | undefined>;
 	/**
 	 * Default study graphics style preferences.
 	 */
@@ -27190,6 +27362,31 @@ export interface SymbolSearchCompleteData {
 	 */
 	name: string;
 }
+/**
+ * Options that define paginated [Symbol Search](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Symbol-Search) requests.
+ */
+export interface SymbolSearchPaginatedOptions {
+	/**
+	 * The requested exchange. An empty value means no filter is specified.
+	 */
+	exchange: string;
+	/**
+	 * Text entered by the user in the Symbol Search field.
+	 */
+	userInput: string;
+	/**
+	 * The number of results to skip, representing how many have already been returned for the same input.
+	 */
+	start?: number;
+	/**
+	 * Type of symbol. An empty value means no filter is specified.
+	 */
+	symbolType: string;
+	/**
+	 * The source of the search ({@link SearchInitiationPoint}).
+	 */
+	searchSource?: SearchInitiationPoint;
+}
 export interface SymbolSpecificTradingOptions {
 	/** Array of strings with valid duration values. You can check that in Order Ticket. */
 	allowedDurations?: string[];
@@ -27234,17 +27431,33 @@ export interface SymbolSpecificTradingOptions {
 	 */
 	warningMessage?: string;
 	/**
-	 * Whether the integration supports the modification of existing position brackets.
+	 * Whether existing position brackets modification is supported for a symbol.
 	 */
 	supportModifyPositionBrackets?: boolean;
 	/**
-	 * Whether the integration supports the modification of existing order brackets.
+	 * Whether existing order brackets modification is supported for a symbol.
 	 */
 	supportModifyOrderBrackets?: boolean;
 	/**
 	 * Whether the risk controls and order info should be shown.
 	 */
 	supportRiskControlsAndInfo?: boolean;
+	/**
+	 * Whether Stop Loss bracket is supported for a symbol.
+	 */
+	supportStopLoss?: boolean;
+	/**
+	 * Whether Trailing Stop bracket is supported for a symbol.
+	 */
+	supportTrailingStop?: boolean;
+	/**
+	 * Whether Guaranteed Stop bracket is supported for a symbol.
+	 */
+	supportGuaranteedStop?: boolean;
+	/**
+	 * Whether crypto exchange order placement mode is supported for a symbol.
+	 */
+	supportCryptoExchange?: boolean;
 }
 export interface SymbolValueFormatterFormatOptions extends NumberFormatterFormatOptions {
 	/** Add plus sign to result string */
@@ -27484,7 +27697,7 @@ export interface TimePoint {
  */
 export interface TimeScaleOptions {
 	/**
-	 * Minimum allowed [bar spacing](https://www.tradingview.com/charting-library-docs/latest/getting_started/glossary#bar-spacing). Should be greater than 0.
+	 * Minimum allowed [bar spacing](https://www.tradingview.com/charting-library-docs/latest/resources/glossary#bar-spacing). Should be greater than 0.
 	 *
 	 * ```javascript
 	 * time_scale: {
@@ -27598,6 +27811,15 @@ export interface TradeContext {
 	/** Previous value */
 	last: number;
 }
+export interface TradedGroupConfig {
+	/**
+	 * Enables the adaptive layout for trading buttons (TP/SL, P&L) on position and order lines.
+	 * When `true` (default), these buttons are automatically hidden on narrow viewports to optimize the layout.
+	 * When `false`, these buttons will always be visible, regardless of screen width.
+	 * @default true
+	 */
+	supportAdaptiveLayout: boolean;
+}
 /**
  * Represents the structure of {@link TradingTerminalWidgetOptions.trading_customization}.
  */
@@ -27637,6 +27859,10 @@ export interface TradingDialogOptions {
 	 *
 	 */
 	customFields?: TradingDialogCustomField[];
+	/**
+	 * Specifies the maximum number of [exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) (brackets) that can be attached to a single parent order or position.
+	 */
+	maxExitLevelsCount?: number;
 }
 export interface TradingQuotes {
 	/** Trade */
@@ -27661,6 +27887,8 @@ export interface TradingQuotes {
 	isHardToBorrow?: boolean;
 	/** Whether quotes are can not be shorted */
 	isNotShortable?: boolean;
+	/** Last trade size */
+	lastSize?: number;
 }
 export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidgetOptions, "enabled_features" | "disabled_features" | "favorites"> {
 	/**
@@ -29547,8 +29775,13 @@ export type ChartingLibraryFeatureset =
  */
 "long_press_floating_tooltip" | 
 /**
+ * Enables dynamic coloring of bar change values in the legend based on their value (positive, negative, or zero). Applies only to non-OHLC chart types.
+ * @default false
+ */
+"legend_bar_change_colors_based_on_value" | 
+/**
  * Enables chart drag event handling.
- * See {@link IChartWidgetApi.setDragExportEnabled} and {@link SubscribeEventsMap.dragstart} for more implementation details.
+ * See [Enable drag-to-export feature](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Chart#enable-drag-to-export-feature) for more implementation details.
  * @default false
  */
 "chart_drag_export" | 
@@ -29615,7 +29848,7 @@ export type CustomTableFormatElementFunction<T extends TableFormatterInputValues
  * Identifier for a custom timezone (string).
  */
 export type CustomTimezoneId = Nominal<"CustomTimezoneId", string>;
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Kabul" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Halifax" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Kabul" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 /**
  * Custom translation function
  * @param  {string} originalText - original raw text taking into account pluralization rules
@@ -29864,6 +30097,7 @@ export type ResolveCallback = (symbolInfo: LibrarySymbolInfo) => void;
 /** RSS news feed. */
 export type RssNewsFeedItem = RssNewsFeedInfo | RssNewsFeedInfo[];
 export type SearchSymbolsCallback = (items: SearchSymbolResultItem[]) => void;
+export type SearchSymbolsPaginatedCallback = (items: SearchSymbolResultItem[], symbolsRemaining: number) => void;
 /** An event related to the series. Currently the only possible value for this argument is `price_scale_changed` */
 export type SeriesEventType = "price_scale_changed";
 export type SeriesFormat = "price" | "volume";
@@ -29904,6 +30138,7 @@ export type StudyMetaInfo = DeepWriteable<RawStudyMetaInformation> & {
 };
 export type StudyOhlcPlotPreferences = StudyOhlcPlotBarsStylePreferences | StudyOhlcPlotCandlesStylePreferences;
 export type StudyOverrideValueType = string | number | boolean;
+export type StudyPlotDefaultPreferences = StudyLinePlotDefaultPreferences | StudyShapesPlotDefaultPreferences | StudyCharsPlotDefaultPreferences | StudyArrowsPlotPreferences;
 export type StudyPlotDisplayMode = Nominal<number, "StudyPlotDisplayTarget"> | StudyPlotDisplayTarget;
 export type StudyPlotInfo = StudyPlotInformation;
 /**
@@ -30076,6 +30311,16 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  */
 "show_symbol_logo_in_account_manager" | 
 /**
+ * Display the symbol's logo in the close position dialog. This requires that `show_symbol_logos` is enabled.
+ * @default true
+ */
+"show_symbol_logo_in_close_position_dialog" | 
+/**
+ * Display the symbol's logo in the cancel order dialog. This requires that `show_symbol_logos` is enabled.
+ * @default true
+ */
+"show_symbol_logo_in_cancel_order_dialog" | 
+/**
  * Display UI (buttons and context menu options) for creating sections within the watchlist.
  * @default true
  */
@@ -30110,7 +30355,12 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  * Enables cross-tab synchronization for [watchlists](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List).
  * @default true
  */
-"watchlist_cross_tab_sync";
+"watchlist_cross_tab_sync" | 
+/**
+ * Enables the DOM widget's static mode.
+ * @default false
+ */
+"static_dom";
 export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c" | "hlc";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;

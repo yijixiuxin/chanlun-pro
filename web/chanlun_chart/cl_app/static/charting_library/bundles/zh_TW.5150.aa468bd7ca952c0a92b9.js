@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5150],{26663:e=>{e.exports={en:["Add column to right"],zh_TW:["在右側增加列"]}},16989:e=>{e.exports={en:["Add row below"],zh_TW:["在下方增加行"]}},91227:e=>{e.exports={en:["Remove column"],zh_TW:["刪除攔"]}},15398:e=>{e.exports={en:["Remove row"],zh_TW:["刪除行"]}}}]);
