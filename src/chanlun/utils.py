@@ -183,5 +183,7 @@ def send_fs_msg(market, title, contents: Union[str, list]):
 
 if __name__ == "__main__":
     send_fs_msg(
-        "us", "这里是选股的测试消息", ["运行完成", "选出300只股票", "用时1000小时"]
+        "futures",
+        "这里是选股的测试消息",
+        ["运行完成", "选出300只股票", "用时1000小时"],
     )

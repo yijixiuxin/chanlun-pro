@@ -417,14 +417,14 @@ class ExchangeBinanceSpot(Exchange):
 if __name__ == "__main__":
     ex = ExchangeBinanceSpot()
 
-    stocks = ex.all_stocks()
-    print(len(stocks))
-    stocks = sorted(stocks, key=lambda x: x["precision"], reverse=True)
-    for _s in stocks[0:10]:
-        print(_s)
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
+    # stocks = sorted(stocks, key=lambda x: x["precision"], reverse=True)
+    # for _s in stocks[0:10]:
+    #     print(_s)
 
-    # klines = ex.klines("BTC/USDT", "5m")
-    # print(klines)
+    klines = ex.klines("BTC/USDT", "5m")
+    print(klines)
 
     # ticks = ex.ticks(["BTC/USDT"])
     # for _c, _t in ticks.items():
