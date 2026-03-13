@@ -2,18 +2,27 @@ version = 1
 revision = 2
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
-    "python_full_version >= '3.14' and sys_platform == 'darwin'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin'",
-    "python_full_version < '3.12' and sys_platform == 'darwin'",
-    "python_full_version >= '3.14' and sys_platform == 'linux'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux'",
-    "python_full_version < '3.12' and sys_platform == 'linux'",
-    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
-    "python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version < '3.12' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.12' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.12' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 
 [[package]]
@@ -358,7 +367,7 @@ name = "build"
 version = "1.4.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
-    { name = "colorama", marker = "os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux'" },
+    { name = "colorama", marker = "(os_name == 'nt' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (os_name == 'nt' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux')" },
     { name = "packaging" },
     { name = "pyproject-hooks" },
 ]
@@ -507,10 +516,13 @@ dependencies = [
     { name = "scipy" },
     { name = "setuptools" },
     { name = "sqlalchemy" },
-    { name = "ta-lib", version = "0.6.8", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl" }, marker = "sys_platform == 'darwin'" },
-    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl" }, marker = "sys_platform == 'linux'" },
-    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "ta-lib", version = "0.6.8", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" }, marker = "platform_machine == 'amd64' and sys_platform == 'win32'" },
+    { name = "ta-lib", version = "0.6.8", source = { path = "package/ta_lib-0.6.8-cp311-cp311-win_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'win32'" },
     { name = "tenacity" },
     { name = "tornado" },
     { name = "tqdm" },
@@ -556,10 +568,13 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "setuptools", specifier = ">=80.9.0" },
     { name = "sqlalchemy", specifier = ">=2.0.41" },
-    { name = "ta-lib", marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ta-lib", marker = "sys_platform == 'darwin'", path = "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl" },
-    { name = "ta-lib", marker = "sys_platform == 'linux'", path = "package/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl" },
-    { name = "ta-lib", marker = "sys_platform == 'win32'", path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" },
+    { name = "ta-lib", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "ta-lib", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", path = "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", path = "package/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'amd64' and sys_platform == 'win32'", path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'arm64' and sys_platform == 'win32'", path = "package/ta_lib-0.6.8-cp311-cp311-win_arm64.whl" },
     { name = "tenacity", specifier = ">=9.1.2" },
     { name = "tornado", specifier = ">=6.5.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
@@ -1369,10 +1384,13 @@ name = "ipython"
 version = "9.10.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 resolution-markers = [
-    "python_full_version < '3.12' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'darwin'",
-    "python_full_version < '3.12' and sys_platform == 'linux'",
-    "python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "(python_full_version < '3.12' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.12' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.12' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
     { name = "colorama", marker = "python_full_version < '3.12' and sys_platform == 'win32'" },
@@ -1397,14 +1415,20 @@ name = "ipython"
 version = "9.11.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.14' and sys_platform == 'darwin'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin'",
-    "python_full_version >= '3.14' and sys_platform == 'linux'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux'",
-    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
     { name = "colorama", marker = "python_full_version >= '3.12' and sys_platform == 'win32'" },
@@ -2289,7 +2313,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
-    { name = "ptyprocess", marker = "sys_platform != 'win32'" },
+    { name = "ptyprocess", marker = "(platform_machine != 'amd64' and platform_machine != 'arm64') or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f" }
 wheels = [
@@ -3473,28 +3497,89 @@ name = "ta-lib"
 version = "0.6.8"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
-    "python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "(python_full_version >= '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
+    "(python_full_version < '3.12' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.12' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.12' and platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 dependencies = [
-    { name = "build", marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "numpy", marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "build", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
+    { name = "numpy", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/ba/ec/27114f6255e6723783d4c4366810620a4347375ebf66f8aea86d9dd58ffd/ta_lib-0.6.8.tar.gz", hash = "sha256:3a9195299df9d7d2a6e9d16bebd6b706b0ea99e4b871864c4b034c2577e21a77" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/2f/8b/f0da03cb80bd7f92a362ef86b64c6aede5485cb4b1a5ef1a669a28e974f1/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:f823d0f6b04a6797fbe253bcf91666e71a6b63c290683819650c68b2468ebe64" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/33/7a/35dcba621814e0c94f222791255bf0c90bb57db870491e375c3cc748ea50/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:30de46b55873b51be945a09edf486afcc190dc47eff9fb5d2b12c9f7e3d743da" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/52/4a/79dc81240708bd6ab5489b73b6fce52a49b90f16ca80326155c106a0cca4/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:490e19a45cd3cdd6dfe6b46019f7ffe1103500750b41b51996a870e7c1c5f066" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/3c/3b/49f5524798ab407abc6125047de031bfe3dac41218ad99b3932185743719/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a395524b0fafa10446d11e11acb4742e919523de58aac03b791f26d7a783bcf0" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/89/de/ebc78aa4b391339443932cc3ef0b4fc43e90587826bfe4526c242c602f3a/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:11a373c9308eae3bac2d56d37017f9ab63968cc074a8b95be879aae3d13133aa" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/59/ba/728ddf00c372fb188a85114fdb22b4ae8edee599ba1d4e18d14bcc1b98b4/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:282e49c766b5952dd8796f77d7ed3ae412cdd88e31f845b1fbbb86ac6cb7bebf" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/b6/64/fc0c3f67af28dc46f99cf9f0996c2b4a3bfc69f8d7a97c6d80d8d8664bcc/ta_lib-0.6.8-cp311-cp311-win32.whl", hash = "sha256:0a08a29690a922ba92a6cf42902a8a93c6fbda4cfed62c3c5b0471560ef60135" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/2f/83/dcd76d7253a2d159d5e58821aea917fb7b4671eb07a71d0d3c770d7077d3/ta_lib-0.6.8-cp311-cp311-win_amd64.whl", hash = "sha256:c01809fb602e2fefc8cbfb3b603bb59d2a2eaee8708410896d48a835ba00e7c5" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/5b/9b/8e997dfbd94e30c0dff29b914cae832fbf7d573933fd9faf7fcdd7247608/ta_lib-0.6.8-cp311-cp311-win_arm64.whl", hash = "sha256:a89734a7bcb2ea3b6fd600a74d6fbcdb8d3fa3f7917dbd978e039710b5509c9c" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/18/2b/72b8b180410f1f0e76187fe1b81d4f2df26820749245ffa2d2d2fbaa82de/ta_lib-0.6.8-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:128ec92e6a0e9ff7a38edef80e3b74f15bb2ed1c531d5d3252c8dca22677651b" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/4c/9a/0ec4bbc961c9490bf59b765e18fc2c986b5a3feeda0a8537365145f1454f/ta_lib-0.6.8-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:66a8e1c1e899d15a2f7510e43527fba22d895e7f6058d027db3e3837d88a69de" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/5f/50/fbb0b41bf9e771ffacf212b5ff2bacb66410bcbe162e0382ff871603dd0f/ta_lib-0.6.8-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5929c83bd8cb7572d1c17ffdbf0eac235bf3c4d53cde1950cf89d944eaf97525" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/59/79/7513f1c39a2f6cd4f35651940f3b71a0ae9d13c04fe9235a57bdeeec621c/ta_lib-0.6.8-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:094677b279a59c3f01c3aca8a889fda3523fd641a3805f69a2d642121b72e55e" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/06/45/0ca307d5c9306b47c40b889aeed3b23a982a661d66450232863a54904175/ta_lib-0.6.8-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:e920c272cd9e70a6b10eae9203cc96845da142e1dd4482de9343dda3738a9862" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/79/ca/0df51f6c065f5716371929e9d991ee16909ab3eb8b0c16dab47b05a4ece6/ta_lib-0.6.8-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:d556d1c256b3700b60b6b061664a667b2e49d599c2772d46a9f2348f2dc4ab5c" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/f6/df/c34a82164bb86585075dfe6a77051a1e45d8a2e57cbaabc7c74a5ed760d4/ta_lib-0.6.8-cp312-cp312-win32.whl", hash = "sha256:2b369cabb48485fbf444beb3f5a878075367b99c2c86db2f796afeabebc749e0" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/73/8f/adbbbd5849284c593675c0deb34ef56ce55c7e307663e7c28a598a423892/ta_lib-0.6.8-cp312-cp312-win_amd64.whl", hash = "sha256:e781eeb65b2007af553389c8a7fb7bc53cb856118b0fcffb2c26b0f49561c686" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/22/a8/979d6db422a26e9417c833e49a077e12a9c1d3aa4a690dff874cde557c34/ta_lib-0.6.8-cp312-cp312-win_arm64.whl", hash = "sha256:fa7e9f2e80a9535f9692e113d02b4268b5f88675a730d1b0ef0abeb74c9a4e80" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/e2/0f/0a1e6a3fff0df62d53ed4c71b5b91da6dfe2670991c94ff0a2116eb79773/ta_lib-0.6.8-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:6cf029b886cfb28a2701503b7c602b811f2daa45276bd6459b0c71e051deb497" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/53/ee/036845c31209173f57f41e3a841e24c70e587fe7256e79642398154d8fb6/ta_lib-0.6.8-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:ddf7453acd03b966624ebefdb38169b5bbbeea1a1a58c90b095667247f9de327" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/93/c8/8b6bc9f29ea361fcbb1e8fe895f9c155b51fe73b9000088f883fa5ac9b56/ta_lib-0.6.8-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:3c32fc0f546ceecc47dd45f33d72ab4a1e341b80d9081c2d77b100add5d49104" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/47/4b/a46be776d1fc45d232c959aab9458182e937cc66829b820077dfd3950530/ta_lib-0.6.8-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:2bf714333788bf5175f2512b86d2ed129e89ae6f6c2923e8a297a1e3395e13b5" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/c3/b3/0f8edd802d5026a99f6bd6a7307b017a714f45e3de04f94e9b7d76665e89/ta_lib-0.6.8-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:b3845e4c2fa32963fb7f384ebbaa2761b0e6b96145239bf80e956d4aff4b071c" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/1f/58/078ccdee5286015dfa1864b6469f639ce6b613abbea17b167bb802a4a8b3/ta_lib-0.6.8-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:4795e93d130c9b7fb661f0cead49752ae6a980437df74b99d5918026c212443e" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/69/b5/8d50404307dd429aeb6d222dfbf02dca2f60e937f13e81a491a681db1a63/ta_lib-0.6.8-cp313-cp313-win32.whl", hash = "sha256:691a62926ba09f2653ec0908554b3635497efb7751c5d46b916cd1ebbb1d3c25" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/1b/90/b0bdf9f3e1e88ea4052f4cc1476c86b40f6dbe3f3d201e310e93471a593b/ta_lib-0.6.8-cp313-cp313-win_amd64.whl", hash = "sha256:34e3b12407ddf99f6627435aa8a165f094339bb7dc33de92e1d7472e9f237304" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/c3/fe/03d58ea7997d9bef0e1b10e3cf160c016dd890b66413c292051e9c9b257a/ta_lib-0.6.8-cp313-cp313-win_arm64.whl", hash = "sha256:0ccd478ff5735831bf2a61d653466bfda8afadc26ad58ca6b1edb9e7521cc674" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/db/61/c47098dfb28c468d29fccfbb2ba35a10001d37dd51c4200a4e50c788ede6/ta_lib-0.6.8-cp314-cp314-macosx_13_0_x86_64.whl", hash = "sha256:36b2a516fce57309840f5ef3fa2fd0c4449293fc72536a0400d2e1e26b414da8" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/6d/e9/a30e770902c1df915a94a43e652f432e7647b710c0e1120751c05805d4bc/ta_lib-0.6.8-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:7993164e8e9f78ec31d38c47850ca6ba5451788b5b49a8a2dbb3322b36b5693b" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/9b/2f/8961a9e7434a2d10b8f625bb4d5c049484a898e76e9c5e40398da410aec0/ta_lib-0.6.8-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:613cf06313331f49dd7b85a5a24fbddb1156c9723b6921a231906241726e5aee" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/75/c1/352bc32394549ac9886829a24070a507a30abf45265135b60ee77354f7da/ta_lib-0.6.8-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ce2bc1ea01200b6d8130ab917296d05d77a1a571ec6c1ee25cfca6d55cd5db4a" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/e4/b3/7bde1867df3bf015f48d510d2ba7491359ce13c79ecf5127acae3d308272/ta_lib-0.6.8-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:a63a52221f8c73f82f4e00493351d987f594931198589287aee96f8da673cfd5" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/82/13/8d389f60bb085b6991764d7535f066dd6009fc4f5a45dbd26dc9eaaa3c0a/ta_lib-0.6.8-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:559326d8f3d904cd4aa61f6a392d5626f35eec6a9f6cc83bcddb0abf88c40516" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/82/bc/d2e4c2b752baaee592095feb69514764b004fe53af7cc893ba9c3854cc30/ta_lib-0.6.8-cp314-cp314-win32.whl", hash = "sha256:f5b6174bf4bf9152e368561dff410203c6921e4dd2afbcda3283a95957158112" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/40/98/0f2755b5bde81d7b1eaf96b4204f18fabea38b0efc869cb0ea05d57e0afc/ta_lib-0.6.8-cp314-cp314-win_amd64.whl", hash = "sha256:1fb4028437201e19014e4e374272b739867c8a3eb655da46675ef4c2ff14b616" },
+    { url = "https://mirrors.aliyun.com/pypi/packages/0b/4c/d341020377f8b183405bdf3c5717fc2ca04a8d33b5c59b2348377ee459d9/ta_lib-0.6.8-cp314-cp314-win_arm64.whl", hash = "sha256:bfad1202fb1f9140e3810cc607058395f59032d9128cc0d716900c78bea5f337" },
+]
+
+[[package]]
+name = "ta-lib"
+version = "0.6.8"
+source = { path = "package/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "build", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+]
+wheels = [
+    { filename = "ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:f823d0f6b04a6797fbe253bcf91666e71a6b63c290683819650c68b2468ebe64" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build" },
+    { name = "numpy" },
+]
 
 [[package]]
 name = "ta-lib"
 version = "0.6.8"
 source = { path = "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'darwin'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin'",
-    "python_full_version < '3.12' and sys_platform == 'darwin'",
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "build", marker = "sys_platform == 'darwin'" },
-    { name = "numpy", marker = "sys_platform == 'darwin'" },
+    { name = "build", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "numpy", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
 wheels = [
     { filename = "ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:30de46b55873b51be945a09edf486afcc190dc47eff9fb5d2b12c9f7e3d743da" },
@@ -3509,18 +3594,41 @@ requires-dist = [
 [[package]]
 name = "ta-lib"
 version = "0.6.8"
-source = { path = "package/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl" }
+source = { path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'linux'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux'",
-    "python_full_version < '3.12' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 dependencies = [
-    { name = "build", marker = "sys_platform == 'linux'" },
-    { name = "numpy", marker = "sys_platform == 'linux'" },
+    { name = "build", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "numpy", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { filename = "ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:282e49c766b5952dd8796f77d7ed3ae412cdd88e31f845b1fbbb86ac6cb7bebf" },
+    { filename = "ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:490e19a45cd3cdd6dfe6b46019f7ffe1103500750b41b51996a870e7c1c5f066" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build" },
+    { name = "numpy" },
+]
+
+[[package]]
+name = "ta-lib"
+version = "0.6.8"
+source = { path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+dependencies = [
+    { name = "build", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
+wheels = [
+    { filename = "ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a395524b0fafa10446d11e11acb4742e919523de58aac03b791f26d7a783bcf0" },
 ]
 
 [package.metadata]
@@ -3534,16 +3642,39 @@ name = "ta-lib"
 version = "0.6.8"
 source = { path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" }
 resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'amd64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'amd64' and sys_platform == 'win32'",
 ]
 dependencies = [
-    { name = "build", marker = "sys_platform == 'win32'" },
-    { name = "numpy", marker = "sys_platform == 'win32'" },
+    { name = "build", marker = "platform_machine == 'amd64' and sys_platform == 'win32'" },
+    { name = "numpy", marker = "platform_machine == 'amd64' and sys_platform == 'win32'" },
 ]
 wheels = [
     { filename = "ta_lib-0.6.8-cp311-cp311-win_amd64.whl", hash = "sha256:c01809fb602e2fefc8cbfb3b603bb59d2a2eaee8708410896d48a835ba00e7c5" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build" },
+    { name = "numpy" },
+]
+
+[[package]]
+name = "ta-lib"
+version = "0.6.8"
+source = { path = "package/ta_lib-0.6.8-cp311-cp311-win_arm64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and platform_machine == 'arm64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "build", marker = "platform_machine == 'arm64' and sys_platform == 'win32'" },
+    { name = "numpy", marker = "platform_machine == 'arm64' and sys_platform == 'win32'" },
+]
+wheels = [
+    { filename = "ta_lib-0.6.8-cp311-cp311-win_arm64.whl", hash = "sha256:a89734a7bcb2ea3b6fd600a74d6fbcdb8d3fa3f7917dbd978e039710b5509c9c" },
 ]
 
 [package.metadata]
