@@ -4,13 +4,13 @@ from typing import Union
 
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun
 from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.file_db import FileCacheDB
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton

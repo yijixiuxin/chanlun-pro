@@ -1,18 +1,17 @@
 import time
-import akshare as ak
-
 from typing import Union
 
+import akshare as ak
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from pytdx.util import best_ip
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
-from chanlun import fun
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
+from chanlun import fun
+from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange.exchange import *
 from chanlun.file_db import FileCacheDB
-from chanlun.config import get_data_path
+from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
@@ -282,11 +281,15 @@ class ExchangeTDXHK(Exchange):
                         high=_quote["high"],
                         volume=_quote["zongliang"],
                         open=_quote["open"],
-                        rate=round(
-                            (_quote["price"] - _quote["pre_close"])
-                            / _quote["price"]
-                            * 100,
-                            2,
+                        rate=(
+                            round(
+                                (_quote["price"] - _quote["pre_close"])
+                                / _quote["price"]
+                                * 100,
+                                2,
+                            )
+                            if _quote["price"] > 0
+                            else 0
                         ),
                     )
         return ticks

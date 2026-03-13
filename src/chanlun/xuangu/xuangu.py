@@ -1,8 +1,10 @@
 import itertools
+
 import talib
-from chanlun.cl_utils import *
-from chanlun.cl_interface import Config
+
 from chanlun.backtesting.base import MarketDatas
+from chanlun.cl_interface import Config
+from chanlun.cl_utils import *
 
 """
 根据缠论数据，选择自己所需要的形态方法集合
@@ -63,7 +65,7 @@ def xg_multiple_xd_bi_mmd(code: str, mk_datas: MarketDatas, opt_type: list = [])
     if len(high_data.get_xds()) == 0 or len(high_data.get_bis()) == 0:
         return None
     high_xd = high_data.get_xds()[-1]
-    if high_xd.type not in opt_direction or low_bi.type not in opt_direction:
+    if high_xd.type not in opt_direction:
         return None
 
     # 再判断低级别的
@@ -71,6 +73,8 @@ def xg_multiple_xd_bi_mmd(code: str, mk_datas: MarketDatas, opt_type: list = [])
     if len(low_data.get_xds()) == 0 or len(low_data.get_bis()) == 0:
         return None
     low_bi = low_data.get_bis()[-1]
+    if low_bi.type not in opt_direction:
+        return None
     if (high_xd.mmd_exists(opt_mmd, "|") or high_xd.bc_exists(["pz", "qs"], "|")) and (
         low_bi.mmd_exists(opt_mmd, "|") or low_bi.bc_exists(["pz", "qs"], "|")
     ):
@@ -476,7 +480,7 @@ def xg_single_find_3buy_by_1buy(code: str, mk_datas: MarketDatas, opt_type: list
                 ):
                     return {
                         "code": cd.get_code(),
-                        "msg": f"出现三买，并且之前有出现一买",
+                        "msg": "出现三买，并且之前有出现一买",
                     }
     return None
 
@@ -600,8 +604,8 @@ def xg_single_bi_1buy_next_l3buy_mmd(
 
 
 if __name__ == "__main__":
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
     from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     market = "a"
     code = "SZ.000551"
