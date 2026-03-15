@@ -752,6 +752,11 @@ class ChartManager {
         if (!latestBar || latestBar.time === this._latestAppliedBarTime) {
             return;
         }
+        console.log("[DataVerify][Charts] handleTick newBar key=" + symbolResKey, {
+            barTime: latestBar.time,
+            prevTime: this._latestAppliedBarTime,
+            barsCount: barsResult?.bars?.length || 0,
+        });
         this._latestAppliedBarTime = latestBar.time;
         this.debouncedDrawChanlun();
     }
@@ -924,6 +929,18 @@ class ChartManager {
         if (!barsResult) return;
         this.initChartContainer(symbolKey);
 
+        console.log("[DataVerify][Charts] drawChartElements interval=" + currentInterval, {
+            fxs: barsResult.fxs?.length || 0,
+            bis: barsResult.bis?.length || 0,
+            xds: barsResult.xds?.length || 0,
+            zsds: barsResult.zsds?.length || 0,
+            bi_zss: barsResult.bi_zss?.length || 0,
+            xd_zss: barsResult.xd_zss?.length || 0,
+            zsd_zss: barsResult.zsd_zss?.length || 0,
+            bcs: barsResult.bcs?.length || 0,
+            mmds: barsResult.mmds?.length || 0,
+        });
+
         const safeCreate = (promise, type) => {
             if (promise && typeof promise.then === 'function') {
                 return promise.catch(e => {
@@ -939,9 +956,9 @@ class ChartManager {
         this.reconcile('bis', window.cl_show_config.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 2 }), 'bi'));
         this.reconcile('xds', window.cl_show_config.xd ? barsResult.xds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
         this.reconcile('zsds', window.cl_show_config.zsd ? barsResult.zsds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
-        this.reconcile('bi_zss', window.cl_show_config.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.BI_ZSS, linewidth: 1 }), 'bi_zs'));
+        this.reconcile('bi_zss', window.cl_show_config.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "bi_zss"), linewidth: 1 }), 'bi_zs'));
         this.reconcile('xd_zss', window.cl_show_config.zs ? barsResult.xd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
-        this.reconcile('zsd_zss', window.cl_show_config.zs ? barsResult.zsd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: CHART_CONFIG.COLORS.ZSD_ZSS, linewidth: 2 }), 'zsd_zs'));
+        this.reconcile('zsd_zss', window.cl_show_config.zs ? barsResult.zsd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsd_zss"), linewidth: 2 }), 'zsd_zs'));
         this.reconcile('bcs', window.cl_show_config.bc ? barsResult.bcs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
         this.reconcile('mmds', window.cl_show_config.mmd ? barsResult.mmds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
     }

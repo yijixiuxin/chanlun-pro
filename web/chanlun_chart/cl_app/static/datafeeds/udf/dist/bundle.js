@@ -98,6 +98,19 @@
         }
         _emitBarsReady(resKey, requestParams) {
             try {
+                const obj = this.bars_result.get(resKey);
+                if (obj) {
+                    console.log("[DataVerify][Datafeed] emitBarsReady key=" + resKey, {
+                        bars: obj.bars ? obj.bars.length : 0,
+                        fxs: obj.fxs ? obj.fxs.length : 0,
+                        bis: obj.bis ? obj.bis.length : 0,
+                        xds: obj.xds ? obj.xds.length : 0,
+                        zsds: obj.zsds ? obj.zsds.length : 0,
+                        bi_zss: obj.bi_zss ? obj.bi_zss.length : 0,
+                        bcs: obj.bcs ? obj.bcs.length : 0,
+                        mmds: obj.mmds ? obj.mmds.length : 0,
+                    });
+                }
                 window.dispatchEvent(new CustomEvent('chanlun-bars-ready', {
                     detail: {
                         key: resKey,
@@ -411,6 +424,13 @@
                     obj_res.zsd_zss = updateLineSegments(obj_res.zsd_zss, response.zsd_zss);
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
+                    // Fix: Merge new bars into obj_res.bars so handleTick can detect new bar times
+                    if (bars.length > 0) {
+                        const newBarTimes = new Set(bars.map(b => b.time));
+                        obj_res.bars = obj_res.bars.filter(b => !newBarTimes.has(b.time));
+                        obj_res.bars.push(...bars);
+                        obj_res.bars.sort((a, b) => a.time - b.time);
+                    }
                     obj_res.chart_color = response.chart_color;
                     const oldTimes = obj_res.times || [];
                     const difObj = mergeAlignedArrays(oldTimes, obj_res.macd_dif, raw_times, macd_dif);

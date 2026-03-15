@@ -6,6 +6,7 @@ import pytz
 import json
 import datetime
 import time
+import threading
 import numpy as np
 import talib
 from cachetools import TTLCache
@@ -80,6 +81,8 @@ stock_cache = TTLCache(maxsize=100, ttl=7200)
 chart_data_cache = TTLCache(maxsize=100, ttl=600)
 
 # Fix: Pre-warm cache for common interval switches to reduce recomputation
+# accessed_intervals is bounded to prevent unbounded memory growth
+_MAX_ACCESSED_INTERVALS = 500
 chart_data_cache_stats = {"accessed_intervals": defaultdict(set), "prewarmed": set()}
 COMMON_INTERVALS = ["1", "5", "15", "30", "60", "1D", "1W"]  # Commonly switched intervals
 
@@ -319,7 +322,8 @@ def prewarm_common_intervals(market, code, cl_config):
                     with cache_lock:
                         _set_chart_cache_entry(cache_key, cl_chart_data, is_full_snapshot=True)
                         chart_data_cache_stats["prewarmed"].discard(cache_key)
-                        chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
+                        if len(chart_data_cache_stats["accessed_intervals"]) < _MAX_ACCESSED_INTERVALS:
+                            chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
                         LogUtil.info(f"[tv_history] Pre-warmed cache for {market}:{code} interval {interval}")
                 except Exception as e:
                     if cache_key is not None:
@@ -346,8 +350,6 @@ class _LimitedLockDict(defaultdict):
         return self[key]
 
 chart_calc_locks = _LimitedLockDict()
-
-import threading
 
 def preload_symbols():
     exchanges = ["a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot"]
@@ -918,6 +920,20 @@ def tv_history():
             if not arr or _resp_end >= len(arr):
                 return arr
             return arr[:_resp_end]
+
+        # [DataVerify] Log response shape counts for frontend correlation
+        _resp_t = _trim(cl_chart_data.get("t", []))
+        LogUtil.info(
+            f"[DataVerify][Backend] symbol={symbol} resolution={resolution} "
+            f"update={firstDataRequest != 'true'} bars={len(_resp_t)} "
+            f"fxs={len(cl_chart_data.get('fxs', []))} "
+            f"bis={len(cl_chart_data.get('bis', []))} "
+            f"xds={len(cl_chart_data.get('xds', []))} "
+            f"zsds={len(cl_chart_data.get('zsds', []))} "
+            f"bi_zss={len(cl_chart_data.get('bi_zss', []))} "
+            f"bcs={len(cl_chart_data.get('bcs', []))} "
+            f"mmds={len(cl_chart_data.get('mmds', []))}"
+        )
 
         return {
             "s": "ok",
