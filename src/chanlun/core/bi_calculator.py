@@ -53,12 +53,10 @@ class BiCalculator:
             return
 
         is_incremental = bool(self.cl_klines)
-        # Use snapshot to check for changes instead of object comparison
         if is_incremental and self._last_kline_snapshot:
             current_last = cl_klines[-1]
             last_idx, last_h, last_l = self._last_kline_snapshot
-            
-            # If index is same or older, AND values haven't changed, skip
+
             if (current_last.index <= last_idx and 
                 current_last.h == last_h and 
                 current_last.l == last_l):

@@ -93,7 +93,7 @@ class KlineDataProcessor:
         # 2. **核心优化：识别增量数据**
         #    如果 self.klines 已有数据，我们只处理 "可能" 是增量的数据。
         #    这能极大地加速 "传入全量数据" 时的处理速度。
-        if self.klines is not None:
+        if self.klines:
             last_date = self.klines[-1].date
 
             # 我们只需要关心时间大于或等于最后一根K线的数据
