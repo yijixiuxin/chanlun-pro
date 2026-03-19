@@ -83,6 +83,7 @@ chart_data_cache = TTLCache(maxsize=100, ttl=600)
 # Fix: Pre-warm cache for common interval switches to reduce recomputation
 # accessed_intervals is bounded to prevent unbounded memory growth
 _MAX_ACCESSED_INTERVALS = 500
+_MAX_PREWARMED_SIZE = 50  # prewarmed 集合上限，防止线程异常导致无限增长
 chart_data_cache_stats = {"accessed_intervals": defaultdict(set), "prewarmed": set()}
 COMMON_INTERVALS = ["1", "5", "15", "30", "60", "1D", "1W"]  # Commonly switched intervals
 
@@ -253,7 +254,12 @@ def _merge_chart_data(existing_data: dict, new_data: dict):
                 merged_values[bar_time] = existing_values[idx]
         for idx, bar_time in enumerate(new_times):
             if idx < len(new_values):
-                merged_values[bar_time] = new_values[idx]
+                val = new_values[idx]
+                # 仅当新值有效时才覆盖，避免 None 覆盖已有的有效值
+                if val is not None:
+                    merged_values[bar_time] = val
+                elif bar_time not in merged_values:
+                    merged_values[bar_time] = val
         merged[key] = [merged_values.get(bar_time) for bar_time in all_times]
 
     for key in ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "zsd_zss", "bcs", "mmds"]:
@@ -290,6 +296,10 @@ def prewarm_common_intervals(market, code, cl_config):
                     with cache_lock:
                         if cache_key in chart_data_cache or cache_key in chart_data_cache_stats["prewarmed"]:
                             continue
+                        # 防止 prewarmed 集合因线程异常无限增长
+                        if len(chart_data_cache_stats["prewarmed"]) >= _MAX_PREWARMED_SIZE:
+                            chart_data_cache_stats["prewarmed"].clear()
+                            LogUtil.warning(f"[tv_history] prewarmed 集合已达上限 {_MAX_PREWARMED_SIZE}，已清空")
                         # Mark as prewarming to prevent duplicate computation
                         chart_data_cache_stats["prewarmed"].add(cache_key)
                     
@@ -339,15 +349,21 @@ def prewarm_common_intervals(market, code, cl_config):
     LogUtil.info(f"[tv_history] Started pre-warm thread for {market}:{code}")
 
 
-class _LimitedLockDict(defaultdict):
-    """Bounded lock dict to avoid unlimited cache-key lock growth."""
+class _LimitedLockDict(dict):
+    """Bounded lock dict with LRU eviction to avoid unlimited lock growth."""
     _MAX_SIZE = 200
+    _EVICT_COUNT = 50  # 每次淘汰数量
 
     def __missing__(self, key):
         if len(self) >= self._MAX_SIZE:
-            LogUtil.warning(f"chart_calc_locks 已达上限 {self._MAX_SIZE}，跳过清理避免删除正在使用的锁")
-        self[key] = RLock()
-        return self[key]
+            # 淘汰最早插入的 _EVICT_COUNT 个 key（近似 LRU）
+            keys_to_evict = list(self.keys())[:self._EVICT_COUNT]
+            for k in keys_to_evict:
+                self.pop(k, None)
+            LogUtil.info(f"chart_calc_locks 淘汰了 {len(keys_to_evict)} 个旧锁，当前数量 {len(self)}")
+        lock = RLock()
+        self[key] = lock
+        return lock
 
 chart_calc_locks = _LimitedLockDict()
 
@@ -775,10 +791,12 @@ def tv_history():
                 if ratio is not None:
                     try:
                         closes = np.array(cl_chart_data.get("c", []), dtype=float)
-                        if len(closes) > 0:
-                            fast = int(cl_config.get("idx_macd_fast", 12)) * ratio
-                            slow = int(cl_config.get("idx_macd_slow", 26)) * ratio
-                            signal = int(cl_config.get("idx_macd_signal", 9)) * ratio
+                        fast = int(cl_config.get("idx_macd_fast", 12)) * ratio
+                        slow = int(cl_config.get("idx_macd_slow", 26)) * ratio
+                        signal = int(cl_config.get("idx_macd_signal", 9)) * ratio
+                        # 确保有足够的 bar 数量用于 MACD 计算（至少需要 slow+signal 根K线）
+                        min_bars = slow + signal
+                        if len(closes) > min_bars:
                             h_dif, h_dea, h_hist = talib.MACD(
                                 closes,
                                 fastperiod=fast,

@@ -116,33 +116,23 @@ class CL_Kline_Process:
     def process_cl_klines(self, src_klines: List[Kline]):
         """
         处理原始K线列表。
-        修复逻辑：如果遇到 index 等于 _last_src_kline_index，视为更新操作，执行回滚并重新计算。
         """
         if not src_klines:
             return []
 
-        # 记录起始返回点（注意：如果发生回滚，列表长度可能会暂时变短，
-        # 但我们总是希望返回“受影响”的部分，所以取 max(0, len-1) 是安全的起点）
-        return_start_idx = max(0, len(self.cl_klines) - 1)
-        has_processed = False
-
         for current_k in src_klines:
 
-            # --- 情况1: 这是一个旧数据 (完全忽略) ---
+            # --- 情况1: 这是一个旧数据 ---
             if current_k.index < self._last_src_kline_index:
                 continue
 
-            has_processed = True
-
-            # --- 情况2: 这是一个更新数据 (Index 相同，数据变动) ---
+            # --- 情况2: 这是一个更新数据 ---
             if current_k.index == self._last_src_kline_index:
-                # LogUtil.debug(f"检测到K线更新: index={current_k.index}, 执行回滚重算...")
-
                 # 1. 弹出最后一根受影响的 CLKline
                 if self.cl_klines:
                     dirty_cl_k = self.cl_klines.pop()
 
-                    # 2. 从这根脏 K 线中，分离出 *之前已经确认的* 原始 K 线
+                    # 2. 从这根脏 K 线中，分离出之前已经确认的原始 K 线
                     #    逻辑：dirty_cl_k 可能由 [8017, 8018] 合并而成。
                     #    现在 8018 更新了，我们要保留 8017，扔掉旧的 8018，然后放入新的 8018。
                     valid_prev_klines = [k for k in dirty_cl_k.klines if k.index < current_k.index]

@@ -179,6 +179,8 @@
                         requestParams.to = Math.round(result.bars[0].time / 1000);
                     }
                     const followupResponse = await this._requester.sendRequest(this._datafeedUrl, "history", requestParams);
+                    // 分页后续请求必须使用合并模式，避免覆盖前一页的 MACD 数据
+                    followupResponse.update = true;
                     const followupResult = this._processHistoryResponse(followupResponse, requestParams);
                     lastResultLength = followupResult.bars.length;
                     // merge result with results collected so far
@@ -297,7 +299,10 @@
                         let val = newArr[i];
                         if (val === null || val === undefined)
                             val = NaN;
-                        map.set(t, val);
+                        // 仅当新值有效时才覆盖，避免 NaN 覆盖已有的有效值
+                        if (!Number.isNaN(val) || !map.has(t) || Number.isNaN(map.get(t))) {
+                            map.set(t, val);
+                        }
                     });
                     const allTimes = Array.from(new Set([...existingTimes, ...newTimes])).sort((a, b) => a - b);
                     return {
