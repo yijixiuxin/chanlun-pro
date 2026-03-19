@@ -4,14 +4,16 @@
 """
 from typing import List
 from chanlun.core.cl_interface import Kline, CLKline
-# 导入日志工具
-from chanlun.tools.log_util import LogUtil
 
 
 class CL_Kline_Process:
     """
-    该类负责处理K线的包含关系，并支持增量更新。
-    已修复：支持对同一 index 的 K 线进行数值更新（Re-paint）。
+    处理原始K线的包含关系，并将结果维护在内部的 ``self.cl_klines`` 中。
+
+    该类不是“传入列表 -> 返回结果列表”的纯函数，而是一个有状态的增量更新器：
+    - 输入 ``src_klines`` 用于驱动内部 ``cl_klines`` 状态更新
+    - 结果由调用方通过 ``self.cl_klines`` 读取
+    - 支持对最后一根原始K线进行同 index 的数值更新（re-paint）
     """
 
     def __init__(self):
@@ -28,7 +30,7 @@ class CL_Kline_Process:
         return k1_contains_k2 or k2_contains_k1
 
     def _merge_klines(self, k1: CLKline, k2: CLKline, direction: str) -> CLKline:
-        """根据指定方向合并两根K线"""
+        """根据指定方向合并两根K线。"""
         if direction == 'up':
             # 向上合并：取 高-高, 高-低
             h, l = max(k1.h, k2.h), max(k1.l, k2.l)
@@ -41,9 +43,11 @@ class CL_Kline_Process:
             date, k_index = (k1.date, k1.k_index) if k1.l < k2.l else (k2.date, k2.k_index)
 
         merged = CLKline(
+            # k_index 继续落在原始K线坐标系中，供 MACD 切片、角度计算等逻辑使用。
             k_index=k_index, date=date, h=h, l=l, o=o, c=c, a=k1.a + k2.a,
             klines=k1.klines + k2.klines,  # 累积所有原始K线
-            index=k1.index,  # 保持第一根K线的索引
+            # index 保持缠论K线序号稳定，供 BiCalculator 增量回退与成笔距离判断使用。
+            index=k1.index,
             _n=k1.n + k2.n,  # 累积合并的K线数量
             _q=k1.q  # 缺口属性继承
         )
@@ -68,7 +72,9 @@ class CL_Kline_Process:
         # --- B. 获取当前最新的缠论 K 线 ---
         last_cl_k = self.cl_klines[-1]
 
-        # 创建新对象的包装
+        # 创建新对象的包装：
+        # - k_index 使用原始K线坐标
+        # - index 使用缠论K线序号
         new_cl_k = CLKline(
             k_index=current_k.index, date=current_k.date,
             h=current_k.h, l=current_k.l, o=current_k.o, c=current_k.c, a=current_k.a,
@@ -115,10 +121,15 @@ class CL_Kline_Process:
 
     def process_cl_klines(self, src_klines: List[Kline]):
         """
-        处理原始K线列表。
+        基于原始K线序列增量更新内部 ``self.cl_klines`` 状态。
+
+        注意：
+        - 该方法的结果保存在 ``self.cl_klines`` 中
+        - 调用方不应依赖其返回值
+        - 传入的 ``src_klines`` 用于驱动内部状态更新，而不是作为纯函数输入返回新列表
         """
         if not src_klines:
-            return []
+            return
 
         for current_k in src_klines:
 

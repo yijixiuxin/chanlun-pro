@@ -28,6 +28,7 @@ class BiCalculator:
         # 2. 顶分型与底分型之间的距离要求
         # 严格笔：包含一个及以上独立K线 (索引差 >= 4)
         # 新笔：无独立K线要求，但不共用K线 (索引差 >= 3)
+        # 这里使用 fx.k.index（缠论K线序号），而不是 fx.k.k_index（原始K线坐标）。
         min_distance = 4 if self.bi_mode == 'strict' else 3
         if abs(fx2.k.index - fx1.k.index) < min_distance:
             return False
@@ -66,6 +67,7 @@ class BiCalculator:
         self.cl_klines = cl_klines
 
         # --- 2. 确定计算起始点 (回退逻辑) ---
+        # 这里的 start_index 位于缠论K线坐标系中，对应 CLKline.index。
         start_index = 1
 
         if is_incremental:
@@ -97,6 +99,7 @@ class BiCalculator:
             # 清理过期的分型缓存 (保留 start_index 之前的，因为它们可能作为起点)
             # 注意：这里保留 < start_index 的分型。
             # 当循环从 start_index 开始时，会重新生成该位置及之后的分型。
+            # 这里同样按 CLKline.index 回退，而不是按原始K线坐标回退。
             self.fxs = [fx for fx in self.fxs if fx.k.index < start_index]
 
             start_index = max(1, start_index)

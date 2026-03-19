@@ -97,7 +97,9 @@ class Level(Enum):
 
 class Kline:
     """
-    原始K线对象
+    原始K线对象。
+
+    ``index`` 表示原始K线在源数据序列中的坐标，可直接用于原始指标数组下标。
     """
 
     def __init__(
@@ -137,7 +139,15 @@ class Kline:
 
 class CLKline:
     """
-    缠论K线对象
+    缠论K线对象。
+
+    这里同时维护两套坐标：
+    - ``index``: 缠论K线序号，位于合并后的 ``cl_klines`` 坐标系中
+    - ``k_index``: 原始K线坐标，位于源 ``Kline`` 序列坐标系中
+
+    两者不可混用：
+    - 结构距离、增量回退等缠论对象关系，使用 ``index``
+    - MACD 切片、原始K线跨度、原始序列定位，使用 ``k_index``
     """
 
     def __init__(
@@ -168,6 +178,16 @@ class CLKline:
         self.n: int = _n  # 记录包含的K线数量
         self.q: bool = _q  # 是否有缺口
         self.up_qs = None  # 合并时之前的趋势
+
+    @property
+    def cl_index(self) -> int:
+        """缠论K线坐标系中的序号别名。"""
+        return self.index
+
+    @property
+    def src_index(self) -> int:
+        """原始K线坐标系中的序号别名。"""
+        return self.k_index
 
     def to_dict(self):
         """将CLKline对象转换为字典"""
@@ -446,6 +466,7 @@ class LINE:
             return 0
 
         dy = (self.end.val - self.start.val) / self.start.val * 100
+        # 角度横轴按原始K线坐标计算，因此这里使用 k_index 而不是 index。
         dx = self.end.k.k_index - self.start.k.k_index
         # 弧度
         k = math.atan2(dy, dx)
@@ -1675,6 +1696,7 @@ def query_macd_ld(cd: ICL, start_fx: FX, end_fx: FX):
             % (cd.get_code(), cd.get_frequency(), cd.get_klines()[-1].date)
         )
 
+    # MACD 数组按原始K线序列对齐，这里必须使用 k_index 进行切片。
     dea = np.array(
         cd.get_idx()["macd"]["dea"][start_fx.k.k_index : end_fx.k.k_index + 1]
     )

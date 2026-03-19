@@ -131,7 +131,8 @@ class CL(ICL):
         # 使用MACD计算器更新指标
         self.macd_calculator.process_macd(self.kline_processor.klines)
 
-        # 更新缠论K线 - 始终使用原始K线作为包含关系处理的输入
+        # 更新缠论K线：process_cl_klines 是内部状态更新器，不依赖返回值。
+        # 下游直接继续消费 self.cl_kline_processor.cl_klines。
         self.cl_kline_processor.process_cl_klines(self.kline_processor.klines)
 
         # 计算笔和分型 - 直接引用 cl_klines
