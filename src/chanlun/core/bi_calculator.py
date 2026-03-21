@@ -1,224 +1,213 @@
 # -*- coding: utf-8 -*-
 from typing import List, Optional
+
 from chanlun.core.cl_interface import FX, BI, CLKline
 
 
 class BiCalculator:
     """
-    笔计算器
-    修复了增量计算时可能丢失待定笔（pending_bi）的问题。
+    笔计算器。
+
+    对外仍保持：
+    - self.fxs 为识别出的分型列表
+    - self.bis 为用于展示/下游消费的笔列表，最后一笔可能未完成
+
+    对内采用“已确认笔 + 当前待定笔”的状态机，每次在最新缠论 K 线上重放，
+    优先保证结果正确与全量/增量一致性。
     """
 
     def __init__(self, bi_mode: str = 'strict'):
         self.bis: List[BI] = []
         self.fxs: List[FX] = []
+        self.confirmed_bis: List[BI] = []
         self.pending_bi: Optional[BI] = None
         self.bi_index: int = 0
         self.cl_klines: List[CLKline] = []
         self.bi_mode = bi_mode  # 'strict' (严格笔) 或 'new' (新笔)
-        # Snapshot of the last processed kline: (index, high, low)
         self._last_kline_snapshot: Optional[tuple] = None
 
     def _check_stroke_validity(self, fx1: FX, fx2: FX) -> bool:
         """检查两个分型是否能构成有效的一笔。"""
-        # 1. 顶底分型必须不同
         if fx1.type == fx2.type:
             return False
 
-        # 2. 顶分型与底分型之间的距离要求
-        # 严格笔：包含一个及以上独立K线 (索引差 >= 4)
-        # 新笔：无独立K线要求，但不共用K线 (索引差 >= 3)
-        # 这里使用 fx.k.index（缠论K线序号），而不是 fx.k.k_index（原始K线坐标）。
         min_distance = 4 if self.bi_mode == 'strict' else 3
-        if abs(fx2.k.index - fx1.k.index) < min_distance:
+        if fx2.k.index <= fx1.k.index:
+            return False
+        if (fx2.k.index - fx1.k.index) < min_distance:
             return False
 
-        # 3. 顶底分型的高低点验证
         if fx1.type == 'ding':
-            if fx2.val >= fx1.val:  # 底分型底不能高于顶分型底 (严格讲是底分型底 < 顶分型底)
-                # 注意：这里用 val (极值) 比较更通用
+            if fx2.val >= fx1.val:
                 return False
-        else:  # fx1.type == 'di'
-            if fx2.val <= fx1.val:  # 顶分型顶不能低于底分型顶
+        else:
+            if fx2.val <= fx1.val:
                 return False
 
         return True
 
-    def calculate(self, cl_klines: List[CLKline]):
-        """
-        支持增量计算的笔识别逻辑。
-        """
-        # --- 1. 数据校验与增量判断 ---
-        if not cl_klines:
-            return
-
-        is_incremental = bool(self.cl_klines)
-        if is_incremental and self._last_kline_snapshot:
-            current_last = cl_klines[-1]
-            last_idx, last_h, last_l = self._last_kline_snapshot
-
-            if (current_last.index <= last_idx and 
-                current_last.h == last_h and 
-                current_last.l == last_l):
-                return
-
-        self.cl_klines = cl_klines
-
-        # --- 2. 确定计算起始点 (回退逻辑) ---
-        # 这里的 start_index 位于缠论K线坐标系中，对应 CLKline.index。
-        start_index = 1
-
-        if is_incremental:
-            # 策略：只要是增量，就假设最后一笔（无论是完成还是未完成）的状态是不稳定的
-            # 尤其是最后一笔未完成时，必须重算。
-            # 如果最后一笔已完成，为了应对包含关系变动导致分型重构的情况，建议也回退。
-
-            if self.bis:
-                last_bi = self.bis[-1]
-
-                # 如果最后一笔未完成，肯定要弹出重算
-                if not last_bi.end.done:
-                    self.bis.pop()
-                    # 弹出后，当前的 bi_index 需要回退
-                    self.bi_index = last_bi.index
-                    # 起点回退到这笔的开始位置，重新扫描，看能否形成新的形态
-                    start_index = last_bi.start.k.index
-                else:
-                    # 如果最后一笔已完成，从它结束的位置开始往后找
-                    # 注意：已完成的笔，其 end 分型是确定的，我们从 end 分型所在 K 线开始扫描
-                    start_index = last_bi.end.k.index
-
-            elif self.fxs:
-                start_index = self.fxs[-1].k.index
-
-            # 清理 pending_bi，因为我们要重新从 start_index 处构建它
-            self.pending_bi = None
-
-            # 清理过期的分型缓存 (保留 start_index 之前的，因为它们可能作为起点)
-            # 注意：这里保留 < start_index 的分型。
-            # 当循环从 start_index 开始时，会重新生成该位置及之后的分型。
-            # 这里同样按 CLKline.index 回退，而不是按原始K线坐标回退。
-            self.fxs = [fx for fx in self.fxs if fx.k.index < start_index]
-
-            start_index = max(1, start_index)
-
-        else:
-            # 全量计算
-            self.bis, self.fxs, self.pending_bi, self.bi_index = [], [], None, 0
-
-        # --- 3. 核心计算循环 ---
-        i = start_index
-        total_len = len(self.cl_klines)
-
-        while i < total_len - 1:
-            k_left = self.cl_klines[i - 1]
-            k_curr = self.cl_klines[i]
-            k_right = self.cl_klines[i + 1]
-
-            current_fx = self._find_fractal(k_left, k_curr, k_right)
-
-            if not current_fx:
-                i += 1
-                continue
-
-            self.fxs.append(current_fx)
-
-            # === 分支 A: 当前没有正在构建的笔 ===
-            if not self.pending_bi:
-                # 寻找起点的策略：
-                start_fx = None
-
-                # 情况1: 如果已经有历史笔，起点必须是上一笔的终点
-                if self.bis:
-                    start_fx = self.bis[-1].end
-                # 情况2: 如果是第一笔，从分型列表中找倒数第二个
-                elif len(self.fxs) >= 2:
-                    start_fx = self.fxs[-2]
-
-                if start_fx:
-                    # 尝试构建新笔
-                    if self._check_stroke_validity(start_fx, current_fx):
-                        bi_type = 'up' if start_fx.type == 'di' else 'down'
-                        self.pending_bi = BI(
-                            start=start_fx,
-                            end=current_fx,
-                            _type=bi_type,
-                            index=self.bi_index
-                        )
-                        self.pending_bi.end.done = False  # 标记为未完成
-                        self.bi_index += 1
-                        i += 1  # 即使成笔，也不要跳跃太多，以免漏掉紧随其后的分型变化
-                    else:
-                        i += 1
-                else:
-                    i += 1
-
-            # === 分支 B: 已有正在构建的笔 (判断延伸或结束) ===
-            else:
-                end_fx_of_pending = self.pending_bi.end
-
-                # 1. 同向分型：尝试延伸
-                if current_fx.type == end_fx_of_pending.type:
-                    # 顶分型更高，或底分型更低
-                    if (end_fx_of_pending.type == 'ding' and current_fx.val > end_fx_of_pending.val) or \
-                            (end_fx_of_pending.type == 'di' and current_fx.val < end_fx_of_pending.val):
-                        # 更新当前待定笔的终点
-                        self.pending_bi.end = current_fx
-                        self.pending_bi.end.done = False
-                        # 延伸后，可以适当跳过一根，但保守起见 i+=1
-                        i += 1
-                    else:
-                        i += 1
-
-                # 2. 反向分型：尝试结束当前笔，并开启新笔
-                else:
-                    if self._check_stroke_validity(end_fx_of_pending, current_fx):
-                        # ---> 确认旧笔结束 <---
-                        self.pending_bi.end.done = True
-                        self.bis.append(self.pending_bi)
-
-                        # ---> 生成下一笔的雏形 <---
-                        # 新笔起点 = 旧笔终点
-                        start_fx_new = self.pending_bi.end
-                        bi_type_new = 'up' if start_fx_new.type == 'di' else 'down'
-
-                        self.pending_bi = BI(
-                            start=start_fx_new,
-                            end=current_fx,
-                            _type=bi_type_new,
-                            index=self.bi_index
-                        )
-                        self.pending_bi.end.done = False
-                        self.bi_index += 1
-                        i += 1  # 找到新分型后，继续往后看
-                    else:
-                        # 虽是反向分型，但不满足成笔条件（如力度不够），忽略
-                        i += 1
-
-        # --- 4. 收尾：将最后的 pending_bi 放入列表供展示 ---
-        # 注意：pending_bi 此时应该是一个 done=False 的笔，代表当前正在运行的那一笔
-        if self.pending_bi:
-            # 如果 bis 为空，直接加
-            if not self.bis:
-                self.bis.append(self.pending_bi)
-            # 如果 bis 不为空，且 pending_bi 不是 bis 里的最后一个对象，则添加
-            elif self.bis[-1] != self.pending_bi:
-                self.bis.append(self.pending_bi)
-
-            # 确保状态正确
-            self.bis[-1].end.done = False
-
-        # Update snapshot
-        if self.cl_klines:
-            last_k = self.cl_klines[-1]
-            self._last_kline_snapshot = (last_k.index, last_k.h, last_k.l)
+    @staticmethod
+    def _is_more_extreme(new_fx: FX, old_fx: FX) -> bool:
+        if new_fx.type != old_fx.type:
+            return False
+        if new_fx.type == 'ding':
+            return new_fx.val > old_fx.val
+        return new_fx.val < old_fx.val
 
     def _find_fractal(self, k1: CLKline, k2: CLKline, k3: CLKline) -> Optional[FX]:
-        """
-        简化版分型识别
-        """
+        """简化版分型识别。"""
         if k2.h > k1.h and k2.h > k3.h and k2.l > k1.l and k2.l > k3.l:
             return FX(_type='ding', k=k2, klines=[k1, k2, k3], val=k2.h)
         if k2.l < k1.l and k2.l < k3.l and k2.h < k1.h and k2.h < k3.h:
             return FX(_type='di', k=k2, klines=[k1, k2, k3], val=k2.l)
         return None
+
+    def _collect_fxs(self, cl_klines: List[CLKline]) -> List[FX]:
+        fxs: List[FX] = []
+        for i in range(1, len(cl_klines) - 1):
+            current_fx = self._find_fractal(cl_klines[i - 1], cl_klines[i], cl_klines[i + 1])
+            if current_fx is None:
+                continue
+            current_fx.index = len(fxs)
+            fxs.append(current_fx)
+        return fxs
+
+    def _compress_fxs(self, fxs: List[FX]) -> List[FX]:
+        """
+        压缩连续同类分型，只保留更极端的那个。
+
+        这样可以避免首笔构造阶段被连续同类分型干扰，但不会跨越中间的反向分型。
+        """
+        effective_fxs: List[FX] = []
+        for fx in fxs:
+            if not effective_fxs:
+                effective_fxs.append(fx)
+                continue
+
+            last_fx = effective_fxs[-1]
+            if last_fx.type == fx.type:
+                if self._is_more_extreme(fx, last_fx):
+                    effective_fxs[-1] = fx
+            else:
+                effective_fxs.append(fx)
+        return effective_fxs
+
+    def _create_bi(self, start_fx: FX, end_fx: FX, index: int, done: bool) -> BI:
+        bi_type = 'up' if start_fx.type == 'di' else 'down'
+        bi = BI(start=start_fx, end=end_fx, _type=bi_type, index=index)
+        bi.end.done = done
+        return bi
+
+    def _reindex_bis(self):
+        for i, bi in enumerate(self.confirmed_bis):
+            bi.index = i
+            bi.end.done = True
+
+        if self.pending_bi is not None:
+            self.pending_bi.index = len(self.confirmed_bis)
+            self.pending_bi.end.done = False
+
+        self.bi_index = len(self.confirmed_bis) + (1 if self.pending_bi is not None else 0)
+        self.bis = list(self.confirmed_bis)
+        if self.pending_bi is not None:
+            self.bis.append(self.pending_bi)
+
+    def _rebuild_from_fxs(self, fxs: List[FX]):
+        self.confirmed_bis = []
+        self.pending_bi = None
+
+        effective_fxs = self._compress_fxs(fxs)
+        reopenable_bi: Optional[BI] = None
+        next_bi_index = 0
+
+        for fx_pos, current_fx in enumerate(effective_fxs):
+            if self.pending_bi is None:
+                start_fx = None
+                if self.confirmed_bis:
+                    start_fx = self.confirmed_bis[-1].end
+                elif fx_pos > 0:
+                    start_fx = effective_fxs[fx_pos - 1]
+
+                if start_fx and self._check_stroke_validity(start_fx, current_fx):
+                    self.pending_bi = self._create_bi(start_fx, current_fx, next_bi_index, False)
+                    reopenable_bi = self.confirmed_bis[-1] if self.confirmed_bis else None
+                    next_bi_index += 1
+                continue
+
+            end_fx_of_pending = self.pending_bi.end
+
+            if current_fx.type == end_fx_of_pending.type:
+                if self._is_more_extreme(current_fx, end_fx_of_pending):
+                    self.pending_bi.end = current_fx
+                    self.pending_bi.end.done = False
+                continue
+
+            if self._check_stroke_validity(end_fx_of_pending, current_fx):
+                self.pending_bi.end.done = True
+                self.confirmed_bis.append(self.pending_bi)
+
+                start_fx_new = self.pending_bi.end
+                self.pending_bi = self._create_bi(start_fx_new, current_fx, next_bi_index, False)
+                reopenable_bi = self.confirmed_bis[-1]
+                next_bi_index += 1
+                continue
+
+            should_reopen_prev_bi = (
+                reopenable_bi is not None
+                and self.confirmed_bis
+                and reopenable_bi is self.confirmed_bis[-1]
+                and reopenable_bi.end.type == current_fx.type
+                and self._is_more_extreme(current_fx, reopenable_bi.end)
+            )
+
+            if should_reopen_prev_bi:
+                reopened_bi = self.confirmed_bis.pop()
+                reopened_bi.end = current_fx
+                reopened_bi.end.done = False
+                self.pending_bi = reopened_bi
+                reopenable_bi = None
+
+        self._reindex_bis()
+
+    def _snapshot_matches(self, cl_klines: List[CLKline]) -> bool:
+        if not self._last_kline_snapshot or not cl_klines:
+            return False
+        current_last = cl_klines[-1]
+        last_idx, last_h, last_l = self._last_kline_snapshot
+        return (
+            current_last.index == last_idx
+            and current_last.h == last_h
+            and current_last.l == last_l
+        )
+
+    def _update_snapshot(self):
+        if not self.cl_klines:
+            self._last_kline_snapshot = None
+            return
+        last_k = self.cl_klines[-1]
+        self._last_kline_snapshot = (last_k.index, last_k.h, last_k.l)
+
+    def calculate(self, cl_klines: List[CLKline]):
+        """
+        计算笔列表。
+
+        当前实现采用尾部全重放策略：当缠论 K 线发生变化时，重新根据完整分型序列构建笔，
+        以保证复杂边界 case 下的正确性与增量/全量一致性。
+        """
+        if not cl_klines:
+            self.cl_klines = []
+            self.fxs = []
+            self.confirmed_bis = []
+            self.pending_bi = None
+            self.bis = []
+            self.bi_index = 0
+            self._last_kline_snapshot = None
+            return
+
+        if self._snapshot_matches(cl_klines):
+            return
+
+        self.cl_klines = cl_klines
+        self.fxs = self._collect_fxs(cl_klines)
+        self._rebuild_from_fxs(self.fxs)
+        self._update_snapshot()
