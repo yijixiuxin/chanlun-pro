@@ -1,3 +1,4 @@
+import os
 import time
 import threading
 import functools
@@ -9,8 +10,7 @@ from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
-# Longport SDK imports
-from longport.openapi import Config, QuoteContext, TradeContext, Market, Period, \
+from longbridge.openapi import Config, QuoteContext, TradeContext, Market, Period, \
     AdjustType, OrderSide, OrderType, TimeInForceType, SecurityListCategory, TradeSessions, OpenApiException
 
 # Chanlun SDK imports
@@ -22,6 +22,72 @@ from chanlun.tools.log_util import LogUtil
 
 # 统一时区设置
 __tz = pytz.timezone("Asia/Shanghai")
+
+
+def _get_env(new_key: str, legacy_key: str = None):
+    # 优先读取长桥当前环境变量；如果用户还在沿用旧的 LONGPORT_*，这里继续兼容。
+    return os.getenv(new_key) or (os.getenv(legacy_key) if legacy_key else None)
+
+
+def _get_env_bool(new_key: str, legacy_key: str = None, default: bool = False) -> bool:
+    # SDK 的布尔配置通常通过环境变量传入，这里统一做一次字符串到 bool 的转换。
+    value = _get_env(new_key, legacy_key)
+    if value is None:
+        return default
+    return value.lower() == "true"
+
+
+def _build_longbridge_config() -> Config:
+    """
+    优先使用长桥新环境变量，兼容旧 LONGPORT_* 配置与新旧 SDK 初始化方法。
+    """
+    app_key = _get_env("LONGBRIDGE_APP_KEY", "LONGPORT_APP_KEY")
+    app_secret = _get_env("LONGBRIDGE_APP_SECRET", "LONGPORT_APP_SECRET")
+    access_token = _get_env("LONGBRIDGE_ACCESS_TOKEN", "LONGPORT_ACCESS_TOKEN")
+
+    http_url = _get_env("LONGBRIDGE_HTTP_URL", "LONGPORT_HTTP_URL")
+    quote_ws_url = _get_env("LONGBRIDGE_QUOTE_WS_URL", "LONGPORT_QUOTE_WS_URL")
+    trade_ws_url = _get_env("LONGBRIDGE_TRADE_WS_URL", "LONGPORT_TRADE_WS_URL")
+    enable_overnight = _get_env_bool("LONGBRIDGE_ENABLE_OVERNIGHT", "LONGPORT_ENABLE_OVERNIGHT", False)
+    enable_print_quote_packages = _get_env_bool(
+        "LONGBRIDGE_PRINT_QUOTE_PACKAGES", "LONGPORT_PRINT_QUOTE_PACKAGES", True
+    )
+    log_path = _get_env("LONGBRIDGE_LOG_PATH", "LONGPORT_LOG_PATH")
+
+    # 新版 SDK 优先走 from_apikey；这样可以显式传入 host / ws / 其他开关，避免不同版本行为差异。
+    if hasattr(Config, "from_apikey") and app_key and app_secret and access_token:
+        return Config.from_apikey(
+            app_key,
+            app_secret,
+            access_token,
+            http_url=http_url,
+            quote_ws_url=quote_ws_url,
+            trade_ws_url=trade_ws_url,
+            enable_overnight=enable_overnight,
+            enable_print_quote_packages=enable_print_quote_packages,
+            log_path=log_path,
+        )
+
+    # 某些版本只提供 from_apikey_env，会自行从环境变量读取凭证与接入点。
+    if hasattr(Config, "from_apikey_env"):
+        return Config.from_apikey_env()
+
+    # 再兼容更老的 SDK 版本；如果没有这个方法，会继续走最下方的构造函数初始化。
+    if hasattr(Config, "from_env"):
+        return Config.from_env()
+
+    # 兜底直接实例化，兼容不提供类方法的 SDK 版本。
+    return Config(
+        app_key=app_key,
+        app_secret=app_secret,
+        access_token=access_token,
+        http_url=http_url,
+        quote_ws_url=quote_ws_url,
+        trade_ws_url=trade_ws_url,
+        enable_overnight=enable_overnight,
+        enable_print_quote_packages=enable_print_quote_packages,
+        log_path=log_path,
+    )
 
 
 class RateLimiter:
@@ -86,9 +152,11 @@ class ExchangeChangQiao(Exchange):
     """
 
     def __init__(self):
-        self.config = Config.from_env()
-        self.quote_ctx = QuoteContext(self.config)
-        self.trade_ctx = TradeContext(self.config)
+        # 这里只构建配置对象，不在构造时立刻连网。
+        # 真正访问长桥时再懒加载 QuoteContext / TradeContext，避免应用启动阶段因网络问题直接失败。
+        self.config = _build_longbridge_config()
+        self._quote_context = None
+        self._trade_context = None
         self.stock_list_cache = None
 
         # 线程池配置
@@ -96,6 +164,18 @@ class ExchangeChangQiao(Exchange):
         self.executor = ThreadPoolExecutor(max_workers=16)
         # 初始化限流器 (10 QPS)
         self.rate_limiter = RateLimiter(calls=3, period=1.0)
+
+    def _quote_ctx(self) -> QuoteContext:
+        # QuoteContext 建立时会初始化行情连接，这里按需创建并复用单例连接。
+        if self._quote_context is None:
+            self._quote_context = QuoteContext(self.config)
+        return self._quote_context
+
+    def _trade_ctx(self) -> TradeContext:
+        # TradeContext 同样使用懒加载，避免只查行情时也初始化交易连接。
+        if self._trade_context is None:
+            self._trade_context = TradeContext(self.config)
+        return self._trade_context
 
     def default_code(self) -> str:
         return "TSLA.US"
@@ -116,7 +196,7 @@ class ExchangeChangQiao(Exchange):
         if self.stock_list_cache is not None:
             return self.stock_list_cache
         try:
-            resp = self.quote_ctx.security_list(Market.US, SecurityListCategory.Overnight)
+            resp = self._quote_ctx().security_list(Market.US, SecurityListCategory.Overnight)
             self.stock_list_cache = [{"code": info.symbol, "name": info.name_en} for info in resp]
             return self.stock_list_cache
         except Exception as e:
@@ -134,7 +214,7 @@ class ExchangeChangQiao(Exchange):
             try:
                 et_timezone = pytz.timezone('America/New_York')
                 now_et = datetime.now(et_timezone).time()
-                sessions = self.quote_ctx.trading_session()
+                sessions = self._quote_ctx().trading_session()
 
                 for session in sessions:
                     if session.market == Market.US:
@@ -175,7 +255,7 @@ class ExchangeChangQiao(Exchange):
         带限流和重试的 API 调用
         """
         self.rate_limiter.wait()
-        return self.quote_ctx.history_candlesticks_by_offset(
+        return self._quote_ctx().history_candlesticks_by_offset(
             symbol=symbol,
             period=period,
             adjust_type=adjust_type,
@@ -431,7 +511,7 @@ class ExchangeChangQiao(Exchange):
         """
         def _do_ticks():
             try:
-                quotes = self.quote_ctx.quote(codes)
+                quotes = self._quote_ctx().quote(codes)
                 res = {}
                 for q in quotes:
                     last_done = float(q.last_done)
@@ -472,7 +552,7 @@ class ExchangeChangQiao(Exchange):
         try:
             # 兼容处理
             symbol = code if code.endswith('.US') else f"{code}.US"
-            infos = self.quote_ctx.static_info([symbol])
+            infos = self._quote_ctx().static_info([symbol])
             if not infos:
                 return None
             info = infos[0]
@@ -500,7 +580,7 @@ class ExchangeChangQiao(Exchange):
         获取账户余额
         """
         try:
-            balances = self.trade_ctx.account_balance()
+            balances = self._trade_ctx().account_balance()
             if not balances:
                 return {}
             b = balances[0]
@@ -518,7 +598,7 @@ class ExchangeChangQiao(Exchange):
         获取持仓
         """
         try:
-            resp = self.trade_ctx.stock_positions()
+            resp = self._trade_ctx().stock_positions()
             positions = []
             for channel in resp.channels:
                 for p in channel.positions:
@@ -551,7 +631,7 @@ class ExchangeChangQiao(Exchange):
         qty = Decimal(str(amount))
 
         try:
-            resp = self.trade_ctx.submit_order(
+            resp = self._trade_ctx().submit_order(
                 symbol=code,
                 order_type=order_type,
                 side=side,
