@@ -71,9 +71,6 @@ UV 和 Conda 任选一个自己喜欢的就行
       uv venv --python=3.11 .venv
       uv sync
 
-      # 检查环境
-      uv run check_env.py
-
       # 运行 Web 服务
       uv run web/chanlun_chart/app.py
 
@@ -89,9 +86,6 @@ UV 和 Conda 任选一个自己喜欢的就行
       pip3 install package/pytdx-1.72r2-py3-none-any.whl
       pip3 install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
       pip3 install -r requirements.txt
-
-      # 检查环境
-      python check_env.py
 
       # 运行 Web 服务
       python web/chanlun_chart/app.py

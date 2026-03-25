@@ -14,9 +14,6 @@ Supported markets: 沪深A股, 港股, 美股, 国内期货, 纽约期货, 外�
 # Install dependencies (uv preferred)
 uv sync
 
-# Validate environment
-python check_env.py
-
 # Run web application (port 9900)
 uv run  web/chanlun_chart/app.py
 ```

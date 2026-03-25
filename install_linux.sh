@@ -53,15 +53,10 @@ else
     echo "获取授权文件后，请放置到 src/pyarmor_runtime_005445/ 目录下"
 fi
 
-# 5. 验证环境
-echo ""
-echo "[5/5] 验证环境..."
-uv run python check_env.py
-
 echo ""
 echo "=== 安装完成! ==="
 echo ""
 echo "启动服务:"
-echo "  uv run python web/chanlun_chart/app.py"
+echo "  uv run web/chanlun_chart/app.py"
 echo ""
 echo "启动后访问 http://localhost:9900"

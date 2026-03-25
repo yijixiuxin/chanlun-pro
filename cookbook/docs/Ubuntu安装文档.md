@@ -67,14 +67,9 @@ uv run web/chanlun_chart/app.py
 
 ### 4. 在 `src/chanlun` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
 
-### 5. 运行项目根目录中的 `check_env.py` 文件，检查环境是否OK，如果输出 “环境OK”，则可以继续进行，如果有错误，则安装提示进行修复
+### 5. 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
 
-         conda activate chanlun
-         python check_env.py
-
-### 6. 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
-
-#### 7. 到 `web/chanlun_chart` 目录，启动 web 服务
+### 6. 到 `web/chanlun_chart` 目录，启动 web 服务
 
          # 使用 conda 环境
          conda activate chanlun
