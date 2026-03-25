@@ -321,7 +321,7 @@ if __name__ == "__main__":
     bkgn = StocksBKGN()
     # 重新更新并保存行业与板块信息
 
-    bkgn.reload_bkgn()
+    # bkgn.reload_bkgn()
 
     # 所有行业概念
     bkgn_infos = bkgn.file_bkgns()

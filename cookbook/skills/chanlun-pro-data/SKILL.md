@@ -1,14 +1,34 @@
 ---
 name: chanlun-pro-data
 description: "获取 chanlun-pro 项目的行情数据与缠论结构化数据，支持多市场多周期"
+metadata:
+  project_path: "<设置为你本地的 chanlun-pro 项目路径>"
+  execution: "uv run"
 ---
 
 # Chanlun-Pro Data Retrieval Skill
 
-在使用本技能前，确保项目已安装并配置好环境变量：
+## 项目路径
+
+**chanlun-pro 项目路径：** `<CHANLUN_PRO_PATH>` （使用前请在配置中设置为你本地的项目路径）
+
+## 脚本执行方式
+
+使用 `uv run` 在 chanlun-pro 目录下执行 scripts 脚本：
+
 ```bash
-export PYTHONPATH="/path/to/chanlun-pro/src:$PYTHONPATH"
+cd <CHANLUN_PRO_PATH>
+uv run python scripts/xxx.py
 ```
+
+或使用 `uv run` 直接执行模块：
+
+```bash
+cd <CHANLUN_PRO_PATH>
+uv run python -m cookbook.skills.chanlun-pro-data.scripts.get_market_data
+```
+
+在使用本技能前，确保项目已安装并配置好环境变量：
 
 ## 核心功能
 
