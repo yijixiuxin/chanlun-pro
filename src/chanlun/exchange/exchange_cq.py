@@ -352,14 +352,14 @@ class ExchangeChangQiao(Exchange):
 
         # 1. 默认回看周期配置
         DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=30),
-            "5m": timedelta(days=60),
+            "1m": timedelta(days=90),
+            "5m": timedelta(days=150),
             "15m": timedelta(days=90),
-            "30m": timedelta(days=365),
-            "60m": timedelta(days=365),
-            "d": timedelta(days=365 * 5),
-            "w": timedelta(days=365 * 5),
-            "m": timedelta(days=365 * 10),
+            "30m": timedelta(days=365 * 5),
+            "60m": timedelta(days=365 * 8),
+            "d": timedelta(days=365 * 10),
+            "w": timedelta(days=365 * 20),
+            "m": timedelta(days=365 * 30),
         }
 
         # 2. 时间标准化处理
