@@ -14,7 +14,7 @@ from chanlun.db import db
 from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
-
+from chanlun.exchange.exchange import convert_fx_kline_frequency
 
 @fun.singleton
 class ExchangeTDXFX(Exchange):
@@ -85,6 +85,7 @@ class ExchangeTDXFX(Exchange):
             "m": "M",
             "w": "W",
             "d": "D",
+            "4h": "4H",
             "60m": "60m",
             "30m": "30m",
             "15m": "15m",
@@ -170,6 +171,7 @@ class ExchangeTDXFX(Exchange):
             "m": 6,
             "w": 5,
             "d": 9,
+            "4h": 3,
             "60m": 3,
             "30m": 2,
             "15m": 1,
@@ -246,6 +248,10 @@ class ExchangeTDXFX(Exchange):
 
             # 将 volume 转换成 float类型
             klines[["volume"]] = klines[["volume"]].astype(float)
+
+            # 转换时间周期
+            if frequency in ["4h"]:
+                klines = convert_fx_kline_frequency(klines, frequency)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
@@ -330,11 +336,20 @@ class ExchangeTDXFX(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXFX()
-    stocks = ex.all_stocks()
-    print(len(stocks))
-    print(stocks)
+    # stocks = ex.all_stocks()
+    # print(len(stocks))
+    # print(stocks)
     # print(ex.market_maps)
 
-    klines = ex.klines("FX.GBPEUR", "1m", args={"pages": 10})
+    klines = ex.klines("FX.GBPEUR", "30m")
     print(len(klines))
     print(klines)
+    print('-----------------')
+    klines = ex.klines("FX.GBPEUR", "60m")
+    print(len(klines))
+    print(klines)
+    print('-----------------')
+    klines = ex.klines("FX.GBPEUR", "4h")
+    print(len(klines))
+    print(klines)
+    print('-----------------')

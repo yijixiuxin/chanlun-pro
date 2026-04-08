@@ -861,6 +861,49 @@ def convert_us_tdx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFr
 
     return period_klines[["code", "date", "open", "high", "low", "close", "volume"]]
 
+def convert_fx_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:
+    """
+    外汇k线转换方法
+    """
+
+    period_maps = {
+        "4h": "4H",
+    }
+    if len(klines) == 0:
+        return klines
+
+    code = klines.iloc[0]["code"]
+
+    klines.insert(0, column="date_index", value=klines["date"])
+    klines.set_index("date_index", inplace=True)
+    period_type = period_maps[to_f]
+
+    agg_dict = {
+        "date": "first",
+        "open": "first",
+        "close": "last",
+        "high": "max",
+        "low": "min",
+        "volume": "sum",
+    }
+
+    period_klines = klines.resample(period_type, label="right", closed="left").agg(
+        agg_dict
+    )
+
+    period_klines.loc[:, "date"] = period_klines.index
+    period_klines["date"] = period_klines["date"] - pd.to_timedelta(period_maps[to_f])
+    period_klines.loc[:, "code"] = code
+    period_klines.loc[:, "frequency"] = to_f
+
+    period_klines.dropna(inplace=True)
+    period_klines.reset_index(inplace=True)
+    period_klines.drop("date_index", axis=1, inplace=True)
+
+    return period_klines[
+        ["date", "frequency", "code", "high", "low", "open", "close", "volume"]
+    ]
+
 
 def get_ny_future_trade_day(dt: pd.Timestamp) -> pd.Timestamp:
     if dt.hour < 6:
