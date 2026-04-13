@@ -1,14 +1,13 @@
 import datetime
-import time
 from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+from xtquant import xtdata
 
 from chanlun import fun
 from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
-from xtquant import xtdata
 
 """
 QMT 沪深行情
@@ -180,7 +179,7 @@ class ExchangeQMT(Exchange):
         )
         if kline_exists is None or kline_exists["time"].empty:
             # 如果没有数据，则全量下载
-            s_time = time.time()
+            # s_time = time.time()
             # 根据周期，决定下载的时间起始日期
             if frequency in ["1m", "3m"]:
                 download_start_date = fun.datetime_to_str(
@@ -228,7 +227,6 @@ class ExchangeQMT(Exchange):
         )
         # print(f"{code}-{frequency} 获取历史数据耗时：{time.time() - s_time}")
 
-        s_time = time.time()
         klines_df = pd.DataFrame(
             {key: value.values[0] for key, value in qmt_klines.items()}
         )
@@ -414,17 +412,9 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    klines = ex.klines(
-        "SZ.002645",
-        "1m",
-    )
+    klines = ex.klines("SH.510300", "d", start_date="2000-01-01")
 
-    # 2026-02-04 日期的 volume 累加
-    klines["ddd"] = klines["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
-    volume = klines[klines["ddd"] == "2026-02-04"]["volume"].sum()
-
-    print(klines[klines["ddd"] == "2026-02-04"])
-    print(volume)
+    print(klines)
 
     # stock = ex.stock_info("SH.000001")
     # print(stock)
