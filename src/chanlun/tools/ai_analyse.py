@@ -15,7 +15,6 @@ from chanlun.db import db, TableByAIAnalyse
 
 
 class AIAnalyse:
-
     def __init__(self, market: str):
         self.market = market
         self.ex = get_exchange(market=Market(self.market))
