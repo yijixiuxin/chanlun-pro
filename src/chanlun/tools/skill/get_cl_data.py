@@ -66,11 +66,13 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
             "klines_count": int,
             "latest_price": float,
             "latest_date": str,
+            "stock_info": Dict 股票基本信息,
             "bis": List[笔信息],
             "xds": List[线段信息],
-            "zss": List[中枢信息],
+            "zss": Dict 不同类型中枢信息,
             "mmds": List[买卖点信息],
             "bcs": List[背驰信息],
+            "zs_relationships": List 中枢位置关系,
         }
 
     Example:
@@ -84,21 +86,12 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
     if cd is None:
         return {}
 
+    # 获取股票信息
+    ex = get_exchange(_get_market_enum(market))
+    stock_info = ex.stock_info(code) or {}
+
     klines = cd.get_src_klines()
     latest_k = klines[-1] if klines else None
-
-    def _format_k(k):
-        """格式化K线数据"""
-        if k is None:
-            return None
-        return {
-            "date": str(k.date) if hasattr(k, "date") else None,
-            "open": k.o,
-            "high": k.h,
-            "low": k.l,
-            "close": k.c,
-            "volume": k.v,
-        }
 
     def _format_bi(bi):
         """格式化笔数据"""
@@ -111,8 +104,9 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
             "is_done": bi.is_done(),
             "high": bi.high,
             "low": bi.low,
-            "mmds": [m.type for m in bi.mmds] if hasattr(bi, "mmds") else [],
-            "bcs": [b.type for b in bi.bcs] if hasattr(bi, "bcs") else [],
+            "mmds": [m for m in bi.get_mmds("|")],
+            "bcs": [b for b in bi.get_bcs("|")],
+            "length": abs(bi.end.val - bi.start.val) if bi.start and bi.end else None,
         }
 
     def _format_xd(xd):
@@ -126,8 +120,9 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
             "is_done": xd.is_done(),
             "high": xd.high,
             "low": xd.low,
-            "mmds": [m.type for m in xd.mmds] if hasattr(xd, "mmds") else [],
-            "bcs": [b.type for b in xd.bcs] if hasattr(xd, "bcs") else [],
+            "mmds": [m for m in xd.get_mmds("|")],
+            "bcs": [b for b in xd.get_bcs("|")],
+            "length": abs(xd.end.val - xd.start.val) if xd.start and xd.end else None,
         }
 
     def _format_zs(zs):
@@ -143,24 +138,36 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
             "dd": zs.dd,  # 低低点
             "level": getattr(zs, "level", 1),  # 中枢级别
             "line_num": getattr(zs, "line_num", 0),  # 构成中枢的线段数量
+            "range": zs.zg - zs.zd
+            if hasattr(zs, "zg") and hasattr(zs, "zd")
+            else None,  # 中枢范围
         }
 
-    def _format_mmd(mmd):
-        """格式化买卖点数据"""
-        return {
-            "type": mmd.type,
-            "name": getattr(mmd, "name", mmd.type),
-            "price": getattr(mmd, "price", None),
-            "index": getattr(mmd, "index", None),
-        }
+    # 获取不同类型的中枢数据
+    zss_by_type = {}
+    zs_relationships = []
+    for zs_type in cd.get_config().get("zs_bi_type", ["zs_type_bz"]):
+        zss = cd.get_bi_zss(zs_type)
+        if zss:
+            zss_by_type[zs_type] = [_format_zs(zs) for zs in zss[-3:]]
+            # 分析中枢位置关系
+            if len(zss) >= 2:
+                zs_direction = cd.zss_is_qs(zss[-2], zss[-1])
+                zs_relationships.append(
+                    {
+                        "zs_type": zs_type,
+                        "direction": zs_direction,
+                        "current_zs": _format_zs(zss[-1]),
+                        "previous_zs": _format_zs(zss[-2]),
+                    }
+                )
 
-    def _format_bc(bc):
-        """格式化背驰数据"""
-        return {
-            "type": bc.type,
-            "name": getattr(bc, "name", bc.type),
-            "bis": [_format_bi(b) for b in bc.bis] if hasattr(bc, "bis") else [],
-        }
+    # 获取所有笔的买卖点和背驰
+    all_mmds = []
+    all_bcs = []
+    for bi in cd.get_bis()[-9:]:
+        all_mmds.extend([m for m in bi.get_mmds("|")])
+        all_bcs.extend([b for b in bi.get_bcs("|")])
 
     return {
         "code": cd.get_code(),
@@ -168,11 +175,13 @@ def get_cl_structured_data(market: str, code: str, frequency: str) -> Dict[str, 
         "klines_count": len(klines),
         "latest_price": latest_k.c if latest_k else None,
         "latest_date": str(latest_k.date) if latest_k else None,
-        "bis": [_format_bi(bi) for bi in cd.get_bis()],
-        "xds": [_format_xd(xd) for xd in cd.get_xds()],
-        "zss": [_format_zs(zs) for zs in cd.get_zss()],
-        "mmds": [_format_mmd(mmd) for mmd in cd.get_mmds()],
-        "bcs": [_format_bc(bc) for bc in cd.get_bcs()],
+        "stock_info": stock_info,
+        "bis": [_format_bi(bi) for bi in cd.get_bis()[-9:]],
+        "xds": [_format_xd(xd) for xd in cd.get_xds()[-3:]],
+        "zss": zss_by_type,
+        "mmds": list(set(all_mmds)),
+        "bcs": list(set(all_bcs)),
+        "zs_relationships": zs_relationships,
     }
 
 
@@ -221,3 +230,56 @@ def _get_market_enum(market: str) -> Market:
     if market not in market_map:
         raise ValueError(f"不支持的市场: {market}")
     return market_map[market]
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description="缠论数据获取工具")
+    parser.add_argument("--fun", type=str, required=True, help="要调用的方法名")
+    parser.add_argument("--market", type=str, help="市场标识")
+    parser.add_argument("--code", type=str, help="标的代码")
+    parser.add_argument("--codes", type=str, help="标的代码列表，逗号分隔")
+    parser.add_argument("--frequency", type=str, help="周期")
+
+    args = parser.parse_args()
+
+    # 构建参数字典
+    kwargs = {}
+    if args.market:
+        kwargs["market"] = args.market
+    if args.code:
+        kwargs["code"] = args.code
+    if args.codes:
+        kwargs["codes"] = args.codes.split(",")
+    if args.frequency:
+        kwargs["frequency"] = args.frequency
+
+    # 调用指定方法
+    fun_map = {
+        "get_cl_data": get_cl_data,
+        "get_cl_structured_data": get_cl_structured_data,
+        "batch_get_cl_data": batch_get_cl_data,
+    }
+
+    if args.fun not in fun_map:
+        print(f"不支持的方法: {args.fun}")
+        exit(1)
+
+    try:
+        result = fun_map[args.fun](**kwargs)
+        # 对于 get_cl_data 返回的对象，需要特殊处理
+        if args.fun == "get_cl_data" and result:
+            # 转换为结构化数据以便输出
+            structured_result = get_cl_structured_data(
+                args.market, args.code, args.frequency
+            )
+            print(json.dumps(structured_result, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+    except Exception as e:
+        print(f"执行出错: {e}")
+        import traceback
+
+        traceback.print_exc()

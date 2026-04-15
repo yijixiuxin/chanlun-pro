@@ -173,3 +173,79 @@ def get_multiple_market_data(
             print(f"获取 {code} 数据失败: {e}")
             result[code] = pd.DataFrame()
     return result
+
+
+def _json_serial(obj):
+    """JSON序列化辅助函数，处理Timestamp等类型"""
+    from pandas import Timestamp
+
+    if isinstance(obj, Timestamp):
+        return obj.strftime("%Y-%m-%d %H:%M:%S")
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description="行情数据获取工具")
+    parser.add_argument("--fun", type=str, required=True, help="要调用的方法名")
+    parser.add_argument("--market", type=str, help="市场标识")
+    parser.add_argument("--code", type=str, help="标的代码")
+    parser.add_argument("--codes", type=str, help="标的代码列表，逗号分隔")
+    parser.add_argument("--frequency", type=str, help="周期")
+
+    args = parser.parse_args()
+
+    # 构建参数字典
+    kwargs = {}
+    if args.market:
+        kwargs["market"] = args.market
+    if args.code:
+        kwargs["code"] = args.code
+    if args.codes:
+        kwargs["codes"] = args.codes.split(",")
+    if args.frequency:
+        kwargs["frequency"] = args.frequency
+
+    # 调用指定方法
+    fun_map = {
+        "list_supported_markets": list_supported_markets,
+        "list_supported_frequencies": list_supported_frequencies,
+        "list_all_market_frequencies": list_all_market_frequencies,
+        "get_market_data": get_market_data,
+        "get_multiple_market_data": get_multiple_market_data,
+    }
+
+    if args.fun not in fun_map:
+        print(f"不支持的方法: {args.fun}")
+        exit(1)
+
+    def _process_result(obj):
+        """处理结果中的DataFrame对象"""
+        if hasattr(obj, "to_dict"):
+            # 只返回最后50行数据
+            obj = obj.tail(50)
+            return obj.to_dict(orient="records")
+        elif isinstance(obj, dict):
+            return {k: _process_result(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_process_result(item) for item in obj]
+        else:
+            return obj
+
+    try:
+        result = fun_map[args.fun](**kwargs)
+        # 处理结果中的DataFrame对象
+        processed_result = _process_result(result)
+        # 输出处理后的结果
+        print(
+            json.dumps(
+                processed_result, ensure_ascii=False, indent=2, default=_json_serial
+            )
+        )
+    except Exception as e:
+        print(f"执行出错: {e}")
+        import traceback
+
+        traceback.print_exc()
