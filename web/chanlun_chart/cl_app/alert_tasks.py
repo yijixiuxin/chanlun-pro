@@ -40,6 +40,7 @@ class AlertTasks(object):
                         name=f"监控-{_t.task_name}",
                         minute=f"*/{_t.interval_minutes}",
                         second="0",
+                        misfire_grace_time=30,  # 允许错过后30秒内补执行
                     )
                 else:
                     # 60分钟及以上，按小时运行
@@ -53,6 +54,7 @@ class AlertTasks(object):
                         hour=f"*/{hours}",
                         minute="0",
                         second="0",
+                        misfire_grace_time=30,  # 允许错过后30秒内补执行
                     )
 
                 self.task_ids.append(_job.id)
@@ -104,7 +106,7 @@ class AlertTasks(object):
                     cl_config=cl_config,
                 )
             except Exception as e:
-                self.log.error(f'run {s["code"]} alert exception {e}')
+                self.log.error(f"run {s['code']} alert exception {e}")
 
         return True
 
