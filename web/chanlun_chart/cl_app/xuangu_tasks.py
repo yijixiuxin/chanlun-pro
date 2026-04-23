@@ -1,17 +1,17 @@
 import datetime
+import os
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from typing import Dict, List
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from chanlun import zixuan
-from chanlun import fun
-from chanlun import utils
-from chanlun.exchange import Market, get_exchange
-from chanlun.xuangu import xuangu
-from chanlun.trader.online_market_datas import OnlineMarketDatas
 from tqdm.auto import tqdm
-from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import get_context
+
+from chanlun import fun, utils, zixuan
+from chanlun.cl_utils import query_cl_chart_config
+from chanlun.exchange import Market, get_exchange
+from chanlun.trader.online_market_datas import OnlineMarketDatas
+from chanlun.xuangu import xuangu
 
 log = fun.get_logger()
 
@@ -132,33 +132,34 @@ def process_xuangu_task(
         zx.clear_zx_stocks(target_zx_group)
 
         # 多进程版本
-        # with ProcessPoolExecutor(
-        #     max_workers=5,
-        #     mp_context=get_context("spawn"),
-        # ) as executor:
-        #     bar = tqdm(run_codes, desc="选股进度")
-        #     for _xg_res in executor.map(
-        #         process_xuangu_by_code,
-        #         [(_c, market, freqs, task_name, opt_types) for _c in run_codes],
-        #         chunksize=5,
-        #     ):
-        #         bar.update(1)
-        #         if _xg_res is not None:
-        #             tqdm.write(
-        #                 f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
-        #             )
-        #             zx.add_stock(target_zx_group, _xg_res["code"], None)
+        max_workers = int(os.cpu_count() / 2)
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=get_context("spawn"),
+        ) as executor:
+            bar = tqdm(run_codes, desc="选股进度")
+            for _xg_res in executor.map(
+                process_xuangu_by_code,
+                [(_c, market, freqs, task_name, opt_types) for _c in run_codes],
+                chunksize=5,
+            ):
+                bar.update(1)
+                if _xg_res is not None:
+                    tqdm.write(
+                        f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
+                    )
+                    zx.add_stock(target_zx_group, _xg_res["code"], None)
 
         # 单进程版本
-        for _code in tqdm(run_codes, desc="选股进度"):
-            _xg_res = process_xuangu_by_code(
-                (_code, market, freqs, task_name, opt_types)
-            )
-            if _xg_res is not None:
-                tqdm.write(
-                    f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
-                )
-                zx.add_stock(target_zx_group, _xg_res["code"], None)
+        # for _code in tqdm(run_codes, desc="选股进度"):
+        #     _xg_res = process_xuangu_by_code(
+        #         (_code, market, freqs, task_name, opt_types)
+        #     )
+        #     if _xg_res is not None:
+        #         tqdm.write(
+        #             f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
+        #         )
+        #         zx.add_stock(target_zx_group, _xg_res["code"], None)
 
         xg_stocks = zx.zx_stocks(target_zx_group)
         utils.send_fs_msg(
