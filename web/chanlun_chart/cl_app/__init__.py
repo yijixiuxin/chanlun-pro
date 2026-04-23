@@ -1413,7 +1413,8 @@ def create_app(test_config=None):
         market = request.form["market"]
         task_name = request.form["task_name"]
         frequencys = request.form["frequencys"]
-        zx_group = request.form["zx_group"]
+        src_zx_group = request.form["src_zx_group"]
+        target_zx_group = request.form["target_zx_group"]
         opt_type = request.form["opt_type"]
 
         frequencys = frequencys.split(",")
@@ -1432,7 +1433,7 @@ def create_app(test_config=None):
             }
 
         run_res = _xuangu_tasks.run_xuangu(
-            market, task_name, frequencys, opt_type, zx_group
+            market, task_name, frequencys, opt_type, src_zx_group, target_zx_group
         )
 
         return {
