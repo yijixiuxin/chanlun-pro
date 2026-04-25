@@ -394,6 +394,14 @@ class ExchangeChangQiao(Exchange):
             lookback = DEFAULT_LOOKBACK.get(frequency, timedelta(days=30))
             start_dt = end_dt - lookback
 
+        # 限制最大回看范围：不允许请求超过 DEFAULT_LOOKBACK 的历史数据
+        max_lookback = DEFAULT_LOOKBACK.get(frequency, timedelta(days=30))
+        earliest_allowed = now_dt - max_lookback
+        if start_dt < earliest_allowed:
+            start_dt = earliest_allowed
+        if start_dt >= end_dt:
+            return pd.DataFrame()
+
         # 3. 周期映射
         period_map = {
             "1m": Period.Min_1, "5m": Period.Min_5, "15m": Period.Min_15,
