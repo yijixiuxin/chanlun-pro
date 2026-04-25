@@ -33,6 +33,13 @@ class XdCalculator:
         """
         return max(bi1.low, bi2.low) <= min(bi1.high, bi2.high)
 
+    def _check_overlap_with_cs_dict(self, bi: BI, cs_dict: dict) -> bool:
+        """
+        检查一笔与包含处理后的特征序列元素(dict)的价格区间是否有重叠。
+        使用 dict 中的 high/low（合并后的实际值），而非原始 BI 对象的值。
+        """
+        return max(bi.low, cs_dict['low']) <= min(bi.high, cs_dict['high'])
+
     def _find_critical_bi_and_truncate(self, all_bis: List[BI]) -> int:
         """
         找到一个关键的笔作为分析起点，并返回其索引。
@@ -59,7 +66,7 @@ class XdCalculator:
                 is_start_lower = (bi_i.low < bi_i_plus_2.low and
                                   bi_i.low < bi_i_plus_4.low)
                 is_end_lower = (bi_i.high < bi_i_plus_2.high and
-                              bi_i.high < bi_i_plus_4.high)
+                                bi_i.high < bi_i_plus_4.high)
                 if is_start_lower and is_end_lower:
                     is_critical = True
 
@@ -74,12 +81,11 @@ class XdCalculator:
         return [bi for bi in segment_bis if bi.type == cs_type]
 
     def _check_inclusion_dict(self, bi1: dict, bi2: dict, direction: str) -> bool:
-        """检查字典格式的两笔是否存在包含关系"""
+        """检查字典格式的两笔是否存在包含关系（双向）"""
         high1, low1 = bi1.get('high'), bi1.get('low')
         high2, low2 = bi2.get('high'), bi2.get('low')
-        # 缠论的定义是 高点>=高点 且 低点<=低点 (而不是 bi1.high > bi2.high and bi1.low < bi2.low)
-        # 注意：这里保持了原有的 >= 和 <= 逻辑，这似乎是标准定义
-        return high1 >= high2 and low1 <= low2
+        # 包含关系是双向的：bi1包含bi2 或 bi2包含bi1
+        return (high1 >= high2 and low1 <= low2) or (high2 >= high1 and low2 <= low1)
 
     def _process_inclusion(self, bis: Union[List[BI], List[dict]], direction: str) -> List[dict]:
         """
@@ -158,7 +164,7 @@ class XdCalculator:
         for i in range(len(processed_cs) - 2):
             cs1, cs2, cs3 = processed_cs[i:i + 3]
             h2 = cs2['high']
-            is_high_highest = h2 >= cs1['high'] and h2 >= cs3['high']
+            is_high_highest = h2 > cs1['high'] and h2 > cs3['high']
             if is_high_highest:
                 return True, cs2, cs3
         return False, None, None
@@ -171,18 +177,26 @@ class XdCalculator:
         for i in range(len(processed_cs) - 2):
             cs1, cs2, cs3 = processed_cs[i:i + 3]
             l2 = cs2['low']
-            is_low_lowest = l2 <= cs1['low'] and l2 <= cs3['low']
+            is_low_lowest = l2 < cs1['low'] and l2 < cs3['low']
             if is_low_lowest:
                 return True, cs2, cs3
         return False, None, None
 
-    def _get_segment_end_bi_from_middle_cs(self, middle_cs: dict, all_bis: List[BI]) -> Optional[BI]:
-        """根据分型的中间笔确定线段的结束笔"""
+    def _get_segment_end_bi_from_middle_cs(self, middle_cs: dict, all_bis: List[BI],
+                                           segment_type: str = 'up') -> Optional[BI]:
+        """根据分型的中间笔确定线段的结束笔。
+        对于合并笔，根据线段方向选取极值对应的原始笔：
+        - 上涨线段（顶分型）：取 high 最大的原始笔（起点最高的下跌笔）
+        - 下跌线段（底分型）：取 low 最小的原始笔（终点最低的上涨笔）
+        """
         target_bi = None
         if middle_cs.get('is_merged') and 'original_bis' in middle_cs:
             original_bis = middle_cs.get('original_bis', [])
             if original_bis:
-                target_bi = original_bis[0]  # 使用合并前的第一笔来定位
+                if segment_type == 'up':
+                    target_bi = max(original_bis, key=lambda b: b.high)
+                else:
+                    target_bi = min(original_bis, key=lambda b: b.low)
             else:
                 LogUtil.warning("中间笔为合并笔，但其 'original_bis' 为空。")
                 return None
@@ -214,10 +228,23 @@ class XdCalculator:
             LogUtil.error(f"获取线段结束笔时发生未知异常: {e}")
             return None
 
-    def _get_extremum_bi_from_cs(self, cs_bi: dict) -> BI:
-        """从特征序列笔中获取关键的原始笔（用于构建下一线段）"""
+    def _get_extremum_bi_from_cs(self, cs_bi: dict, segment_type: str) -> BI:
+        """从特征序列笔中获取极值对应的原始笔（用于确定分型的转折点位置）。
+        - 上涨线段（顶分型）：取 high 最大的原始笔
+        - 下跌线段（底分型）：取 low 最小的原始笔
+        """
         original_bis = cs_bi.get('original_bis', [cs_bi['bi']])
-        return original_bis[0] if original_bis else cs_bi['bi']
+        if not original_bis:
+            return cs_bi['bi']
+        if segment_type == 'up':
+            return max(original_bis, key=lambda b: b.high)
+        else:
+            return min(original_bis, key=lambda b: b.low)
+
+    def _get_endpoint_bi_from_cs(self, cs_bi: dict) -> BI:
+        """从特征序列笔中获取最后一个原始笔（用于确定下一线段的范围端点）。"""
+        original_bis = cs_bi.get('original_bis', [cs_bi['bi']])
+        return original_bis[-1] if original_bis else cs_bi['bi']
 
     def _calculate_segment_high_low(self, current_segment: Dict) -> (float, float):
         """根据 current_segment 的类型计算其高点和低点"""
@@ -256,10 +283,10 @@ class XdCalculator:
         if self.xds and all_bis and self._last_bi_snapshot:
             current_last_bi = all_bis[-1]
             last_idx, last_end_val = self._last_bi_snapshot
-            if (current_last_bi.index == last_idx and 
-                abs(current_last_bi.end.val - last_end_val) < 1e-9):
+            if (current_last_bi.index == last_idx and
+                    abs(current_last_bi.end.val - last_end_val) < 1e-9):
                 return []
-        
+
         # --- 状态处理：确定本次计算的起点 ---
         start_bi_index = 0
         if self.xds:
@@ -324,6 +351,13 @@ class XdCalculator:
                     next_segment_builder = None
                     continue
 
+                # 检查前三笔是否有重叠，无重叠则不能构成线段
+                if len(all_bis) > start_idx + 2:
+                    if not self._check_bi_overlap(all_bis[start_idx], all_bis[start_idx + 2]):
+                        current_list_index = start_idx + 1
+                        next_segment_builder = None
+                        continue
+
                 current_segment_bis = all_bis[start_idx: end_idx + 1]
                 current_segment = {'bis': current_segment_bis, 'type': next_segment_builder['next_segment_type']}
                 current_list_index = start_idx
@@ -360,8 +394,8 @@ class XdCalculator:
                             next_check_idx += 2
                             continue
 
-                        last_cs_bi = self._process_inclusion(cs_existing_raw, 'up')[-1]
-                        last_cs_original_bi = last_cs_bi['bi']
+                        processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
+                        last_cs_bi = processed_cs_existing[-1]
 
                         lookahead_bis = all_bis[next_check_idx:]
                         bounded_lookahead_bis = []
@@ -371,21 +405,18 @@ class XdCalculator:
                                 break
 
                         # 第一种情况：特征序列出现顶分型
-                        if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
-                            cs_existing_raw = self._process_inclusion(cs_existing_raw, 'down')
-                            processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
+                        if self._check_overlap_with_cs_dict(bi_for_fractal_check, last_cs_bi):
                             new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
-                            processed_cs_new = self._process_inclusion(new_cs_down_raw, 'up')
-                            final_processed_cs = ([processed_cs_existing[-1]] + processed_cs_new
-                                                  if processed_cs_existing else processed_cs_new)
+                            processed_new_cs = self._process_inclusion(new_cs_down_raw, 'up')
+                            final_processed_cs = processed_cs_existing + processed_new_cs
 
                             check1_passes, cs_middle, cs_right = self._check_top_fractal(final_processed_cs)
                             if check1_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis)
+                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis, 'up')
                                 if segment_end_bi:
                                     is_completed = True
-                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle)
-                                    right_bi = self._get_extremum_bi_from_cs(cs_right)
+                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle, 'up')
+                                    right_bi = self._get_endpoint_bi_from_cs(cs_right)
                                     break_info = {'next_segment_type': 'down',
                                                   'start_bi': peak_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
@@ -394,11 +425,9 @@ class XdCalculator:
                                 next_check_idx += len(bounded_lookahead_bis)
                                 continue
                         else:
-                            processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
                             new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
-                            processed_cs_new = self._process_inclusion(new_cs_down_raw, 'up')
-                            cs_for_check1 = ([processed_cs_existing[-1]] + processed_cs_new
-                                             if processed_cs_existing else processed_cs_new)
+                            processed_new_cs1 = self._process_inclusion(new_cs_down_raw, 'up')
+                            cs_for_check1 = processed_cs_existing + processed_new_cs1
                             check1_passes, cs_middle_top, cs_right_top = self._check_top_fractal(cs_for_check1)
 
                             next_segment_cs_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
@@ -406,15 +435,16 @@ class XdCalculator:
                             check2_passes, _, _ = self._check_bottom_fractal(processed_cs2)
 
                             if check1_passes and check2_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_top, all_bis)
+                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_top, all_bis, 'up')
                                 if segment_end_bi:
                                     is_completed = True
-                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle_top)
-                                    right_bi_for_builder = self._get_extremum_bi_from_cs(cs_right_top)
+                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle_top, 'up')
+                                    right_bi_for_builder = self._get_endpoint_bi_from_cs(cs_right_top)
                                     break_info = {'next_segment_type': 'down',
                                                   'start_bi': peak_bi, 'end_bi': right_bi_for_builder,
                                                   'segment_end_bi': segment_end_bi}
                             else:
+                                # 第二特征序列未出现分型，线段继续延伸
                                 current_segment['bis'].extend(bounded_lookahead_bis)
                                 next_check_idx += len(bounded_lookahead_bis)
                                 continue
@@ -433,8 +463,8 @@ class XdCalculator:
                             next_check_idx += 2
                             continue
 
-                        last_cs_bi = self._process_inclusion(cs_existing_raw, 'down')[-1]
-                        last_cs_original_bi = last_cs_bi['bi']
+                        processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
+                        last_cs_bi = processed_cs_existing[-1]
 
                         lookahead_bis = all_bis[next_check_idx:]
                         bounded_lookahead_bis = []
@@ -444,21 +474,18 @@ class XdCalculator:
                                 break
 
                         # 第一种情况：特征序列出现底分型
-                        if self._check_bi_overlap(bi_for_fractal_check, last_cs_original_bi):
-                            cs_existing_raw = self._process_inclusion(cs_existing_raw, 'up')
-                            processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
+                        if self._check_overlap_with_cs_dict(bi_for_fractal_check, last_cs_bi):
                             new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
-                            processed_cs_new = self._process_inclusion(new_cs_up_raw, 'down')
-                            final_processed_cs = ([processed_cs_existing[-1]] + processed_cs_new
-                                                  if processed_cs_existing else processed_cs_new)
+                            processed_new_cs = self._process_inclusion(new_cs_up_raw, 'down')
+                            final_processed_cs = processed_cs_existing + processed_new_cs
 
                             check1_passes, cs_middle, cs_right = self._check_bottom_fractal(final_processed_cs)
                             if check1_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis)
+                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis, 'down')
                                 if segment_end_bi:
                                     is_completed = True
-                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle)
-                                    right_bi = self._get_extremum_bi_from_cs(cs_right)
+                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle, 'down')
+                                    right_bi = self._get_endpoint_bi_from_cs(cs_right)
                                     break_info = {'next_segment_type': 'up',
                                                   'start_bi': trough_bi, 'end_bi': right_bi,
                                                   'segment_end_bi': segment_end_bi}
@@ -467,11 +494,9 @@ class XdCalculator:
                                 next_check_idx += len(bounded_lookahead_bis)
                                 continue
                         else:
-                            processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
                             new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
-                            processed_cs_new = self._process_inclusion(new_cs_up_raw, 'down')
-                            cs_for_check1 = ([processed_cs_existing[-1]] + processed_cs_new
-                                             if processed_cs_existing else processed_cs_new)
+                            processed_new_cs1 = self._process_inclusion(new_cs_up_raw, 'down')
+                            cs_for_check1 = processed_cs_existing + processed_new_cs1
 
                             check1_passes, cs_middle_bottom, cs_right_bottom = self._check_bottom_fractal(cs_for_check1)
                             next_segment_cs_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
@@ -479,15 +504,17 @@ class XdCalculator:
                             check2_passes, _, _ = self._check_top_fractal(processed_cs2)
 
                             if check1_passes and check2_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_bottom, all_bis)
+                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_bottom, all_bis,
+                                                                                         'down')
                                 if segment_end_bi:
                                     is_completed = True
-                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle_bottom)
-                                    right_bi_for_builder = self._get_extremum_bi_from_cs(cs_right_bottom)
+                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle_bottom, 'down')
+                                    right_bi_for_builder = self._get_endpoint_bi_from_cs(cs_right_bottom)
                                     break_info = {'next_segment_type': 'up',
                                                   'start_bi': trough_bi, 'end_bi': right_bi_for_builder,
                                                   'segment_end_bi': segment_end_bi}
                             else:
+                                # 第二特征序列未出现分型，线段继续延伸
                                 current_segment['bis'].extend(bounded_lookahead_bis)
                                 next_check_idx += len(bounded_lookahead_bis)
                                 continue
@@ -636,7 +663,7 @@ class XdCalculator:
                 if all_bis:
                     last_bi = all_bis[-1]
                     self._last_bi_snapshot = (last_bi.index, last_bi.end.val)
-            
+
             return self.xds[start_index_for_delta:]
         else:
             # Update snapshot
