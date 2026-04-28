@@ -6,6 +6,7 @@ launcher mode that wraps stdio into GBK to avoid encoding issues, and
 bootstraps the Flask/Tornado server.
 """
 
+import os
 import pathlib
 import sys
 
@@ -62,7 +63,21 @@ def main() -> None:
     try:
         app = create_app()
 
-        s = HTTPServer(WSGIContainer(app, executor=ThreadPoolExecutor(10)))
+        # ★ B5 修复：HTTP 线程池容量可配置，默认从 10 提升到 32。
+        # 之前的 10 worker 在多 tab + 多周期同时切换时极易堵塞：
+        # 一个图表初始化就要并行 N 个请求（symbols/config/history/marks/...），
+        # 多余请求在 Tornado 队列里排队，叠加 history 单仓信号量限流后体感"卡死"。
+        # tv.py 里大部分耗时在 IO（QMT/CQ 拉数据），不是 CPU 密集，
+        # 即使把 worker 数放大到 32~64 也不会显著抢占 GIL。
+        # 用环境变量 CHANLUN_HTTP_WORKERS 覆盖，便于按部署环境调优。
+        try:
+            http_workers = int(os.environ.get('CHANLUN_HTTP_WORKERS', '32'))
+            if http_workers < 1:
+                http_workers = 32
+        except (TypeError, ValueError):
+            http_workers = 32
+        LogUtil.info(f"HTTP 线程池容量: {http_workers}")
+        s = HTTPServer(WSGIContainer(app, executor=ThreadPoolExecutor(http_workers)))
         s.bind(9900, config.WEB_HOST)
 
         # 先启动 symbol 预加载后台线程：daemon 线程，不阻塞主流程，
@@ -70,6 +85,11 @@ def main() -> None:
         start_symbol_preload_thread()
 
         LogUtil.info("启动成功")
+        # ⚠️ 严禁改为 s.start(0) 或 s.start(N)（多进程模式）！
+        # 当前架构所有缓存（tv.py 的 chart_data_cache / stock_cache / chart_calc_locks /
+        # _history_req_locks，以及 file_db、QMT/CQ 的 singleton 实例字段）都是
+        # **进程内内存**，多进程会让缓存命中率瞬间归零、per-key 锁失效（不同进程不共享锁）。
+        # 如需扩容，请用反向代理 + 多端口部署，或先把缓存改造到 Redis。
         s.start(1)
 
         if len(sys.argv) >= 2 and sys.argv[1] == "nobrowser":

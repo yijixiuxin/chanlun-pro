@@ -1,5 +1,6 @@
 import datetime
 import json
+import threading
 import time
 import warnings
 from typing import List, Union
@@ -31,7 +32,7 @@ warnings.filterwarnings("ignore")
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
-Base = declarative_base()
+from chanlun.db_models.base import Base
 from chanlun.db_models.alert_record import TableByAlertRecord
 from chanlun.db_models.alert_task import TableByAlertTask
 from chanlun.db_models.cache import TableByCache
@@ -41,19 +42,8 @@ from chanlun.db_models.tv_marks import TableByTVMarks
 from chanlun.db_models.tv_marks_price import TableByTVMarksPrice
 from chanlun.db_models.zixuan import TableByZixuan
 from chanlun.db_models.zixuan_group import TableByZxGroup
-frequency = Column(String(10), comment="分析周期")
-dt = Column(DateTime, comment="分析时间")
-model = Column(String(100), comment="分析模型")
-prompt = Column(Text, comment="缠论当下说明")
-msg = Column(Text, comment="分析结果")
-
-# 添加配置设置编码
-__table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
-
-
 @fun.singleton
 class DB(object):
-    global Base
 
     def __init__(self) -> None:
         if config.DB_TYPE == "sqlite":
@@ -96,8 +86,26 @@ class DB(object):
         Base.metadata.create_all(self.engine)
 
         self.__cache_tables = {}
-        # 轻量级缓存：最后一根K线时间，降低重复查询成本
-        self._last_dt_cache = {}
+        # 轻量级缓存：最后一根K线时间，降低重复查询成本。
+        # 为避免多线程并发读写出现可见性问题（写入新 K 线时缓存与 DB 不一致），
+        # 使用一个独立的锁保护 _last_dt_cache 的所有读写。
+        self._last_dt_cache: dict = {}
+        self._last_dt_cache_lock = threading.Lock()
+
+    def _get_last_dt_cache(self, market: str, code: str, frequency: str):
+        """加锁读 _last_dt_cache。"""
+        with self._last_dt_cache_lock:
+            return self._last_dt_cache.get((market, code, frequency))
+
+    def _set_last_dt_cache(self, market: str, code: str, frequency: str, value):
+        """加锁写 _last_dt_cache。"""
+        with self._last_dt_cache_lock:
+            self._last_dt_cache[(market, code, frequency)] = value
+
+    def _invalidate_last_dt_cache(self, market: str, code: str, frequency: str):
+        """加锁失效 _last_dt_cache 中指定 key。"""
+        with self._last_dt_cache_lock:
+            self._last_dt_cache.pop((market, code, frequency), None)
 
     def klines_tables(self, market: str, stock_code: str):
         stock_code = (
@@ -164,17 +172,28 @@ class DB(object):
         end_date: datetime.datetime = None,
         limit: int = 5000,
         order: str = "desc",
+        auto_reverse: bool = False,
     ) -> List:
         """
-        获取k线数据
+        获取k线数据。
+
+        ⚠️ 注意返回方向：
+        - ``order='desc'``（默认）+ ``limit`` 是为了"取最近 N 根"而设计的，
+          因此返回结果是 **按 dt 降序** 的（最新的在 [0] 位置）。
+        - 缠论计算 / 大多数业务消费方期望的是 **升序**（最早的在 [0] 位置）。
+        - 调用方如果需要升序，可以：
+            a) 显式传 ``order='asc'``（但当 limit 生效时会取到"最早 N 根"，语义不同）；
+            b) 传 ``auto_reverse=True``：保持 desc+limit 的"取最近 N 根"语义，
+               但在返回前自动反转为升序，同时兼顾"最近 N 根 + 升序"两个诉求。
+
         :param market:
         :param code:
         :param frequency:
         :param start_date:
         :param end_date:
         :param limit:
-        :param order:
-        :return:
+        :param order: ``'desc'`` 或 ``'asc'``。
+        :param auto_reverse: 仅在 ``order='desc'`` 时生效，将结果反转为升序返回。
         """
         with self.Session() as session:
             table = self.klines_tables(market, code)
@@ -191,7 +210,10 @@ class DB(object):
                 query = query.order_by(table.dt.asc())
             if limit is not None:
                 query = query.limit(limit)
-            return query.all()
+            rows = query.all()
+            if auto_reverse and order == "desc":
+                rows = list(reversed(rows))
+            return rows
 
     def klines_last_datetime(self, market, code, frequency):
         """
@@ -201,10 +223,10 @@ class DB(object):
         :param frequency:
         :return:
         """
-        # 命中轻量级缓存，减少数据库查询
-        _cache_key = (market, code, frequency)
-        if _cache_key in self._last_dt_cache:
-            return self._last_dt_cache[_cache_key]
+        # 命中轻量级缓存（加锁），减少数据库查询
+        cached = self._get_last_dt_cache(market, code, frequency)
+        if cached is not None:
+            return cached
 
         with self.Session() as session:
             table = self.klines_tables(market, code)
@@ -222,12 +244,16 @@ class DB(object):
             else:
                 _res = last_date[0].strftime("%Y-%m-%d %H:%M:%S")
 
-        # 写入缓存
-        self._last_dt_cache[_cache_key] = _res
+        # 加锁写缓存
+        self._set_last_dt_cache(market, code, frequency, _res)
         return _res
 
+    # MySQL upsert 的批大小：默认 1000，受 max_allowed_packet 限制建议 500~5000。
+    # 之前直接调到 20000 在大列宽 K 线表上很容易触发 "MySQL server has gone away"。
+    KLINES_INSERT_BATCH_SIZE = 1000
+
     def klines_insert(
-            self, market: str, code: str, frequency: str, klines: pd.DataFrame
+        self, market: str, code: str, frequency: str, klines: pd.DataFrame
     ):
         """
         插入k线 (性能优化版)
@@ -236,25 +262,32 @@ class DB(object):
             return True
 
         # 1. 数据预处理 (Pandas 向量化操作，替代 iterrows)
-        # 复制一份以防修改原数据
         df = klines.copy()
 
-        # 统一处理时间：去除时区信息
-        if df["date"].dt.tz is not None:
-            df["dt"] = df["date"].dt.tz_localize(None)
-        else:
-            df["dt"] = df["date"]
+        # 统一处理时间：去除时区信息。鲁棒化处理：
+        # - 列已经是 tz-aware datetime 时，做 tz_localize(None)
+        # - 列是 tz-naive datetime 时，原样返回
+        # - 列是 object/混合类型时，用 pd.to_datetime 统一标准化
+        date_col = df["date"]
+        if not pd.api.types.is_datetime64_any_dtype(date_col):
+            date_col = pd.to_datetime(date_col, errors="coerce", utc=False)
+        if getattr(date_col.dt, "tz", None) is not None:
+            date_col = date_col.dt.tz_localize(None)
+        df["dt"] = date_col
+        # 异常 date 值不能写入 DB（主键），直接抛出让调用方处理。
+        if df["dt"].isna().any():
+            raise ValueError(
+                f"klines_insert({market},{code},{frequency}) 中存在无法解析的 date 值"
+            )
 
         # 映射列名：API返回的列名 -> 数据库列名
-        # 假设 API 列名为: open, close, high, low, volume, position
-        # 数据库列名为: o, c, h, l, v, p
         rename_map = {
             "open": "o",
             "close": "c",
             "high": "h",
             "low": "l",
             "volume": "v",
-            "position": "p"
+            "position": "p",
         }
         df.rename(columns=rename_map, inplace=True)
 
@@ -267,76 +300,63 @@ class DB(object):
         if "p" in df.columns:
             db_columns.append("p")
 
-        # 确保只包含存在的列，防止 KeyError
+        # 仅保留存在的列，防止 KeyError
         final_columns = [col for col in db_columns if col in df.columns]
-
-        # 【核心优化点】直接转换为字典列表，极快
         data_to_insert = df[final_columns].to_dict(orient="records")
+
+        # 写入前先失效缓存（保证读侧不会拿到过期 last_dt）
+        self._invalidate_last_dt_cache(market, code, frequency)
 
         with self.Session() as session:
             table = self.klines_tables(market, code)
 
-            # 如果是 SQLite，依然使用 ORM 的 merge 方式或者简化的 upsert
+            # SQLite 分支：逐行 upsert，必须有 try/except + rollback，
+            # 否则一条记录失败会让前面已 add 的数据状态不一致。
             if config.DB_TYPE == "sqlite":
-                # SQLite 处理逻辑保持现状，或者优化为 execute_many
-                # 这里为了稳妥，暂保持原有的逐行检查逻辑，但数据源已经是 dict list 了
-                # 如果对 SQLite 也有性能要求，建议改用 core insert + on_conflict_do_update
-                for _in_k in data_to_insert:
-                    db_k = (
-                        session.query(table)
-                        .filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
+                try:
+                    for _in_k in data_to_insert:
+                        db_k = (
+                            session.query(table)
+                            .filter(
+                                table.code == code,
+                                table.f == frequency,
+                                table.dt == _in_k["dt"],
+                            )
+                            .first()
                         )
-                        .first()
-                    )
-                    if db_k is None:
-                        session.add(table(**_in_k))
-                    else:
-                        session.query(table).filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
-                        ).update(_in_k)
-                session.commit()
-                self._last_dt_cache.pop((market, code, frequency), None)
+                        if db_k is None:
+                            session.add(table(**_in_k))
+                        else:
+                            session.query(table).filter(
+                                table.code == code,
+                                table.f == frequency,
+                                table.dt == _in_k["dt"],
+                            ).update(_in_k)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
                 return True
 
-            # MySQL 批量插入优化
-            # 增大 Batch Size (500 -> 20000)
-            batch_size = 20000
-
+            # MySQL 批量 upsert
+            batch_size = self.KLINES_INSERT_BATCH_SIZE
             try:
-                # 分块处理
                 for i in range(0, len(data_to_insert), batch_size):
-                    batch = data_to_insert[i: i + batch_size]
-
-                    # 构建 Insert 语句
+                    batch = data_to_insert[i : i + batch_size]
                     insert_stmt = insert(table).values(batch)
-
-                    # 构建 On Duplicate Key Update 语句
-                    # 排除主键/唯一索引列 (code, dt, f)
+                    # 主键/唯一索引列不参与 update
                     update_columns = {
-                        x.name: x for x in insert_stmt.inserted
-                        if x.name not in ["code", "dt", "f"]
+                        x.name: x
+                        for x in insert_stmt.inserted
+                        if x.name not in ("code", "dt", "f")
                     }
-
                     upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-
-                    # 执行
                     session.execute(upsert_stmt)
-
-                # 所有批次执行完再一次性提交，极大提升速度
                 session.commit()
-
             except Exception as e:
                 session.rollback()
                 LogUtil.error(f"Batch Insert Error: {e}")
-                raise e
-
-            # 失效缓存
-            self._last_dt_cache.pop((market, code, frequency), None)
+                raise
 
         return True
 
@@ -355,18 +375,22 @@ class DB(object):
         :param dt:
         :return:
         """
-        with self.Session() as session:
-            table = self.klines_tables(market, code)
-            q = session.query(table).filter(table.code == code)
-            if frequency is not None:
-                q = q.filter(table.f == frequency)
-            if dt is not None:
-                q = q.filter(table.dt == dt)
-            q.delete()
-            session.commit()
-        # 删除后失效缓存
+        # 删除前先失效缓存（无论后续是否成功），避免读到过期值。
         if frequency is not None:
-            self._last_dt_cache.pop((market, code, frequency), None)
+            self._invalidate_last_dt_cache(market, code, frequency)
+        with self.Session() as session:
+            try:
+                table = self.klines_tables(market, code)
+                q = session.query(table).filter(table.code == code)
+                if frequency is not None:
+                    q = q.filter(table.f == frequency)
+                if dt is not None:
+                    q = q.filter(table.dt == dt)
+                q.delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -387,12 +411,16 @@ class DB(object):
         添加自选分组
         """
         with self.Session() as session:
-            session.add(
-                TableByZxGroup(
-                    market=market, zx_group=zx_group, add_dt=datetime.datetime.now()
+            try:
+                session.add(
+                    TableByZxGroup(
+                        market=market, zx_group=zx_group, add_dt=datetime.datetime.now()
+                    )
                 )
-            )
-            session.commit()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -401,10 +429,14 @@ class DB(object):
         删除自选分组
         """
         with self.Session() as session:
-            session.query(TableByZxGroup).filter(
-                TableByZxGroup.market == market, TableByZxGroup.zx_group == zx_group
-            ).delete()
-            session.commit()
+            try:
+                session.query(TableByZxGroup).filter(
+                    TableByZxGroup.market == market, TableByZxGroup.zx_group == zx_group
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -433,52 +465,60 @@ class DB(object):
         location: str = "bottom",
     ):
         with self.Session() as session:
-            # 添加前，统一删除在自选组下的股票信息
-            session.query(TableByZixuan).filter(
-                TableByZixuan.market == market,
-                TableByZixuan.zx_group == zx_group,
-                TableByZixuan.stock_code == stock_code,
-            ).delete()
-
-            position = 0
-            if location == "top":
-                # 自选组的股票位置+1
+            try:
+                # 添加前，统一删除在自选组下的股票信息
                 session.query(TableByZixuan).filter(
-                    TableByZixuan.zx_group == zx_group
-                ).update(
-                    {TableByZixuan.position: TableByZixuan.position + 1},
-                    synchronize_session=False,
+                    TableByZixuan.market == market,
+                    TableByZixuan.zx_group == zx_group,
+                    TableByZixuan.stock_code == stock_code,
+                ).delete()
+
+                position = 0
+                if location == "top":
+                    # 自选组的股票位置+1
+                    session.query(TableByZixuan).filter(
+                        TableByZixuan.zx_group == zx_group
+                    ).update(
+                        {TableByZixuan.position: TableByZixuan.position + 1},
+                        synchronize_session=False,
+                    )
+                else:
+                    # 获取自选组的 position 最大值
+                    max_position = (
+                        session.query(func.max(TableByZixuan.position))
+                        .filter(TableByZixuan.market == market)
+                        .filter(TableByZixuan.zx_group == zx_group)
+                        .scalar()
+                    )
+                    position = max_position + 1 if max_position is not None else 0
+                zx_stock = TableByZixuan(
+                    market=market,
+                    zx_group=zx_group,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    stock_color=color,
+                    position=position,
+                    stock_memo=memo,
+                    add_datetime=datetime.datetime.now(),
                 )
-            else:
-                # 获取自选组的 position 最大值
-                max_position = (
-                    session.query(func.max(TableByZixuan.position))
-                    .filter(TableByZixuan.market == market)
-                    .filter(TableByZixuan.zx_group == zx_group)
-                    .scalar()
-                )
-                position = max_position + 1 if max_position is not None else 0
-            zx_stock = TableByZixuan(
-                market=market,
-                zx_group=zx_group,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                stock_color=color,
-                position=position,
-                stock_memo=memo,
-                add_datetime=datetime.datetime.now(),
-            )
-            session.add(zx_stock)
-            session.commit()
+                session.add(zx_stock)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def zx_del_group_stock(self, market: str, zx_group: str, stock_code: str):
         with self.Session() as session:
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).filter(TableByZixuan.stock_code == stock_code).delete()
-            session.commit()
+            try:
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).filter(TableByZixuan.stock_code == stock_code).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -486,12 +526,16 @@ class DB(object):
         self, market: str, zx_group: str, stock_code: str, color: str
     ):
         with self.Session() as session:
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).filter(TableByZixuan.stock_code == stock_code).update(
-                {"stock_color": color}, synchronize_session=False
-            )
-            session.commit()
+            try:
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).filter(TableByZixuan.stock_code == stock_code).update(
+                    {"stock_color": color}, synchronize_session=False
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -499,59 +543,75 @@ class DB(object):
         self, market: str, zx_group: str, stock_code: str, stock_name: str
     ):
         with self.Session() as session:
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).filter(TableByZixuan.stock_code == stock_code).update(
-                {"stock_name": stock_name}, synchronize_session=False
-            )
-            session.commit()
+            try:
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).filter(TableByZixuan.stock_code == stock_code).update(
+                    {"stock_name": stock_name}, synchronize_session=False
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def zx_stock_sort_top(self, market: str, zx_group: str, stock_code: str):
         with self.Session() as session:
-            # market、zx_group 结果下的 position + 1
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).update(
-                {"position": TableByZixuan.position + 1}, synchronize_session=False
-            )
-            # 再将指定的股票 postition 更新为 0
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).filter(TableByZixuan.stock_code == stock_code).update(
-                {"position": 0}, synchronize_session=False
-            )
-            session.commit()
+            try:
+                # market、zx_group 结果下的 position + 1
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).update(
+                    {"position": TableByZixuan.position + 1}, synchronize_session=False
+                )
+                # 再将指定的股票 postition 更新为 0
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).filter(TableByZixuan.stock_code == stock_code).update(
+                    {"position": 0}, synchronize_session=False
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def zx_stock_sort_bottom(self, market: str, zx_group: str, stock_code: str):
         with self.Session() as session:
-            # 获取 market zx_group 结果下最大的position
-            max_position = (
-                session.query(func.max(TableByZixuan.position))
-                .filter(TableByZixuan.market == market)
-                .filter(TableByZixuan.zx_group == zx_group)
-                .scalar()
-            )
-            # 将 market zx_group stock_code 结果下的 position 更新为 max_position + 1
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).filter(TableByZixuan.stock_code == stock_code).update(
-                {"position": max_position + 1}, synchronize_session=False
-            )
-            session.commit()
+            try:
+                # 获取 market zx_group 结果下最大的position
+                max_position = (
+                    session.query(func.max(TableByZixuan.position))
+                    .filter(TableByZixuan.market == market)
+                    .filter(TableByZixuan.zx_group == zx_group)
+                    .scalar()
+                )
+                # 将 market zx_group stock_code 结果下的 position 更新为 max_position + 1
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).filter(TableByZixuan.stock_code == stock_code).update(
+                    {"position": max_position + 1}, synchronize_session=False
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def zx_clear_by_group(self, market: str, zx_group: str):
         with self.Session() as session:
-            # 删除 market、zx_group 下所有的记录
-            session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
-                TableByZixuan.zx_group == zx_group
-            ).delete(synchronize_session=False)
-            session.commit()
+            try:
+                # 删除 market、zx_group 下所有的记录
+                session.query(TableByZixuan).filter(TableByZixuan.market == market).filter(
+                    TableByZixuan.zx_group == zx_group
+                ).delete(synchronize_session=False)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -581,19 +641,23 @@ class DB(object):
         order_time: Union[str, datetime.datetime],
     ):
         with self.Session() as session:
-            # 保存订单
-            order = TableByOrder(
-                market=market,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                order_type=order_type,
-                order_price=order_price,
-                order_amount=order_amount,
-                order_memo=order_memo,
-                dt=order_time,
-            )
-            session.add(order)
-            session.commit()
+            try:
+                # 保存订单
+                order = TableByOrder(
+                    market=market,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    order_type=order_type,
+                    order_price=order_price,
+                    order_amount=order_amount,
+                    order_memo=order_memo,
+                    dt=order_time,
+                )
+                session.add(order)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -630,11 +694,15 @@ class DB(object):
 
     def order_clear_by_code(self, market: str, stock_code: str):
         with self.Session() as session:
-            # 清除 market 下 stock_code 的所有订单
-            session.query(TableByOrder).filter(TableByOrder.market == market).filter(
-                TableByOrder.stock_code == stock_code
-            ).delete()
-            session.commit()
+            try:
+                # 清除 market 下 stock_code 的所有订单
+                session.query(TableByOrder).filter(TableByOrder.market == market).filter(
+                    TableByOrder.stock_code == stock_code
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -657,32 +725,46 @@ class DB(object):
         is_send_msg: int,
     ):
         with self.Session() as session:
-            # 保存任务
-            session.add(
-                TableByAlertTask(
-                    market=market,
-                    task_name=task_name,
-                    zx_group=zx_group,
-                    frequency=frequency,
-                    interval_minutes=interval_minutes,
-                    check_bi_type=check_bi_type,
-                    check_bi_beichi=check_bi_beichi,
-                    check_bi_mmd=check_bi_mmd,
-                    check_xd_type=check_xd_type,
-                    check_xd_beichi=check_xd_beichi,
-                    check_xd_mmd=check_xd_mmd,
-                    check_idx_ma_info=check_idx_ma_info,
-                    check_idx_macd_info=check_idx_macd_info,
-                    is_run=is_run,
-                    is_send_msg=is_send_msg,
-                    dt=datetime.datetime.now(),
+            try:
+                # 保存任务
+                session.add(
+                    TableByAlertTask(
+                        market=market,
+                        task_name=task_name,
+                        zx_group=zx_group,
+                        frequency=frequency,
+                        interval_minutes=interval_minutes,
+                        check_bi_type=check_bi_type,
+                        check_bi_beichi=check_bi_beichi,
+                        check_bi_mmd=check_bi_mmd,
+                        check_xd_type=check_xd_type,
+                        check_xd_beichi=check_xd_beichi,
+                        check_xd_mmd=check_xd_mmd,
+                        check_idx_ma_info=check_idx_ma_info,
+                        check_idx_macd_info=check_idx_macd_info,
+                        is_run=is_run,
+                        is_send_msg=is_send_msg,
+                        dt=datetime.datetime.now(),
+                    )
                 )
-            )
-            session.commit()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def task_query(self, market: str = None, id: int = None) -> List[TableByAlertTask]:
+        """
+        查询任务列表。
+
+        签名为兼容历史调用方仍然返回 ``List``。
+
+        约束：
+        - 当传 ``id`` 时，``id`` 是主键，理论上只会有 0 或 1 条；
+          ``.limit(1)`` 防御脏数据（极端情况存在多条同 id），
+          避免上层静默丢弃多余记录。
+        """
         with self.Session() as session:
             # 查询任务
             query = session.query(TableByAlertTask)
@@ -692,14 +774,21 @@ class DB(object):
             if id is not None:
                 filter += (TableByAlertTask.id == id,)
             if len(filter) > 0:
-                return query.filter(*filter).all()
+                query = query.filter(*filter)
+            if id is not None:
+                # 主键查询只可能命中 1 条；显式 limit(1) 既加快查询，也防御脏数据。
+                query = query.limit(1)
             return query.all()
 
     def task_delete(self, id: int):
         with self.Session() as session:
-            # 删除任务
-            session.query(TableByAlertTask).filter(TableByAlertTask.id == id).delete()
-            session.commit()
+            try:
+                # 删除任务
+                session.query(TableByAlertTask).filter(TableByAlertTask.id == id).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -723,29 +812,33 @@ class DB(object):
         is_send_msg: int,
     ):
         with self.Session() as session:
-            session.query(TableByAlertTask).filter(
-                TableByAlertTask.market == market,
-                TableByAlertTask.id == id,
-            ).update(
-                {
-                    TableByAlertTask.task_name: task_name,
-                    TableByAlertTask.zx_group: zx_group,
-                    TableByAlertTask.frequency: frequency,
-                    TableByAlertTask.interval_minutes: interval_minutes,
-                    TableByAlertTask.check_bi_type: check_bi_type,
-                    TableByAlertTask.check_bi_beichi: check_bi_beichi,
-                    TableByAlertTask.check_bi_mmd: check_bi_mmd,
-                    TableByAlertTask.check_xd_type: check_xd_type,
-                    TableByAlertTask.check_xd_beichi: check_xd_beichi,
-                    TableByAlertTask.check_xd_mmd: check_xd_mmd,
-                    TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
-                    TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
-                    TableByAlertTask.is_run: is_run,
-                    TableByAlertTask.is_send_msg: is_send_msg,
-                    TableByAlertTask.dt: datetime.datetime.now(),
-                }
-            )
-            session.commit()
+            try:
+                session.query(TableByAlertTask).filter(
+                    TableByAlertTask.market == market,
+                    TableByAlertTask.id == id,
+                ).update(
+                    {
+                        TableByAlertTask.task_name: task_name,
+                        TableByAlertTask.zx_group: zx_group,
+                        TableByAlertTask.frequency: frequency,
+                        TableByAlertTask.interval_minutes: interval_minutes,
+                        TableByAlertTask.check_bi_type: check_bi_type,
+                        TableByAlertTask.check_bi_beichi: check_bi_beichi,
+                        TableByAlertTask.check_bi_mmd: check_bi_mmd,
+                        TableByAlertTask.check_xd_type: check_xd_type,
+                        TableByAlertTask.check_xd_beichi: check_xd_beichi,
+                        TableByAlertTask.check_xd_mmd: check_xd_mmd,
+                        TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
+                        TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
+                        TableByAlertTask.is_run: is_run,
+                        TableByAlertTask.is_send_msg: is_send_msg,
+                        TableByAlertTask.dt: datetime.datetime.now(),
+                    }
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
         return True
 
     def alert_record_save(
@@ -774,21 +867,25 @@ class DB(object):
         :return:
         """
         with self.Session() as session:
-            recored = TableByAlertRecord(
-                market=market,
-                task_name=task_name,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                frequency=frequency,
-                alert_msg=alert_msg,
-                bi_is_done=bi_is_done,
-                bi_is_td=bi_is_td,
-                line_type=line_type,
-                line_dt=line_dt.replace(tzinfo=None),
-                alert_dt=datetime.datetime.now(),
-            )
-            session.add(recored)
-            session.commit()
+            try:
+                recored = TableByAlertRecord(
+                    market=market,
+                    task_name=task_name,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    frequency=frequency,
+                    alert_msg=alert_msg,
+                    bi_is_done=bi_is_done,
+                    bi_is_td=bi_is_td,
+                    line_type=line_type,
+                    line_dt=line_dt.replace(tzinfo=None),
+                    alert_dt=datetime.datetime.now(),
+                )
+                session.add(recored)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -866,28 +963,32 @@ class DB(object):
         :return:
         """
         with self.Session() as session:
-            # 相同的 market,code/mark_time/mark_label 只能又一个，先删除一下
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarks.stock_code == stock_code,
-                TableByTVMarks.mark_time == mark_time,
-                TableByTVMarks.mark_label == mark_label,
-            ).delete()
+            try:
+                # 相同的 market,code/mark_time/mark_label 只能又一个，先删除一下
+                session.query(TableByTVMarks).filter(
+                    TableByTVMarks.market == market,
+                    TableByTVMarks.stock_code == stock_code,
+                    TableByTVMarks.mark_time == mark_time,
+                    TableByTVMarks.mark_label == mark_label,
+                ).delete()
 
-            mark = TableByTVMarks(
-                market=market,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                frequency=frequency,
-                mark_time=mark_time,
-                mark_label=mark_label,
-                mark_tooltip=mark_tooltip,
-                mark_shape=mark_shape,
-                mark_color=mark_color,
-                dt=datetime.datetime.now(),
-            )
-            session.add(mark)
-            session.commit()
+                mark = TableByTVMarks(
+                    market=market,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    frequency=frequency,
+                    mark_time=mark_time,
+                    mark_label=mark_label,
+                    mark_tooltip=mark_tooltip,
+                    mark_shape=mark_shape,
+                    mark_color=mark_color,
+                    dt=datetime.datetime.now(),
+                )
+                session.add(mark)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -912,10 +1013,14 @@ class DB(object):
 
     def marks_del(self, market: str, mark_label: str):
         with self.Session() as session:
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market, TableByTVMarks.mark_label == mark_label
-            ).delete()
-            session.commit()
+            try:
+                session.query(TableByTVMarks).filter(
+                    TableByTVMarks.market == market, TableByTVMarks.mark_label == mark_label
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -935,29 +1040,33 @@ class DB(object):
         添加代码在 tv 价格主图显示的信息
         """
         with self.Session() as session:
-            # 相同的 market,code/mark_time/mark_label 只能有一个，先删除一下
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarks.stock_code == stock_code,
-                TableByTVMarks.mark_time == mark_time,
-                TableByTVMarks.mark_label == mark_label,
-            ).delete()
+            try:
+                # 相同的 market,code/mark_time/mark_label 只能有一个，先删除一下
+                session.query(TableByTVMarks).filter(
+                    TableByTVMarks.market == market,
+                    TableByTVMarks.stock_code == stock_code,
+                    TableByTVMarks.mark_time == mark_time,
+                    TableByTVMarks.mark_label == mark_label,
+                ).delete()
 
-            mark = TableByTVMarksPrice(
-                market=market,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                frequency=frequency,
-                mark_time=mark_time,
-                mark_color=mark_color,
-                mark_text=mark_text,
-                mark_label=mark_label,
-                mark_label_font_color=mark_label_color,
-                mark_min_size=1,
-                dt=datetime.datetime.now(),
-            )
-            session.add(mark)
-            session.commit()
+                mark = TableByTVMarksPrice(
+                    market=market,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    frequency=frequency,
+                    mark_time=mark_time,
+                    mark_color=mark_color,
+                    mark_text=mark_text,
+                    mark_label=mark_label,
+                    mark_label_font_color=mark_label_color,
+                    mark_min_size=1,
+                    dt=datetime.datetime.now(),
+                )
+                session.add(mark)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -981,11 +1090,17 @@ class DB(object):
 
     def marks_del_by_price(self, market: str, mark_label: str):
         with self.Session() as session:
-            session.query(TableByTVMarksPrice).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarksPrice.mark_label == mark_label,
-            ).delete()
-            session.commit()
+            try:
+                # 修复原 bug：原代码这里把 TableByTVMarks.market 与 TableByTVMarksPrice 混用，
+                # 实际期望删除的是 TableByTVMarksPrice，统一改为 TableByTVMarksPrice.market。
+                session.query(TableByTVMarksPrice).filter(
+                    TableByTVMarksPrice.market == market,
+                    TableByTVMarksPrice.mark_label == mark_label,
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
@@ -994,15 +1109,19 @@ class DB(object):
         删除代码的所有标记
         """
         with self.Session() as session:
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarks.stock_code == code,
-            ).delete()
-            session.query(TableByTVMarksPrice).filter(
-                TableByTVMarksPrice.market == market,
-                TableByTVMarksPrice.stock_code == code,
-            ).delete()
-            session.commit()
+            try:
+                session.query(TableByTVMarks).filter(
+                    TableByTVMarks.market == market,
+                    TableByTVMarks.stock_code == code,
+                ).delete()
+                session.query(TableByTVMarksPrice).filter(
+                    TableByTVMarksPrice.market == market,
+                    TableByTVMarksPrice.stock_code == code,
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
         return True
 
     def tv_chart_list(self, chart_type, client_id, user_id):
@@ -1111,26 +1230,40 @@ class DB(object):
     def tv_chart_del(self, chart_type, id, client_id, user_id):
         # 删除图表布局
         with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.id == id,
-                TableByTVCharts.chart_type == chart_type,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-            ).delete()
-            session.commit()
+            try:
+                session.query(TableByTVCharts).filter(
+                    TableByTVCharts.id == id,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
         return True
 
     def tv_chart_del_by_name(self, chart_type, name, client_id, user_id):
         # 根据名称删除图表布局
         with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.name == name,
-                TableByTVCharts.chart_type == chart_type,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-            ).delete()
-            session.commit()
+            try:
+                session.query(TableByTVCharts).filter(
+                    TableByTVCharts.name == name,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                ).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
         return True
+
+    # cache_get 过期清理节流：避免每次读 cache 都扫全表 delete，造成写放大。
+    # 同进程内每 _CACHE_GC_INTERVAL_SEC 秒最多触发一次过期清理；
+    # 用类属性 + 简单时间戳即可，不需要锁（多次执行也只是重复 delete，幂等无害）。
+    _CACHE_GC_INTERVAL_SEC = 300
+    _last_cache_gc_at = 0.0
 
     def cache_get(self, key: str):
         for attempt in range(2):
@@ -1145,10 +1278,24 @@ class DB(object):
                     if cache and (cache.expire == 0 or cache.expire > now):
                         return json.loads(cache.v)
 
-                    session.query(TableByCache).filter(
-                        TableByCache.expire != 0, TableByCache.expire < now
-                    ).delete()
-                    session.commit()
+                    # 过期清理节流：只有距离上次清理超过 _CACHE_GC_INTERVAL_SEC 秒才执行；
+                    # 并且 delete + commit 必须自己包 try/except + rollback，
+                    # 失败时不能让外层吞掉（外层 except 会把它当成可重试的连接异常）。
+                    if (now - DB._last_cache_gc_at) >= self._CACHE_GC_INTERVAL_SEC:
+                        try:
+                            session.query(TableByCache).filter(
+                                TableByCache.expire != 0,
+                                TableByCache.expire < now,
+                            ).delete()
+                            session.commit()
+                            DB._last_cache_gc_at = now
+                        except Exception as gc_exc:
+                            session.rollback()
+                            LogUtil.warning(
+                                f"[db.cache_get] gc expired cache failed: {gc_exc}"
+                            )
+                            # 仍然刷新时间戳，避免坏 case 下连续重试拖慢主流程。
+                            DB._last_cache_gc_at = now
                 return None
             except Exception as e:
                 err = str(e)
@@ -1162,10 +1309,12 @@ class DB(object):
                     LogUtil.warning(
                         f"[db.cache_get] retry key={key} because db connection error: {e}"
                     )
-                    try:
-                        self.engine.dispose()
-                    except Exception:
-                        pass
+                    # 注意：原实现这里调用了 self.engine.dispose()，
+                    # 它会一次性关闭整个连接池里的所有连接，让其他线程下一次取连接
+                    # 时全都要重建 —— 在缓存失效高频场景下容易引发雪崩。
+                    # SQLAlchemy 的 pool_pre_ping=True（见 __init__）已经能在每次取连接时
+                    # 检测并替换掉单条失效连接，足够应对 "MySQL gone away" / "Lost connection"，
+                    # 因此这里不需要再 dispose 整个池。
                     time.sleep(0.05)
                     continue
                 LogUtil.error(f"[db.cache_get] failed key={key}: {e}", exc_info=True)
@@ -1174,17 +1323,25 @@ class DB(object):
 
     def cache_set(self, key: str, val: dict, expire: int = 0):
         with self.Session() as session:
-            session.query(TableByCache).filter(TableByCache.k == key).delete()
-            cache = TableByCache(k=key, v=json.dumps(val), expire=expire)
-            session.add(cache)
-            session.commit()
+            try:
+                session.query(TableByCache).filter(TableByCache.k == key).delete()
+                cache = TableByCache(k=key, v=json.dumps(val), expire=expire)
+                session.add(cache)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 
     def cache_del(self, key: str):
         with self.Session() as session:
-            session.query(TableByCache).filter(TableByCache.k == key).delete()
-            session.commit()
+            try:
+                session.query(TableByCache).filter(TableByCache.k == key).delete()
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
 
         return True
 

@@ -96,9 +96,30 @@ class KlineDataProcessor:
         if self.klines:
             last_date = self.klines[-1].date
 
-            # 我们只需要关心时间大于或等于最后一根K线的数据
+            # ★ B1 修复：跨时区比较保护。
+            # 长桥 / QMT / CSV 等不同数据源返回的 date 列时区可能不一致：
+            #   - DataFrame 列可能是 timezone-naive（多数交易所返回）或 timezone-aware
+            #   - self.klines[-1].date 是 datetime，可能带 tzinfo 也可能不带
+            # pandas 在 >= 比较时若两侧 tz 不一致会抛 TypeError，
+            # 这里统一对齐到 DataFrame 列的时区语义后再比较。
+            df_dt = klines['date']
+            df_is_tz_aware = pd.api.types.is_datetime64tz_dtype(df_dt)
+            last_ts = pd.Timestamp(last_date)
+            if df_is_tz_aware:
+                if last_ts.tzinfo is None:
+                    # naive → 按 DataFrame 列的时区做本地化
+                    last_ts = last_ts.tz_localize(df_dt.dt.tz)
+                else:
+                    # tz-aware → 转换到与 DataFrame 一致的时区
+                    last_ts = last_ts.tz_convert(df_dt.dt.tz)
+            else:
+                if last_ts.tzinfo is not None:
+                    # DataFrame 是 naive 但 last_ts 带 tz → 剥离 tz 后再比较
+                    last_ts = last_ts.tz_convert('UTC').tz_localize(None)
+
+            # 我们只需要关心时间大于或等于最后一根 K 线的数据
             # DataFrame 的切片操作远快于后续的 _convert
-            klines = klines[klines['date'] >= last_date]
+            klines = klines[df_dt >= last_ts]
 
         # 返回处理过的、可能已大大缩小的DataFrame
         return klines

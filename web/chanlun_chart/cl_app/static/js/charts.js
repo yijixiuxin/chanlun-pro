@@ -259,6 +259,14 @@ class ChartManager {
         this.markDrawingMutationStart('apply-user-drawings');
         try {
             this.chart.removeAllShapes();
+            // ★ 关键修复：chart.removeAllShapes() 会把所有 shape 从画面上删掉，
+            //   包括之前 reconcile 创建的缠论 bi/xd/zs 等形态。但 obj_charts 仍记录
+            //   着这些 entity 的 {key, id, time}，下次 reconcile 时会因为旧 key 命中
+            //   newKeys 而进入 toKeep 分支，导致不重新创建 shape——结果图上空空，
+            //   只有"最新一段"（端点变化使 key 不同）会被新建。这就是"切回原周期
+            //   有概率只显示最新一段"的根因。
+            //   修复：与 chart 状态同步置空 obj_charts，让 reconcile 走"全量重建"路径。
+            this.obj_charts = {};
             if (!this.isTokenCurrent(token)) {
                 return false;
             }
@@ -330,6 +338,7 @@ class ChartManager {
         if (detail.resolution && detail.resolution !== identity.interval.toLowerCase()) {
             return;
         }
+        console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms handleBarsReadyEvent ✓ symbol=${detail.symbol} res=${detail.resolution} bars=${detail.bars || '?'} fxs=${detail.fxs || '?'} bis=${detail.bis || '?'} xds=${detail.xds || '?'}`);
         this._initialLoadDone = true;
         this.debouncedDrawChanlun();
     }
@@ -699,6 +708,16 @@ class ChartManager {
 
             this.reloadDrawingsForCurrentContext('initial-load');
 
+            // 注入 MACD 区间统计功能（工具栏按钮 + 右键菜单 + 侧边面板）
+            // 该模块在 macd_stats.js 中定义，依赖 chart/widget 已就绪
+            try {
+                if (window.MacdStats && typeof window.MacdStats.attach === 'function') {
+                    window.MacdStats.attach(this);
+                }
+            } catch (e) {
+                console.warn("[DEBUG-CHARTS] MacdStats.attach failed", e);
+            }
+
             this.widget.subscribe('drawing_event', (id, eventType) => {
                 if (this.shouldSuppressDrawingSave()) return;
                 console.log("[DEBUG-CHARTS] drawing_event", id, eventType);
@@ -733,13 +752,14 @@ class ChartManager {
         this._latestAppliedBarTime = null;
         const currentSeq = ++this._intervalSwitchSeq;
         this._intervalVersion++;
-        console.log("[DEBUG-CHARTS] Interval Changed to:", interval, "version:", this._intervalVersion, "seq:", currentSeq);
+        console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms handleIntervalChange → ${interval} (seq=${currentSeq}, ver=${this._intervalVersion}) [_initialLoadDone reset to false]`);
         Utils.set_local_data(`${market}_interval_${this.id}`, interval);
         this.clear_draw_chanlun();
         this.reloadDrawingsForCurrentContext('interval-change');
     }
 
     handleDataReady() {
+        console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms handleDataReady fired [_initialLoadDone=true]`);
         this._initialLoadDone = true;
         this.debouncedDrawChanlun();
     }
@@ -760,7 +780,14 @@ class ChartManager {
         this._latestAppliedBarTime = latestBar.time;
         this.debouncedDrawChanlun();
     }
-    handleVisibleRangeChange() { if (this._initialLoadDone) this.debouncedDrawChanlun(); }
+    handleVisibleRangeChange() {
+        if (this._initialLoadDone) {
+            console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms handleVisibleRangeChange → debouncedDrawChanlun (will fire 300ms later)`);
+            this.debouncedDrawChanlun();
+        } else {
+            console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms handleVisibleRangeChange SKIPPED (_initialLoadDone=false)`);
+        }
+    }
 
     safeRemove(entityId) {
         if (!entityId) return Promise.resolve();
@@ -988,7 +1015,10 @@ class ChartManager {
             if (!this._drawRetryCount) this._drawRetryCount = 0;
             if (this._drawRetryCount < 10) {
                 this._drawRetryCount++;
+                console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms draw_chanlun: chartData=null, retry#${this._drawRetryCount}/10 in 500ms`);
                 setTimeout(() => this.debouncedDrawChanlun(), 500);
+            } else {
+                console.warn(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms draw_chanlun: chartData=null, retry exhausted`);
             }
             return;
         }
@@ -1000,19 +1030,35 @@ class ChartManager {
             return;
         }
 
-        console.log("[DEBUG-CHARTS] draw_chanlun executing for", symbolInterval.interval);
-        console.log("[DEBUG-CHARTS] barsResult shapes:", {
-            fxs: chartData.barsResult.fxs?.length || 0,
-            bis: chartData.barsResult.bis?.length || 0,
-            xds: chartData.barsResult.xds?.length || 0,
-            zsds: chartData.barsResult.zsds?.length || 0,
-            bi_zss: chartData.barsResult.bi_zss?.length || 0,
-            bcs: chartData.barsResult.bcs?.length || 0,
-            mmds: chartData.barsResult.mmds?.length || 0,
-        });
+        // 计算可视区与 bars 范围对比，分析"可视区比 bars 窄多少"
+        const vr = this.chart?.getVisibleRange?.();
+        const firstBarSec = (chartData.barsResult.bars?.[0]?.time || 0) / 1000;
+        const lastBarSec = (chartData.barsResult.bars?.[chartData.barsResult.bars.length - 1]?.time || 0) / 1000;
+        console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms draw_chanlun executing interval=${symbolInterval.interval}`);
+        console.log(`[CHANLUN-TIMING]   from=${chartData.from} (visibleRange.from), barsRange=[${firstBarSec.toFixed(0)}, ${lastBarSec.toFixed(0)}], visibleRange=[${vr?.from?.toFixed(0)}, ${vr?.to?.toFixed(0)}]`);
+        console.log(`[CHANLUN-TIMING]   barsResult: bars=${chartData.barsResult.bars?.length || 0} fxs=${chartData.barsResult.fxs?.length || 0} bis=${chartData.barsResult.bis?.length || 0} xds=${chartData.barsResult.xds?.length || 0} zsds=${chartData.barsResult.zsds?.length || 0} bi_zss=${chartData.barsResult.bi_zss?.length || 0} mmds=${chartData.barsResult.mmds?.length || 0}`);
+
+        // 统计 from 过滤效果（看到底过滤掉了多少）
+        const bisInside = (chartData.barsResult.bis || []).filter(b => (b.points?.[0]?.time ?? 0) >= chartData.from).length;
+        const xdsInside = (chartData.barsResult.xds || []).filter(x => (x.points?.[0]?.time ?? 0) >= chartData.from).length;
+        const totalBis = chartData.barsResult.bis?.length || 0;
+        const totalXds = chartData.barsResult.xds?.length || 0;
+        console.log(`[CHANLUN-TIMING]   FILTER bis: ${bisInside}/${totalBis} pass (filtered out ${totalBis - bisInside}), xds: ${xdsInside}/${totalXds} pass (filtered out ${totalXds - xdsInside})`);
         this.markDrawingMutationStart('chanlun-redraw');
+        const drawStartTs = performance.now();
         try {
             this.drawChartElements(chartData, symbolInterval.interval);
+            // ★ 关键修复："切走再切回原周期后只显示可视区一部分缠论形态"。
+            //   handleIntervalChange 把 _initialLoadDone 置为 false，需要 handleDataReady
+            //   重新置 true，handleVisibleRangeChange 才会响应缩放/平移补绘左边形态。
+            //   但切回原周期时，bars 已在 datafeed 缓存中，TV 不会再触发 onDataLoaded，
+            //   于是 handleDataReady 永远不来，_initialLoadDone 一直 false，
+            //   后续所有缩放都被 handleVisibleRangeChange 屏蔽——左边形态再也补不上。
+            //
+            //   兜底：只要 draw_chanlun 成功执行过一次（说明 chart 已有可绘制数据），
+            //   就把 _initialLoadDone 置 true，恢复 visibleRangeChange 的响应能力。
+            this._initialLoadDone = true;
+            console.log(`[CHANLUN-TIMING] @${performance.now().toFixed(0)}ms draw_chanlun DONE (took ${(performance.now() - drawStartTs).toFixed(0)}ms) [_initialLoadDone=true]`);
         } finally {
             this.markDrawingMutationEnd('chanlun-redraw');
         }

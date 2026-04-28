@@ -29,6 +29,12 @@ class ExchangeTDXFutures(Exchange):
 
     g_all_stocks = []
 
+    # 连接超时 (秒)。pytdx 默认无超时, 在境外/网络受限环境下会卡 30s 才放弃,
+    # 严重拖慢启动。这里收紧到 5s, 失败更快, 用户体感更好。
+    _CONNECT_TIMEOUT = 5
+    # 初始化时换 IP 重连的最大次数, 避免无限循环卡死。
+    _INIT_MAX_RETRY = 2
+
     def __init__(self):
         # super().__init__()
 
@@ -37,6 +43,14 @@ class ExchangeTDXFutures(Exchange):
 
         # 文件缓存
         self.fdb = FileCacheDB()
+
+        # 标记初始化是否成功。
+        # 失败时设为 True, 后续所有走 client.connect 的方法 (all_stocks/klines/...)
+        # 都应快速失败, 而不是再次卡 30s 超时。
+        # 注意: 不在 __init__ 内部 raise, 因为 @fun.singleton 会缓存实例,
+        # 调用方 (preload / get_cached_processed_stocks / klines) 自行处理 init_failed。
+        self.init_failed = False
+        self.market_maps = {}
 
         try:
             # 选择最优的服务器，并保存到 cache 中
@@ -47,12 +61,17 @@ class ExchangeTDXFutures(Exchange):
                 # print(f"TDXEX 最优服务器：{self.connect_info}")
 
             # 初始化，映射交易所代码
-            self.market_maps = {}
-            while True:
+            # 注意: auto_retry=False 避免 pytdx 内部再叠加一次 30s 超时;
+            # 这里用显式的 retry_count 上限替代原来的 while True 死循环。
+            retry_count = 0
+            last_error = None
+            while retry_count < self._INIT_MAX_RETRY:
                 try:
-                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
+                    client = TdxExHq_API(raise_exception=True, auto_retry=False)
                     with client.connect(
-                        self.connect_info["ip"], self.connect_info["port"]
+                        self.connect_info["ip"],
+                        self.connect_info["port"],
+                        time_out=self._CONNECT_TIMEOUT,
                     ):
                         all_markets = client.get_markets()
                         for _m in all_markets:
@@ -71,9 +90,16 @@ class ExchangeTDXFutures(Exchange):
                                     "name": _m["name"],
                                 }
                     break
-                except TdxConnectionError:
-                    self.reset_tdx_ip()
+                except TdxConnectionError as e:
+                    last_error = e
+                    retry_count += 1
+                    if retry_count < self._INIT_MAX_RETRY:
+                        self.reset_tdx_ip()
+            else:
+                # 重试次数耗尽仍未成功, 抛出让外层 except 兜底
+                raise last_error if last_error else RuntimeError("TDX init retry exhausted")
         except Exception:
+            self.init_failed = True
             print(traceback.format_exc())
             print("通达信 期货行情接口初始化失败，期货行情不可用")
 

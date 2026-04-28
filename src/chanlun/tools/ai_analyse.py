@@ -9,6 +9,18 @@ from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from chanlun import config, fun
 import json, datetime
 from chanlun.db import db
+from chanlun.db_models.base import Base
+from chanlun.tools.log_util import LogUtil
+
+# AI 分析记录表是后加的：db.py 的全局 create_all 在该模块尚未被 import 时已经执行完毕，
+# 因此 TableByAIAnalyse 不会被注册到那次 create_all 调用里，导致 SQLite 上首次访问报
+# "no such table: cl_ai_analyses"。
+# 这里在模块首次 import 时按需建表（仅建本表，避免影响其他模型）；
+# create_all 自身对已存在的表是 no-op，幂等安全。
+try:
+    Base.metadata.create_all(db.engine, tables=[TableByAIAnalyse.__table__])
+except Exception as _e:
+    LogUtil.warning(f"[ai_analyse] ensure table cl_ai_analyses failed: {_e}")
 
 
 class AIAnalyse:

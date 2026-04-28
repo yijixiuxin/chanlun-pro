@@ -1,9 +1,12 @@
 from typing import List, Dict
 
+from chanlun import fun
 from chanlun.base import Market
 from chanlun.db import db
 
 from chanlun.exchange import get_exchange
+
+_log = fun.get_logger()
 
 
 class ZiXuan(object):
@@ -89,14 +92,20 @@ class ZiXuan(object):
         """
         if zx_group not in self.zx_names:
             return False
-        # 如果名称为空，则自动进行获取
+        # 如果名称为空，则自动通过交易所接口获取
         if name is None or name == "" or name == "undefined":
             try:
                 ex = get_exchange(Market(self.market_type))
                 stock_info = ex.stock_info(code)
                 name = stock_info["name"]
-            except Exception:
-                pass
+            except Exception as exc:
+                # 拉取失败时不能继续写空名（否则 UI 上是空白条目，且后续无人知道为什么），
+                # 用 code 兜底，并记录 warning 让运维定位真实原因。
+                _log.warning(
+                    f"[ZiXuan.add_stock] fetch stock_info failed, "
+                    f"market={self.market_type} code={code}, fallback name=code, err={exc}"
+                )
+                name = code
         db.zx_add_group_stock(
             self.market_type, zx_group, code, name, memo, color, location
         )

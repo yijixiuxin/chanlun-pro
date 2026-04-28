@@ -27,6 +27,13 @@ class ExchangeTDXHK(Exchange):
 
     g_all_stocks = []
 
+    # 单次初始化的最大 IP 重试次数。原实现 ``while True`` 配合 ``except TdxConnectionError``
+    # 在网络不稳定时也只能拦住 ``TdxConnectionError`` 这一种异常, 而 ``client.get_markets()``
+    # 的 socket ``TimeoutError`` 会直接冒泡到外层 ``except Exception`` 里被吞掉,
+    # 整个对象就处于"半初始化"状态(没 ``connect_info``/``market_maps``), 后面
+    # ``all_stocks`` / ``klines`` 一调就 AttributeError。这里改成有限次"换 IP 重试"。
+    _INIT_MAX_RETRY = 3
+
     def __init__(self):
         # super().__init__()
 
@@ -36,16 +43,23 @@ class ExchangeTDXHK(Exchange):
         # 文件缓存
         self.fdb = FileCacheDB()
 
+        # 失败标记 + 字段预初始化:
+        # 1. ``init_failed=True`` 让上层 (web 的 _preload_single_exchange /
+        #    get_cached_processed_stocks 以及 cq fallback) 能短路, 不再重复触发 30s 超时;
+        # 2. 预初始化 ``connect_info`` / ``market_maps`` 避免半初始化状态下被属性访问爆 AttributeError。
+        self.init_failed = False
+        self.connect_info = None
+        self.market_maps = {}
+
         try:
             # 选择最优的服务器，并保存到 cache 中
             self.connect_info = db.cache_get("tdxex_connect_ip")
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
-                # print(f"最优服务器：{self.connect_info}")
 
             # 初始化，映射交易所代码
-            self.market_maps = {}
-            while True:
+            last_error = None
+            for retry_count in range(self._INIT_MAX_RETRY):
                 try:
                     client = TdxExHq_API(raise_exception=True, auto_retry=True)
                     with client.connect(
@@ -59,10 +73,23 @@ class ExchangeTDXHK(Exchange):
                                     "category": _m["category"],
                                     "name": _m["name"],
                                 }
+                    last_error = None
                     break
-                except TdxConnectionError:
-                    self.reset_tdx_ip()
+                except Exception as e:
+                    # 不只接 TdxConnectionError, ``socket.timeout`` 等也要在重试时被消化掉,
+                    # 否则整个 __init__ 失败, 调用方再也走不到 all_stocks。
+                    last_error = e
+                    if retry_count < self._INIT_MAX_RETRY - 1:
+                        # 换一个 IP 再试; 不再使用上次的坏 IP 缓存。
+                        try:
+                            self.reset_tdx_ip()
+                        except Exception as ip_e:
+                            last_error = ip_e
+                            break
+            if last_error is not None:
+                raise last_error
         except Exception:
+            self.init_failed = True
             print(traceback.format_exc())
             print("通达信 香港行情接口初始化失败，香港行情不可用")
 
@@ -99,6 +126,12 @@ class ExchangeTDXHK(Exchange):
         """
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
+
+        # 初始化失败时直接返回空列表, 避免再次走 client.connect 卡 30s 超时, 也防止
+        # connect_info=None 时的 KeyError。上层 (cq fallback / web search) 见到空列表
+        # 会以"无结果"的体感降级, 远比卡死或 500 好。
+        if getattr(self, "init_failed", False) or not self.connect_info or not self.market_maps:
+            return []
 
         __all_stocks = []
         client = TdxExHq_API(raise_exception=True, auto_retry=True)

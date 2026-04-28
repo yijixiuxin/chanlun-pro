@@ -123,18 +123,42 @@ def send_dd_msg(market: str, msg: Union[str, Dict[str, str]]) -> bool:
 
     t, s = sign()
     url = url % (dd_info["token"], t, s)
-    if isinstance(msg, str):
-        requests.post(
-            url,
-            json={
-                "msgtype": "text",
-                "text": {"content": msg},
-            },
-        )
-    else:
-        requests.post(url, json={"msgtype": "markdown", "markdown": msg})
+    # 加 (connect, read) 双段超时，避免外网网络抖动时整条任务被卡住。
+    request_timeout = (5, 10)
+    try:
+        if isinstance(msg, str):
+            res = requests.post(
+                url,
+                json={
+                    "msgtype": "text",
+                    "text": {"content": msg},
+                },
+                timeout=request_timeout,
+            )
+        else:
+            res = requests.post(
+                url,
+                json={"msgtype": "markdown", "markdown": msg},
+                timeout=request_timeout,
+            )
+    except requests.RequestException as exc:
+        lark.logger.error(f"send_dd_msg request failed: {exc}")
+        return False
 
-    # print(res.text)
+    # 钉钉成功返回 errcode == 0，否则视为失败但不抛出，避免上层任务被打断。
+    try:
+        body = res.json()
+        if body.get("errcode", 0) != 0:
+            lark.logger.error(
+                f"send_dd_msg api error, errcode={body.get('errcode')}, errmsg={body.get('errmsg')}"
+            )
+            return False
+    except ValueError:
+        lark.logger.error(
+            f"send_dd_msg got non-json response, status={res.status_code}, text={res.text[:200]}"
+        )
+        return False
+
     return True
 
 
@@ -199,12 +223,18 @@ def send_fs_msg(market: str, title: str, contents: Union[str, list]) -> bool:
     )
 
     # 发起请求
-    response: CreateMessageResponse = client.im.v1.message.create(request)
-    # 处理失败返回
+    try:
+        response: CreateMessageResponse = client.im.v1.message.create(request)
+    except Exception as exc:
+        # lark sdk 内部已经做了重试与超时控制，这里再兜一层，避免飞书侧异常打断主流程。
+        lark.logger.error(f"client.im.v1.message.create raised: {exc}")
+        return False
+    # 处理失败返回：必须返回 False，让调用方知道发送未成功，可补救（如重试 / 落库）。
     if not response.success():
         lark.logger.error(
             f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
         )
+        return False
     return True
 
 

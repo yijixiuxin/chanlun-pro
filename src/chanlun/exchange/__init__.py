@@ -40,7 +40,12 @@ def get_exchange(market: Market) -> Exchange:
         elif config.EXCHANGE_A == "cq":
             from chanlun.exchange.exchange_cq import ExchangeChangQiao
 
-            g_exchange_obj[market.value] = ExchangeChangQiao()
+            # ExchangeChangQiao 是 @fun.singleton，A/HK/US 共享同一实例。
+            # 这里把"当前 market"注入实例，让 all_stocks() 知道无参调用时该查哪个市场，
+            # 避免历史上写死 Market.US 导致 A 股全部返回美股列表的 bug。
+            cq_inst = ExchangeChangQiao()
+            cq_inst.default_market = Market.A.value
+            g_exchange_obj[market.value] = cq_inst
         else:
             raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
 
@@ -58,10 +63,12 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.HK.value)
-        elif config.EXCHANGE_A == "cq":
+        elif config.EXCHANGE_HK == "cq":
             from chanlun.exchange.exchange_cq import ExchangeChangQiao
 
-            g_exchange_obj[market.value] = ExchangeChangQiao()
+            cq_inst = ExchangeChangQiao()
+            cq_inst.default_market = Market.HK.value
+            g_exchange_obj[market.value] = cq_inst
         else:
             raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
 
@@ -101,10 +108,12 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
-        elif config.EXCHANGE_A == "cq":
+        elif config.EXCHANGE_FX == "cq":
             from chanlun.exchange.exchange_cq import ExchangeChangQiao
 
-            g_exchange_obj[market.value] = ExchangeChangQiao()
+            cq_inst = ExchangeChangQiao()
+            cq_inst.default_market = Market.FX.value
+            g_exchange_obj[market.value] = cq_inst
         else:
             raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
 
@@ -154,10 +163,12 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.US.value)
-        elif config.EXCHANGE_A == "cq":
+        elif config.EXCHANGE_US == "cq":
             from chanlun.exchange.exchange_cq import ExchangeChangQiao
 
-            g_exchange_obj[market.value] = ExchangeChangQiao()
+            cq_inst = ExchangeChangQiao()
+            cq_inst.default_market = Market.US.value
+            g_exchange_obj[market.value] = cq_inst
         else:
             raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")
 

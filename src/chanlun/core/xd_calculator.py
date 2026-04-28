@@ -129,7 +129,27 @@ def _resolve_pivot_bi(elem: dict, seg_type: str):
 # 单次 _try_end 一直扫到数组末尾，造成 O(n²) 退化甚至无法返回。
 # 经验值依据：正常一段反向走势的反向 CS 笔通常不超过十几根，50 已远超合理上限；
 # 一旦触发即可判定该方向无法形成有效反向段，直接放弃本轮判定。
-SAFETY_LOOKAHEAD = 50
+#
+# ★ D4 优化：默认值仍为 50，但允许通过两种方式调优：
+#   - 环境变量 CHANLUN_XD_LOOKAHEAD（部署侧统一控制）
+#   - XdCalculator(config={'xd_safety_lookahead': N}) 实例级覆盖
+# 实例级配置优先于环境变量；都没设则用默认 50。
+import os as _os
+
+def _get_default_safety_lookahead() -> int:
+    raw = _os.environ.get('CHANLUN_XD_LOOKAHEAD', '50')
+    try:
+        v = int(raw)
+        # 不接受 < 5 的过小值（容易误中止合理走势），也不接受 > 1000 的过大值（性能失控）
+        if v < 5:
+            return 5
+        if v > 1000:
+            return 1000
+        return v
+    except (TypeError, ValueError):
+        return 50
+
+SAFETY_LOOKAHEAD = _get_default_safety_lookahead()
 
 
 # ============================================================
@@ -153,7 +173,19 @@ class XdCalculator:
 
         if self.xds and all_bis and self._last_bi_snapshot:
             lb = all_bis[-1]
-            if lb.index == self._last_bi_snapshot[0] and abs(lb.end.val - self._last_bi_snapshot[1]) < 1e-9:
+            # ★ B3 修复：snapshot 同时校验 end.k.k_index。
+            # 缠论 K 线层会发生包含合并，导致同一根 BI 的 end.k.k_index 在新 K 线
+            # 到来后悄悄变化（合并/拆分），但 end.val（价格）和 index（笔序号）不变。
+            # 只校验 (index, end.val) 会让 XdCalculator 误判"无变化"直接 return，
+            # 但下游 ZsCalculator / BsPointCalculator 用到的 bi.end.k.k_index 已经变了，
+            # 结果不一致。snapshot 增加 k_index 后任何端点漂移都会触发重算。
+            last_k_index = lb.end.k.k_index if lb.end is not None and lb.end.k is not None else -1
+            if (
+                lb.index == self._last_bi_snapshot[0]
+                and abs(lb.end.val - self._last_bi_snapshot[1]) < 1e-9
+                and len(self._last_bi_snapshot) >= 3
+                and last_k_index == self._last_bi_snapshot[2]
+            ):
                 return []
 
         start_bi_idx = 0
@@ -186,7 +218,8 @@ class XdCalculator:
 
         if all_bis:
             lb = all_bis[-1]
-            self._last_bi_snapshot = (lb.index, lb.end.val)
+            last_k_index = lb.end.k.k_index if lb.end is not None and lb.end.k is not None else -1
+            self._last_bi_snapshot = (lb.index, lb.end.val, last_k_index)
 
         return self.xds[start_index_for_delta:] if is_incremental else self.xds
 

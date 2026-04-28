@@ -2,10 +2,12 @@
 监控相关代码
 """
 
+import copy
 import os
 import pathlib
 import time
 import traceback
+import uuid
 from typing import List
 
 import lark_oapi as lark
@@ -76,7 +78,22 @@ def monitoring_code(
 
     ex = get_exchange(Market(market))
 
-    klines = {f: ex.klines(code, f) for f in frequencys}
+    # 拉行情时按周期独立 try：原写法用一行 dict 推导式，
+    # 任何一个周期网络抖动 / 数据缺失会把整只票直接抛到外层，
+    # 导致这只票本轮所有周期都被跳过；改成单周期失败 log + 跳过。
+    klines = {}
+    for f in frequencys:
+        try:
+            klines[f] = ex.klines(code, f)
+        except Exception as kex:
+            _log = fun.get_logger()
+            _log.warning(
+                f"[monitoring_code] fetch klines failed market={market} code={code} "
+                f"frequency={f} err={kex}; skip this frequency this round"
+            )
+    if not klines:
+        # 全部周期都拉失败，本轮直接结束，避免后面 web_batch_get_cl_datas 拿空数据继续算。
+        return []
     cl_datas: List[ICL] = web_batch_get_cl_datas(market, code, klines, cl_config)
 
     jh_cl_msgs = []  # 这里保存缠论触发的机会信息
@@ -321,14 +338,28 @@ def monitoring_code(
                 send_msgs.append(image_key)
     # 发送消息
     if is_send_msg and len(send_msgs) > 0:
-        send_fs_msg(market, f"{task_name} 监控提醒", send_msgs)
+        ok = send_fs_msg(market, f"{task_name} 监控提醒", send_msgs)
+        # send_fs_msg 内部已 catch 各种异常并以 False 表达失败，但调用方原本完全不消费返回值，
+        # 飞书静默丢消息会让运维以为"今天没信号"。这里 log 一条 warning 让失败可观测。
+        if not ok:
+            fun.get_logger().warning(
+                f"[monitoring_code] send_fs_msg failed market={market} "
+                f"task_name={task_name} code={code} msg_count={len(send_msgs)}"
+            )
 
     return jh_cl_msgs
 
 
 def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     """
-    缠论数据保存图表并上传网络，返回访问地址
+    缠论数据保存图表并上传网络，返回访问地址。
+
+    重要修复点：
+    1. 不再原地修改入参 ``cl_config``；改为内部深拷贝，避免污染调用方（如 alert_tasks
+       会复用同一个 cl_config 多次，原代码会让 chart_show_ma 等设置被永久篡改）。
+    2. 文件名从 ``int(time.time())`` 改为 ``uuid4``，避免在同一秒内并发调用时
+       生成相同 html / png 文件名互相覆盖。
+    3. ``finally`` 不仅删除 png，还删除中间产物 html，避免长期残留。
     """
     # 没有启用图片则不生产图片
     if config.FEISHU_KEYS["enable_img"] is False:
@@ -343,24 +374,31 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
     png_path = config.get_data_path() / "png"
     if png_path.is_dir() is False:
         png_path.mkdir(parents=True)
-    cl_config["chart_width"] = "100%"
-    cl_config["chart_high"] = "400px"
-    cl_config["chart_show_ma"] = False
-    cl_config["chart_show_ama"] = False
-    cl_config["chart_show_boll"] = False
-    cl_config["chart_show_infos"] = False
-    cl_config["chart_kline_nums"] = 600
+
+    # 深拷贝一份配置，所有图表渲染相关 override 仅作用在副本上。
+    chart_config = copy.deepcopy(cl_config) if cl_config is not None else {}
+    chart_config["chart_width"] = "100%"
+    chart_config["chart_high"] = "400px"
+    chart_config["chart_show_ma"] = False
+    chart_config["chart_show_ama"] = False
+    chart_config["chart_show_boll"] = False
+    chart_config["chart_show_infos"] = False
+    chart_config["chart_kline_nums"] = 600
+
     file_name = (
         cd.get_code().replace(".", "_").replace("/", "_").replace("@", "_")
         + "_"
         + cd.get_frequency()
     )
-    cl_config["to_file"] = f"{str(png_path)}/{file_name}_{int(time.time())}.html"
-    png_file = f"{str(png_path)}/{file_name}_{int(time.time())}.png"
+    # 用 uuid 保证唯一，避免并发任务在同一秒生成同名文件互相覆盖。
+    unique_suffix = f"{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    html_file = f"{str(png_path)}/{file_name}_{unique_suffix}.html"
+    png_file = f"{str(png_path)}/{file_name}_{unique_suffix}.png"
+    chart_config["to_file"] = html_file
 
     try:
         # 渲染并保存图片
-        render_file = kcharts.render_charts(title, cd, config=cl_config)
+        render_file = kcharts.render_charts(title, cd, config=chart_config)
 
         with sync_playwright() as p:
             browser = p.chromium.launch()
@@ -403,9 +441,14 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict) -> str:
         traceback.print_exc()
         return ""
     finally:
-        # 删除本地图片
-        if pathlib.Path(png_file).is_file():
-            os.remove(png_file)
+        # 同时清理 png 和中间产物 html，避免本地长期残留垃圾文件。
+        for tmp in (png_file, html_file):
+            try:
+                if pathlib.Path(tmp).is_file():
+                    os.remove(tmp)
+            except OSError:
+                # 删除失败不能影响主流程；忽略并打印一条日志。
+                traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -4,20 +4,21 @@ TradingView相关接口蓝图。
 """
 import pytz
 import json
+import hashlib
 import datetime
 import time
 import threading
+import weakref
 import numpy as np
 import talib
 from cachetools import TTLCache
-from threading import RLock
-from collections import defaultdict
+from threading import RLock, Semaphore
 import bisect
 from flask import Blueprint, request
 from flask_login import login_required
 import pinyin
 
-from chanlun import fun
+from chanlun import config, fun
 from chanlun.base import Market
 from chanlun.cl_utils import (
     cl_data_to_tv_chart,
@@ -77,22 +78,52 @@ MARKET_D_TO_W_RATIO = {
 # 基础数据缓存
 stock_cache = TTLCache(maxsize=100, ttl=7200)
 
-# 图表数据计算结果缓存 (30秒缓存，防止短时间重复计算，减少快速切换周期时的重复计算)
+# 图表数据计算结果缓存 (10 分钟缓存，防止短时间重复计算，减少快速切换周期时的重复计算)
 chart_data_cache = TTLCache(maxsize=100, ttl=600)
 
-# Fix: Pre-warm cache for common interval switches to reduce recomputation
-# accessed_intervals is bounded to prevent unbounded memory growth
-_MAX_ACCESSED_INTERVALS = 500
+# Pre-warm cache for common interval switches to reduce recomputation
 _MAX_PREWARMED_SIZE = 50  # prewarmed 集合上限，防止线程异常导致无限增长
-chart_data_cache_stats = {"accessed_intervals": defaultdict(set), "prewarmed": set()}
+# 已"在飞行中"的 prewarm cache_key 集合，避免同一个 key 被多个 prewarm 任务重复计算。
+# 设计上始终通过 discard 移除，size 不会超过同时 in-flight 的预热任务数（极小）。
+chart_data_cache_stats = {"prewarmed": set()}
 COMMON_INTERVALS = ["1", "5", "15", "30", "60", "1D", "1W"]  # Commonly switched intervals
 
+# Prewarm 全局并发限制：xtquant native 不是线程安全的，且每次启动 prewarm 会拉 7 个周期，
+# 多个 prewarm 线程并发会直接撞 BSON 断言。这里用信号量限制全局只有 1 个 prewarm 在飞行。
+_PREWARM_MAX_CONCURRENT = 1
+_prewarm_semaphore = Semaphore(_PREWARM_MAX_CONCURRENT)
+# 记录最近一次 prewarm 的目标 symbol，用户快速切换时旧任务可主动放弃。
+_prewarm_latest_target = {"key": None}
+_prewarm_target_lock = threading.Lock()
+
 # 缓存数据最近验证时间戳（防止非交易时段 DataPulse 反复 cache miss）
+# H4: 验证时间戳直接放在 chart_data_cache 的 entry["validated_at"] 中，
+# 不再单独维护 chart_data_validated_at TTLCache：
+#   1) 双 TTLCache（600s vs 3600s）/ 双 maxsize（100 vs 500）会形成悬挂键，
+#      mark 时拿不到 entry 却仍写独立缓存，永久堆积无对应 cache entry 的孤儿键。
+#   2) entry 本身已经存了 validated_at，独立缓存纯属冗余源。
 _CACHE_REVALIDATION_INTERVAL = 30  # 秒，缓存在此时间内被验证过则视为有效
-chart_data_validated_at = {}
 
 cache_lock = RLock()
-req_lock = RLock()
+# 注：原 req_lock 全局 RLock 已被 H7 拆为 per-key 的 _history_req_locks（见下方），
+# 全文已无任何引用，故移除避免误用。
+
+
+def _stable_hash(obj) -> str:
+    """
+    生成稳定的 hash（不受 PYTHONHASHSEED 影响，跨进程/重启一致）。
+    这样多 worker 部署、进程重启后 cache_key 仍然稳定，缓存命中率不会被打穿。
+    """
+    try:
+        s = json.dumps(obj, sort_keys=True, default=str)
+    except Exception:
+        s = str(obj)
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
+
+
+def _build_cache_key(market: str, code: str, frequency: str, cl_config: dict) -> str:
+    """统一构造 chart_data_cache 的 key，确保所有调用方一致。"""
+    return f"{market}_{code}_{frequency}_{_stable_hash(cl_config)}"
 
 
 def _safe_int(value, default=0):
@@ -152,27 +183,27 @@ def _get_chart_cache_entry(cache_key: str):
     if isinstance(cached, dict) and "data" in cached and "validated_at" in cached:
         return cached
     if isinstance(cached, dict):
-        validated_at = chart_data_validated_at.get(cache_key, time.time())
-        return _build_chart_cache_entry(cached, is_full_snapshot=True, validated_at=validated_at)
+        # H4: 兼容历史遗留的 raw dict 格式（旧版本 entry 没有 validated_at 字段），
+        # 取当前时间兜底，下次 set 自然会规范化。原本依赖的 chart_data_validated_at
+        # 独立 TTLCache 已删除（双 TTL 不一致会形成悬挂键）。
+        return _build_chart_cache_entry(cached, is_full_snapshot=True, validated_at=time.time())
     return None
 
 
 def _set_chart_cache_entry(cache_key: str, cl_chart_data: dict, is_full_snapshot: bool):
     entry = _build_chart_cache_entry(cl_chart_data, is_full_snapshot=is_full_snapshot)
     chart_data_cache[cache_key] = entry
-    chart_data_validated_at[cache_key] = entry["validated_at"]
     return entry
 
 
 def _mark_chart_cache_validated(cache_key: str):
-    validated_at = time.time()
+    # H4: validated_at 只更新到 entry 内部；entry 本身的 TTL 由 chart_data_cache 统一管理。
+    # 若 cache 已被 TTL 淘汰，没有 entry 可标记，直接返回（下次请求自然重算）。
     entry = _get_chart_cache_entry(cache_key)
     if entry is None:
-        chart_data_validated_at[cache_key] = validated_at
         return
-    entry["validated_at"] = validated_at
+    entry["validated_at"] = time.time()
     chart_data_cache[cache_key] = entry
-    chart_data_validated_at[cache_key] = validated_at
 
 
 def _cache_entry_recently_validated(cache_entry: dict):
@@ -280,18 +311,47 @@ def prewarm_common_intervals(market, code, cl_config):
     """
     Pre-warm cache for commonly switched intervals to reduce recomputation on rapid interval switches.
     This is called asynchronously after initial data load.
+
+    关键改动：
+    1. 全局信号量 _prewarm_semaphore 限制最多 1 个 prewarm 任务同时跑，避免对 xtquant
+       native 客户端的并发冲击（多线程并发是 BSON 断言崩溃的主因之一）。
+    2. _prewarm_latest_target 跟踪用户最近查看的标的，用户快速切换时旧的 prewarm
+       任务在每个周期处理前会主动放弃，节省资源。
+    3. 单个 prewarm 线程内部串行处理多个周期，每个周期之间 sleep 一小段，避免压力过大。
     """
+    target_key = f"{market}:{code}:{_stable_hash(cl_config)}"
+
+    # 标记当前最新的目标，旧 prewarm 任务在循环中会自查并退出
+    with _prewarm_target_lock:
+        _prewarm_latest_target["key"] = target_key
+
+    def _is_still_latest():
+        with _prewarm_target_lock:
+            return _prewarm_latest_target["key"] == target_key
+
     def _prewarm():
+        # 非阻塞获取信号量；获取不到说明已有 prewarm 在跑，本次直接放弃
+        # （新的 prewarm 比旧的更接近用户当前关注点，旧的会通过 _is_still_latest 自动退出）
+        if not _prewarm_semaphore.acquire(blocking=False):
+            LogUtil.info(f"[tv_history] Prewarm skipped (another in flight) for {market}:{code}")
+            return
         try:
+            if not _is_still_latest():
+                return
             ex = get_exchange(Market(market))
             tz_sh = pytz.timezone("Asia/Shanghai")
-            
+
             for interval in COMMON_INTERVALS:
+                # 用户已切换到其他标的，立即放弃剩余周期
+                if not _is_still_latest():
+                    LogUtil.info(f"[tv_history] Prewarm aborted (user switched away) for {market}:{code}")
+                    return
+
                 cache_key = None
                 try:
                     freq = resolution_maps.get(interval, interval)
-                    cache_key = f"{market}_{code}_{freq}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
-                    
+                    cache_key = _build_cache_key(market, code, freq, cl_config)
+
                     # Skip if already in cache or being computed
                     with cache_lock:
                         if cache_key in chart_data_cache or cache_key in chart_data_cache_stats["prewarmed"]:
@@ -300,14 +360,12 @@ def prewarm_common_intervals(market, code, cl_config):
                         if len(chart_data_cache_stats["prewarmed"]) >= _MAX_PREWARMED_SIZE:
                             chart_data_cache_stats["prewarmed"].clear()
                             LogUtil.warning(f"[tv_history] prewarmed 集合已达上限 {_MAX_PREWARMED_SIZE}，已清空")
-                        # Mark as prewarming to prevent duplicate computation
                         chart_data_cache_stats["prewarmed"].add(cache_key)
-                    
-                    # Pre-warm in background (fire and forget)
+
                     kline_args = {
                         'end_date': datetime.datetime.now(tz_sh).strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    
+
                     to_frequency = None
                     if cl_config.get("enable_kchart_low_to_high") == "1":
                         frequency_low, to_frequency = kcharts_frequency_h_l_map(market, freq)
@@ -321,20 +379,20 @@ def prewarm_common_intervals(market, code, cl_config):
                     else:
                         klines = ex.klines(code, freq, **kline_args)
                         cd = web_batch_get_cl_datas(market, code, {freq: klines}, cl_config)[0]
-                    
+
                     cl_chart_data = cl_data_to_tv_chart(cd, cl_config, to_frequency=to_frequency)
                     if cl_chart_data is None:
                         with cache_lock:
                             chart_data_cache_stats["prewarmed"].discard(cache_key)
                         continue
-                    
-                    # Store in cache
+
                     with cache_lock:
                         _set_chart_cache_entry(cache_key, cl_chart_data, is_full_snapshot=True)
                         chart_data_cache_stats["prewarmed"].discard(cache_key)
-                        if len(chart_data_cache_stats["accessed_intervals"]) < _MAX_ACCESSED_INTERVALS:
-                            chart_data_cache_stats["accessed_intervals"][f"{market}:{code}"].add(interval)
                         LogUtil.info(f"[tv_history] Pre-warmed cache for {market}:{code} interval {interval}")
+
+                    # 每个周期之间小憩，避免对 native 行情接口持续压力
+                    time.sleep(0.2)
                 except Exception as e:
                     if cache_key is not None:
                         with cache_lock:
@@ -342,61 +400,156 @@ def prewarm_common_intervals(market, code, cl_config):
                     LogUtil.error(f"[tv_history] Pre-warm failed for {interval}: {e}")
         except Exception as e:
             LogUtil.error(f"[tv_history] Pre-warm thread error: {e}")
-    
-    # Run prewarming in background thread
+        finally:
+            _prewarm_semaphore.release()
+
     t = threading.Thread(target=_prewarm, daemon=True, name="IntervalPrewarmThread")
     t.start()
     LogUtil.info(f"[tv_history] Started pre-warm thread for {market}:{code}")
 
 
-class _LimitedLockDict(dict):
-    """Bounded lock dict with LRU eviction to avoid unlimited lock growth."""
-    _MAX_SIZE = 200
-    _EVICT_COUNT = 50  # 每次淘汰数量
+class _SafeLockRegistry:
+    """
+    线程安全的 per-key 锁注册表，使用 weakref + 引用计数避免锁正确性问题。
 
-    def __missing__(self, key):
-        if len(self) >= self._MAX_SIZE:
-            # 淘汰最早插入的 _EVICT_COUNT 个 key（近似 LRU）
-            keys_to_evict = list(self.keys())[:self._EVICT_COUNT]
-            for k in keys_to_evict:
-                self.pop(k, None)
-            LogUtil.info(f"chart_calc_locks 淘汰了 {len(keys_to_evict)} 个旧锁，当前数量 {len(self)}")
-        lock = RLock()
-        self[key] = lock
-        return lock
+    原 _LimitedLockDict 的问题：
+    - 用 dict 的插入顺序做 FIFO 淘汰（不是 LRU），热点 key 会被错误淘汰；
+    - 更严重的：被淘汰的 RLock 如果还被另一个线程持有，新请求会拿到一把全新的锁，
+      导致同一 key 上"两把锁、各串行各的"，破坏 per-key 串行化语义。
 
-chart_calc_locks = _LimitedLockDict()
+    本实现改为：
+    - 锁不主动淘汰，借助 WeakValueDictionary 让无引用的锁自然被 GC；
+    - 调用方使用 with registry.get(key) as lock: 模式，进入 with 时锁的强引用挂在
+      调用栈上，不会被 GC，确保两个并发请求拿到同一把锁。
+    """
 
-PRELOAD_EXCHANGES = ["a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot"]
+    def __init__(self):
+        self._locks = weakref.WeakValueDictionary()
+        self._registry_lock = threading.Lock()
+
+    def get(self, key: str) -> RLock:
+        """返回 key 对应的 RLock。调用方应立即用 with 包住，确保引用持续。"""
+        with self._registry_lock:
+            lock = self._locks.get(key)
+            if lock is None:
+                lock = RLock()
+                self._locks[key] = lock
+            return lock
+
+    def __contains__(self, key):
+        return key in self._locks
+
+    def __len__(self):
+        return len(self._locks)
+
+
+chart_calc_locks = _SafeLockRegistry()
+# H7（保守版）：__history_req_counter 的 per-key 节流锁。
+# 原 req_lock 是全局 RLock，所有 (symbol, resolution) 的请求计数访问都串行化，
+# 多用户并发翻页历史时形成无谓热点。改 per-key 后不同 symbol/resolution 互不阻塞，
+# 同一 key 内仍严格串行，节流语义不变。
+# 注意：必须用 with _history_req_locks.get(key) 模式，详见 _SafeLockRegistry 注释。
+_history_req_locks = _SafeLockRegistry()
+
+# 全部支持的市场（用于校验配置项）
+_ALL_PRELOAD_EXCHANGES = [
+    "a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot",
+]
+
+def _resolve_preload_exchanges():
+    """从 config 读取 PRELOAD_MARKETS（list[str]）。
+    - 未配置时回退默认仅预加载 a/hk/us（避免 futures/currency 这类境外/超时频发的市场拖慢启动）。
+    - 配置中包含未知市场名时仅记 warning, 不中断。
+    用户用不到的市场可在 config.py 中显式置空 PRELOAD_MARKETS = [] 关闭预加载。
+    """
+    raw = getattr(config, "PRELOAD_MARKETS", None)
+    if raw is None:
+        return ["a", "hk", "us"]
+    if not isinstance(raw, (list, tuple)):
+        LogUtil.warning(f"config.PRELOAD_MARKETS 类型应为 list, 当前为 {type(raw).__name__}, 已忽略并使用默认值")
+        return ["a", "hk", "us"]
+    valid = []
+    for ex in raw:
+        if ex in _ALL_PRELOAD_EXCHANGES:
+            valid.append(ex)
+        else:
+            LogUtil.warning(f"config.PRELOAD_MARKETS 包含未知市场 {ex}, 已跳过")
+    return valid
+
+PRELOAD_EXCHANGES = _resolve_preload_exchanges()
 PRELOAD_INTERVAL_SECONDS = 3600
-PRELOAD_PARALLEL_WORKERS = 8
+# 启动后延迟多少秒才开始第一轮预加载, 让启动初期完全静默,
+# 也避免抢占用户首次加载页面所需要的 CPU/网络资源。
+# 可通过 config.PRELOAD_STARTUP_DELAY_SECONDS 覆盖, 默认 30s。
+PRELOAD_STARTUP_DELAY_SECONDS = max(0, int(getattr(config, "PRELOAD_STARTUP_DELAY_SECONDS", 30)))
+# 并发度自适应: 不超过待加载市场数量, 也不超过原上限 8。
+PRELOAD_PARALLEL_WORKERS = min(8, max(1, len(PRELOAD_EXCHANGES))) if PRELOAD_EXCHANGES else 1
+
+# 单市场单次刷新的最大耗时阈值, 仅用于日志告警, 不会强制 kill 任务。
+_PRELOAD_SLOW_WARN_SECONDS = 10
+
+# 正在异步刷新的市场集合, 防止同一市场被并发触发多次刷新而堆积慢请求。
+_async_refresh_in_flight = set()
+_async_refresh_lock = threading.Lock()
+
+def _safe_all_stocks(ex, exchange: str):
+    """统一的 all_stocks 调用入口。
+
+    历史 bug：``ExchangeChangQiao`` 是 ``@fun.singleton``, A/HK/US 三个市场共享同一实例。
+    如果只靠实例字段 ``default_market`` 区分市场, 后注册的市场会覆盖前面的字段, 结果
+    所有市场拿到的都是最后一个市场的数据 (实测复现)。所以这里强制把 ``exchange`` 作为
+    参数传下去——cq 实现的 ``all_stocks`` 接受可选 ``market`` 参数; 其它 exchange 的
+    签名是无参的, 用 try/except 优雅降级即可。
+    """
+    try:
+        return ex.all_stocks(exchange)
+    except TypeError:
+        # 大多数非 cq 的 exchange 是无参签名, 退回原行为。
+        return ex.all_stocks()
 
 def _preload_single_exchange(exchange: str) -> None:
     """加载单个市场的 symbol 列表并写入缓存。任何异常都被吞掉，仅记日志，避免影响其他市场。"""
     try:
         start_ts = time.time()
         ex = get_exchange(Market(exchange))
-        all_stocks = ex.all_stocks()
+        # 短路: 如果交易所实例标记了 init_failed (例如通达信连接超时),
+        # 直接跳过 all_stocks 调用, 避免再次 30s 阻塞。
+        if getattr(ex, "init_failed", False):
+            LogUtil.warning(f"市场 {exchange} 交易所初始化失败, 跳过本次预加载")
+            return
+        all_stocks = _safe_all_stocks(ex, exchange)
         processed_stocks = _process_stock_list(all_stocks)
         with cache_lock:
             stock_cache[exchange] = processed_stocks
-        LogUtil.info(
-            f"市场 {exchange} symbols 预加载完成，共 {len(processed_stocks)} 条，耗时 {time.time() - start_ts:.2f}s"
+        elapsed = time.time() - start_ts
+        log_fn = LogUtil.warning if elapsed > _PRELOAD_SLOW_WARN_SECONDS else LogUtil.info
+        log_fn(
+            f"市场 {exchange} symbols 预加载完成，共 {len(processed_stocks)} 条，耗时 {elapsed:.2f}s"
         )
     except Exception as e:
         LogUtil.error(f"预加载市场 {exchange} symbols 失败: {e}")
 
 def preload_symbols():
-    """常驻线程入口：并行预加载 8 个市场的 symbols，并周期性刷新。
+    """常驻线程入口：并行预加载配置中的市场 symbols，并周期性刷新。
 
     设计要点：
-    1. 每轮使用 ThreadPoolExecutor 并行触发 8 个市场的加载，单轮总耗时由最慢的市场决定，
-       而不是 8 个市场耗时之和，避免长时间占用 GIL 导致请求线程被饿死。
-    2. 单个市场失败不会影响其他市场。
-    3. 该函数本身运行在 daemon 线程中，不阻塞主进程。
+    1. 启动后先静默 PRELOAD_STARTUP_DELAY_SECONDS 秒再开始第一轮, 让启动初期日志干净、
+       不和用户首次访问页面争抢资源。
+    2. 每轮使用 ThreadPoolExecutor 并行触发, 单轮总耗时由最慢的市场决定。
+    3. 单个市场失败不会影响其他市场。
+    4. 该函数本身运行在 daemon 线程中, 不阻塞主进程。
+    5. 如果 PRELOAD_EXCHANGES 为空, 直接退出线程, 不再周期性刷新。
     """
     # 通过局部导入避免在模块顶层增加额外依赖项的可见性
     from concurrent.futures import ThreadPoolExecutor
+
+    if not PRELOAD_EXCHANGES:
+        LogUtil.info("config.PRELOAD_MARKETS 为空, 跳过 symbols 预加载线程")
+        return
+
+    # 启动延迟: 让 web 服务先静默就绪, 用户可立即开始使用 (按需触发的市场会走异步刷新路径)。
+    if PRELOAD_STARTUP_DELAY_SECONDS > 0:
+        time.sleep(PRELOAD_STARTUP_DELAY_SECONDS)
 
     while True:
         LogUtil.info("开始预加载并更新所有市场的 symbols（并行）...")
@@ -404,7 +557,7 @@ def preload_symbols():
         try:
             with ThreadPoolExecutor(
                 max_workers=PRELOAD_PARALLEL_WORKERS,
-                thread_name_prefiFx="SymbolPreloadWorker",
+                thread_name_prefix="SymbolPreloadWorker",
             ) as pool:
                 # 提交后等待所有 future 结束（_preload_single_exchange 已自行吞异常）
                 list(pool.map(_preload_single_exchange, PRELOAD_EXCHANGES))
@@ -469,7 +622,7 @@ def tv_symbol_info():
         all_symbols = get_cached_processed_stocks(group)
     except Exception:
         ex = get_exchange(Market(group))
-        all_symbols = ex.all_stocks()
+        all_symbols = _safe_all_stocks(ex, group)
 
     info = {
         "symbol": [s["code"] for s in all_symbols],
@@ -572,54 +725,158 @@ def _process_stock_list(all_stocks):
     return processed_list
 
 
-def get_cached_processed_stocks(exchange):
+def _trigger_async_refresh(exchange: str) -> None:
+    """触发后台线程异步刷新该市场的 symbols, 不阻塞调用方。
+    使用 _async_refresh_in_flight 集合做单例化, 避免同一市场并发刷新堆积。
+    """
+    with _async_refresh_lock:
+        if exchange in _async_refresh_in_flight:
+            return
+        _async_refresh_in_flight.add(exchange)
+
+    def _worker():
+        try:
+            _preload_single_exchange(exchange)
+        finally:
+            with _async_refresh_lock:
+                _async_refresh_in_flight.discard(exchange)
+
+    t = threading.Thread(target=_worker, daemon=True, name=f"SymbolAsyncRefresh-{exchange}")
+    t.start()
+
+def get_cached_processed_stocks(exchange, allow_sync_fallback: bool = False):
+    """获取指定市场已缓存的 symbols 列表。
+
+    设计要点 (启动慢优化):
+    - 缓存命中: 直接返回。
+    - 缓存 miss + ``allow_sync_fallback=False``: 触发后台异步刷新并 raise, 适合那些"宁可
+      报错也不能阻塞"的入口 (如图表页面初始化时的 symbol_info 探测)。
+    - 缓存 miss + ``allow_sync_fallback=True``: 同步调用一次 ``ex.all_stocks()`` 直接构建
+      并写入缓存, 适合"用户主动点搜索"这种愿意等几秒的场景。否则启动后 60s 预加载空窗期内
+      搜索接口会全 500, 用户体感是"搜索框完全坏了"。
+    - 同步路径里任何异常 (包括交易所连接超时) 都吞掉并返回 ``[]``, 搜索框最差是"无结果"。
+    """
     with cache_lock:
         cached = stock_cache.get(exchange)
     if cached is not None:
         return cached
 
-    ex = get_exchange(Market(exchange))
-    all_stocks = ex.all_stocks()
-    processed_stocks = _process_stock_list(all_stocks)
+    if not allow_sync_fallback:
+        _trigger_async_refresh(exchange)
+        raise RuntimeError(
+            f"市场 {exchange} symbols 尚未就绪 (后台正在加载, 请稍后重试)"
+        )
 
-    with cache_lock:
-        stock_cache[exchange] = processed_stocks
-    return processed_stocks
+    # 同步兜底路径: 直接构建一次。即使较慢 (a/hk/us 通常 1~5s), 也比让用户看到 500 好。
+    try:
+        ex = get_exchange(Market(exchange))
+        if getattr(ex, "init_failed", False):
+            LogUtil.warning(
+                f"[get_cached_processed_stocks] {exchange} 交易所初始化失败, 同步兜底返回空列表"
+            )
+            return []
+        all_stocks = _safe_all_stocks(ex, exchange) or []
+        processed = _process_stock_list(all_stocks)
+        with cache_lock:
+            stock_cache[exchange] = processed
+        LogUtil.info(
+            f"[get_cached_processed_stocks] {exchange} 同步兜底加载完成, 共 {len(processed)} 条"
+        )
+        return processed
+    except Exception as e:
+        LogUtil.error(
+            f"[get_cached_processed_stocks] {exchange} 同步兜底加载失败: {e}"
+        )
+        return []
 
 
 @tv_bp.route("/tv/search")
 @login_required
 def tv_search():
-    query = request.args.get("query")
+    # 关键修复：搜索结果必须严格按"当前页面市场"过滤，避免 A 股搜出美股之类的串市场问题。
+    # 触发原因：TradingView 的 Symbol Search 组件默认会传 exchange="" / "All" / 上次选中的
+    # 交易所，并不一定等于当前 chart 的 market；若后端不校验直接命中错误缓存或 KeyError 退化，
+    # 会让前端 datafeed 回退到内置 symbol 列表（含历史浏览过的其它市场标的）。
+    query = (request.args.get("query") or "").strip()
     type_ = request.args.get("type")
-    exchange = request.args.get("exchange")
-    limit_str = request.args.get("limit", "10")
-    limit = int(limit_str)
-
+    exchange = (request.args.get("exchange") or "").strip().lower()
     try:
-        processed_stocks = get_cached_processed_stocks(exchange)
+        limit = int(request.args.get("limit", "10"))
+    except (TypeError, ValueError):
+        limit = 10
+    if limit <= 0:
+        limit = 10
+
+    # exchange 必须是已知市场之一，否则直接拒绝；不要静默回退到任何"看似合理"的市场。
+    if exchange not in market_types or exchange not in market_frequencys:
+        LogUtil.warning(
+            f"[tv_search] reject invalid exchange={exchange!r} query={query!r}"
+        )
+        return {"error": f"invalid exchange: {exchange!r}"}, 400
+
+    # 空 query 直接返回空列表，避免对几万条 symbol 全量扫描后被 limit 截断成"看起来随机"的结果。
+    if not query:
+        return []
+
+    # 用 allow_sync_fallback=True: 启动后 60s 预加载空窗期或某个市场首次访问时, 同步加载一次,
+    # 避免直接 500。最差情况是返回 [], 搜索框显示"无结果"——优于"接口异常"的体感。
+    try:
+        processed_stocks = get_cached_processed_stocks(exchange, allow_sync_fallback=True)
     except Exception as e:
-        return {"error": f"Failed to get stocks for {exchange}: {e}"}, 500
+        LogUtil.error(f"[tv_search] get stocks failed exchange={exchange}: {e}")
+        # 兜底也失败时仍降级为空列表而不是 500, 避免前端 datafeed 抛异常显示"加载错误"。
+        processed_stocks = []
+
+    if not processed_stocks:
+        # 没有可搜的 symbol 直接返回空, 后续逻辑还有 market_session/market_timezone 取值,
+        # 提前返回也能省一次循环。
+        return []
 
     query_lower = query.lower()
-    res_stocks = []
     is_currency = exchange in ["currency", "currency_spot"]
 
+    # 优先级：完全相等 > code/拼音前缀 > 任意子串包含。
+    # 这样搜 "600" 不会被一堆名字含 600 的票淹没；搜 "中国" 也不会被代码含相同字符的票打乱顺序。
+    exact_hits = []
+    prefix_hits = []
+    contains_hits = []
     for stock in processed_stocks:
+        code_l = stock['code_lower']
+        name_l = stock['name_lower']
+        pinyin_l = stock['pinyin_initials']
+
         if is_currency:
-            if query_lower in stock['code_lower']:
-                res_stocks.append(stock)
+            if query_lower == code_l:
+                exact_hits.append(stock)
+            elif code_l.startswith(query_lower):
+                prefix_hits.append(stock)
+            elif query_lower in code_l:
+                contains_hits.append(stock)
         else:
-            if (query_lower in stock['code_lower'] or
-                    query_lower in stock['name_lower'] or
-                    query_lower in stock['pinyin_initials']):
-                res_stocks.append(stock)
-        if len(res_stocks) >= limit:
+            if query_lower == code_l or query_lower == name_l:
+                exact_hits.append(stock)
+            elif (code_l.startswith(query_lower)
+                  or pinyin_l.startswith(query_lower)
+                  or name_l.startswith(query_lower)):
+                prefix_hits.append(stock)
+            elif (query_lower in code_l
+                  or query_lower in name_l
+                  or query_lower in pinyin_l):
+                contains_hits.append(stock)
+
+        # 早停：精确+前缀已经够用就不再扫剩下的，节省 CPU。
+        if len(exact_hits) + len(prefix_hits) >= limit:
             break
 
+    res_stocks = (exact_hits + prefix_hits + contains_hits)[:limit]
+
+    # 用 .get 防御 market_frequencys 中 exchange 因懒加载失败缺键的情况（前面已校验在表内，
+    # 但懒加载 build 失败时值会是 []，这里再兜一层就不会抛）。
     supported_resolutions = [
-        v for k, v in frequency_maps.items() if k in market_frequencys[exchange]
+        v for k, v in frequency_maps.items() if k in market_frequencys.get(exchange, [])
     ]
+    session_value = market_session.get(exchange, "24x7")
+    timezone_value = market_timezone.get(exchange, "Asia/Shanghai")
 
     infos = []
     for stock in res_stocks:
@@ -632,8 +889,8 @@ def tv_search():
                 "exchange": exchange,
                 "ticker": f"{exchange}:{stock['code']}",
                 "type": type_,
-                "session": market_session[exchange],
-                "timezone": market_timezone[exchange],
+                "session": session_value,
+                "timezone": timezone_value,
                 "supported_resolutions": supported_resolutions,
             }
         )
@@ -683,7 +940,10 @@ def tv_history():
         _symbol_res_old_k_time_key = f"{symbol}_{resolution}"
         now_time = time.time()
         if firstDataRequest == "false":
-            with req_lock:
+            # H7（保守版）：per-key 锁替代全局 req_lock，不同 symbol/resolution 并发不互斥。
+            # 必须先 get 出 RLock 再 with，确保整个临界区内强引用持续（WeakValueDictionary 语义）。
+            _req_lock = _history_req_locks.get(_symbol_res_old_k_time_key)
+            with _req_lock:
                 if _symbol_res_old_k_time_key not in __history_req_counter.keys():
                     __history_req_counter[_symbol_res_old_k_time_key] = {
                         "counter": 0,
@@ -713,7 +973,8 @@ def tv_history():
         cl_config = query_cl_chart_config(market, code)
         if not isinstance(cl_config, dict):
             cl_config = {}
-        cache_key = f"{market}_{code}_{frequency}_{hash(json.dumps(cl_config, sort_keys=True, default=str))}"
+        # 使用稳定 hash 构造 cache_key（不受 PYTHONHASHSEED 影响，进程重启后仍一致）
+        cache_key = _build_cache_key(market, code, frequency, cl_config)
 
         cl_chart_data = None
         is_cache_hit = False
@@ -725,32 +986,36 @@ def tv_history():
             and _to >= _from
         )
 
-        with chart_calc_locks[cache_key]:
+        # 内联函数：根据当前缓存项判断是否命中。提取出来供 double-check locking 复用。
+        def _evaluate_cache(_cache_entry):
+            if _cache_entry is None:
+                return False, None, "cache_empty"
+            cached_data = _cache_entry.get("data", {})
+            cache_min_time = _cache_entry.get("min_time")
+            cache_max_time = _cache_entry.get("max_time")
+            if not is_range_request:
+                if _cache_entry.get("is_full_snapshot", False):
+                    return True, cached_data, None
+                return False, None, "cache_partial_snapshot"
+            if cache_min_time is None or cache_max_time is None:
+                return False, None, "cache_no_coverage"
+            if _from < cache_min_time:
+                return False, None, "cache_head_gap"
+            if _to > cache_max_time:
+                if _cache_entry_recently_validated(_cache_entry):
+                    return True, cached_data, None
+                return False, None, "cache_tail_gap"
+            return True, cached_data, None
+
+        # 注意：必须先 get 出 RLock 对象再 with，确保整个临界区内引用持续存在
+        # （_SafeLockRegistry 用 WeakValueDictionary 存储锁，无强引用会被 GC）
+        _calc_lock = chart_calc_locks.get(cache_key)
+        with _calc_lock:
             with cache_lock:
                 cache_entry = _get_chart_cache_entry(cache_key)
-                if cache_entry is not None:
-                    cached_data = cache_entry.get("data", {})
-                    cache_min_time = cache_entry.get("min_time")
-                    cache_max_time = cache_entry.get("max_time")
-                    if not is_range_request:
-                        if cache_entry.get("is_full_snapshot", False):
-                            cl_chart_data = cached_data
-                            is_cache_hit = True
-                        else:
-                            cache_miss_reason = "cache_partial_snapshot"
-                    elif cache_min_time is None or cache_max_time is None:
-                        cache_miss_reason = "cache_no_coverage"
-                    elif _from < cache_min_time:
-                        cache_miss_reason = "cache_head_gap"
-                    elif _to > cache_max_time:
-                        if _cache_entry_recently_validated(cache_entry):
-                            cl_chart_data = cached_data
-                            is_cache_hit = True
-                        else:
-                            cache_miss_reason = "cache_tail_gap"
-                    else:
-                        cl_chart_data = cached_data
-                        is_cache_hit = True
+                is_cache_hit, cl_chart_data, miss_reason = _evaluate_cache(cache_entry)
+                if not is_cache_hit:
+                    cache_miss_reason = miss_reason
 
             if not is_cache_hit:
                 LogUtil.info(f"[tv_history] Cache miss ({cache_miss_reason}) req={req_tag}")

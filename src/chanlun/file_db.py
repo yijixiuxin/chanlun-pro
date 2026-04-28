@@ -4,6 +4,7 @@ import hashlib
 import pathlib
 import pickle
 import random
+import threading
 import time
 from decimal import Decimal
 from typing import Union
@@ -37,6 +38,18 @@ class FileCacheDB(object):
         self.cl_data_path.mkdir(parents=True, exist_ok=True)
         self.klines_path = self.project_path / "klines"
         self.klines_path.mkdir(parents=True, exist_ok=True)
+        # H6：旧数据清理的并发节流。
+        # - clear_old_web_cl_data / clear_tdx_old_klines 会遍历 glob+stat+unlink，
+        #   高并发下 random.randint(0,1000)<=5 即使概率只有 0.6%，N 个请求同时触发
+        #   时仍会形成 race（stat 后被另一线程删掉再 unlink → except pass 掉但浪费 IO）。
+        # - 用 Lock + 上次清理时间戳节流，保证全局最多 N 分钟一次，
+        #   且同一时刻只有一个清理在跑。tryLock 失败直接跳过本次（清理是机会型任务，
+        #   不需要等待）。
+        self._cleanup_lock = threading.Lock()
+        self._last_cleanup_at: dict = {}  # key: 标识符 → 上次执行时间戳
+        # 同一类清理任务两次执行的最小间隔（秒）：5 分钟
+        self._cleanup_min_interval = 5 * 60
+
         self.cache_pkl_path = self.project_path / "cache_pkl"
         self.cache_pkl_path.mkdir(parents=True, exist_ok=True)
 
@@ -114,22 +127,95 @@ class FileCacheDB(object):
         unique_str = "|".join(parts)
         return hashlib.md5(unique_str.encode("UTF-8")).hexdigest()
 
+    # 固定 pickle 协议为 4（Python 3.4+ 都兼容），避免不同 Python 版本之间互不兼容。
+    # 之前用 pickle.HIGHEST_PROTOCOL，从 3.8 升到 3.12 后旧 pkl 文件无法读取。
+    _PICKLE_PROTOCOL = 4
+
     def _atomic_write_pickle(self, path: pathlib.Path, obj: object):
         """
         原子化写入 pickle，避免并发读到半写入文件。
+
+        H2：失败时主动清理 .tmp 残留，避免临时文件长期堆积撑爆磁盘配额。
         """
         tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
-        with open(tmp, "wb") as fp:
-            pickle.dump(obj, fp, protocol=pickle.HIGHEST_PROTOCOL)
-        os.replace(tmp, path)
+        try:
+            with open(tmp, "wb") as fp:
+                pickle.dump(obj, fp, protocol=self._PICKLE_PROTOCOL)
+            os.replace(tmp, path)
+        except Exception:
+            # os.replace 失败 / pickle dump 失败 / 磁盘满 等场景，清掉残留 tmp。
+            try:
+                if tmp.exists():
+                    tmp.unlink(missing_ok=True)
+            except Exception as cleanup_exc:
+                # 清理失败不能掩盖原异常，仅记录 debug 用于事后排查（如磁盘只读、权限等）。
+                LogUtil.debug(
+                    f"[FileCacheDB._atomic_write_pickle] cleanup tmp failed "
+                    f"path={tmp} err={cleanup_exc}"
+                )
+            raise
 
     def _atomic_write_csv(self, path: pathlib.Path, df: pd.DataFrame):
         """
         原子化写入 CSV，先写入临时文件再替换，保证读侧一致性。
+
+        H2：失败时主动清理 .tmp 残留。
         """
         tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
-        df.to_csv(tmp, index=False)
-        os.replace(tmp, path)
+        try:
+            df.to_csv(tmp, index=False)
+            os.replace(tmp, path)
+        except Exception:
+            try:
+                if tmp.exists():
+                    tmp.unlink(missing_ok=True)
+            except Exception as cleanup_exc:
+                LogUtil.debug(
+                    f"[FileCacheDB._atomic_write_csv] cleanup tmp failed "
+                    f"path={tmp} err={cleanup_exc}"
+                )
+            raise
+
+    def _try_run_cleanup(self, key: str, fn, on_error=None):
+        """
+        H6：尝试以「单飞行 + 时间戳节流」方式执行清理任务。
+
+        - 用 _cleanup_lock 的 acquire(blocking=False) 实现"全局至多一个清理在跑"，
+          抢不到锁的请求直接放弃（清理是机会型任务，没必要排队等）。
+        - 同一 key 在 _cleanup_min_interval 秒内只跑一次，避免高并发概率叠加导致
+          同一类清理几秒内连续触发。
+        - 异常通过 on_error 回调上抛或日志记录，由调用方决定语境化处理。
+        """
+        if not self._cleanup_lock.acquire(blocking=False):
+            return
+        try:
+            now_ts = time.time()
+            last_ts = self._last_cleanup_at.get(key, 0)
+            if now_ts - last_ts < self._cleanup_min_interval:
+                return
+            try:
+                fn()
+            except Exception as exc:
+                if on_error is not None:
+                    try:
+                        on_error(exc)
+                    except Exception as on_err_exc:
+                        # on_error 自己抛错时也不能影响主流程，仅 debug 留痕。
+                        LogUtil.debug(
+                            f"[FileCacheDB._try_run_cleanup] on_error raised key={key} "
+                            f"err={on_err_exc}"
+                        )
+                else:
+                    # 没有 on_error 时记录 debug：清理失败不影响主流程，
+                    # 真实根因（磁盘满 / 权限）调用方写盘时会通过 H2 的 critical 暴露。
+                    LogUtil.debug(
+                        f"[FileCacheDB._try_run_cleanup] cleanup failed key={key} err={exc}"
+                    )
+            finally:
+                # 不论成功失败都更新时间戳：避免失败任务被高频反复重试。
+                self._last_cleanup_at[key] = time.time()
+        finally:
+            self._cleanup_lock.release()
 
     def get_tdx_klines(
         self, market: str, code: str, frequency: str
@@ -145,7 +231,8 @@ class FileCacheDB(object):
         try:
             _klines = pd.read_csv(file_pathname, parse_dates=["date"])  # 直接解析日期列
         except Exception:
-            file_pathname.unlink()
+            # H3：用 missing_ok 防止并发清理线程已经删过该文件时再次抛错。
+            file_pathname.unlink(missing_ok=True)
             return None
         if len(_klines) > 0:
             # 如果 date 有 Nan 则返回 None
@@ -154,9 +241,13 @@ class FileCacheDB(object):
             # 不返回最后一行
             _klines = _klines.iloc[0:-1:]
 
-        # 加一个随机概率，去清理历史的缓存，避免太多占用空间
+        # H6：加一个随机概率，去清理历史的缓存，避免太多占用空间。
+        # 真正的并发节流由 _try_run_cleanup 内部统一保证，这里仅做触发频率压制。
         if random.randint(0, 1000) <= 5:
-            self.clear_tdx_old_klines(market)
+            self._try_run_cleanup(
+                f"tdx::{market}",
+                lambda: self.clear_tdx_old_klines(market),
+            )
         return _klines
 
     def save_tdx_klines(
@@ -181,9 +272,14 @@ class FileCacheDB(object):
         for filename in (self.klines_path / market).glob("*.csv"):
             try:
                 if filename.stat().st_mtime < del_lt_times:
-                    filename.unlink()
-            except Exception:
-                pass
+                    # missing_ok=True：防御 glob 拿到文件名后、unlink 调用前被并发清理
+                    filename.unlink(missing_ok=True)
+            except Exception as exc:
+                # 单个文件清理失败不影响其它文件继续清理，仅 debug 留痕。
+                LogUtil.debug(
+                    f"[FileCacheDB.clear_tdx_old_klines] unlink failed "
+                    f"file={filename} err={exc}"
+                )
         return True
 
     def get_web_cl_data(
@@ -257,12 +353,31 @@ class FileCacheDB(object):
                             logger.warning(f"{log_id} 局部数据缺失 [Cache:{len(_v_cd)} vs Src:{len(_v_src)}]，重算")
                             need_recompute = True
 
-                    # 4. 数据量校验：缓存数据远少于输入数据，说明缓存可能由窄范围请求(如DataPulse)创建，需全量重算
-                    if not need_recompute and len(cached_klines) > 0 and len(klines) > len(cached_klines) * 2:
-                        logger.warning(
-                            f"{log_id} 缓存数据量({len(cached_klines)})远少于输入({len(klines)})，全量重算"
+                    # 4. 数据量校验（G6 修正）：原始逻辑 len(klines) > len(cached_klines) * 2
+                    # 会把「缓存是窄范围、本次拉取标准范围」这类**正常增量**误判为全量重算，
+                    # 把已经算好的中枢/笔/段全部丢弃，性能浪费严重。
+                    #
+                    # 真正需要全量重算的只有一种场景：输入头部时间显著早于缓存头部时间，
+                    # 即「输入往左侧扩了一大块缓存里没有的旧数据」，此时缓存的 idx/中枢
+                    # 都是基于较短的尾段建立的，无法直接拼接更早的历史。
+                    #
+                    # 仅当输入头早于缓存头、且左侧延伸出来的数据量超过缓存量的一半时，
+                    # 才认为不值得增量、直接全量重算。
+                    if (
+                        not need_recompute
+                        and len(cached_klines) > 0
+                        and klines.iloc[0]["date"] < cached_klines[0].date
+                    ):
+                        # 缓存覆盖区间内的输入数据条数（粗略：以缓存头时间为分界）
+                        left_extend_count = int(
+                            (klines["date"] < cached_klines[0].date).sum()
                         )
-                        need_recompute = True
+                        if left_extend_count > len(cached_klines) // 2:
+                            logger.warning(
+                                f"{log_id} 输入左侧扩展 {left_extend_count} 根早于缓存头("
+                                f"缓存量 {len(cached_klines)})，全量重算"
+                            )
+                            need_recompute = True
 
                 if need_recompute:
                     cd = cl.CL(code, frequency, cl_config)
@@ -280,21 +395,34 @@ class FileCacheDB(object):
         try:
             cd.process_klines(klines)
         except Exception as e:
-            logger.error(f"{log_id} 执行缠论计算 process_klines 失败: {str(e)}", exc_info=True)
-            return cd  # 或者按需抛出
+            # G7：process_klines 抛错时 cd 处于半 applied 状态（子计算器 snapshot
+            # 已被 cl.py 内部 _clean_state_on_failure 推平，但本对象的中枢/MMD
+            # 数据可能只算到一半）。
+            # 这里既不写盘（避免污染下次请求的起点），也不返回半成品给上层
+            # 误用，统一返回一个全新空白 CL 让调用方下次请求自然重算。
+            logger.error(
+                f"{log_id} 执行缠论计算 process_klines 失败: {str(e)}", exc_info=True
+            )
+            return cl.CL(code, frequency, cl_config)
 
         # 写入缓存
         try:
             self._atomic_write_pickle(file_pathname, cd)
         except Exception as e:
-            logger.error(f"{log_id} 写入缓存异常: {str(e)}")
+            # H2：写盘失败是「下次还会从空缓存重算」的 silent 放大源，
+            # 必须 critical 级 + 完整堆栈，便于运维及时发现磁盘/权限问题。
+            logger.critical(
+                f"{log_id} 写入缓存失败 path={file_pathname} err={str(e)}",
+                exc_info=True,
+            )
 
-        # 随机清理旧数据
+        # H6：随机清理旧数据，统一通过 _try_run_cleanup 节流 + 互斥。
         if random.randint(0, 1000) <= 5:
-            try:
-                self.clear_old_web_cl_data()
-            except Exception as e:
-                logger.error(f"清理旧缓存数据异常: {str(e)}")
+            self._try_run_cleanup(
+                "web_cl",
+                self.clear_old_web_cl_data,
+                on_error=lambda exc: logger.error(f"清理旧缓存数据异常: {exc}"),
+            )
 
         return cd
 
@@ -307,9 +435,13 @@ class FileCacheDB(object):
                 if f"{market}_{code.replace('/', '_').replace('.', '_')}" in str(
                     filename
                 ):
-                    filename.unlink()
-            except Exception:
-                pass
+                    # missing_ok=True：防御 glob 与并发清理任务的 race
+                    filename.unlink(missing_ok=True)
+            except Exception as exc:
+                LogUtil.debug(
+                    f"[FileCacheDB.clear_web_cl_data] unlink failed "
+                    f"file={filename} err={exc}"
+                )
         return True
 
     def clear_old_web_cl_data(self):
@@ -323,10 +455,14 @@ class FileCacheDB(object):
             for filename in (self.cl_data_path / _market.value).glob("*.pkl"):
                 try:
                     if filename.stat().st_mtime < del_lt_times:
-                        filename.unlink()
+                        # missing_ok=True：防御 glob 与并发清理任务的 race
+                        filename.unlink(missing_ok=True)
 
-                except Exception:
-                    pass
+                except Exception as exc:
+                    LogUtil.debug(
+                        f"[FileCacheDB.clear_old_web_cl_data] unlink failed "
+                        f"file={filename} err={exc}"
+                    )
         return True
 
     def clear_all_cl_data(self):
@@ -336,9 +472,13 @@ class FileCacheDB(object):
         for _market in Market:
             for filename in (self.cl_data_path / _market.value).glob("*.pkl"):
                 try:
-                    filename.unlink()
-                except Exception:
-                    pass
+                    # missing_ok=True：防御 glob 与并发清理任务的 race
+                    filename.unlink(missing_ok=True)
+                except Exception as exc:
+                    LogUtil.debug(
+                        f"[FileCacheDB.clear_all_cl_data] unlink failed "
+                        f"file={filename} err={exc}"
+                    )
         return True
 
     def get_low_to_high_cl_data(
@@ -355,12 +495,27 @@ class FileCacheDB(object):
             self.cl_data_path
             / f'{market}_{code.replace("/", "_")}_{frequency}_{key}.pkl'
         )
-        cd: ICL
-        if filename.is_file() is False:
+        cd: ICL = None
+        # 与 get_web_cl_data 保持一致：pkl 文件可能因进程被强杀、磁盘异常等原因损坏，
+        # 这里加 try/except，损坏时回退为重建对象（避免长期卡死无法读取）。
+        if filename.is_file():
+            try:
+                with open(filename, "rb") as fp:
+                    cd = pickle.load(fp)
+            except Exception as e:
+                LogUtil.warning(
+                    f"[FileCacheDB.get_low_to_high_cl_data] pkl 损坏 file={filename} err={e}, 将重新计算"
+                )
+                try:
+                    filename.unlink(missing_ok=True)
+                except Exception as unlink_exc:
+                    LogUtil.debug(
+                        f"[FileCacheDB.get_low_to_high_cl_data] unlink corrupted pkl failed "
+                        f"file={filename} err={unlink_exc}"
+                    )
+                cd = None
+        if cd is None:
             cd = cl.CL(code, frequency, cl_config)
-        else:
-            with open(filename, "rb") as fp:
-                cd = pickle.load(fp)
         limit = 200000
         if len(cd.get_klines()) > 10000:
             limit = 1000

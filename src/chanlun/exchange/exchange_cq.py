@@ -1,5 +1,7 @@
 import os
 import time
+import atexit
+import weakref
 import threading
 import functools
 from datetime import timedelta, datetime, time as datetime_time
@@ -157,13 +159,38 @@ class ExchangeChangQiao(Exchange):
         self.config = _build_longbridge_config()
         self._quote_context = None
         self._trade_context = None
-        self.stock_list_cache = None
+        # 历史 bug：原来用单一字段 stock_list_cache 缓存 all_stocks 结果，且 all_stocks 写死
+        # 只查 Market.US 的列表。配合 @fun.singleton（A/HK/US 共享同一实例），结果是任何
+        # market 调 all_stocks 都返回同一份美股数据，导致 web 搜索框 A 股/港股全是美股标的。
+        # 改为按 market 维度分桶缓存，并支持显式传入 market 区分。
+        self.stock_list_cache: Dict[str, List[Dict]] = {}
+        # 由 get_exchange 在创建实例后注入，标识"当前调用来自哪个 market"。
+        # 不传时 all_stocks 兜底走 US（保留原行为，避免外部裸调用 ExchangeChangQiao() 后行为突变）。
+        self.default_market: str = "us"
 
         # 线程池配置
         # 建议设置在 8-16 之间。过高可能导致 API 触发流控限制 (Rate Limit)
         self.executor = ThreadPoolExecutor(max_workers=16)
-        # 初始化限流器 (10 QPS)
+        # 初始化限流器 (3 QPS)。长桥行情接口默认配额很紧张（约 10 QPS），
+        # 这里保守用 3 QPS 留出突发余量，避免触发 301600。如确认账号配额更高可调大。
         self.rate_limiter = RateLimiter(calls=3, period=1.0)
+
+        # G8：进程退出时显式关闭线程池，避免长桥 SDK 的 quote/trade 网络上下文
+        # 在 daemon 线程里被强行打断造成日志噪音/连接半关。
+        # 用 weakref 避免闭包持有 self 阻碍单例 GC（虽然 fun.singleton 通常永生，
+        # 但保持 weakref 风格更安全）。
+        _self_ref = weakref.ref(self)
+
+        def _shutdown_on_exit():
+            inst = _self_ref()
+            if inst is None:
+                return
+            try:
+                inst.executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+
+        atexit.register(_shutdown_on_exit)
 
     def _quote_ctx(self) -> QuoteContext:
         # QuoteContext 建立时会初始化行情连接，这里按需创建并复用单例连接。
@@ -192,15 +219,94 @@ class ExchangeChangQiao(Exchange):
             "m": "Month",
         }
 
-    def all_stocks(self):
-        if self.stock_list_cache is not None:
-            return self.stock_list_cache
+    # 长桥 OpenAPI 实测结论（2026-04 验证）：
+    #   - SecurityListCategory 枚举只有 Overnight 一个值；
+    #   - security_list 仅 (Market.US, Overnight) 组合可用，其它市场 / 不传 category 都返回 param_error；
+    #   - QuoteContext 没有任何"按市场拉全量列表"的能力（watchlist 是用户自选股、static_info 必须先知道 code）。
+    # 因此港股 / A 股的全量列表只能从外部数据源拿。这里采用 lazy fallback：
+    #   - hk → 复用 ExchangeTDXHK.all_stocks()（通达信港股）
+    #   - a  → 复用 ExchangeTDX.all_stocks()（通达信 A 股）
+    # K 线 / Tick / 下单等其它接口仍然完全走长桥，不受影响。
+    _LB_MARKET_MAP = {
+        "us": Market.US,
+    }
+
+    def _fallback_all_stocks(self, market_key: str) -> List[Dict]:
+        """当长桥 SDK 不支持时，借用项目里其它 exchange 实现拿全量列表。
+
+        ``ExchangeTDXHK`` / ``ExchangeTDX`` 在内部都有自己的缓存（``g_all_stocks``）和
+        服务器选择逻辑，这里 lazy import 避免引入循环依赖、也避免在长桥单进程启动时
+        无谓地建立通达信连接。
+
+        失败容错：检测 ``init_failed`` 标志, 通达信连接坏了就快速返回空, 不再卡 30s。
+        """
         try:
-            resp = self._quote_ctx().security_list(Market.US, SecurityListCategory.Overnight)
-            self.stock_list_cache = [{"code": info.symbol, "name": info.name_en} for info in resp]
-            return self.stock_list_cache
+            if market_key == "hk":
+                from chanlun.exchange.exchange_tdx_hk import ExchangeTDXHK
+                ex = ExchangeTDXHK()
+                if getattr(ex, "init_failed", False):
+                    LogUtil.info(
+                        "all_stocks fallback: ExchangeTDXHK init_failed, return []"
+                    )
+                    return []
+                return ex.all_stocks() or []
+            if market_key == "a":
+                from chanlun.exchange.exchange_tdx import ExchangeTDX
+                ex = ExchangeTDX()
+                if getattr(ex, "init_failed", False):
+                    LogUtil.info(
+                        "all_stocks fallback: ExchangeTDX init_failed, return []"
+                    )
+                    return []
+                return ex.all_stocks() or []
         except Exception as e:
-            LogUtil.info(f"Error in all_stocks: {e}")
+            LogUtil.info(
+                f"all_stocks fallback failed: market={market_key!r}, err={e}"
+            )
+        return []
+
+    def all_stocks(self, market: str = None):
+        """获取指定 market 的全量 symbol 列表。
+
+        :param market: 可选；项目内的 market 标识（"a"/"hk"/"us" 等）。不传则使用
+            ``self.default_market``（由 ``get_exchange`` 注入）。这是为了兼容 ``Exchange``
+            基类无参签名，同时避免历史 bug——同一个长桥单例被三个市场共用，原实现写死
+            ``Market.US`` 导致 A 股/港股的 ``all_stocks`` 都返回美股列表。
+
+        缓存策略：按 market 分桶，避免互相污染。
+        """
+        market_key = (market or self.default_market or "us").lower()
+
+        cached = self.stock_list_cache.get(market_key)
+        if cached is not None:
+            return cached
+
+        try:
+            stocks: List[Dict] = []
+            lb_market = self._LB_MARKET_MAP.get(market_key)
+            if lb_market is not None:
+                # 美股：长桥唯一支持 security_list 的市场，保留原 Overnight 行为。
+                resp = self._quote_ctx().security_list(
+                    lb_market, SecurityListCategory.Overnight
+                )
+                stocks = [
+                    {"code": info.symbol, "name": getattr(info, "name_cn", None) or info.name_en}
+                    for info in resp
+                ]
+            else:
+                # 港股 / A 股 / 外汇：长桥不提供全量列表，借助通达信 exchange 拿。
+                stocks = self._fallback_all_stocks(market_key)
+                LogUtil.info(
+                    f"all_stocks: market={market_key!r} 通过 fallback 获取到 {len(stocks)} 条"
+                )
+
+            self.stock_list_cache[market_key] = stocks
+            return stocks
+        except Exception as e:
+            LogUtil.info(f"Error in all_stocks(market={market_key!r}): {e}")
+            # 出错时也尝试 fallback，避免单点失败导致搜索完全不可用。
+            if market_key not in self._LB_MARKET_MAP:
+                return self._fallback_all_stocks(market_key)
             return []
 
     def now_trading(self):
@@ -305,11 +411,13 @@ class ExchangeChangQiao(Exchange):
             oldest_candle = candlesticks[0]
 
             # --- [修复] 统一转为带时区的 datetime 进行比较 ---
+            # 注意：pd.to_datetime(标量) 返回 Timestamp（不是 Series），没有 .dt 访问器，
+            # 直接 .dt.tz_convert 会抛 AttributeError，这里使用 pd.Timestamp 构造。
             try:
                 ts = oldest_candle.timestamp
                 if isinstance(ts, (int, float)):
                     # Unix 时间戳 (秒) -> UTC -> 转上海
-                    oldest_dt = pd.to_datetime(ts, unit='s', utc=True).dt.tz_convert(tz).to_pydatetime()
+                    oldest_dt = pd.Timestamp(ts, unit='s', tz='UTC').tz_convert(tz).to_pydatetime()
                 else:
                     # Datetime 对象
                     oldest_dt = pd.to_datetime(ts).to_pydatetime()
@@ -352,13 +460,13 @@ class ExchangeChangQiao(Exchange):
 
         # 1. 默认回看周期配置
         DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=90),
-            "5m": timedelta(days=150),
-            "15m": timedelta(days=90),
-            "30m": timedelta(days=365 * 5),
-            "60m": timedelta(days=365 * 8),
-            "d": timedelta(days=365 * 10),
-            "w": timedelta(days=365 * 20),
+            "1m": timedelta(days=30),
+            "5m": timedelta(days=90),
+            "15m": timedelta(days=180),
+            "30m": timedelta(days=365),
+            "60m": timedelta(days=365 * 2),
+            "d": timedelta(days=365 * 3),
+            "w": timedelta(days=365 * 10),
             "m": timedelta(days=365 * 30),
         }
 

@@ -2,6 +2,7 @@ import json
 from typing import Dict, List
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from tqdm.auto import tqdm
 
 from chanlun import fun, monitor
@@ -27,35 +28,29 @@ class AlertTasks(object):
 
         task_list = self.task_list()
         for _t in task_list:
-            # print(al)
-            if _t.is_run == 1:
-                # 根据interval_minutes设置定时任务
-                if _t.interval_minutes < 60:
-                    # 60分钟以下，按分钟运行
-                    _job = self.scheduler.add_job(
-                        func=self.alert_run,
-                        trigger="cron",
-                        args={_t.id},
-                        id=str(_t.id),
-                        name=f"监控-{_t.task_name}",
-                        minute=f"*/{_t.interval_minutes}",
-                        second="0",
-                    )
-                else:
-                    # 60分钟及以上，按小时运行
-                    hours = _t.interval_minutes // 60
-                    _job = self.scheduler.add_job(
-                        func=self.alert_run,
-                        trigger="cron",
-                        args={_t.id},
-                        id=str(_t.id),
-                        name=f"监控-{_t.task_name}",
-                        hour=f"*/{hours}",
-                        minute="0",
-                        second="0",
-                    )
+            if _t.is_run != 1:
+                continue
 
-                self.task_ids.append(_job.id)
+            # 关键修复：原实现使用 cron 的 minute=f"*/{interval_minutes}"，
+            # 在 interval_minutes 不能整除 60 时（例如 7、25、50 分钟），cron
+            # 会在每个整点重置触发序列，导致边界附近重复触发；并且原代码
+            # `args={_t.id}` 用了 set 而非 tuple/list，依赖位置实参时
+            # 行为依赖元素 hash 顺序，是潜在 bug。
+            #
+            # 现统一改为 IntervalTrigger，按"自上次触发起经过 N 分钟"调度，
+            # 行为更可预期；同时 args 改为 tuple，避免 set 顺序问题。
+            interval_minutes = max(int(_t.interval_minutes or 1), 1)
+            _job = self.scheduler.add_job(
+                func=self.alert_run,
+                trigger=IntervalTrigger(minutes=interval_minutes),
+                args=(_t.id,),
+                id=str(_t.id),
+                name=f"监控-{_t.task_name}",
+                # 防止任务堆积时同一 job 并发执行，互踩自选组。
+                max_instances=1,
+                coalesce=True,
+            )
+            self.task_ids.append(_job.id)
         return True
 
     def alert_run(self, alert_id):
@@ -118,11 +113,12 @@ class AlertTasks(object):
 
     @staticmethod
     def alert_get(_id) -> TableByAlertTask:
+        # task_query(id=...) 在 db 层已经显式 limit(1)；这里用 next + iter 安全取首元素，
+        # 避免 alert_config[0] 在某些边界（如外部并发删除导致空 list）下抛 IndexError。
         alert_config = db.task_query(id=_id)
-        if alert_config is None or len(alert_config) == 0:
+        if not alert_config:
             return None
-        alert_config = alert_config[0]
-        return alert_config
+        return alert_config[0]
 
     def alert_save(self, alert_config: Dict):
         """

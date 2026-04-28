@@ -27,6 +27,10 @@ class ZsCalculator:
         # 增量计算状态
         self._last_lines_count: int = 0
         self._last_entry_idx: int = 0  # 上次计算结束时的 entry_idx
+        # ★ B6 修复：增量校验需要的尾段快照
+        # (last_line.index, last_line.start.val, last_line.end.val, last_line 是否 done)
+        # 任何一项变化都意味着前缀已经改变，必须降级到全量重算。
+        self._last_tail_snapshot: Optional[tuple] = None
 
     def calculate(self, lines: List[LINE]) -> List[ZS]:
         """
@@ -44,33 +48,53 @@ class ZsCalculator:
             self.pending_zs = None
             self._last_lines_count = 0
             self._last_entry_idx = 0
+            self._last_tail_snapshot = None
             return []
 
         # 检查线段数量
         if len(lines) < 4:
             self._last_lines_count = len(lines)
+            self._last_tail_snapshot = self._build_tail_snapshot(lines)
             return []
 
         # 判断是否为增量更新
+        # ★ B6 修复：除了长度比较，还要校验「上次的尾段在新 lines 里仍然存在且未变化」。
+        # XdCalculator 增量产出新的 xds 时，最后一段的 done 状态可能翻转
+        # （pending 变 confirmed，或反之），此时 lines[N-1] 是不同对象。
+        # 仅看 len 会被错误地走增量分支，从一个不再存在的 pending_zs.start.index
+        # 扫描，可能漏识别中枢。
+        prefix_unchanged = self._tail_snapshot_consistent(lines)
         is_incremental = (
             self._last_lines_count > 0
             and len(lines) >= self._last_lines_count
             and (self.zss or self.pending_zs)
+            and prefix_unchanged
         )
 
         if is_incremental:
-            # 增量模式：丢弃 pending_zs，从其起始位置重新计算
-            if self.pending_zs:
-                # pending_zs 的进入段索引就是我们需要回退到的位置
-                restart_idx = self.pending_zs.start.index if self.pending_zs.start else self._last_entry_idx
+            # ★ C2(A5) 修复：增量回退点不能信 pending_zs.start.index。
+            # 上游 BiCalculator/XdCalculator 在增量模式下会重排 line.index，
+            # 同一根线段的 index 在两次 calculate 之间可能变化。
+            # 用 (start.val, start.k.k_index, type) 这种业务唯一键
+            # 在新 lines 里重新定位「上次 pending_zs 的进入段位置」更稳。
+            # 没找到匹配项时，安全降级到全量。
+            self.all_lines = lines
+
+            restart_idx: Optional[int] = None
+            if self.pending_zs and self.pending_zs.start is not None:
+                restart_idx = self._locate_line(lines, self.pending_zs.start)
                 self.pending_zs = None
             elif self.zss:
-                # 没有 pending 时，从最后一个完成中枢的 exit 位置开始
-                restart_idx = self._last_entry_idx
-            else:
-                restart_idx = 0
+                # 没有 pending 时，复用上次记录的 exit 位置；
+                # 但 _last_entry_idx 也是基于 line 序号的，越界则降级。
+                if 0 <= self._last_entry_idx <= len(lines) - 4:
+                    restart_idx = self._last_entry_idx
 
-            self.all_lines = lines
+            if restart_idx is None:
+                # 任意环节定位失败 → 全量重算，正确性优先
+                self.zss = []
+                self.pending_zs = None
+                restart_idx = 0
             self._create_zs_full(start_entry_idx=restart_idx)
         else:
             # 全量模式
@@ -81,12 +105,113 @@ class ZsCalculator:
 
         # 更新增量状态
         self._last_lines_count = len(lines)
+        self._last_tail_snapshot = self._build_tail_snapshot(lines)
 
         # 组合并返回结果
         final_zss = self.zss.copy()
         if self.pending_zs:
             final_zss.append(self.pending_zs)
         return final_zss
+
+    @staticmethod
+    def _locate_line(lines: List[LINE], target_line: LINE) -> Optional[int]:
+        """在 lines 中重新定位 target_line 的位置。
+
+        ★ C2(A5) 配套：用业务唯一键定位，避开 line.index 的漂移问题。
+        匹配键：(start.val, end.val, start.k.k_index, type)
+          - start/end.val：缠论价格不变，可作主键
+          - start.k.k_index：原始 K 索引绝对稳定（KlineDataProcessor 单调递增）
+          - type：方向兜底
+        从尾部往前找，因为同一根线段最可能停留在原位附近。
+        """
+        try:
+            t_start_val = target_line.start.val if target_line.start is not None else None
+            t_end_val = target_line.end.val if target_line.end is not None else None
+            t_k_index = (
+                target_line.start.k.k_index
+                if (target_line.start is not None and target_line.start.k is not None)
+                else None
+            )
+            t_type = getattr(target_line, 'type', None)
+        except AttributeError:
+            return None
+
+        if t_start_val is None or t_k_index is None:
+            return None
+
+        # 尾部往前扫，命中即返回（增量场景下基本是 O(1)~O(几个)）
+        for i in range(len(lines) - 1, -1, -1):
+            line = lines[i]
+            try:
+                if line.start is None or line.start.k is None:
+                    continue
+                if (
+                    line.start.val == t_start_val
+                    and line.start.k.k_index == t_k_index
+                    and getattr(line, 'type', None) == t_type
+                ):
+                    # end.val 可选校验：能命中说明就是同一根
+                    if t_end_val is None or (line.end is not None and line.end.val == t_end_val):
+                        return i
+            except AttributeError:
+                continue
+        return None
+
+    @staticmethod
+    def _build_tail_snapshot(lines: List[LINE]) -> Optional[tuple]:
+        """构造 lines 的尾段快照，用于增量模式的前缀一致性校验。
+
+        快照内容：
+          - 末段的笔/段 index
+          - 末段的 start.val / end.val
+          - 末段的 done 状态
+          - lines 的总长度
+
+        注意：不能用 id(line) 做快照，因为 XdCalculator 每次增量都会
+        pop 掉最后一段并追加新对象，对象身份会变。
+        """
+        if not lines:
+            return None
+        last = lines[-1]
+        try:
+            return (
+                len(lines),
+                getattr(last, 'index', -1),
+                last.start.val if last.start is not None else None,
+                last.end.val if last.end is not None else None,
+                bool(getattr(last, 'done', False)),
+            )
+        except AttributeError:
+            return None
+
+    def _tail_snapshot_consistent(self, lines: List[LINE]) -> bool:
+        """检查上次记录的尾段快照在新的 lines 里是否仍然成立。
+
+        核心校验：
+          - 上次记录的 (index, start.val, end.val, done) 在新 lines 中位置
+            `len_at_last_calc - 1` 是否仍然吻合
+          - 如果吻合 → 前缀未变，可以走增量
+          - 否则 → 历史尾段被改写，必须降级到全量
+        """
+        if self._last_tail_snapshot is None:
+            return False
+        prev_len, prev_idx, prev_start_val, prev_end_val, prev_done = self._last_tail_snapshot
+        if prev_len == 0 or prev_len > len(lines):
+            return False
+        candidate = lines[prev_len - 1]
+        try:
+            cand_start = candidate.start.val if candidate.start is not None else None
+            cand_end = candidate.end.val if candidate.end is not None else None
+            cand_done = bool(getattr(candidate, 'done', False))
+        except AttributeError:
+            return False
+        if getattr(candidate, 'index', -1) != prev_idx:
+            return False
+        if cand_start != prev_start_val or cand_end != prev_end_val:
+            return False
+        if cand_done != prev_done:
+            return False
+        return True
 
     def _create_zs_full(self, start_entry_idx: int = 0):
         """
@@ -244,428 +369,447 @@ class ZsCalculator:
         # (这种情况理论上在 1.1 中被覆盖了，但作为兜底)
         return False, j - 1
 
-
-class ChanlunStructureAnalyzer:
-    """
-    多级别缠论结构分析器
-
-    从基础级别线段开始，逐级向上推导和分析高维度的走势结构。
-    """
-
-    def __init__(
-            self,
-            levels: Optional[List[Level]] = None,
-            zs_calculator: Optional[ZsCalculator] = None
-    ):
+    class ChanlunStructureAnalyzer:
         """
-        初始化分析器
+        多级别缠论结构分析器
 
-        Args:
-            levels: 分析级别列表（从低到高）
-            zs_calculator: 中枢计算器实例
+        从基础级别线段开始，逐级向上推导和分析高维度的走势结构。
         """
-        self.levels: List[Level] = levels or [Level.M1, Level.M5, Level.M30, Level.D1]
-        self.zs_calculator = zs_calculator or ZsCalculator()
 
-        # 存储各级别分析结果
-        # 格式: { "M1": {"zss": [...], "trend_lines": [...]}, "M5": ... }
-        self.structures_by_level: Dict[str, Dict[str, Union[List[ZSLX], List[ZS]]]] = {}
+        def __init__(
+                self,
+                levels: Optional[List[Level]] = None,
+                zs_calculator: Optional[ZsCalculator] = None
+        ):
+            """
+            初始化分析器
 
-        # 配置参数
-        self.min_lines_for_analysis = 4  # 最少需要的线段数
-        self.extension_threshold = 9  # 延伸升级的段数阈值
-        self.grouping_size = 3  # 升级时的分组大小 (暂未使用，保留)
+            Args:
+                levels: 分析级别列表（从低到高）
+                zs_calculator: 中枢计算器实例
+            """
+            self.levels: List[Level] = levels or [Level.M1, Level.M5, Level.M30, Level.D1]
+            self.zs_calculator = zs_calculator or ZsCalculator()
 
-    def calculate(self, base_lines: List[LINE]) -> Dict:
-        """
-        执行多级别分析
+            # 存储各级别分析结果
+            # 格式: { "M1": {"zss": [...], "trend_lines": [...]}, "M5": ... }
+            self.structures_by_level: Dict[str, Dict[str, Union[List[ZSLX], List[ZS]]]] = {}
 
-        Args:
-            base_lines: 最低级别的线段列表
+            # 配置参数
+            self.min_lines_for_analysis = 4  # 最少需要的线段数
+            self.extension_threshold = 9  # 延伸升级的段数阈值
+            self.grouping_size = 3  # 升级时的分组大小 (暂未使用，保留)
 
-        Returns:
-            各级别的分析结果 (self.structures_by_level)
-        """
-        if not base_lines:
-            LogUtil.warning("输入线段为空，无法进行分析")
-            return {}
+        def calculate(self, base_lines: List[LINE]) -> Dict:
+            """
+            执行多级别分析
 
-        current_lines = base_lines
-        self.structures_by_level = {}
+            Args:
+                base_lines: 最低级别的线段列表
 
-        for level_index, level in enumerate(self.levels):
+            Returns:
+                各级别的分析结果 (self.structures_by_level)
+            """
+            if not base_lines:
+                LogUtil.warning("输入线段为空，无法进行分析")
+                return {}
 
+            current_lines = base_lines
+            self.structures_by_level = {}
 
-            # 1. 检查线段数量
-            if len(current_lines) < self.min_lines_for_analysis:
-                break
+            for level_index, level in enumerate(self.levels):
 
-            # 2. 分析当前级别
-            level_result = self._analyze_level(
-                current_lines,
-                level,
+                # 1. 检查线段数量
+                if len(current_lines) < self.min_lines_for_analysis:
+                    break
+
+                # 2. 分析当前级别
+                level_result = self._analyze_level(
+                    current_lines,
+                    level,
+                    level_index
+                )
+
+                # 3. 存储结果
+                self.structures_by_level[level.value] = level_result
+
+                # 4. 准备下一级别的输入
+                # 下一级别分析的 "线段" 是本级别生成的 "走势类型" (trend_lines)
+                trend_lines = level_result.get("trend_lines", [])
+                if not trend_lines:
+                    break
+
+                current_lines = trend_lines  # 迭代
+
+            return self.structures_by_level
+
+        def _analyze_level(
+                self,
+                lines: List[LINE],
+                level: Level,
+                level_index: int
+        ) -> Dict:
+            """
+            分析单个级别：1. 计算中枢 2. 生成走势类型（含升级）
+
+            Args:
+                lines: 当前级别的输入线段
+                level: 当前级别
+                level_index: 当前级别的索引
+
+            Returns:
+                包含中枢和走势类型的字典
+            """
+            # 1. 计算当前级别中枢
+            zss = self._calculate_level_zss(lines, level)
+
+            # 2. 处理中枢升级和生成走势类型
+            trend_lines = self._generate_trends(
+                lines,
+                zss,
                 level_index
             )
 
-            # 3. 存储结果
-            self.structures_by_level[level.value] = level_result
+            return {
+                "zss": zss,
+                "trend_lines": trend_lines
+            }
 
-            # 4. 准备下一级别的输入
-            # 下一级别分析的 "线段" 是本级别生成的 "走势类型" (trend_lines)
-            trend_lines = level_result.get("trend_lines", [])
-            if not trend_lines:
-                break
+        def _calculate_level_zss(self, lines: List[LINE], level: Level) -> List[ZS]:
+            """计算当前级别的中枢"""
+            zss = self.zs_calculator.calculate(lines)
+            for zs in zss:
+                zs.level = level
+            return zss
 
-            current_lines = trend_lines  # 迭代
+        def _create_upgraded_trends(
+                self,
+                lines: List[LINE],
+                next_level: Level,
+                trend_lines: List[ZSLX],
+                current_zs: ZS
+        ) -> List[ZSLX]:
+            """
+            根据“3+3+3”规则和后续的延续逻辑，为延伸或扩展的中枢创建升级后的走势类型。
+            这些“走势类型”将作为下一级别的“线段”使用。
 
-        return self.structures_by_level
+            Args:
+                lines: 用于组合成更高级别走势的基础级别线段列表。
+                       (对于延伸，这是 zs.lines; 对于扩展，这是 zs1.start 到 zs2.end 的所有 lines)
+                next_level: 新创建的走势类型应归属的级别（即更高级别）。
+                trend_lines: 已存在的走势类型列表，用于提供上下文（确定方向）。
+                current_zs: 当前中枢，用于确定初始方向（如果 trend_lines 为空）。
 
-    def _analyze_level(
-            self,
-            lines: List[LINE],
-            level: Level,
-            level_index: int
-    ) -> Dict:
-        """
-        分析单个级别：1. 计算中枢 2. 生成走势类型（含升级）
+            Returns:
+                一个新的、升级后的ZSLX走势类型列表。
+            """
+            upgraded_trends: List[ZSLX] = []
+            i = 0
 
-        Args:
-            lines: 当前级别的输入线段
-            level: 当前级别
-            level_index: 当前级别的索引
-
-        Returns:
-            包含中枢和走势类型的字典
-        """
-        # 1. 计算当前级别中枢
-        zss = self._calculate_level_zss(lines, level)
-
-        # 2. 处理中枢升级和生成走势类型
-        trend_lines = self._generate_trends(
-            lines,
-            zss,
-            level_index
-        )
-
-        return {
-            "zss": zss,
-            "trend_lines": trend_lines
-        }
-
-    def _calculate_level_zss(self, lines: List[LINE], level: Level) -> List[ZS]:
-        """计算当前级别的中枢"""
-        zss = self.zs_calculator.calculate(lines)
-        for zs in zss:
-            zs.level = level
-        return zss
-
-    def _create_upgraded_trends(
-            self,
-            lines: List[LINE],
-            next_level: Level,
-            trend_lines: List[ZSLX],
-            current_zs: ZS
-    ) -> List[ZSLX]:
-        """
-        根据“3+3+3”规则和后续的延续逻辑，为延伸或扩展的中枢创建升级后的走势类型。
-        这些“走势类型”将作为下一级别的“线段”使用。
-
-        Args:
-            lines: 用于组合成更高级别走势的基础级别线段列表。
-                   (对于延伸，这是 zs.lines; 对于扩展，这是 zs1.start 到 zs2.end 的所有 lines)
-            next_level: 新创建的走势类型应归属的级别（即更高级别）。
-            trend_lines: 已存在的走势类型列表，用于提供上下文（确定方向）。
-            current_zs: 当前中枢，用于确定初始方向（如果 trend_lines 为空）。
-
-        Returns:
-            一个新的、升级后的ZSLX走势类型列表。
-        """
-        upgraded_trends: List[ZSLX] = []
-        i = 0
-
-        # 1. 确定要创建的第一个走势类型的方向
-        if trend_lines:
-            # 如果存在之前的走势，则新走势的方向与最后一个走势相反
-            reference_direction = trend_lines[-1].type
-        else:
-            # 否则，使用进入参考中枢的线段的方向
-            reference_direction = current_zs.start.type
-
-        current_direction = 'down' if reference_direction == 'up' else 'up'
-
-        while i < len(lines):
-            # 一个新的走势类型至少需要3段线段
-            if len(lines) - i < 3:
-                break
-
-            # 基础组合是3段线段
-            end_index = i + 3
-
-            # 2. 延续规则：当已形成至少3个高级别走势后，检查后续线段是否延续当前趋势
-            # (注意: 这里的 len(upgraded_trends) 是指本次调用中新生成的数量)
-            if len(upgraded_trends) >= 3:
-                base_j = end_index - 1  # 延续检查的基准线段
-                if current_direction == 'up':
-                    # 对于上涨走势，检查是否连续创出更高的高点和低点。
-                    for j in range(end_index, len(lines)):
-                        if lines[j].high > lines[base_j].high and lines[j].low > lines[base_j].low:
-                            end_index = j + 1  # 延伸走势
-                            base_j = j
-                        else:
-                            break  # 模式被破坏
-                else:  # current_direction == 'down'
-                    # 对于下跌走势，检查是否连续创出更低的高点和低点。
-                    for j in range(end_index, len(lines)):
-                        if lines[j].high < lines[base_j].high and lines[j].low < lines[base_j].low:
-                            end_index = j + 1  # 延伸走势
-                            base_j = j
-                        else:
-                            break  # 模式被破坏
-
-            # 构成此走势的最终线段集合。
-            # 确保 end_index 不会超出范围
-            if end_index > len(lines):
-                end_index = len(lines)
-
-            trend_chunk = lines[i:end_index]
-
-            # 如果分块后剩余线段不足 (例如最后只剩1-2条)，则停止
-            if not trend_chunk:
-                break
-
-            # 计算新走势的最高点和最低点
-            trend_high = max(line.high for line in trend_chunk)
-            trend_low = min(line.low for line in trend_chunk)
-
-            start: FX = trend_chunk[0].start.copy()
-            end: FX = trend_chunk[-1].end.copy()
-
-            # 修正走势的起始点和结束点的值
-            if current_direction == 'down':
-                start.val = trend_high
-                end.val = trend_low
+            # 1. 确定要创建的第一个走势类型的方向
+            if trend_lines:
+                # 如果存在之前的走势，则新走势的方向与最后一个走势相反
+                reference_direction = trend_lines[-1].type
             else:
-                start.val = trend_low
-                end.val = trend_high
+                # 否则，使用进入参考中枢的线段的方向
+                reference_direction = current_zs.start.type
 
-            # 创建新的走势类型 (ZSLX) 对象。
-            new_trend = ZSLX(
-                index=len(trend_lines) + len(upgraded_trends),
-                zslx_level=next_level,  # 级别是 *下一级*
-                _type=current_direction,
-                start_line=trend_chunk[0],
-                end_line=trend_chunk[-1],
-                start=start,
-                end=end
-            )
-            new_trend.high = trend_high
-            new_trend.low = trend_low
+            current_direction = 'down' if reference_direction == 'up' else 'up'
 
-            upgraded_trends.append(new_trend)
+            while i < len(lines):
+                # 一个新的走势类型至少需要3段线段
+                if len(lines) - i < 3:
+                    break
 
-            # 为下一次迭代做准备
-            i = end_index
-            # 下一个走势类型的方向将相反
-            current_direction = 'down' if current_direction == 'up' else 'up'
+                # 基础组合是3段线段
+                end_index = i + 3
 
-        return upgraded_trends
+                # 2. 延续规则：当已形成至少3个高级别走势后，检查后续线段是否延续当前趋势
+                # (注意: 这里的 len(upgraded_trends) 是指本次调用中新生成的数量)
+                if len(upgraded_trends) >= 3:
+                    base_j = end_index - 1  # 延续检查的基准线段
+                    if current_direction == 'up':
+                        # 对于上涨走势，检查是否连续创出更高的高点和低点。
+                        for j in range(end_index, len(lines)):
+                            if lines[j].high > lines[base_j].high and lines[j].low > lines[base_j].low:
+                                end_index = j + 1  # 延伸走势
+                                base_j = j
+                            else:
+                                break  # 模式被破坏
+                    else:  # current_direction == 'down'
+                        # 对于下跌走势，检查是否连续创出更低的高点和低点。
+                        for j in range(end_index, len(lines)):
+                            if lines[j].high < lines[base_j].high and lines[j].low < lines[base_j].low:
+                                end_index = j + 1  # 延伸走势
+                                base_j = j
+                            else:
+                                break  # 模式被破坏
 
-    def _generate_trends(
-            self,
-            lines: List[LINE],
-            zss: List[ZS],
-            current_level_index: int
-    ) -> List[ZSLX]:
-        """
-        处理中枢升级（延伸/扩展）并生成本级别的走势类型 (ZSLX)。
+                # 构成此走势的最终线段集合。
+                # 确保 end_index 不会超出范围
+                if end_index > len(lines):
+                    end_index = len(lines)
 
-        Args:
-            lines: 当前级别的 *所有* 线段
-            zss: 当前级别计算出的 *所有* 中枢
-            current_level_index: 当前级别的索引
+                trend_chunk = lines[i:end_index]
 
-        Returns:
-            生成的走势类型列表 (ZSLX)，将作为下一级别的 'lines' 输入。
-        """
-        trend_lines: List[ZSLX] = []
-        if not zss:
+                # 如果分块后剩余线段不足 (例如最后只剩1-2条)，则停止
+                if not trend_chunk:
+                    break
+
+                # 计算新走势的最高点和最低点
+                trend_high = max(line.high for line in trend_chunk)
+                trend_low = min(line.low for line in trend_chunk)
+
+                start: FX = trend_chunk[0].start.copy()
+                end: FX = trend_chunk[-1].end.copy()
+
+                # 修正走势的起始点和结束点的值
+                if current_direction == 'down':
+                    start.val = trend_high
+                    end.val = trend_low
+                else:
+                    start.val = trend_low
+                    end.val = trend_high
+
+                # 创建新的走势类型 (ZSLX) 对象。
+                new_trend = ZSLX(
+                    index=len(trend_lines) + len(upgraded_trends),
+                    zslx_level=next_level,  # 级别是 *下一级*
+                    _type=current_direction,
+                    start_line=trend_chunk[0],
+                    end_line=trend_chunk[-1],
+                    start=start,
+                    end=end
+                )
+                new_trend.high = trend_high
+                new_trend.low = trend_low
+
+                upgraded_trends.append(new_trend)
+
+                # 为下一次迭代做准备
+                i = end_index
+                # 下一个走势类型的方向将相反
+                current_direction = 'down' if current_direction == 'up' else 'up'
+
+            return upgraded_trends
+
+        def _generate_trends(
+                self,
+                lines: List[LINE],
+                zss: List[ZS],
+                current_level_index: int
+        ) -> List[ZSLX]:
+            """
+            处理中枢升级（延伸/扩展）并生成本级别的走势类型 (ZSLX)。
+
+            Args:
+                lines: 当前级别的 *所有* 线段
+                zss: 当前级别计算出的 *所有* 中枢
+                current_level_index: 当前级别的索引
+
+            Returns:
+                生成的走势类型列表 (ZSLX)，将作为下一级别的 'lines' 输入。
+            """
+            trend_lines: List[ZSLX] = []
+            if not zss:
+                return trend_lines
+
+            # 检查是否存在下一级别，用于升级
+            current_level = self.levels[current_level_index]
+            next_level: Optional[Level] = None
+            if current_level_index + 1 < len(self.levels):
+                next_level = self.levels[current_level_index + 1]
+
+            i = 0
+            while i < len(zss):
+                current_zs = zss[i]
+
+                # 必须是已完成的中枢才能参与判断
+                if not current_zs.done:
+                    i += 1
+                    continue
+
+                # 规则 1: 尝试处理延伸升级（单个中枢9段以上）
+                if next_level and current_zs.is_extension_candidate(self.extension_threshold):
+                    # 对中枢的 *核心线段* (zs.lines) 进行 3-group 升级
+                    new_trends = self._create_upgraded_trends(
+                        current_zs.lines,
+                        next_level,
+                        trend_lines,
+                        current_zs
+                    )
+                    if new_trends:
+                        trend_lines.extend(new_trends)
+                    i += 1
+                    continue
+
+                # 规则 2: 处理扩展升级 (两个中枢)
+                if next_level and i + 1 < len(zss):
+                    next_zs = zss[i + 1]
+                    if not next_zs.done:  # 下一个中枢也必须完成
+                        # 当前中枢不延伸，但下一个未完成，无法判断扩展，处理当前中枢
+                        pass  # 进入规则3
+                    elif current_zs.can_expand_with(next_zs):
+                        # 扩展升级：取 *两个中枢之间* (从 zs.start 到 zs_next.end) 的 *所有* 线段
+                        start_index = current_zs.start.index
+                        end_index = next_zs.end.index
+                        # 确保索引有效
+                        if start_index < 0 or end_index < 0 or end_index + 1 > len(lines):
+                            # 索引无效，退回到规则3
+                            pass
+                        else:
+                            all_lines = lines[start_index:end_index + 1]
+                            new_trends = self._create_upgraded_trends(
+                                all_lines,
+                                next_level,  # 级别是下一级
+                                trend_lines,
+                                current_zs
+                            )
+                            if new_trends:
+                                trend_lines.extend(new_trends)
+                            # 扩展消耗了两个中枢
+                            i += 2
+                            continue
+
+                # 规则 3: 当前中枢既不延伸也不扩展，构建本级别普通走势类型（趋势 or 盘整）。
+                #
+                # 设计说明（2026-04 修正，对应缠论原文图 25-27 "1-19 构成 5 分钟盘整走势"）：
+                # 缠论中"走势类型"包括 趋势(上涨/下跌) 与 盘整 三种，三者都是本级别的合法走势。
+                # 旧实现把 _handle_non_upgraded_trend 的结果丢弃，导致：
+                #   1) 上一级别 (next_level) 在做中枢识别时丢失"盘整段"作为输入，
+                #      高级别中枢识别会出现整段缺失；
+                #   2) 与原文 "5 分钟盘整走势 = 由 1-19 这 19 段组成" 的描述不一致。
+                # 因此这里改为：将本级别构建出的 ZSLX 也作为下一级别的"线段"输入，
+                # 同时通过 ZSLX.zslx_type 区分 "盘整" / "上涨" / "下跌"，便于上层使用。
+                previous_zs = zss[i - 1] if i > 0 and zss[i - 1].done else None
+                new_trend = self._handle_non_upgraded_trend(
+                    current_zs, previous_zs, current_level, trend_lines
+                )
+                if new_trend is not None:
+                    trend_lines.append(new_trend)
+
+                i += 1
+
             return trend_lines
 
-        # 检查是否存在下一级别，用于升级
-        current_level = self.levels[current_level_index]
-        next_level: Optional[Level] = None
-        if current_level_index + 1 < len(self.levels):
-            next_level = self.levels[current_level_index + 1]
+        def _handle_non_upgraded_trend(
+                self,
+                current_zs: ZS,
+                previous_zs: Optional[ZS],
+                current_level: Level,
+                trend_lines: List[ZSLX]  # 这里的 trend_lines 仅用于上下文判断
+        ) -> Optional[ZSLX]:
+            """
+            处理普通（未升级）的走势类型构建（盘整或趋势）。
 
-        i = 0
-        while i < len(zss):
-            current_zs = zss[i]
+            注意：此函数生成的 ZSLX 属于 current_level，
+            用于描述 *本级别* 的结构，通常 *不* 作为输入传递给下一级别。
 
-            # 必须是已完成的中枢才能参与判断
-            if not current_zs.done:
-                i += 1
-                continue
+            Args:
+                current_zs: 当前正在处理的中枢。
+                previous_zs: 前一个已完成的中枢。
+                current_level: 当前的走势级别。
+                trend_lines: 已生成的 *升级* 走势列表（用于判断是否为初始走势）。
 
-            # 规则 1: 尝试处理延伸升级（单个中枢9段以上）
-            if next_level and current_zs.is_extension_candidate(self.extension_threshold):
-                # 对中枢的 *核心线段* (zs.lines) 进行 3-group 升级
-                new_trends = self._create_upgraded_trends(
-                    current_zs.lines,
-                    next_level,
-                    trend_lines,
-                    current_zs
+            Returns:
+                如果成功构建了新的走势类型，则返回 ZSLX 对象，否则返回 None。
+            """
+
+            # 规则 1: "如果之前没有走势类型，那么就以当前中枢的开始走势作为走势类型的类型"
+            # 我们将“之前没有走势类型”理解为“这是第一个被处理的(未升级的)中枢”
+            is_first_trend = not previous_zs and not trend_lines
+
+            if is_first_trend:
+                # 这是第一个被处理的普通中枢，我们将其定义为一个初始的"盘整"走势。
+                direction = current_zs.start.type
+                start_line = current_zs.start
+                end_line = current_zs.end
+
+                # 盘整走势的范围由其自身决定
+                start_point = start_line.start.copy()
+                end_point = end_line.end.copy()
+
+                if direction == 'up':
+                    start_point.val = min(start_line.low, end_line.low)
+                    end_point.val = max(start_line.high, end_line.high)
+                else:
+                    start_point.val = max(start_line.high, end_line.high)
+                    end_point.val = min(start_line.low, end_line.low)
+
+                new_trend = ZSLX(
+                    zslx_level=current_level,  # 级别是当前级别
+                    start=start_point,
+                    end=end_point,
+                    _type=direction,  # 走势类型由进入线段决定
+                    start_line=start_line,
+                    end_line=end_line,
+                    index=0
                 )
-                if new_trends:
-                    trend_lines.extend(new_trends)
-                i += 1
-                continue
+                new_trend.high = max(start_line.high, end_line.high)
+                new_trend.low = min(start_line.low, end_line.low)
+                # zs_high / zs_low 是中枢区间计算专用的端点（LINE.__init__ 默认置 0），
+                # 当本 ZSLX 作为下一级别的"线段"输入时，下一级别的
+                # ZsCalculator._create_zs_full / ZS.update_boundaries 会读取这两个字段。
+                # 必须显式赋值，否则下一级别中枢边界会被 0 污染。
+                new_trend.zs_high = new_trend.high
+                new_trend.zs_low = new_trend.low
+                new_trend.zslx_type = "盘整"  # 首段尚无前序中枢可比较，原文统一归为盘整
+                return new_trend
 
-            # 规则 2: 处理扩展升级 (两个中枢)
-            if next_level and i + 1 < len(zss):
-                next_zs = zss[i + 1]
-                if not next_zs.done:  # 下一个中枢也必须完成
-                    # 当前中枢不延伸，但下一个未完成，无法判断扩展，处理当前中枢
-                    pass  # 进入规则3
-                elif current_zs.can_expand_with(next_zs):
-                    # 扩展升级：取 *两个中枢之间* (从 zs.start 到 zs_next.end) 的 *所有* 线段
-                    start_index = current_zs.start.index
-                    end_index = next_zs.end.index
-                    # 确保索引有效
-                    if start_index < 0 or end_index < 0 or end_index + 1 > len(lines):
-                        # 索引无效，退回到规则3
-                        pass
-                    else:
-                        all_lines = lines[start_index:end_index + 1]
-                        new_trends = self._create_upgraded_trends(
-                            all_lines,
-                            next_level,  # 级别是下一级
-                            trend_lines,
-                            current_zs
-                        )
-                        if new_trends:
-                            trend_lines.extend(new_trends)
-                        # 扩展消耗了两个中枢
-                        i += 2
-                        continue
+            # 规则 2: "如果存在走势类型...根据前一个中枢和当前中枢比较位置确定当前的走势类型。"
+            # 必须有前一个中枢才能进行比较来确定趋势方向。
+            if not previous_zs:
+                return None
 
-            # 规则 3: 当前中枢既不延伸也不扩展，调用函数处理普通走势类型构建。
-            previous_zs = zss[i - 1] if i > 0 and zss[i - 1].done else None
-
-            # *** 注意 ***：
-            # 您的原始逻辑在 _handle_non_upgraded_trend 中创建 ZSLX，
-            # 但这些 ZSLX 的级别是 current_level。
-            # 它们 *不应该* 被添加到 trend_lines 列表中，
-            # 因为 trend_lines 列表是用于 *下一级别* (next_level) 分析的。
+            # 走势类型判定（趋势 / 盘整）
+            # - 上涨趋势：当前中枢的高低点都高于前一个中枢
+            # - 下跌趋势：当前中枢的高低点都低于前一个中枢
+            # - 其他情况：两中枢有重叠 -> 盘整（原文图 25-27）
             #
-            # 缠论的原始定义中，"走势类型" (趋势/盘整) 是由同级别中枢构成的。
-            # 而 "升级" 产生的才是更高级别的 "线段" (在我们的代码里也用 ZSLX 表示)。
-            #
-            # 因此，我将 _handle_non_upgraded_trend 的调用保留（它可以用于分析本级别结构），
-            # 但 *不* 将其结果添加到 trend_lines 中。
+            # ⚠️ 注意：本处比较口径与 cl.py::zss_is_qs() 提供的多种位置关系判断
+            # （ZS_WZGX_ZGD / ZS_WZGX_ZGGDD / ZS_WZGX_GD）尚未统一，
+            # 后续应抽出公共工具函数 zss_position_judge(zs1, zs2, mode) 复用。
+            if current_zs.zg > previous_zs.zg and current_zs.zd > previous_zs.zd:
+                direction = 'up'
+                zslx_type = "上涨"
+            elif current_zs.zg < previous_zs.zg and current_zs.zd < previous_zs.zd:
+                direction = 'down'
+                zslx_type = "下跌"
+            else:
+                # 两中枢有重叠 -> 盘整。
+                # 旧实现此处直接 return None 导致上一级别 trend_lines 缺段，
+                # 现在改为构造一个 zslx_type="盘整" 的 ZSLX。
+                # 方向(direction)由 start_fx -> end_fx 的实际价格走向决定（在下方端点确定后再设值）。
+                direction = None  # 占位，盘整方向由实际起止价决定，见下方设值
+                zslx_type = "盘整"
 
-            # (如果您希望将普通趋势也视为下一级别线段，请取消下面两行的注释)
-            # new_trend = self._handle_non_upgraded_trend(current_zs, previous_zs, current_level, trend_lines)
-            # if new_trend:
-            #     trend_lines.append(new_trend) # <-- 这在逻辑上可能不正确
+            # 确定走势的起点和终点
+            # 走势的起点是前一个中枢的离开段的端点
+            # （前置约束：previous_zs.done == True 时，_extend_and_check_complete 已保证 previous_zs.end 非空）
+            start_fx = previous_zs.end.end.copy()
+            # 走势的终点是当前中枢的离开段的端点
+            end_fx = current_zs.end.end.copy()
 
-            # 仅在调试时使用：
-            self._handle_non_upgraded_trend(current_zs, previous_zs, current_level, trend_lines)
-
-            i += 1
-
-        return trend_lines
-
-    def _handle_non_upgraded_trend(
-            self,
-            current_zs: ZS,
-            previous_zs: Optional[ZS],
-            current_level: Level,
-            trend_lines: List[ZSLX]  # 这里的 trend_lines 仅用于上下文判断
-    ) -> Optional[ZSLX]:
-        """
-        处理普通（未升级）的走势类型构建（盘整或趋势）。
-
-        注意：此函数生成的 ZSLX 属于 current_level，
-        用于描述 *本级别* 的结构，通常 *不* 作为输入传递给下一级别。
-
-        Args:
-            current_zs: 当前正在处理的中枢。
-            previous_zs: 前一个已完成的中枢。
-            current_level: 当前的走势级别。
-            trend_lines: 已生成的 *升级* 走势列表（用于判断是否为初始走势）。
-
-        Returns:
-            如果成功构建了新的走势类型，则返回 ZSLX 对象，否则返回 None。
-        """
-
-        # 规则 1: "如果之前没有走势类型，那么就以当前中枢的开始走势作为走势类型的类型"
-        # 我们将“之前没有走势类型”理解为“这是第一个被处理的(未升级的)中枢”
-        is_first_trend = not previous_zs and not trend_lines
-
-        if is_first_trend:
-            # 这是第一个被处理的普通中枢，我们将其定义为一个初始的“盘整”走势。
-            direction = current_zs.start.type
-            start_line = current_zs.start
+            start_line = previous_zs.end
             end_line = current_zs.end
 
-            # 盘整走势的范围由其自身决定
-            start_point = start_line.start.copy() if direction == 'up' else start_line.start.copy()
-            end_point = end_line.end.copy() if direction == 'up' else end_line.end.copy()
-
-            if direction == 'up':
-                start_point.val = min(start_line.low, end_line.low)
-                end_point.val = max(start_line.high, end_line.high)
-            else:
-                start_point.val = max(start_line.high, end_line.high)
-                end_point.val = min(start_line.low, end_line.low)
+            # 盘整段的方向由实际起止价确定（不偷懒沿用前中枢离开段方向）
+            if direction is None:
+                direction = 'up' if end_fx.val >= start_fx.val else 'down'
 
             new_trend = ZSLX(
                 zslx_level=current_level,  # 级别是当前级别
-                start=start_point,
-                end=end_point,
-                _type=direction,  # 走势类型由进入线段决定
-                start_line=start_line,
-                end_line=end_line,
-                index=0
+                start=start_fx,
+                end=end_fx,
+                _type=direction,
+                start_line=start_line,  # 走势从前一个中枢的离开线开始
+                end_line=end_line,  # 走势到当前中枢的离开线结束
+                index=(previous_zs.index or 0) + 1  # 假设的索引
             )
             new_trend.high = max(start_line.high, end_line.high)
             new_trend.low = min(start_line.low, end_line.low)
-
+            # 同上：zs_high/zs_low 必须显式赋值，否则下一级别中枢边界计算会被 0 污染
+            new_trend.zs_high = new_trend.high
+            new_trend.zs_low = new_trend.low
+            new_trend.zslx_type = zslx_type
             return new_trend
-
-        # 规则 2: "如果存在走势类型...根据前一个中枢和当前中枢比较位置确定当前的走势类型。"
-        # 必须有前一个中枢才能进行比较来确定趋势方向。
-        if not previous_zs:
-            return None
-
-        direction = None
-        # 定义上涨趋势：当前中枢的高低点都高于前一个中枢
-        if current_zs.zg > previous_zs.zg and current_zs.zd > previous_zs.zd:
-            direction = 'up'
-        # 定义下跌趋势：当前中枢的高低点都低于前一个中枢
-        elif current_zs.zg < previous_zs.zg and current_zs.zd < previous_zs.zd:
-            direction = 'down'
-        else:
-            # 两个中枢存在重叠，不构成严格的上涨或下跌趋势（即盘整），
-            # 此时不生成新的 ZSLX 趋势对象。
-            return None
-
-        # 确定走势的起点和终点
-        # 走势的起点是前一个中枢的离开段的端点
-        start_fx = previous_zs.end.end.copy()
-        # 走势的终点是当前中枢的离开段的端点
-        end_fx = current_zs.end.end.copy()
-
-        start_line = previous_zs.end
-        end_line = current_zs.end
-
-        new_trend = ZSLX(
-            zslx_level=current_level,  # 级别是当前级别
-            start=start_fx,
-            end=end_fx,
-            _type=direction,
-            start_line=start_line,  # 走势从前一个中枢的离开线开始
-            end_line=end_line,  # 走势到当前中枢的离开线结束
-            index=(previous_zs.index or 0) + 1  # 假设的索引
-        )
-        return new_trend

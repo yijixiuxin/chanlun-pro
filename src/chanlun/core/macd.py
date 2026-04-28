@@ -46,10 +46,10 @@ class MACD:
         self._ema_fast_val: float = 0.0
         # _ema_fast_val_prev: 倒数第二根K线的EMA值 (N-1)，用于Tick更新时重算N
         self._ema_fast_val_prev: float = 0.0
-        
+
         self._ema_slow_val: float = 0.0
         self._ema_slow_val_prev: float = 0.0
-        
+
         self._dea_val: float = 0.0
         self._dea_val_prev: float = 0.0
 
@@ -88,7 +88,7 @@ class MACD:
                 self._ema_fast_val_prev = self._ema_fast_val
                 self._ema_slow_val_prev = self._ema_slow_val
                 self._dea_val_prev = self._dea_val
-                
+
                 self._incremental_calculation(k, is_update_last=False)
 
         # 更新长度记录
@@ -110,8 +110,10 @@ class MACD:
         self.dea = dea_series.fillna(0).tolist()
 
         # 计算 Hist
-        hist_series = self.dif - self.dea if not isinstance(self.dif, list) else \
-            pd.Series(self.dif) - pd.Series(self.dea)
+        # ★ P3.5 清理：原代码用三元 `self.dif - self.dea if not isinstance(self.dif, list)`，
+        # 但前两行刚把 self.dif/self.dea 赋值为 list，三元永远走 else，写得绕。
+        # 直接用 Series 减法即可。
+        hist_series = pd.Series(self.dif) - pd.Series(self.dea)
 
         if self.china_mode:
             hist_series *= 2
@@ -123,7 +125,7 @@ class MACD:
             self._ema_fast_val = ema_fast.iloc[-1]
             self._ema_slow_val = ema_slow.iloc[-1]
             self._dea_val = dea_series.iloc[-1]
-            
+
             if len(klines) > 1:
                 self._ema_fast_val_prev = ema_fast.iloc[-2]
                 self._ema_slow_val_prev = ema_slow.iloc[-2]
@@ -171,7 +173,7 @@ class MACD:
         new_hist = (new_dif - new_dea)
         if self.china_mode:
             new_hist *= 2
-            
+
         # 更新当前 Tip 状态
         self._ema_fast_val = new_ema_fast
         self._ema_slow_val = new_ema_slow

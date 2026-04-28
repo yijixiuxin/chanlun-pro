@@ -1,4 +1,5 @@
 import datetime
+import threading
 import time
 from typing import Dict, List, Union
 from datetime import timedelta
@@ -16,16 +17,30 @@ QMT 沪深行情
 """
 
 
-class ExchangeQMT(Exchange):
-    g_all_stocks = []
+# xtquant 的 native 客户端不是线程安全的：多线程并发调用 download_history_data /
+# get_market_data / get_full_tick / get_instrument_detail 等接口时，其内部 BSON
+# 序列化层可能触发 `Assertion failed: u < 1000000, file ...\bson\src\bsonobj.cpp`
+# 断言，进而以 0xC0000409 (STATUS_STACK_BUFFER_OVERRUN) 强制终止整个 Python 进程，
+# Python 层无法 try/except 捕获。这里用进程级全局可重入锁把所有对 xtdata 的调用
+# 串行化，作为防御性兜底，避免多线程并发触发崩溃。
+_XTDATA_NATIVE_LOCK = threading.RLock()
 
+
+class ExchangeQMT(Exchange):
     def __init__(self):
         xtdata.enable_hello = False
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
+        # H1: g_all_stocks 必须为实例属性，且并发构建期间用 Lock 保护，
+        # 避免多线程同时进入 all_stocks() 时各自跑一次 5500 只股票全量扫描，
+        # 也避免类属性被多实例共享导致的状态穿透。
+        self.g_all_stocks: list = []
+        self._all_stocks_lock = threading.Lock()
+
         # 1. 读取数据的周期映射 (用于 get_market_data)
+        # 注意：移除 "y": "1y"，xtquant 实际不支持年线 period，传入会被 native 层拒绝甚至触发 BSON 异常。
         self.frequency_map = {
             "1m": "1m",
             "5m": "5m",
@@ -35,7 +50,6 @@ class ExchangeQMT(Exchange):
             "d": "1d",
             "w": "1w",
             "m": "1mon",
-            "y": "1y",
         }
 
         # 2. 新增：下载数据的周期映射 (用于 download_history_data)
@@ -52,17 +66,20 @@ class ExchangeQMT(Exchange):
             "d": "1d",
             "w": "1d",
             "m": "1d",
-            "y": "1d",
         }
 
+        # 默认回看时长：原本 60m=8年 / d=10年 / 1m=90天 等过长，会让 xtquant 一次性
+        # 拉取数十万根 K 线，BSON payload 极大，是触发 `u < 1000000` 断言的主因。
+        # 这里大幅缩短到合理值：分钟线最多 90 天，日线 3 年，周线 10 年，月线 30 年。
+        # 上层（如 tv_history）通常一次只要 300 根 K 线，进一步用 args["limit"] 短路。
         self.DEFAULT_LOOKBACK = {
-            "1m": timedelta(days=90),
-            "5m": timedelta(days=150),
-            "15m": timedelta(days=90),
-            "30m": timedelta(days=365 * 5),
-            "60m": timedelta(days=365 * 8),
-            "d": timedelta(days=365 * 10),
-            "w": timedelta(days=365 * 20),
+            "1m": timedelta(days=30),
+            "5m": timedelta(days=90),
+            "15m": timedelta(days=180),
+            "30m": timedelta(days=365),
+            "60m": timedelta(days=365 * 2),
+            "d": timedelta(days=365 * 3),
+            "w": timedelta(days=365 * 10),
             "m": timedelta(days=365 * 30),
         }
 
@@ -87,36 +104,86 @@ class ExchangeQMT(Exchange):
         return self.frequency_map
 
     def all_stocks(self):
+        # H1: 双检锁（double-checked locking）防止并发线程都进入构建临界区。
+        # 已就绪后所有读者无锁直接返回，零开销。
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        black_codes = [
-            "SZ.399290", "SZ.399289", "SZ.399302", "SZ.399298", "SZ.399481",
-            "SZ.399299", "SZ.399301", "SH.000013", "SH.000022", "SH.000116",
-            "SH.000061", "SH.000101", "SH.000012", "SZ.988201", "SZ.980068",
-            "SZ.980001", "SZ.980023",
-        ]
+        with self._all_stocks_lock:
+            # 拿到锁后再查一次：可能已经有别的线程构建完了。
+            if len(self.g_all_stocks) > 0:
+                return self.g_all_stocks
 
-        ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
-        tick_codes = list(ticks.keys())
+            # G5：黑名单改为 set，避免 5500+ 次 list 线性查找（O(n) → O(1)）
+            black_codes = {
+                "SZ.399290", "SZ.399289", "SZ.399302", "SZ.399298", "SZ.399481",
+                "SZ.399299", "SZ.399301", "SH.000013", "SH.000022", "SH.000116",
+                "SH.000061", "SH.000101", "SH.000012", "SZ.988201", "SZ.980068",
+                "SZ.980001", "SZ.980023",
+            }
 
-        all_stocks = []
-        for _c in tick_codes:
-            _stock_type: dict = xtdata.get_instrument_type(_c)
-            if _stock_type.get("stock") or _stock_type.get("etf") or _stock_type.get("index"):
-                pass
-            else:
-                continue
-            _stock = self.stock_info(self.code_to_tdx(_c))
-            all_stocks.append(_stock)
+            # G5 性能优化：
+        # - 把全市场扫描放在一把大锁内，避免 5500+ 次抢锁/释放锁的开销，
+        #   同时规避 xtdata 多线程穿插调用触发 BSON 断言。RLock 可重入。
+        # - 原实现每只股票要走 stock_info() → 内部再调 get_instrument_detail，
+        #   总计 2 次 native 调用 + 一次 code_to_qmt(code_to_tdx(_c)) 来回转换。
+        #   这里直接 inline 拿 detail，单只股票降为 1 次 native 调用，整体减半。
+            # - 黑名单改为循环内提前过滤，省一次列表二次遍历。
+            with _XTDATA_NATIVE_LOCK:
+                ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
+                tick_codes = list(ticks.keys())
 
-        all_stocks = [_s for _s in all_stocks if _s["code"] not in black_codes]
-        self.g_all_stocks = all_stocks
-        return self.g_all_stocks
+                all_stocks = []
+                for _c in tick_codes:
+                    _stock_type: dict = xtdata.get_instrument_type(_c)
+                    if not (_stock_type.get("stock") or _stock_type.get("etf") or _stock_type.get("index")):
+                        continue
 
-    def get_start_date_by_frequency(self, frequency: str) -> str:
+                    tdx_code = self.code_to_tdx(_c)
+                    if tdx_code in black_codes:
+                        continue
+
+                    try:
+                        stock_detail = xtdata.get_instrument_detail(_c, False)
+                    except Exception as _e:
+                        LogUtil.warning(
+                            f"[ExchangeQMT.all_stocks] get_instrument_detail failed code={_c} err={_e}"
+                        )
+                        continue
+                    if not stock_detail:
+                        continue
+
+                    all_stocks.append({
+                        "code": tdx_code,
+                        "name": stock_detail["InstrumentName"],
+                        "precision": fun.reverse_decimal_to_power_of_ten(stock_detail["PriceTick"]),
+                    })
+
+            self.g_all_stocks = all_stocks
+            return self.g_all_stocks
+
+    def get_start_date_by_frequency(self, frequency: str, req_counts: int = None) -> str:
+        """
+        根据周期获取默认起始日期。
+        如果上层指定了 req_counts（用户实际只要这么多根 K 线），会按周期估算
+        一个紧凑的回看窗口，避免无谓地拉超长历史导致 BSON payload 过大。
+        """
         now = datetime.datetime.now()
         delta = self.DEFAULT_LOOKBACK.get(frequency, timedelta(days=365))
+
+        # 当调用方指定了请求 K 线数量时，按周期估算一个紧凑的窗口（带 3 倍冗余）。
+        # 这样典型场景（300 根 1m）只需要 ~3 天历史，而不是 30 天。
+        if req_counts is not None and req_counts > 0:
+            minutes_per_bar = {
+                "1m": 1, "5m": 5, "15m": 15, "30m": 30, "60m": 60,
+                "d": 60 * 24, "w": 60 * 24 * 7, "m": 60 * 24 * 30,
+            }
+            est_minutes = minutes_per_bar.get(frequency, 60) * req_counts * 3
+            est_delta = timedelta(minutes=est_minutes)
+            # 取估算窗口和默认窗口中较小的
+            if est_delta < delta:
+                delta = est_delta
+
         start_date = now - delta
         return start_date.strftime("%Y%m%d")
 
@@ -152,37 +219,71 @@ class ExchangeQMT(Exchange):
                 qmt_download_period = "1d"
 
         # 2. 确定时间范围
+        # 上层若传了 args["req_counts"]（实际只要 N 根 K 线），用它来收紧默认回看窗口，
+        # 避免一次性拉超长历史触发 xtquant BSON 断言。
+        req_counts = args.get("req_counts") if args else None
         if start_date:
             query_start = start_date.replace("-", "").replace(" ", "").replace(":", "")
         else:
-            query_start = self.get_start_date_by_frequency(frequency)
+            query_start = self.get_start_date_by_frequency(frequency, req_counts=req_counts)
 
         dividend_type = args.get("dividend_type", "front") if args else "front"
 
-        # 3. 智能增量下载
-        xtdata.download_history_data(
-            stock_code=qmt_code,
-            period=qmt_download_period,
-            start_time=query_start,
-            end_time="",
-            incrementally=False
-        )
-
-        # 4. 获取数据
+        # 3. 智能增量下载 + 4. 获取数据
+        # 用全局锁串行化所有 xtdata 调用，规避 native 层 BSON 断言崩溃。
+        # 关键点：
+        # - 把 download + get_market_data 一起包住，避免两调用之间被其它线程
+        #   插入新的 native 请求（半包/状态错乱也是触发崩溃的诱因之一）。
+        # - download 改用 incrementally=True，避免每次都全量下载导致 BSON
+        #   payload 过大触发 `u < 1000000` 断言。
         field_list = ["time", "open", "high", "low", "close", "volume"]
-        raw_data = xtdata.get_market_data(
-            field_list=field_list,
-            stock_list=[qmt_code],
-            period=qmt_read_period,
-            start_time=query_start,
-            end_time="",
-            count=-1,
-            dividend_type=dividend_type,
-            fill_data=False,
-        )
+        with _XTDATA_NATIVE_LOCK:
+            try:
+                xtdata.download_history_data(
+                    stock_code=qmt_code,
+                    period=qmt_download_period,
+                    start_time=query_start,
+                    end_time="",
+                    incrementally=True,
+                )
+                raw_data = xtdata.get_market_data(
+                    field_list=field_list,
+                    stock_list=[qmt_code],
+                    period=qmt_read_period,
+                    start_time=query_start,
+                    end_time="",
+                    count=-1,
+                    dividend_type=dividend_type,
+                    fill_data=False,
+                )
+            except Exception as e:
+                # native 层抛出的普通异常仍然走外层 retry；
+                # 注意：BSON 断言导致的 0xC0000409 进程崩溃 Python 无法捕获，
+                # 那种情况只能靠外部进程守护（如 NSSM）拉起。
+                LogUtil.warning(
+                    f"[ExchangeQMT.klines] xtdata call failed code={qmt_code} "
+                    f"freq={frequency} read={qmt_read_period} dl={qmt_download_period} err={e}"
+                )
+                raise
 
         # 数据完整性检查
-        if not raw_data or raw_data.get("time") is None or raw_data["time"].empty:
+        # 注意：xtdata.get_market_data 返回的字段值，老版本是 pd.DataFrame（有 .empty），
+        # 新版本可能是 np.ndarray（没有 .empty，但有 .size）。这里两种都兼容。
+        if not raw_data:
+            return empty_df
+        time_col = raw_data.get("time")
+        if time_col is None:
+            return empty_df
+        try:
+            if hasattr(time_col, "empty"):
+                if time_col.empty:
+                    return empty_df
+            elif hasattr(time_col, "size"):
+                if time_col.size == 0:
+                    return empty_df
+            elif len(time_col) == 0:
+                return empty_df
+        except Exception:
             return empty_df
 
         # 5. 极速构建 DataFrame
@@ -234,7 +335,8 @@ class ExchangeQMT(Exchange):
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         qmt_code = self.code_to_qmt(code)
-        stock_detail = xtdata.get_instrument_detail(qmt_code, False)
+        with _XTDATA_NATIVE_LOCK:
+            stock_detail = xtdata.get_instrument_detail(qmt_code, False)
         return {
             "code": code,
             "name": stock_detail["InstrumentName"],
@@ -248,7 +350,8 @@ class ExchangeQMT(Exchange):
         ticks = {}
         if len(codes) == 0:
             return ticks
-        qmt_ticks = xtdata.get_full_tick([self.code_to_qmt(_c) for _c in codes])
+        with _XTDATA_NATIVE_LOCK:
+            qmt_ticks = xtdata.get_full_tick([self.code_to_qmt(_c) for _c in codes])
         for _c, _t in qmt_ticks.items():
             ticks[self.code_to_tdx(_c)] = Tick(
                 code=self.code_to_tdx(_c),
@@ -268,7 +371,8 @@ class ExchangeQMT(Exchange):
         ticks = {}
         all_stocks = self.all_stocks()
         all_codes = [_s["code"] for _s in all_stocks]
-        qmt_ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
+        with _XTDATA_NATIVE_LOCK:
+            qmt_ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
         for _c, _t in qmt_ticks.items():
             _tdx_code = self.code_to_tdx(_c)
             if _tdx_code not in all_codes:
@@ -295,7 +399,8 @@ class ExchangeQMT(Exchange):
         """
         获取股票除权除息信息
         """
-        df = xtdata.get_divid_factors(self.code_to_qmt(stock_code))
+        with _XTDATA_NATIVE_LOCK:
+            df = xtdata.get_divid_factors(self.code_to_qmt(stock_code))
         if df is None or df.empty:
             return None
         df.loc[:, "stock_code"] = stock_code
@@ -336,19 +441,40 @@ class ExchangeQMT(Exchange):
 
     def now_trading(self):
         """
-        返回当前是否是交易时间
-        周一至周五，09:30-11:30 13:00-15:00
+        返回当前是否是交易时间。
+
+        H10 修正：
+        - 用 self.tz（Asia/Shanghai）替换 datetime.now() 裸调用，避免服务器
+          所在时区不在 +8 时整体判错。
+        - 增加集合竞价时段 09:15-09:25：A 股该时段是有 tick 数据的，
+          上游若用 now_trading 决定是否拉 tick / 订阅，会漏掉早盘竞价数据。
+
+        交易时段（含集合竞价）：
+            周一至周五
+            09:15-09:25 集合竞价
+            09:30-11:30 上午连续竞价
+            13:00-15:00 下午连续竞价
         """
-        now_dt = datetime.datetime.now()
+        now_dt = datetime.datetime.now(self.tz)
         if now_dt.weekday() in [5, 6]:  # 周六日不交易
             return False
         hour = now_dt.hour
         minute = now_dt.minute
+
+        # 集合竞价 09:15-09:25
+        if hour == 9 and 15 <= minute < 25:
+            return True
+        # 上午连续竞价 09:30-09:59
         if hour == 9 and minute >= 30:
             return True
-        if hour in [10, 13, 14]:
+        # 上午 10:00-10:59
+        if hour == 10:
             return True
+        # 上午 11:00-11:29
         if hour == 11 and minute < 30:
+            return True
+        # 下午 13:00-14:59
+        if hour in (13, 14):
             return True
         return False
 

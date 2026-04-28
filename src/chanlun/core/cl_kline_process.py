@@ -29,6 +29,28 @@ class CL_Kline_Process:
         k2_contains_k1 = k2.h >= k1.h and k2.l <= k1.l
         return k1_contains_k2 or k2_contains_k1
 
+    @staticmethod
+    def _resolve_direction(last_cl_k: CLKline, new_cl_k: CLKline) -> str:
+        """无上下文时按 new vs last 的高低关系决定合并方向。
+
+        缠论合并方向的本质是"沿趋势走"：
+          - new 比 last 高（h>且 l>）→ 上升趋势 → 'up'（合并取较高的高/低）
+          - new 比 last 低 → 下降趋势 → 'down'
+          - 其他情况按 high 优先比较，high 相等时用 low 兜底，
+            两者都相等时默认 'up'（极少出现，且对后续分型不影响）。
+        """
+        if new_cl_k.h > last_cl_k.h:
+            return 'up'
+        if new_cl_k.h < last_cl_k.h:
+            return 'down'
+        # high 相等时，用 low 决定
+        if new_cl_k.l > last_cl_k.l:
+            return 'up'
+        if new_cl_k.l < last_cl_k.l:
+            return 'down'
+        # 完全相同：方向不影响合并结果（h/l 都一样），随便给一个
+        return 'up'
+
     def _merge_klines(self, k1: CLKline, k2: CLKline, direction: str) -> CLKline:
         """根据指定方向合并两根K线。"""
         if direction == 'up':
@@ -91,21 +113,28 @@ class CL_Kline_Process:
 
         elif self._need_merge(last_cl_k, new_cl_k):
             # 确定合并方向
-            direction = 'up'  # 默认
+            # 优先级：
+            #   1. 上一根缠论 K 已经标记过方向（last_cl_k.up_qs）→ 沿用
+            #   2. 上一根缠论 K 与更前一根有明确高低关系 → 用上文趋势判断
+            #   3. 都不可用 → 用 new_cl_k 与 last_cl_k 的高低做兜底
+            #
+            # ★ A3 修复：原代码在 elif 链里 default 'up'，当 len(cl_klines)==1 或
+            # last_cl_k.h == prev_cl_k.h 时会强制按 'up' 合并，可能把"高高低低"
+            # 错合成"高高高高"，永久污染整段缠论 K 线序列。
+            # 现在所有未确定的分支都收敛到 _resolve_direction 兜底，避免方向错判。
+            direction: str
             if last_cl_k.up_qs is not None:
                 direction = last_cl_k.up_qs
             elif len(self.cl_klines) >= 2:
                 prev_cl_k = self.cl_klines[-2]
-                if last_cl_k.h < prev_cl_k.h:
-                    direction = 'down'
-            else:
-                # 第一根和第二根的处理
-                if new_cl_k.h > last_cl_k.h:
+                if last_cl_k.h > prev_cl_k.h and last_cl_k.l > prev_cl_k.l:
                     direction = 'up'
-                elif new_cl_k.h < last_cl_k.h:
+                elif last_cl_k.h < prev_cl_k.h and last_cl_k.l < prev_cl_k.l:
                     direction = 'down'
                 else:
-                    direction = 'up' if new_cl_k.l > last_cl_k.l else 'down'
+                    direction = self._resolve_direction(last_cl_k, new_cl_k)
+            else:
+                direction = self._resolve_direction(last_cl_k, new_cl_k)
 
             merged_k = self._merge_klines(last_cl_k, new_cl_k, direction)
             # 原地替换
@@ -139,34 +168,55 @@ class CL_Kline_Process:
 
             # --- 情况2: 这是一个更新数据 ---
             if current_k.index == self._last_src_kline_index:
-                # 1. 弹出最后一根受影响的 CLKline
-                if self.cl_klines:
-                    dirty_cl_k = self.cl_klines.pop()
+                # ★ D2 优化：原实现无条件 pop dirty_cl_k → 重放 valid_prev_klines → 处理 current_k。
+                # 这在「dirty_cl_k 只含 current_k 一根」的最常见场景里会做很多无意义工作：
+                #   - dirty_cl_k 只包含 current_k 时，valid_prev_klines 是空的，
+                #     重放循环本身就跳过；但 pop 之后 _process_one_kline(current_k)
+                #     还要重新跑一次 _need_merge / 合并方向判断，事实上等价于
+                #     「在原位修改 cl_klines[-1] 的 h/l/c/o/a」。
+                # 所以拆成两个分支：
+                #   - fast path: dirty_cl_k 只含 current_k → 原地重做最后一个 cl_k 的字段
+                #   - slow path: dirty_cl_k 由多根原始 K 合并而来 → 走原来的 pop+重放逻辑
+                if not self.cl_klines:
+                    self._process_one_kline(current_k)
+                    continue
 
-                    # 2. 从这根脏 K 线中，分离出之前已经确认的原始 K 线
-                    #    逻辑：dirty_cl_k 可能由 [8017, 8018] 合并而成。
-                    #    现在 8018 更新了，我们要保留 8017，扔掉旧的 8018，然后放入新的 8018。
-                    valid_prev_klines = [k for k in dirty_cl_k.klines if k.index < current_k.index]
-
-                    # 3. 修正 _last_src_kline_index
-                    #    我们需要将其回退到 valid_prev_klines 的最后一个 index
-                    #    如果 valid_prev_klines 为空，说明之前那个 cl_k 就是由单根 8018 构成的，
-                    #    那么回退到上一个 cl_kline 的结束点 (或 -1)
-                    if valid_prev_klines:
-                        self._last_src_kline_index = valid_prev_klines[-1].index
+                dirty_cl_k = self.cl_klines[-1]
+                # fast path：脏 cl_k 只由当前这根原始 K 构成
+                if (
+                    len(dirty_cl_k.klines) == 1
+                    and dirty_cl_k.klines[0].index == current_k.index
+                ):
+                    # 直接 pop 然后单根 _process_one_kline 等价于在原位重算，
+                    # 但避免了「重放 valid_prev_klines」的循环开销
+                    # （这里就算是空循环也省下了一次列表推导）
+                    self.cl_klines.pop()
+                    # 把 _last_src_kline_index 回退到上一根的边界，
+                    # _process_one_kline 内部会按当前 cl_klines 状态正确续上
+                    if self.cl_klines:
+                        self._last_src_kline_index = self.cl_klines[-1].klines[-1].index
                     else:
-                        # 尝试找更前面的
-                        if self.cl_klines:
-                            # 取当前队尾包含的最后一个原始K线index
-                            self._last_src_kline_index = self.cl_klines[-1].klines[-1].index
-                        else:
-                            self._last_src_kline_index = -1
+                        self._last_src_kline_index = -1
+                    self._process_one_kline(current_k)
+                    continue
 
-                    # 4. 【关键】先重放之前的有效 K 线，恢复现场
-                    for prev_k in valid_prev_klines:
-                        self._process_one_kline(prev_k)
+                # slow path：原通用逻辑，处理「dirty_cl_k 由多根原始 K 合并而来」
+                self.cl_klines.pop()
+                valid_prev_klines = [k for k in dirty_cl_k.klines if k.index < current_k.index]
 
-                # 5. 最后处理当前这根更新后的 K 线
+                if valid_prev_klines:
+                    self._last_src_kline_index = valid_prev_klines[-1].index
+                else:
+                    if self.cl_klines:
+                        self._last_src_kline_index = self.cl_klines[-1].klines[-1].index
+                    else:
+                        self._last_src_kline_index = -1
+
+                # 重放之前的有效 K 线，恢复现场
+                for prev_k in valid_prev_klines:
+                    self._process_one_kline(prev_k)
+
+                # 处理当前这根更新后的 K 线
                 self._process_one_kline(current_k)
 
             # --- 情况3: 这是一个新数据 (Index 更大) ---

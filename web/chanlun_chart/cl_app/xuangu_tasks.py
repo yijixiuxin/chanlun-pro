@@ -1,4 +1,5 @@
 import datetime
+import traceback
 from typing import Dict, List
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -89,11 +90,23 @@ def process_xuangu_by_code(args):
         ex = get_exchange(Market(market))
         cl_config = query_cl_chart_config(market, "----")
         task_fun = xuangu_task_configs[task_name]["task_fun"]
-        mk_datas = OnlineMarketDatas(market, frequencys, ex, cl_config, use_cache=False)
+        # 选股场景下同一只票多周期会复用底层缠论数据，开缓存能显著减少重复拉行情/重复计算。
+        # OnlineMarketDatas 的缓存生命周期与对象同生共死，每个 code 一个新实例，
+        # 不会跨 code 串数据，因此开 use_cache=True 是安全的。
+        mk_datas = OnlineMarketDatas(market, frequencys, ex, cl_config, use_cache=True)
         xg_res = task_fun(code, mk_datas, opt_types)
         return xg_res
     except Exception as e:
-        tqdm.write(f"{market} {code} {frequencys} 执行选股任务 {task_name} 失败：{e}")
+        # 仅打印 e 时排查时基本无法定位（看不到栈），尤其是多进程/线程混跑场景；
+        # 同时输出 traceback 才能在线上日志里看到具体出错文件/行号。
+        tqdm.write(
+            f"{market} {code} {frequencys} 执行选股任务 {task_name} 失败：{e}\n"
+            f"{traceback.format_exc()}"
+        )
+        log.warning(
+            f"process_xuangu_by_code failed market={market} code={code} "
+            f"freqs={frequencys} task={task_name} err={e}",
+        )
         return None
 
 
@@ -129,7 +142,10 @@ def process_xuangu_task(
             run_codes = [_s["code"] for _s in run_codes]
 
         tqdm.write(f"{market} {task_name} 选股任务开始，选股代码数量 {len(run_codes)}")
-        zx.clear_zx_stocks(target_zx_group)
+        # 注意：原实现一进入就 clear，会让目标自选组在选股过程中处于"空"状态，
+        # 一旦本次选股中途崩溃，原数据也彻底丢失。改为：先把命中结果写到中间 list，
+        # 全部跑完后再 clear + 一次性写入，保证选股过程的原子性。
+        xg_results = []
 
         # 多进程版本
         # with ProcessPoolExecutor(
@@ -158,7 +174,12 @@ def process_xuangu_task(
                 tqdm.write(
                     f"{market} {task_name} 选择 {_xg_res['code']} : {_xg_res['msg']}"
                 )
-                zx.add_stock(target_zx_group, _xg_res["code"], None)
+                xg_results.append(_xg_res)
+
+        # 选股全部完成后再清空 + 写入，避免中途崩溃导致目标组被清空。
+        zx.clear_zx_stocks(target_zx_group)
+        for _xg_res in xg_results:
+            zx.add_stock(target_zx_group, _xg_res["code"], None)
 
         xg_stocks = zx.zx_stocks(target_zx_group)
         utils.send_fs_msg(
@@ -194,7 +215,10 @@ class XuanguTasks(object):
         if xuangu_task_name not in xuangu_task_configs.keys():
             return False
 
-        task_id = f"{market}_{xuangu_task_name}"
+        # task_id 必须包含 freqs 与目标自选组，否则同一个选股任务在不同周期 / 不同
+        # 目标分组下并发跑会被误判成"上一次任务还没结束"而被拒绝。
+        freqs_part = "-".join(freqs) if freqs else "nofreq"
+        task_id = f"{market}_{xuangu_task_name}_{freqs_part}_{target_zx_group}"
         if (
             task_id in self.scheduler.my_task_list.keys()
             and self.scheduler.my_task_list[task_id]["state"] != "已完成"
