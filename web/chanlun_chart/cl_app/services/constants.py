@@ -6,10 +6,13 @@ defined inline in the Flask app. Importing from here reduces duplication
 and makes it easier to test and evolve supported markets and resolutions.
 """
 
+import threading
+
 from tzlocal import get_localzone
 
 from chanlun.base import Market
 from chanlun.exchange import get_exchange
+from chanlun.tools.log_util import LogUtil
 
 
 # 项目中的周期与 tv 的周期对应表
@@ -38,32 +41,94 @@ frequency_maps = {
 resolution_maps = dict(zip(frequency_maps.values(), frequency_maps.keys()))
 
 
-# 各个市场支持的时间周期
-market_frequencys = {
-    "a": list(get_exchange(Market.A).support_frequencys().keys()),
-    "hk": list(get_exchange(Market.HK).support_frequencys().keys()),
-    "fx": list(get_exchange(Market.FX).support_frequencys().keys()),
-    "us": list(get_exchange(Market.US).support_frequencys().keys()),
-    "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
-    "ny_futures": list(get_exchange(Market.NY_FUTURES).support_frequencys().keys()),
-    "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
-    "currency_spot": list(
-        get_exchange(Market.CURRENCY_SPOT).support_frequencys().keys()
-    ),
-}
+_ALL_MARKETS = [
+    ("a", Market.A),
+    ("hk", Market.HK),
+    ("fx", Market.FX),
+    ("us", Market.US),
+    ("futures", Market.FUTURES),
+    ("ny_futures", Market.NY_FUTURES),
+    ("currency", Market.CURRENCY),
+    ("currency_spot", Market.CURRENCY_SPOT),
+]
 
 
-# 各个交易所默认的标的
-market_default_codes = {
-    "a": get_exchange(Market.A).default_code(),
-    "hk": get_exchange(Market.HK).default_code(),
-    "fx": get_exchange(Market.FX).default_code(),
-    "us": get_exchange(Market.US).default_code(),
-    "futures": get_exchange(Market.FUTURES).default_code(),
-    "ny_futures": get_exchange(Market.NY_FUTURES).default_code(),
-    "currency": get_exchange(Market.CURRENCY).default_code(),
-    "currency_spot": get_exchange(Market.CURRENCY_SPOT).default_code(),
-}
+class _LazyMarketDict(dict):
+    """在首次访问时才初始化交易所对象，避免阻塞启动。"""
+
+    def __init__(self, builder):
+        super().__init__()
+        self._builder = builder
+        self._loaded = False
+        self._lock = threading.Lock()
+
+    def _ensure_loaded(self):
+        if self._loaded:
+            return
+        with self._lock:
+            if self._loaded:
+                return
+            self.update(self._builder())
+            self._loaded = True
+
+    def __getitem__(self, key):
+        self._ensure_loaded()
+        return super().__getitem__(key)
+
+    def __contains__(self, key):
+        self._ensure_loaded()
+        return super().__contains__(key)
+
+    def get(self, key, default=None):
+        self._ensure_loaded()
+        return super().get(key, default)
+
+    def keys(self):
+        self._ensure_loaded()
+        return super().keys()
+
+    def values(self):
+        self._ensure_loaded()
+        return super().values()
+
+    def items(self):
+        self._ensure_loaded()
+        return super().items()
+
+    def __iter__(self):
+        self._ensure_loaded()
+        return super().__iter__()
+
+    def __len__(self):
+        self._ensure_loaded()
+        return super().__len__()
+
+
+def _build_market_frequencys():
+    result = {}
+    for key, market in _ALL_MARKETS:
+        try:
+            result[key] = list(get_exchange(market).support_frequencys().keys())
+        except Exception as e:
+            LogUtil.warning(f"获取 {key} 支持周期失败: {e}")
+            result[key] = []
+    return result
+
+
+def _build_market_default_codes():
+    result = {}
+    for key, market in _ALL_MARKETS:
+        try:
+            result[key] = get_exchange(market).default_code()
+        except Exception as e:
+            LogUtil.warning(f"获取 {key} 默认代码失败: {e}")
+            result[key] = ""
+    return result
+
+
+# 懒加载：首次访问时才创建交易所对象，不阻塞启动
+market_frequencys = _LazyMarketDict(_build_market_frequencys)
+market_default_codes = _LazyMarketDict(_build_market_default_codes)
 
 
 # 各个市场的交易时间

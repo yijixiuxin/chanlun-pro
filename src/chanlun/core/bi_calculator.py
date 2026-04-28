@@ -3,7 +3,6 @@ from typing import List, Optional
 
 from chanlun.core.cl_interface import FX, BI, CLKline
 
-
 class BiCalculator:
     """
     笔计算器。
@@ -117,7 +116,6 @@ class BiCalculator:
         self.pending_bi = None
 
         effective_fxs = self._compress_fxs(fxs)
-        reopenable_bi: Optional[BI] = None
         next_bi_index = 0
 
         for fx_pos, current_fx in enumerate(effective_fxs):
@@ -130,7 +128,6 @@ class BiCalculator:
 
                 if start_fx and self._check_stroke_validity(start_fx, current_fx):
                     self.pending_bi = self._create_bi(start_fx, current_fx, next_bi_index, False)
-                    reopenable_bi = self.confirmed_bis[-1] if self.confirmed_bis else None
                     next_bi_index += 1
                 continue
 
@@ -148,24 +145,15 @@ class BiCalculator:
 
                 start_fx_new = self.pending_bi.end
                 self.pending_bi = self._create_bi(start_fx_new, current_fx, next_bi_index, False)
-                reopenable_bi = self.confirmed_bis[-1]
                 next_bi_index += 1
                 continue
 
-            should_reopen_prev_bi = (
-                reopenable_bi is not None
-                and self.confirmed_bis
-                and reopenable_bi is self.confirmed_bis[-1]
-                and reopenable_bi.end.type == current_fx.type
-                and self._is_more_extreme(current_fx, reopenable_bi.end)
-            )
-
-            if should_reopen_prev_bi:
-                reopened_bi = self.confirmed_bis.pop()
-                reopened_bi.end = current_fx
-                reopened_bi.end.done = False
-                self.pending_bi = reopened_bi
-                reopenable_bi = None
+            # 异类分型但不满足成笔条件。
+            # 若无已确认笔且该分型比 pending 起点更极端，
+            # 则按理论要求放弃当前 pending（起点被更极端的同类分型取代）。
+            if (not self.confirmed_bis
+                    and self._is_more_extreme(current_fx, self.pending_bi.start)):
+                self.pending_bi = None
 
         self._reindex_bis()
 

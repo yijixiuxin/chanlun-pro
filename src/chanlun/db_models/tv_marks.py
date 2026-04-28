@@ -4,9 +4,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from chanlun.db_models.base import Base
 
 
 class TableByTVMarks(Base):

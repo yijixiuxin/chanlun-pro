@@ -3,9 +3,7 @@ from sqlalchemy import (
     Integer,
     String, DateTime, Text,
 )
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from chanlun.db_models.base import Base
 
 
 class TableByAIAnalyse(Base):

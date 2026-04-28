@@ -367,27 +367,58 @@ class _LimitedLockDict(dict):
 
 chart_calc_locks = _LimitedLockDict()
 
+PRELOAD_EXCHANGES = ["a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot"]
+PRELOAD_INTERVAL_SECONDS = 3600
+PRELOAD_PARALLEL_WORKERS = 8
+
+def _preload_single_exchange(exchange: str) -> None:
+    """加载单个市场的 symbol 列表并写入缓存。任何异常都被吞掉，仅记日志，避免影响其他市场。"""
+    try:
+        start_ts = time.time()
+        ex = get_exchange(Market(exchange))
+        all_stocks = ex.all_stocks()
+        processed_stocks = _process_stock_list(all_stocks)
+        with cache_lock:
+            stock_cache[exchange] = processed_stocks
+        LogUtil.info(
+            f"市场 {exchange} symbols 预加载完成，共 {len(processed_stocks)} 条，耗时 {time.time() - start_ts:.2f}s"
+        )
+    except Exception as e:
+        LogUtil.error(f"预加载市场 {exchange} symbols 失败: {e}")
+
 def preload_symbols():
-    exchanges = ["a", "hk", "fx", "us", "futures", "ny_futures", "currency", "currency_spot"]
+    """常驻线程入口：并行预加载 8 个市场的 symbols，并周期性刷新。
+
+    设计要点：
+    1. 每轮使用 ThreadPoolExecutor 并行触发 8 个市场的加载，单轮总耗时由最慢的市场决定，
+       而不是 8 个市场耗时之和，避免长时间占用 GIL 导致请求线程被饿死。
+    2. 单个市场失败不会影响其他市场。
+    3. 该函数本身运行在 daemon 线程中，不阻塞主进程。
+    """
+    # 通过局部导入避免在模块顶层增加额外依赖项的可见性
+    from concurrent.futures import ThreadPoolExecutor
+
     while True:
-        LogUtil.info("开始预加载并更新所有市场的 symbols...")
-        for exchange in exchanges:
-            try:
-                ex = get_exchange(Market(exchange))
-                all_stocks = ex.all_stocks()
-                processed_stocks = _process_stock_list(all_stocks)
-                with cache_lock:
-                    stock_cache[exchange] = processed_stocks
-                LogUtil.info(f"市场 {exchange} symbols 预加载完成，共 {len(processed_stocks)} 条")
-            except Exception as e:
-                LogUtil.error(f"预加载市场 {exchange} symbols 失败: {e}")
-        
-        # 每小时更新一次
-        time.sleep(3600)
+        LogUtil.info("开始预加载并更新所有市场的 symbols（并行）...")
+        round_start = time.time()
+        try:
+            with ThreadPoolExecutor(
+                max_workers=PRELOAD_PARALLEL_WORKERS,
+                thread_name_prefiFx="SymbolPreloadWorker",
+            ) as pool:
+                # 提交后等待所有 future 结束（_preload_single_exchange 已自行吞异常）
+                list(pool.map(_preload_single_exchange, PRELOAD_EXCHANGES))
+        except Exception as e:
+            LogUtil.error(f"symbols 预加载轮次异常: {e}")
+        LogUtil.info(f"本轮 symbols 预加载完成，总耗时 {time.time() - round_start:.2f}s")
+
+        time.sleep(PRELOAD_INTERVAL_SECONDS)
 
 def start_symbol_preload_thread():
+    """启动后台 symbol 预加载线程。线程为 daemon，不会阻塞进程退出，也不会阻塞调用方。"""
     t = threading.Thread(target=preload_symbols, daemon=True, name="SymbolPreloadThread")
     t.start()
+    return t
 
 @tv_bp.route("/tv/config")
 @login_required

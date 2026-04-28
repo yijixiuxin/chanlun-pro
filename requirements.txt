@@ -5,7 +5,7 @@ redis
 prettytable
 pymysql
 chardet
-longport
+longbridge
 cachetools
 pyecharts==2.0.8
 dbutils

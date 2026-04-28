@@ -5,9 +5,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from chanlun.db_models.base import Base
 
 
 class TableByAlertTask(Base):

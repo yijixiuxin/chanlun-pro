@@ -37,6 +37,10 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_qmt import ExchangeQMT
 
             g_exchange_obj[market.value] = ExchangeQMT()
+        elif config.EXCHANGE_A == "cq":
+            from chanlun.exchange.exchange_cq import ExchangeChangQiao
+
+            g_exchange_obj[market.value] = ExchangeChangQiao()
         else:
             raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
 
@@ -54,6 +58,10 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.HK.value)
+        elif config.EXCHANGE_A == "cq":
+            from chanlun.exchange.exchange_cq import ExchangeChangQiao
+
+            g_exchange_obj[market.value] = ExchangeChangQiao()
         else:
             raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
 
@@ -93,6 +101,10 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
+        elif config.EXCHANGE_A == "cq":
+            from chanlun.exchange.exchange_cq import ExchangeChangQiao
+
+            g_exchange_obj[market.value] = ExchangeChangQiao()
         else:
             raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
 
@@ -142,7 +154,9 @@ def get_exchange(market: Market) -> Exchange:
             from chanlun.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.US.value)
-        elif config.EXCHANGE_US == "cq":
+        elif config.EXCHANGE_A == "cq":
+            from chanlun.exchange.exchange_cq import ExchangeChangQiao
+
             g_exchange_obj[market.value] = ExchangeChangQiao()
         else:
             raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")

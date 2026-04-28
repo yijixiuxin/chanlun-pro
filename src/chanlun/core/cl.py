@@ -148,6 +148,12 @@ class CL(ICL):
         self._last_bi_zs = None
         self._last_xd_zs = None
 
+        # ★ 关键修复：自动连带跑 process_mmd，避免 web 路径（fdb.get_web_cl_data）
+        # 漏调用 process_mmd 导致前端永远看不到 1B/2B/3B 买卖点。
+        # process_mmd 内部已通过 BsPointCalculator._mmd_already_attached 做了去重，
+        # 增量调用幂等（详见 tests/test_integration_real_klines.py::test_int_r3_idempotent_real）。
+        self.process_mmd()
+
         return self
 
     # --- ICL 接口实现 ---
@@ -308,10 +314,13 @@ class CL(ICL):
             return False, []
 
         # 找到进入前一个中枢的同方向线段
+        # ★ 修复：ZS.start 是 LINE/XD/BI 对象（不是 FX），需要用 .start.k.k_index
+        # 取前一个中枢的「进入段」起点 K 索引作为时间边界。
+        prev_zs_start_k_index = prev_zs.start.start.k.k_index
         compare_lines = []
         for line in lines:
             if (line.type == now_line.type and
-                    line.end.k.k_index <= prev_zs.start.k.k_index):
+                    line.end.k.k_index <= prev_zs_start_k_index):
                 compare_lines.append(line)
 
         if not compare_lines:
@@ -462,5 +471,28 @@ class CL(ICL):
         return self
 
     def process_mmd(self):
-        # 占位：买卖点计算在各线对象中维护
+        """
+        计算三类买卖点（1buy/1sell, 2buy/2sell, 3buy/3sell）。
+
+        当前阶段（D2）只接入线段层（``zs_type='xd'``）：
+            - ``_detect_1buy_1sell`` ✅ 已实现（趋势背驰，复用 ``self.beichi_qs``）
+            - ``_detect_2buy_2sell`` 🚧 占位，由 Step 4 落地
+            - ``_detect_3buy_3sell`` ✅ 已实现（几何判定）
+
+        笔层（``zs_type='bi'``）暂未接入：
+            - ``self.bi_zss`` 是 ``Dict[str, List[ZS]]``，缺少默认 ``zs_type`` 的统一聚合
+            - 接入需先与 ``ZsCalculator`` 在笔层的实例化一并设计，避免接口割裂
+            - 详见 ``docs/bs_point_calculator_design.md`` 第 4 章
+        """
+        from chanlun.core.bs_point_calculator import BsPointCalculator
+
+        xds = self.xd_calculator.xds
+        # ★ 修复：必须包含 pending_zs（最后一个未完成中枢），否则末段 1buy/1sell 永远丢失
+        # zss_calculator.zss 只包含已完成中枢，但趋势背驰常常发生在最后一个中枢未完成时。
+        xd_zss = self.get_xd_zss()
+        if not xds or not xd_zss:
+            return self
+
+        xd_calc = BsPointCalculator(self, zs_type='xd')
+        xd_calc.calculate(xds, xd_zss)
         return self
