@@ -464,8 +464,8 @@ var MacdStats = (function () {
             this.cm.markDrawingMutationStart('macd-stats');
             try {
                 this._removeShapes();
-                this._drawRangeRect(times, startIdx, endIdx);
-                this._drawMarkers(times, statsLocal, statsHtf);
+                // this._drawRangeRect(times, startIdx, endIdx);
+                // this._drawMarkers(times, statsLocal, statsHtf);
             } finally {
                 this.cm.markDrawingMutationEnd('macd-stats');
             }

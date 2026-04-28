@@ -1,9 +1,65 @@
-window.cl_show_config = JSON.parse(localStorage.getItem('cl_show_config')) || { fx: true, bi: true, xd: true, zsd: true, zs: true, bc: true, mmd: true };
-window.cl_independent_drawings = JSON.parse(localStorage.getItem('cl_independent_drawings')) || false;
 // -----------------------------------------------------------------------
 // 文件名: charts.js
 // 修复版: V48_Registry_And_Fix
+// 说明：缠论显示设置（cl_show_config）与独立周期画线开关（cl_independent_drawings）
+//      已改为按 ChartManager 实例（即每个图表面板）独立维护，互不干扰。
+//      存储 key 形如 cl_show_config_<chartId> / cl_independent_drawings_<chartId>。
+//      旧的全局 key（cl_show_config / cl_independent_drawings）只在新 key 不存在时
+//      作为初始默认值迁移过来，保证老用户的设置不丢。
 // -----------------------------------------------------------------------
+
+// 默认的缠论显示项配置
+const CL_SHOW_DEFAULT = { fx: true, bi: true, xd: true, zsd: true, zs: true, bc: true, mmd: true };
+
+// 工具：按图表 id 读取/写入显示配置
+function loadClShowConfig(chartId) {
+    try {
+        const raw = localStorage.getItem('cl_show_config_' + chartId);
+        if (raw) {
+            return Object.assign({}, CL_SHOW_DEFAULT, JSON.parse(raw));
+        }
+        // 兼容旧版全局 key，作为首次默认值（不再写回旧 key）
+        const legacy = localStorage.getItem('cl_show_config');
+        if (legacy) {
+            return Object.assign({}, CL_SHOW_DEFAULT, JSON.parse(legacy));
+        }
+    } catch (e) {
+        console.warn('[CHARTS] loadClShowConfig parse failed', e);
+    }
+    return Object.assign({}, CL_SHOW_DEFAULT);
+}
+
+function saveClShowConfig(chartId, cfg) {
+    try {
+        localStorage.setItem('cl_show_config_' + chartId, JSON.stringify(cfg));
+    } catch (e) {
+        console.warn('[CHARTS] saveClShowConfig failed', e);
+    }
+}
+
+function loadClIndependentDrawings(chartId) {
+    try {
+        const raw = localStorage.getItem('cl_independent_drawings_' + chartId);
+        if (raw !== null) {
+            return JSON.parse(raw) === true;
+        }
+        const legacy = localStorage.getItem('cl_independent_drawings');
+        if (legacy !== null) {
+            return JSON.parse(legacy) === true;
+        }
+    } catch (e) {
+        console.warn('[CHARTS] loadClIndependentDrawings parse failed', e);
+    }
+    return false;
+}
+
+function saveClIndependentDrawings(chartId, val) {
+    try {
+        localStorage.setItem('cl_independent_drawings_' + chartId, JSON.stringify(!!val));
+    } catch (e) {
+        console.warn('[CHARTS] saveClIndependentDrawings failed', e);
+    }
+}
 
 const CHART_CONFIG = {
     COLORS: {
@@ -107,6 +163,9 @@ class ChartManager {
         this.chart = null;
         this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 300);
         this.macdStudyId = null;
+        // 每个图表面板独立维护缠论显示配置与独立周期画线开关
+        this.cl_show_config = loadClShowConfig(this.id);
+        this.cl_independent_drawings = loadClIndependentDrawings(this.id);
         this._initialLoadDone = false; // 标记初始数据加载完成，之后才响应 visibleRangeChange
         this._intervalVersion = 0;
         this._drawingsCache = new Map();  // Lightweight cache for drawings per interval
@@ -125,8 +184,8 @@ class ChartManager {
     }
 
     getDrawingsCacheKey(symbol, interval) {
-        const mode = window.cl_independent_drawings ? "ind" : "shared";
-        const resolutionKey = window.cl_independent_drawings ? interval : "all";
+        const mode = this.cl_independent_drawings ? "ind" : "shared";
+        const resolutionKey = this.cl_independent_drawings ? interval : "all";
         return `${symbol}_${resolutionKey}_${mode}`;
     }
 
@@ -442,7 +501,7 @@ class ChartManager {
                         return resolve();
                     }
                     const rawResolution = self.chart ? self.chart.resolution() : Utils.get_local_data(Utils.get_market() + "_interval_" + self.id);
-                    const resolution = window.cl_independent_drawings ? rawResolution : 'all';
+                    const resolution = self.cl_independent_drawings ? rawResolution : 'all';
                     const symbol = self.chart ? self.chart.symbol() : Utils.get_market() + ":" + Utils.get_code();
                     const cacheKey = self.getDrawingsCacheKey(symbol, rawResolution);
 
@@ -498,7 +557,7 @@ class ChartManager {
                     }
                     const loadSymbol = symbol || (self.chart ? self.chart.symbol() : '');
                     const rawResolution = resolution || (self.chart ? self.chart.resolution() : '');
-                    const loadResolution = window.cl_independent_drawings ? rawResolution : 'all';
+                    const loadResolution = self.cl_independent_drawings ? rawResolution : 'all';
                     if (!loadSymbol || !loadResolution) {
                         return resolve(null);
                     }
@@ -613,60 +672,96 @@ class ChartManager {
             var btnDisplay = global_widget.createButton();
             btnDisplay.textContent = "缠论显示设置 ▾";
             btnDisplay.addEventListener("click", function () {
-                if ($('#cl_display_menu').length > 0) {
-                    $('#cl_display_menu').remove();
-                    $('#cl_menu_backdrop').remove();
+                // 每个图表面板都有自己独立的菜单 DOM，避免双图/三图布局下互相干扰
+                const menuId = 'cl_display_menu_' + self.id;
+                const backdropId = 'cl_menu_backdrop_' + self.id;
+                if ($('#' + menuId).length > 0) {
+                    $('#' + menuId).remove();
+                    $('#' + backdropId).remove();
                     return;
                 }
 
+                const cfg = self.cl_show_config;
+                const cbId = (k) => 'cl_cb_' + k + '_' + self.id;
+                const indCbId = 'cl_cb_independent_drawings_' + self.id;
+
                 let html = `
-                    <div id="cl_display_menu" style="position: absolute; z-index: 99999999; background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 4px; padding: 10px; line-height: 28px; font-size: 14px; color: #333;">
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_fx" ${window.cl_show_config.fx ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 分型</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bi" ${window.cl_show_config.bi ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 笔</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_xd" ${window.cl_show_config.xd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 线段</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_zsd" ${window.cl_show_config.zsd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 走势段</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_zs" ${window.cl_show_config.zs ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 中枢</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_bc" ${window.cl_show_config.bc ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 背驰</label>
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_mmd" ${window.cl_show_config.mmd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 买卖点</label>
+                    <div id="${menuId}" style="position: absolute; z-index: 99999999; background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 4px; padding: 10px; line-height: 28px; font-size: 14px; color: #333;">
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('fx')}" ${cfg.fx ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 分型</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('bi')}" ${cfg.bi ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 笔</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('xd')}" ${cfg.xd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 线段</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('zsd')}" ${cfg.zsd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 走势段</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('zs')}" ${cfg.zs ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 中枢</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('bc')}" ${cfg.bc ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 背驰</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${cbId('mmd')}" ${cfg.mmd ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 买卖点</label>
                         <hr style="margin: 5px 0;">
-                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="cl_cb_independent_drawings" ${window.cl_independent_drawings ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 独立周期画线</label>
+                        <label style="display:block; cursor:pointer;"><input type="checkbox" id="${indCbId}" ${self.cl_independent_drawings ? 'checked' : ''} style="margin-right: 8px; vertical-align: middle;"> 独立周期画线</label>
                     </div>
                 `;
                 $('body').append(html);
 
-                // Get the button's position
-                const btnRect = btnDisplay.getBoundingClientRect();
+                // 计算按钮在主文档（top window）坐标系下的位置。
+                // TradingView 通过 createButton() 创建的按钮位于 widget 内部 iframe 中，
+                // btnDisplay.getBoundingClientRect() 返回的是 iframe 内部的相对坐标，
+                // 直接挂到主页面 body 上会全部错位（多图表场景下尤其明显，看起来像
+                // "所有弹层都跑到了第一个图表那边"）。需要逐层向上累加 iframe 偏移。
+                function getElementRectInTopWindow(el) {
+                    const rect = el.getBoundingClientRect();
+                    let top = rect.top;
+                    let left = rect.left;
+                    let bottom = rect.bottom;
+                    let right = rect.right;
+                    let win = el.ownerDocument && el.ownerDocument.defaultView;
+                    while (win && win !== window.top) {
+                        try {
+                            const frameEl = win.frameElement;
+                            if (!frameEl) break;
+                            const fr = frameEl.getBoundingClientRect();
+                            top += fr.top;
+                            left += fr.left;
+                            bottom += fr.top;
+                            right += fr.left;
+                            win = frameEl.ownerDocument && frameEl.ownerDocument.defaultView;
+                        } catch (e) {
+                            // 跨域 iframe 访问失败时停止累加，使用当前已有偏移
+                            break;
+                        }
+                    }
+                    return { top, left, bottom, right };
+                }
 
-                // Position the menu right below the button
-                $('#cl_display_menu').css({
+                const btnRect = getElementRectInTopWindow(btnDisplay);
+
+                // Position the menu right below the button（已是主文档坐标，再补上滚动偏移）
+                $('#' + menuId).css({
                     top: (btnRect.bottom + window.scrollY + 5) + 'px',
                     left: (btnRect.left + window.scrollX) + 'px'
                 });
 
                 const keys = ['fx', 'bi', 'xd', 'zsd', 'zs', 'bc', 'mmd'];
                 keys.forEach(k => {
-                    $('#cl_cb_' + k).change(function () {
-                        window.cl_show_config[k] = $(this).is(':checked');
-                        localStorage.setItem('cl_show_config', JSON.stringify(window.cl_show_config));
+                    $('#' + cbId(k)).change(function () {
+                        self.cl_show_config[k] = $(this).is(':checked');
+                        saveClShowConfig(self.id, self.cl_show_config);
                         self.debouncedDrawChanlun();
                     });
                 });
 
-                $('#cl_cb_independent_drawings').change(function () {
-                    window.cl_independent_drawings = $(this).is(':checked');
-                    localStorage.setItem('cl_independent_drawings', JSON.stringify(window.cl_independent_drawings));
+                $('#' + indCbId).change(function () {
+                    self.cl_independent_drawings = $(this).is(':checked');
+                    saveClIndependentDrawings(self.id, self.cl_independent_drawings);
                     self._drawingsCache.clear();
                     if (self.chart && self.save_load_adapter) {
                         self.reloadDrawingsForCurrentContext('toggle-drawing-mode');
                     }
-                    layer.msg(window.cl_independent_drawings ? '已切换为独立周期画线' : '已切换为共享画线', { time: 1000 });
+                    layer.msg(self.cl_independent_drawings ? '已切换为独立周期画线' : '已切换为共享画线', { time: 1000 });
                 });
 
                 // 点击非弹框区域时关闭菜单（使用透明遮罩确保可靠捕获点击）
-                const backdrop = $('<div id="cl_menu_backdrop" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999998;background:transparent;"></div>');
+                const backdrop = $('<div id="' + backdropId + '" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999998;background:transparent;"></div>');
                 $('body').append(backdrop);
                 backdrop.on('click', function () {
-                    $('#cl_display_menu').remove();
+                    $('#' + menuId).remove();
                     $(this).remove();
                 });
             });
@@ -978,16 +1073,17 @@ class ChartManager {
             return promise;
         };
 
-        // Reconcile each type
-        this.reconcile('fxs', window.cl_show_config.fx ? barsResult.fxs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
-        this.reconcile('bis', window.cl_show_config.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 2 }), 'bi'));
-        this.reconcile('xds', window.cl_show_config.xd ? barsResult.xds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
-        this.reconcile('zsds', window.cl_show_config.zsd ? barsResult.zsds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
-        this.reconcile('bi_zss', window.cl_show_config.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "bi_zss"), linewidth: 1 }), 'bi_zs'));
-        this.reconcile('xd_zss', window.cl_show_config.zs ? barsResult.xd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
-        this.reconcile('zsd_zss', window.cl_show_config.zs ? barsResult.zsd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsd_zss"), linewidth: 2 }), 'zsd_zs'));
-        this.reconcile('bcs', window.cl_show_config.bc ? barsResult.bcs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
-        this.reconcile('mmds', window.cl_show_config.mmd ? barsResult.mmds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
+        // Reconcile each type（使用本图表实例的显示配置，确保多图独立）
+        const cfg = this.cl_show_config;
+        this.reconcile('fxs', cfg.fx ? barsResult.fxs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createFxShape(this.chart, item), 'fx'), false);
+        this.reconcile('bis', cfg.bi ? barsResult.bis : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "bis"), linewidth: 2 }), 'bi'));
+        this.reconcile('xds', cfg.xd ? barsResult.xds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "xds"), linewidth: 2 }), 'xd'));
+        this.reconcile('zsds', cfg.zsd ? barsResult.zsds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createLineShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsds"), linewidth: 3 }), 'zsd'));
+        this.reconcile('bi_zss', cfg.zs ? barsResult.bi_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "bi_zss"), linewidth: 1 }), 'bi_zs'));
+        this.reconcile('xd_zss', cfg.zs ? barsResult.xd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "xd_zss"), linewidth: 2 }), 'xd_zs'));
+        this.reconcile('zsd_zss', cfg.zs ? barsResult.zsd_zss : [], from, symbolKey, (item) => safeCreate(ChartUtils.createZhongshuShape(this.chart, item, { color: getDynamicColor(currentInterval, "zsd_zss"), linewidth: 2 }), 'zsd_zs'));
+        this.reconcile('bcs', cfg.bc ? barsResult.bcs : [], from, symbolKey, (item) => safeCreate(ChartUtils.createBcShape(this.chart, item), 'bc'), false);
+        this.reconcile('mmds', cfg.mmd ? barsResult.mmds : [], from, symbolKey, (item) => safeCreate(ChartUtils.createMmdShape(this.chart, item), 'mmd'), false);
     }
 
     async draw_chanlun() {
