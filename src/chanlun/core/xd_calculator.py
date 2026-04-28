@@ -1,674 +1,677 @@
 # -*- coding: utf-8 -*-
 """
-线段计算模块
-负责将笔合并且划分为线段。这是缠论中较为复杂的部分。
+线段计算模块 v2
+严格按照《线段划分知识_结构化.md》实现，逻辑简洁清晰。
 """
-from typing import List, Optional, Union, Dict
+from typing import List, Optional
 
 from chanlun.core.cl_interface import BI, XD
 from chanlun.tools.log_util import LogUtil
 
+_log = LogUtil
+
+
+def _bi_label(bi: BI) -> str:
+    return f"bi[{bi.index}]{bi.type}({bi.start.val:.3f}→{bi.end.val:.3f})"
+
+
+def _elem_label(e: dict) -> str:
+    merged = e.get('merged_bis')
+    if merged:
+        return f"{{h={e['high']:.3f},l={e['low']:.3f},merged={len(merged)}}}"
+    return f"{{h={e['high']:.3f},l={e['low']:.3f}}}"
+
+
+# ============================================================
+# 特征序列工具函数（纯函数，无状态）
+# ============================================================
+
+def _bi_to_cs_elem(bi: BI) -> dict:
+    return {'bi': bi, 'high': bi.high, 'low': bi.low}
+
+
+def _overlap(a, b) -> bool:
+    h1, l1 = (a['high'], a['low']) if isinstance(a, dict) else (a.high, a.low)
+    h2, l2 = (b['high'], b['low']) if isinstance(b, dict) else (b.high, b.low)
+    return max(l1, l2) <= min(h1, h2)
+
+
+def _has_inclusion(a: dict, b: dict) -> bool:
+    return (a['high'] >= b['high'] and a['low'] <= b['low']) or \
+           (b['high'] >= a['high'] and b['low'] <= a['low'])
+
+
+def _merge_two(prev: dict, cur: dict, direction: str) -> dict:
+    if direction == 'up':
+        mh, ml = max(prev['high'], cur['high']), max(prev['low'], cur['low'])
+    else:
+        mh, ml = min(prev['high'], cur['high']), min(prev['low'], cur['low'])
+    prev_bis = prev.get('merged_bis', [prev['bi']])
+    cur_bis = cur.get('merged_bis', [cur['bi']])
+    return {
+        'bi': prev['bi'], 'high': mh, 'low': ml,
+        'merged_bis': prev_bis + cur_bis,
+    }
+
+
+def _process_inclusion(elems: List[dict], direction: str) -> List[dict]:
+    """
+    特征序列包含处理（趋势感知版）。
+
+    规则:
+      - 当CS元素沿趋势方向持续创新极值时（up段CS的high不断升高/down段CS的low不断降低），
+        不做包含合并，直接追加。
+      - 当极值不再创新（拐点）时，对拐点处的元素与前一个元素做包含合并，
+        合并后向前级联（可能继续与更前面的元素合并）。
+    """
+    if len(elems) < 2:
+        return list(elems)
+
+    result = [elems[0].copy()]
+    for i in range(1, len(elems)):
+        cur = elems[i]
+        prev = result[-1]
+
+        # 判断是否仍在趋势中（持续创新极值）
+        if direction == 'up':
+            still_trending = cur['high'] > prev['high']
+        else:
+            still_trending = cur['low'] < prev['low']
+
+        if still_trending:
+            result.append(cur.copy())
+        else:
+            # 拐点：检查包含并合并
+            if _has_inclusion(prev, cur):
+                result[-1] = _merge_two(prev, cur, direction)
+                # 级联：合并后可能与更前面的元素产生包含
+                while len(result) >= 2 and _has_inclusion(result[-2], result[-1]):
+                    merged = _merge_two(result[-2], result[-1], direction)
+                    result.pop()
+                    result[-1] = merged
+            else:
+                result.append(cur.copy())
+
+    return result
+
+
+def _resolve_pivot_bi(elem: dict, seg_type: str):
+    """从（可能被包含合并的）反向 CS 元素中，定位"枢轴反向笔"——
+    即用于回溯定位原线段终点的那根反向笔。
+
+    语义说明：
+      - 一个 CS 元素可能由若干根反向笔合并而成（merged_bis）。
+      - 调用者拿到的是分型中心 elem，需要据此推算"原线段终点 = 该反向笔的前一根同向笔"。
+      - 选择规则：取使原线段达到方向极值的那根反向笔
+          * up 段（反向 CS 是 down 笔）→ 取 high 最大的 down 笔
+            原因：down 笔的起点 = 上一根 up 笔的终点；high 越大 → 上一根 up 笔涨得越高
+          * down 段（反向 CS 是 up 笔）→ 取 low 最小的 up 笔
+            原因：up 笔的起点 = 上一根 down 笔的终点；low 越小 → 上一根 down 笔跌得越低
+
+    Args:
+        elem: CS 元素 dict，含 'bi'（首根反向笔）和可选 'merged_bis'（合并的反向笔列表）
+        seg_type: 原线段方向（'up' 或 'down'）
+
+    Returns:
+        枢轴反向笔（BI 对象）。其前一根同向笔即为原线段终点候选。
+    """
+    target = elem['bi']
+    merged = elem.get('merged_bis')
+    if merged:
+        target = max(merged, key=lambda b: b.high) if seg_type == 'up' else min(merged, key=lambda b: b.low)
+    return target
+
+# ============================================================
+# 模块级配置常量
+# ============================================================
+# _try_end 中"反向 CS 元素扫描上限"。
+# 用途：防止"反向 CS 一直被包含合并、second_elems 永远凑不齐 2 个"导致
+# 单次 _try_end 一直扫到数组末尾，造成 O(n²) 退化甚至无法返回。
+# 经验值依据：正常一段反向走势的反向 CS 笔通常不超过十几根，50 已远超合理上限；
+# 一旦触发即可判定该方向无法形成有效反向段，直接放弃本轮判定。
+SAFETY_LOOKAHEAD = 50
+
+
+# ============================================================
+# XdCalculator v2
+# ============================================================
 
 class XdCalculator:
-    """
-    线段计算器
-    负责将笔（BI）合并并划分为线段（XD）。这是缠论中较为复杂的部分。
-    该计算器支持全量计算和增量计算。
-    """
 
     def __init__(self, config: dict):
-        """
-        初始化线段计算器。
-        :param config: 配置字典。
-        """
         self.config = config
         self.xds: List[XD] = []
-        # Snapshot of the last processed BI: (index, end_val)
         self._last_bi_snapshot: Optional[tuple] = None
 
-    def _check_bi_overlap(self, bi1: BI, bi2: BI) -> bool:
-        """
-        检查两笔的价格区间是否有重叠
-        直接访问 bi.low 和 bi.high
-        """
-        return max(bi1.low, bi2.low) <= min(bi1.high, bi2.high)
-
-    def _check_overlap_with_cs_dict(self, bi: BI, cs_dict: dict) -> bool:
-        """
-        检查一笔与包含处理后的特征序列元素(dict)的价格区间是否有重叠。
-        使用 dict 中的 high/low（合并后的实际值），而非原始 BI 对象的值。
-        """
-        return max(bi.low, cs_dict['low']) <= min(bi.high, cs_dict['high'])
-
-    def _find_critical_bi_and_truncate(self, all_bis: List[BI]) -> int:
-        """
-        找到一个关键的笔作为分析起点，并返回其索引。
-        这主要用于首次全量计算时，尝试找到一个明确的趋势转折点。
-        """
-        if len(all_bis) < 5:
-            return 0
-
-        for i in range(len(all_bis) - 4):
-            bi_i = all_bis[i]
-            bi_i_plus_2 = all_bis[i + 2]
-            bi_i_plus_4 = all_bis[i + 4]
-            is_critical = False
-
-            # 优化：直接使用 bi.high 和 bi.low
-            if bi_i.type == 'down':
-                is_start_higher = (bi_i.high > bi_i_plus_2.high and
-                                   bi_i.high > bi_i_plus_4.high)
-                is_end_higher = (bi_i.low > bi_i_plus_2.low and
-                                 bi_i.low > bi_i_plus_4.low)
-                if is_start_higher and is_end_higher:
-                    is_critical = True
-            elif bi_i.type == 'up':
-                is_start_lower = (bi_i.low < bi_i_plus_2.low and
-                                  bi_i.low < bi_i_plus_4.low)
-                is_end_lower = (bi_i.high < bi_i_plus_2.high and
-                                bi_i.high < bi_i_plus_4.high)
-                if is_start_lower and is_end_lower:
-                    is_critical = True
-
-            if is_critical:
-                return i
-
-        return 0
-
-    def _get_characteristic_sequence(self, segment_bis: List[BI], segment_type: str) -> List[BI]:
-        """从线段的笔列表中获取其特征序列"""
-        cs_type = 'down' if segment_type == 'up' else 'up'
-        return [bi for bi in segment_bis if bi.type == cs_type]
-
-    def _check_inclusion_dict(self, bi1: dict, bi2: dict, direction: str) -> bool:
-        """检查字典格式的两笔是否存在包含关系（双向）"""
-        high1, low1 = bi1.get('high'), bi1.get('low')
-        high2, low2 = bi2.get('high'), bi2.get('low')
-        # 包含关系是双向的：bi1包含bi2 或 bi2包含bi1
-        return (high1 >= high2 and low1 <= low2) or (high2 >= high1 and low2 <= low1)
-
-    def _process_inclusion(self, bis: Union[List[BI], List[dict]], direction: str) -> List[dict]:
-        """
-        对特征序列进行包含关系处理（重构版，写入新列表）
-
-        :param bis: 待处理的 BI 序列（可以是对象列表或字典列表）
-        :param direction: 处理方向 ('up' 或 'down')
-        :return: 处理包含关系后的字典列表
-        """
-        if not bis:
-            return []
-
-        # 1. 确保 processed 是一个字典列表
-        processed: list[dict] = []
-        if isinstance(bis[0], dict):
-            # 假设 bis 已经是 List[dict]
-            processed = bis
-        else:
-            # 内联 _bi_to_dict 并直接使用 bi.high/low
-            # 此时 bis 确定为 List[BI]
-            processed = [{'bi': bi, 'high': bi.high, 'low': bi.low, 'type': bi.type}
-                         for bi in bis]
-
-        if len(processed) < 2:
-            return processed
-
-        # 2. 迭代处理，将结果写入 new_processed
-        new_processed: list[dict] = []
-        # 先将第一个元素放入新列表
-        new_processed.append(processed[0])
-
-        # 从第二个元素开始迭代
-        for i in range(1, len(processed)):
-            bi1: dict = new_processed[-1]  # 取新列表的最后一个元素
-            bi2: dict = processed[i]  # 取原列表的当前元素
-
-            if self._check_inclusion_dict(bi1, bi2, direction):
-                # 发现包含关系，合并 bi1 和 bi2
-                high1, low1 = bi1.get('high'), bi1.get('low')
-                high2, low2 = bi2.get('high'), bi2.get('low')
-
-                if direction == 'down':
-                    # 向下笔的包含处理，高点取低，低点取低
-                    new_low = min(low1, low2)
-                    new_high = min(high1, high2)
-                else:  # 'up'
-                    # 向上笔的包含处理，高点取高，低点取高
-                    new_high = max(high1, high2)
-                    new_low = max(low1, low2)
-
-                # 创建合并后的元素
-                merged = {
-                    'bi': bi1['bi'],  # K线（bi）保留第一个的
-                    'high': new_high,
-                    'low': new_low,
-                    'type': bi1['type'],  # 类型保留第一个的
-                    'is_merged': True,
-                    # 合并 'original_bis' 列表
-                    'original_bis': bi1.get('original_bis', [bi1.get('bi')]) + \
-                                    bi2.get('original_bis', [bi2.get('bi')])
-                }
-
-                # 用合并后的元素替换新列表的最后一个元素
-                new_processed[-1] = merged
-            else:
-                # 没有包含关系，将当前元素 bi2 添加到新列表
-                new_processed.append(bi2)
-
-        return new_processed
-
-    def _check_top_fractal(self, processed_cs: List[dict]) -> tuple:
-        """在特征序列中检查顶分型"""
-        if len(processed_cs) < 3:
-            return False, None, None
-
-        for i in range(len(processed_cs) - 2):
-            cs1, cs2, cs3 = processed_cs[i:i + 3]
-            h2 = cs2['high']
-            is_high_highest = h2 > cs1['high'] and h2 > cs3['high']
-            if is_high_highest:
-                return True, cs2, cs3
-        return False, None, None
-
-    def _check_bottom_fractal(self, processed_cs: List[dict]) -> tuple:
-        """在特征序列中检查底分型"""
-        if len(processed_cs) < 3:
-            return False, None, None
-
-        for i in range(len(processed_cs) - 2):
-            cs1, cs2, cs3 = processed_cs[i:i + 3]
-            l2 = cs2['low']
-            is_low_lowest = l2 < cs1['low'] and l2 < cs3['low']
-            if is_low_lowest:
-                return True, cs2, cs3
-        return False, None, None
-
-    def _get_segment_end_bi_from_middle_cs(self, middle_cs: dict, all_bis: List[BI],
-                                           segment_type: str = 'up') -> Optional[BI]:
-        """根据分型的中间笔确定线段的结束笔。
-        对于合并笔，根据线段方向选取极值对应的原始笔：
-        - 上涨线段（顶分型）：取 high 最大的原始笔（起点最高的下跌笔）
-        - 下跌线段（底分型）：取 low 最小的原始笔（终点最低的上涨笔）
-        """
-        target_bi = None
-        if middle_cs.get('is_merged') and 'original_bis' in middle_cs:
-            original_bis = middle_cs.get('original_bis', [])
-            if original_bis:
-                if segment_type == 'up':
-                    target_bi = max(original_bis, key=lambda b: b.high)
-                else:
-                    target_bi = min(original_bis, key=lambda b: b.low)
-            else:
-                LogUtil.warning("中间笔为合并笔，但其 'original_bis' 为空。")
-                return None
-        else:
-            target_bi = middle_cs['bi']
-
-        if not target_bi:
-            LogUtil.error("无法确定用于定位的目标笔。")
-            return None
-
-        try:
-            # 方法1：先检查 target_bi.index 是否可靠
-            idx = target_bi.index
-            if 0 < idx < len(all_bis) and all_bis[idx] == target_bi:
-                return all_bis[idx - 1]
-
-            # 方法2：如果索引不可靠，则在列表中查找该笔的实际位置
-            try:
-                real_idx = all_bis.index(target_bi)
-                if real_idx > 0:
-                    return all_bis[real_idx - 1]
-                return None
-            except ValueError:
-                LogUtil.warning(
-                    f"目标笔在当前的 all_bis 列表中未找到，无法定位前一笔。target_bi index: {target_bi.index}")
-                return None
-
-        except Exception as e:
-            LogUtil.error(f"获取线段结束笔时发生未知异常: {e}")
-            return None
-
-    def _get_extremum_bi_from_cs(self, cs_bi: dict, segment_type: str) -> BI:
-        """从特征序列笔中获取极值对应的原始笔（用于确定分型的转折点位置）。
-        - 上涨线段（顶分型）：取 high 最大的原始笔
-        - 下跌线段（底分型）：取 low 最小的原始笔
-        """
-        original_bis = cs_bi.get('original_bis', [cs_bi['bi']])
-        if not original_bis:
-            return cs_bi['bi']
-        if segment_type == 'up':
-            return max(original_bis, key=lambda b: b.high)
-        else:
-            return min(original_bis, key=lambda b: b.low)
-
-    def _get_endpoint_bi_from_cs(self, cs_bi: dict) -> BI:
-        """从特征序列笔中获取最后一个原始笔（用于确定下一线段的范围端点）。"""
-        original_bis = cs_bi.get('original_bis', [cs_bi['bi']])
-        return original_bis[-1] if original_bis else cs_bi['bi']
-
-    def _calculate_segment_high_low(self, current_segment: Dict) -> (float, float):
-        """根据 current_segment 的类型计算其高点和低点"""
-        segment_high = 0.0
-        segment_low = 0.0
-        bis_objects = current_segment.get('bis', [])
-
-        if not bis_objects:
-            LogUtil.warning("警告: 'bis' 列表为空, 无法计算高点和低点。")
-            return segment_high, segment_low
-
-        first_bi = bis_objects[0]
-        last_bi = bis_objects[-1]
-        segment_type = current_segment.get('type')
-
-        if segment_type == 'up':
-            segment_high = last_bi.end.val
-            segment_low = first_bi.start.val
-        elif segment_type == 'down':
-            segment_high = first_bi.start.val
-            segment_low = last_bi.end.val
-        return segment_high, segment_low
-
+    # ----------------------------------------------------------
+    # 公共接口
+    # ----------------------------------------------------------
     def calculate(self, bis: List[BI]) -> List[XD]:
-        """
-        根据笔列表计算线段。
-        此方法支持全量和增量计算。
-        """
         all_bis = bis
-
         is_incremental = bool(self.xds)
         start_index_for_delta = 0
 
-        # 优化：如果输入数据没有新笔，则不重新计算
-        # Use snapshot check instead of object comparison
         if self.xds and all_bis and self._last_bi_snapshot:
-            current_last_bi = all_bis[-1]
-            last_idx, last_end_val = self._last_bi_snapshot
-            if (current_last_bi.index == last_idx and
-                    abs(current_last_bi.end.val - last_end_val) < 1e-9):
+            lb = all_bis[-1]
+            if lb.index == self._last_bi_snapshot[0] and abs(lb.end.val - self._last_bi_snapshot[1]) < 1e-9:
                 return []
 
-        # --- 状态处理：确定本次计算的起点 ---
-        start_bi_index = 0
+        start_bi_idx = 0
         if self.xds:
-            # --- 1. 数据和状态初始化 ---
             if not all_bis:
                 return []
-            # 增量更新模式
-            last_xd = self.xds.pop()  # 弹出最后一个线段（可能是未完成的），准备重新计算
-            start_index_for_delta = len(self.xds)  # 记录pop后的数量，用于返回增量
-
-            # 在新的 all_bis 列表中定位旧的起点
-            found = False
-            for i, bi in enumerate(all_bis):
-                if (bi.start.k.date == last_xd.start_line.start.k.date and
-                        bi.end.k.date == last_xd.start_line.end.k.date and
-                        bi.type == last_xd.start_line.type):
-                    start_bi_index = i
-                    found = True
-                    break
-
-            if not found:
-                LogUtil.warning("XdCalculator: 无法在'bis'列表中定位上一线段的起点，将执行全量计算。")
+            last_xd = self.xds.pop()
+            start_index_for_delta = len(self.xds)
+            # 优先用 BI.index 反查（O(1)~O(log n)），失败再回退到 O(n) 全扫描
+            target_bi = last_xd.start_line
+            start_bi_idx = self._locate_bi(all_bis, target_bi)
+            if start_bi_idx < 0:
                 self.xds.clear()
                 is_incremental = False
-                start_bi_index = self._find_critical_bi_and_truncate(all_bis)
-            else:
-                LogUtil.info(f"XdCalculator: 增量计算模式。从笔索引 {start_bi_index} (线段 {len(self.xds)}) 继续计算。")
+                start_bi_idx = self._find_start(all_bis)
         else:
-            # 全量计算模式
-            LogUtil.info("XdCalculator: 全量计算模式。")
             self.xds.clear()
             is_incremental = False
-            start_bi_index = self._find_critical_bi_and_truncate(all_bis)
-
-        current_list_index = start_bi_index
+            start_bi_idx = self._find_start(all_bis)
 
         if len(all_bis) < 3:
-            LogUtil.warning("笔的数量少于3，无法形成线段。")
-            if is_incremental:
-                return []  # 增量模式下，如果没有新线段形成，返回空列表
+            return [] if is_incremental else self.xds
+
+        self._bi_pos = {id(bi): i for i, bi in enumerate(all_bis)}
+
+        mode = "增量" if is_incremental else "全量"
+        _log.debug(f"XdCalculator: {mode}计算，笔数={len(all_bis)}，起始位置={start_bi_idx}")
+
+        self._build_segments(all_bis, start_bi_idx)
+
+        if all_bis:
+            lb = all_bis[-1]
+            self._last_bi_snapshot = (lb.index, lb.end.val)
+
+        return self.xds[start_index_for_delta:] if is_incremental else self.xds
+
+    # ----------------------------------------------------------
+    def _find_start(self, all_bis: List[BI]) -> int:
+        for i in range(len(all_bis) - 2):
+            if _overlap(all_bis[i], all_bis[i + 2]):
+                return i
+        return 0
+
+    # ----------------------------------------------------------
+    @staticmethod
+    def _locate_bi(all_bis: List[BI], target: BI) -> int:
+        """在 all_bis 中定位 target 笔的位置。
+
+        优先按 BI.index 反查（猜测位置 + 邻域校验），失败回退到 O(n) 线性扫描
+        + 多字段匹配（start/end k.date + type），保证在 BI 对象重建后仍能找回。
+        找不到返回 -1。
+        """
+        # 路径 1: 利用 BI.index 猜测位置（all_bis 通常按 index 升序排列）
+        try:
+            tgt_idx = target.index
+            if 0 <= tgt_idx < len(all_bis):
+                cand = all_bis[tgt_idx]
+                if (cand.type == target.type and
+                        cand.start.k.date == target.start.k.date and
+                        cand.end.k.date == target.end.k.date):
+                    return tgt_idx
+        except AttributeError:
+            pass
+
+        # 路径 2: 回退到全扫描（兼容 BI.index 失效或乱序场景）
+        for i, bi in enumerate(all_bis):
+            if (bi.type == target.type and
+                    bi.start.k.date == target.start.k.date and
+                    bi.end.k.date == target.end.k.date):
+                return i
+        return -1
+
+    # ----------------------------------------------------------
+    # 主循环
+    # ----------------------------------------------------------
+    def _build_segments(self, all_bis: List[BI], start: int):
+        pos = start
+        reverse_end_hint = None  # 上一段 _try_end 已探明的反向线段终点位置
+
+        while pos + 2 < len(all_bis):
+            # 确定 seg_end 初始值
+            if reverse_end_hint is not None:
+                # 反向线段已成立，跳过 overlap 检查，直接使用已知范围
+                seg_end = reverse_end_hint
+                reverse_end_hint = None
             else:
-                return self.xds  # 全量模式下返回空列表
-
-        next_segment_builder = None
-        while current_list_index <= len(all_bis) - 3:
-            if next_segment_builder:
-                LogUtil.debug(f"主循环: 使用 builder 构建新线段")
-                start_bi = next_segment_builder['start_bi']
-                end_bi = next_segment_builder['end_bi']
-
-                start_idx = start_bi.index
-                end_idx = end_bi.index
-
-                if start_idx < 0 or end_idx < 0:
-                    LogUtil.error(f"Builder 中的笔索引无效: start_idx={start_idx}, end_idx={end_idx}")
-                    current_list_index += 1
-                    next_segment_builder = None
+                if not _overlap(all_bis[pos], all_bis[pos + 2]):
+                    pos += 1
                     continue
+                seg_end = pos + 2
 
-                if end_idx < start_idx + 2:
-                    current_list_index = start_idx + 1
-                    next_segment_builder = None
-                    continue
+            seg_type = all_bis[pos].type
+            seg_start = pos
+            check = seg_end + 1
 
-                # 检查前三笔是否有重叠，无重叠则不能构成线段
-                if len(all_bis) > start_idx + 2:
-                    if not self._check_bi_overlap(all_bis[start_idx], all_bis[start_idx + 2]):
-                        current_list_index = start_idx + 1
-                        next_segment_builder = None
-                        continue
-
-                current_segment_bis = all_bis[start_idx: end_idx + 1]
-                current_segment = {'bis': current_segment_bis, 'type': next_segment_builder['next_segment_type']}
-                current_list_index = start_idx
-                next_segment_builder = None
+            # 计算 seg_high/seg_low 的初始值
+            # 注意：一个段确定方向后，"反方向"那一边是固定值（段起点价），
+            # "顺方向"那一边随 seg_end 推进而刷新。简化为：
+            #   - up 段：seg_low = 起点常量；seg_high 跟随 seg_end.end.val 取 max
+            #   - down 段：seg_high = 起点常量；seg_low 跟随 seg_end.end.val 取 min
+            seg_anchor = all_bis[seg_start].start.val  # 段起点价（恒定的"反方向"边）
+            if seg_type == 'up':
+                seg_low = seg_anchor
+                seg_high = all_bis[seg_end].end.val
             else:
-                s1, s2, s3 = all_bis[current_list_index:current_list_index + 3]
-                if not self._check_bi_overlap(s1, s3):
-                    current_list_index += 1
+                seg_high = seg_anchor
+                seg_low = all_bis[seg_end].end.val
+
+            # 维护增量 seg_cs_bis 列表（cs = 反向笔）
+            # 初始范围 [seg_start, seg_end]，后续延伸/吸收时同步追加。
+            # 这样 _try_end 不必每次重新过滤段内 CS 笔。
+            cs_bi_type = 'down' if seg_type == 'up' else 'up'
+            seg_cs_bis: List[BI] = [all_bis[i] for i in range(seg_start, seg_end + 1)
+                                     if all_bis[i].type == cs_bi_type]
+
+            bi_s = all_bis[seg_start]
+            _log.info(f"[新线段] {seg_type} 起点={_bi_label(bi_s)}, seg_end={_bi_label(all_bis[seg_end])}, seg_high={seg_high:.3f}, seg_low={seg_low:.3f}")
+
+            while check + 1 < len(all_bis):
+                # 仅刷新"顺方向"那一边的极值（反方向边恒等于 seg_anchor，无需重算）
+                if seg_type == 'up':
+                    seg_high = max(seg_high, all_bis[seg_end].end.val)
+                else:
+                    seg_low = min(seg_low, all_bis[seg_end].end.val)
+                next_same = all_bis[check]
+
+                # Step 1: 延伸
+                # 延伸吃掉 [check, check+1] 两根笔，其中 check 是反向笔(cs)、check+1 是同向笔。
+                # 增量缓存：把 check 这根 cs 笔追加到 seg_cs_bis。
+                if seg_type == 'up' and next_same.high > seg_high:
+                    _log.debug(f"  [延伸] {_bi_label(next_same)} high={next_same.high:.3f} > seg_high={seg_high:.3f}")
+                    if all_bis[check].type == cs_bi_type:
+                        seg_cs_bis.append(all_bis[check])
+                    seg_end = check + 1
+                    check += 2
                     continue
-                current_segment = {'bis': [s1, s2, s3], 'type': s1.type}
+                if seg_type == 'down' and next_same.low < seg_low:
+                    _log.debug(f"  [延伸] {_bi_label(next_same)} low={next_same.low:.3f} < seg_low={seg_low:.3f}")
+                    if all_bis[check].type == cs_bi_type:
+                        seg_cs_bis.append(all_bis[check])
+                    seg_end = check + 1
+                    check += 2
+                    continue
 
-            next_check_idx = current_list_index + len(current_segment['bis'])
-            is_completed = False
-            break_info = None
-
-            # --- 线段延伸与结束判断循环 ---
-            while next_check_idx + 1 < len(all_bis):
-                segment_high, segment_low = self._calculate_segment_high_low(current_segment)
-                bi_for_fractal_check = all_bis[next_check_idx]
-                bi_for_extension_check = all_bis[next_check_idx + 1]
-
-                # --- 处理上涨线段 ---
-                if current_segment['type'] == 'up':
-                    if bi_for_extension_check.high >= segment_high:
-                        # 出现新高，线段延伸
-                        current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
-                        next_check_idx += 2
-                        continue
-                    else:
-                        # 未创新高，检查是否出现顶分型导致线段结束
-                        cs_existing_raw = self._get_characteristic_sequence(current_segment['bis'], 'up')
-                        if not cs_existing_raw:
-                            current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
-                            next_check_idx += 2
-                            continue
-
-                        processed_cs_existing = self._process_inclusion(cs_existing_raw, 'up')
-                        last_cs_bi = processed_cs_existing[-1]
-
-                        lookahead_bis = all_bis[next_check_idx:]
-                        bounded_lookahead_bis = []
-                        for bi in lookahead_bis:
-                            bounded_lookahead_bis.append(bi)
-                            if bi.type == 'up' and bi.high > segment_high:
-                                break
-
-                        # 第一种情况：特征序列出现顶分型
-                        if self._check_overlap_with_cs_dict(bi_for_fractal_check, last_cs_bi):
-                            new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
-                            processed_new_cs = self._process_inclusion(new_cs_down_raw, 'up')
-                            final_processed_cs = processed_cs_existing + processed_new_cs
-
-                            check1_passes, cs_middle, cs_right = self._check_top_fractal(final_processed_cs)
-                            if check1_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis, 'up')
-                                if segment_end_bi:
-                                    is_completed = True
-                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle, 'up')
-                                    right_bi = self._get_endpoint_bi_from_cs(cs_right)
-                                    break_info = {'next_segment_type': 'down',
-                                                  'start_bi': peak_bi, 'end_bi': right_bi,
-                                                  'segment_end_bi': segment_end_bi}
-                            else:
-                                current_segment['bis'].extend(bounded_lookahead_bis)
-                                next_check_idx += len(bounded_lookahead_bis)
-                                continue
-                        else:
-                            new_cs_down_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
-                            processed_new_cs1 = self._process_inclusion(new_cs_down_raw, 'up')
-                            cs_for_check1 = processed_cs_existing + processed_new_cs1
-                            check1_passes, cs_middle_top, cs_right_top = self._check_top_fractal(cs_for_check1)
-
-                            next_segment_cs_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
-                            processed_cs2 = self._process_inclusion(next_segment_cs_raw, 'down')
-                            check2_passes, _, _ = self._check_bottom_fractal(processed_cs2)
-
-                            if check1_passes and check2_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_top, all_bis, 'up')
-                                if segment_end_bi:
-                                    is_completed = True
-                                    peak_bi = self._get_extremum_bi_from_cs(cs_middle_top, 'up')
-                                    right_bi_for_builder = self._get_endpoint_bi_from_cs(cs_right_top)
-                                    break_info = {'next_segment_type': 'down',
-                                                  'start_bi': peak_bi, 'end_bi': right_bi_for_builder,
-                                                  'segment_end_bi': segment_end_bi}
-                            else:
-                                # 第二特征序列未出现分型，线段继续延伸
-                                current_segment['bis'].extend(bounded_lookahead_bis)
-                                next_check_idx += len(bounded_lookahead_bis)
-                                continue
-                # --- 处理下跌线段 ---
-                elif current_segment['type'] == 'down':
-                    if bi_for_extension_check.low <= segment_low:
-                        # 出现新低，线段延伸
-                        current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
-                        next_check_idx += 2
-                        continue
-                    else:
-                        # 未创新低，检查是否出现底分型
-                        cs_existing_raw = self._get_characteristic_sequence(current_segment['bis'], 'down')
-                        if not cs_existing_raw:
-                            current_segment['bis'].extend([bi_for_fractal_check, bi_for_extension_check])
-                            next_check_idx += 2
-                            continue
-
-                        processed_cs_existing = self._process_inclusion(cs_existing_raw, 'down')
-                        last_cs_bi = processed_cs_existing[-1]
-
-                        lookahead_bis = all_bis[next_check_idx:]
-                        bounded_lookahead_bis = []
-                        for bi in lookahead_bis:
-                            bounded_lookahead_bis.append(bi)
-                            if bi.type == 'down' and bi.low < segment_low:
-                                break
-
-                        # 第一种情况：特征序列出现底分型
-                        if self._check_overlap_with_cs_dict(bi_for_fractal_check, last_cs_bi):
-                            new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
-                            processed_new_cs = self._process_inclusion(new_cs_up_raw, 'down')
-                            final_processed_cs = processed_cs_existing + processed_new_cs
-
-                            check1_passes, cs_middle, cs_right = self._check_bottom_fractal(final_processed_cs)
-                            if check1_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle, all_bis, 'down')
-                                if segment_end_bi:
-                                    is_completed = True
-                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle, 'down')
-                                    right_bi = self._get_endpoint_bi_from_cs(cs_right)
-                                    break_info = {'next_segment_type': 'up',
-                                                  'start_bi': trough_bi, 'end_bi': right_bi,
-                                                  'segment_end_bi': segment_end_bi}
-                            else:
-                                current_segment['bis'].extend(bounded_lookahead_bis)
-                                next_check_idx += len(bounded_lookahead_bis)
-                                continue
-                        else:
-                            new_cs_up_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'up']
-                            processed_new_cs1 = self._process_inclusion(new_cs_up_raw, 'down')
-                            cs_for_check1 = processed_cs_existing + processed_new_cs1
-
-                            check1_passes, cs_middle_bottom, cs_right_bottom = self._check_bottom_fractal(cs_for_check1)
-                            next_segment_cs_raw = [bi for bi in bounded_lookahead_bis if bi.type == 'down']
-                            processed_cs2 = self._process_inclusion(next_segment_cs_raw, 'up')
-                            check2_passes, _, _ = self._check_top_fractal(processed_cs2)
-
-                            if check1_passes and check2_passes:
-                                segment_end_bi = self._get_segment_end_bi_from_middle_cs(cs_middle_bottom, all_bis,
-                                                                                         'down')
-                                if segment_end_bi:
-                                    is_completed = True
-                                    trough_bi = self._get_extremum_bi_from_cs(cs_middle_bottom, 'down')
-                                    right_bi_for_builder = self._get_endpoint_bi_from_cs(cs_right_bottom)
-                                    break_info = {'next_segment_type': 'up',
-                                                  'start_bi': trough_bi, 'end_bi': right_bi_for_builder,
-                                                  'segment_end_bi': segment_end_bi}
-                            else:
-                                # 第二特征序列未出现分型，线段继续延伸
-                                current_segment['bis'].extend(bounded_lookahead_bis)
-                                next_check_idx += len(bounded_lookahead_bis)
-                                continue
-
-                if is_completed and break_info:
-                    final_end_bi = break_info.get('segment_end_bi')
-                    if final_end_bi is None:
-                        LogUtil.error("segment_end_bi 为 None，跳过此线段")
-                        current_list_index += 1
-                        continue
-
-                    final_bi_index = final_end_bi.index
-                    if final_bi_index < 0 or final_bi_index < current_list_index:
-                        LogUtil.error(f"无效的索引范围: current={current_list_index}, final={final_bi_index}")
-                        current_list_index += 1
-                        continue
-
-                    final_segment_bis = all_bis[current_list_index: final_bi_index + 1]
-                    if not final_segment_bis:
-                        LogUtil.warning(f"线段的笔列表为空，跳过")
-                        current_list_index = final_bi_index + 1
-                        continue
-
-                    xd = XD(
-                        start=final_segment_bis[0].start,
-                        end=final_end_bi.end,
-                        start_line=final_segment_bis[0],
-                        end_line=final_end_bi,
-                        _type=current_segment['type'],
-                        index=len(self.xds),
-                        default_zs_type=self.config.get('zs_type_xd', None)
-                    )
-                    xd.high = max(bi.high for bi in final_segment_bis)
-                    xd.low = min(bi.low for bi in final_segment_bis)
-
-                    start_bi_val = final_segment_bis[0].start.val
-                    end_bi_val = final_end_bi.end.val
-                    if start_bi_val > end_bi_val:
-                        xd.zs_high = start_bi_val
-                        xd.zs_low = end_bi_val
-                    else:
-                        xd.zs_high = end_bi_val
-                        xd.zs_low = start_bi_val
-                    xd.done = True
-                    self.xds.append(xd)
-                    LogUtil.debug(f"完成 {current_segment['type']} 线段，结束于索引:{final_bi_index}")
-
-                    if break_info.get('start_bi'):
-                        next_segment_builder = break_info
-                        current_list_index = break_info['start_bi'].index
-                        if current_list_index < 0:
-                            LogUtil.error("无法找到下一段的起始位置")
-                            break
-                    else:
-                        current_list_index = final_bi_index + 1
+                # Step 2: 分型检测（传入增量缓存避免重算）
+                _log.debug(f"  [检测] seg_end={_bi_label(all_bis[seg_end])}, check={_bi_label(all_bis[check])}")
+                end_result = self._try_end(all_bis, seg_start, seg_end, seg_type,
+                                           seg_high, seg_low, check,
+                                           seg_cs_bis_cache=seg_cs_bis)
+                if end_result is not None:
+                    real_end, next_start, next_end = end_result
+                    self._emit_segment(all_bis, seg_start, real_end, seg_type)
+                    pos = next_start
+                    # 用外层 check 作为反向线段已知终点（check 是反向线段同向笔）
+                    if check >= next_start + 2 and check < len(all_bis):
+                        reverse_end_hint = check
                     break
 
-            # --- 处理最后一个未完成的线段 ---
-            if not is_completed and next_check_idx >= len(all_bis) - 1:
-                if current_segment and current_segment.get('bis'):
-                    # 1. 获取候选笔列表
-                    candidates_bis = all_bis[current_list_index:]
+                # 注：原 Step 2.5「单根反向笔突破段起点即终结原段」已删除。
+                # 理由（缠论 R5/R6 + 章节 8.1）：
+                #   线段只能被反方向"线段"破坏，不能被一根反方向"笔"破坏；
+                #   终结的唯一前提是反向特征序列分型，由 _try_end 全权负责判定。
+                # 一根反向笔突破段起点只是"出现破坏可能"的线索，必须等反向方向
+                # 也形成 ≥3 笔结构并出现 CS 分型后，才能据此回溯终结原段——
+                # 这正是 _try_end 的职责，所以这里不再做任何提前终结。
 
-                    # 2. 过滤未完成的笔
-                    pending_bis = [bi for bi in candidates_bis if bi.is_done()]
-
-                    if not pending_bis:
-                        break
-
-                    seg_type = current_segment['type']
-
-                    # 3. 寻找最佳终点 (回退逻辑)
-                    # 步骤 A: 先找到列表末尾第一个方向匹配的笔的索引
-                    last_valid_index = -1
-                    for i in range(len(pending_bis) - 1, -1, -1):
-                        if pending_bis[i].type == seg_type:
-                            last_valid_index = i
-                            break
-
-                    # 步骤 B: 执行回退比较逻辑
-                    if last_valid_index != -1:
-                        # 从找到的那个笔的前一个位置开始往前找，对比同向笔的高低点
-                        # 注意：这里需要循环往前找，因为中间可能隔着反向笔
-                        current_check_idx = last_valid_index - 1
-                        while current_check_idx >= 0:
-                            bi_to_compare = pending_bis[current_check_idx]
-
-                            if bi_to_compare.type == seg_type:
-                                # 找到了前一个同向笔，开始比较
-                                current_best_bi = pending_bis[last_valid_index]
-
-                                should_backtrack = False
-                                if seg_type == 'up':
-                                    # 向上线段：如果当前暂定终点(last) 低于 前一个同向笔(compare)，则回退
-                                    if current_best_bi.high < bi_to_compare.high:
-                                        should_backtrack = True
-                                else:  # down
-                                    # 向下线段：如果当前暂定终点(last) 高于 前一个同向笔(compare)，则回退
-                                    if current_best_bi.low > bi_to_compare.low:
-                                        should_backtrack = True
-
-                                if should_backtrack:
-                                    # 确认回退：将最佳终点更新为前一个笔
-                                    last_valid_index = current_check_idx
-                                    # 继续向前循环，看是否还有更高的(up)或更低的(down)
-                                else:
-                                    # 如果当前暂定终点表现更好（或相等），则停止回退，这就我们想要的暂定极值
-                                    break
-
-                            current_check_idx -= 1
-
-                        # 步骤 C: 根据最终确定的索引截取列表
-                        pending_bis = pending_bis[:last_valid_index + 1]
-                    else:
-                        # 没有找到同向笔，异常情况，不生成线段
-                        break
-
-                    if not pending_bis:
-                        break
-
-                    # 4. 构建未完成线段对象
-                    pending_xd = XD(
-                        start=pending_bis[0].start,
-                        end=pending_bis[-1].end,
-                        start_line=pending_bis[0],
-                        end_line=pending_bis[-1],
-                        _type=seg_type,
-                        index=len(self.xds),
-                        default_zs_type=self.config.get('zs_type_xd', None)
-                    )
-                    pending_xd.high = max(bi.high for bi in pending_bis)
-                    pending_xd.low = min(bi.low for bi in pending_bis)
-
-                    # 对于未完成线段，中枢暂时取自身高低点
-                    pending_xd.zs_high = pending_xd.high
-                    pending_xd.zs_low = pending_xd.low
-
-                    pending_xd.done = False
-                    self.xds.append(pending_xd)
+                # Step 3: 吸收
+                # 吸收吃掉 [check, check+1] 两根笔，其中 check 是 cs 笔。
+                # 增量缓存：把 check 这根 cs 笔追加到 seg_cs_bis。
+                if all_bis[check].type == cs_bi_type:
+                    seg_cs_bis.append(all_bis[check])
+                seg_end = check + 1
+                check += 2
+            else:
+                self._emit_pending(all_bis, seg_start, seg_type)
                 break
-        if is_incremental:
-            # Update snapshot
-            if self.xds:
-                last_bi_used = self.xds[-1].end_line
-                # We need the last BI from the input list, not just the one used in the segment
-                if all_bis:
-                    last_bi = all_bis[-1]
-                    self._last_bi_snapshot = (last_bi.index, last_bi.end.val)
 
-            return self.xds[start_index_for_delta:]
+    # ----------------------------------------------------------
+    # _try_end
+    # ----------------------------------------------------------
+    def _try_end(self, all_bis, seg_start, seg_end, seg_type,
+                 seg_high, seg_low, check_pos,
+                 seg_cs_bis_cache: Optional[List[BI]] = None) -> Optional[tuple]:
+
+        cs_bi_type = 'down' if seg_type == 'up' else 'up'
+        inc_dir = 'up' if seg_type == 'up' else 'down'
+        frac_name = '顶分型' if seg_type == 'up' else '底分型'
+
+        # ---- 步骤1 ----
+        # 优先使用调用方传入的增量缓存（由 _build_segments 维护），
+        # 否则回退为按 seg_start..seg_end 全量过滤（兜底/向后兼容）。
+        # 增量维护把每次 _try_end 的 cs 笔收集成本从 O(seg_len) 降到 O(1)，
+        # 在 90天 1min 数据这种长段场景下消除 O(n²) 退化。
+        if seg_cs_bis_cache is not None:
+            seg_cs_bis = seg_cs_bis_cache
         else:
-            # Update snapshot
-            if all_bis:
-                last_bi = all_bis[-1]
-                self._last_bi_snapshot = (last_bi.index, last_bi.end.val)
+            seg_cs_bis = [all_bis[i] for i in range(seg_start, seg_end + 1)
+                          if all_bis[i].type == cs_bi_type]
+        if not seg_cs_bis:
+            _log.debug(f"    _try_end: 段内无CS笔 → 跳过")
+            return None
+        if check_pos >= len(all_bis) or all_bis[check_pos].type != cs_bi_type:
+            return None
 
-            return self.xds
+        current_cs_bi = all_bis[check_pos]
+
+        _log.debug(f"    _try_end: 段内CS={len(seg_cs_bis)}根, 当前CS笔={_bi_label(current_cs_bi)}")
+
+        # ---- 步骤2 ----
+        if len(seg_cs_bis) >= 2:
+            std_seg = _process_inclusion([_bi_to_cs_elem(bi) for bi in seg_cs_bis[:-1]], inc_dir)
+            std_seg.append(_bi_to_cs_elem(seg_cs_bis[-1]))
+        else:
+            std_seg = [_bi_to_cs_elem(seg_cs_bis[0])]
+        has_gap = not _overlap(std_seg[-1], current_cs_bi)
+        _log.debug(f"    _try_end: 包含处理后std_seg={len(std_seg)}个, 缺口={'有' if has_gap else '无'} → {'第二种' if has_gap else '第一种'}")
+
+        # ---- 步骤3 ----
+        # 第一元素（属于原段的最后一根CS笔）从 std_seg 中取出冻结，
+        # 按缠论 R8/章节 5.2："假设转折点前后的两个元素不可做包含处理"
+        # 因此 first_elem 不能与后续收集到的元素（属于反向段或原段延续，性质未定）合并。
+        # 只有 second_elems（look_elems[1:]）内部可以做包含处理。
+        first_elem = std_seg.pop(-1)
+        second_elems: List[dict] = []
+        # 步骤4 需要构成分型 (first_elem, second_elems[0], second_elems[1])，
+        # 因此本步骤必须至少收集到 2 个 second_elems（包含合并后），
+        # 否则下一轮外层吸收一根 CS 后 first_elem 又会被新的反向笔替换，
+        # second_elems 永远凑不到 2 个，导致死循环（segment 无限延伸）。
+        min_second = 2
+        # SAFETY_LOOKAHEAD: 模块级常量，详见文件顶部定义。
+        ready = False
+        i = check_pos
+        while i < len(all_bis):
+            if i - check_pos > SAFETY_LOOKAHEAD:
+                _log.debug(f"    _try_end: 扫描超过{SAFETY_LOOKAHEAD}笔仍未凑齐second_elems → 放弃本轮")
+                return None
+            bi = all_bis[i]
+            if bi.type == cs_bi_type:
+                new_elem = _bi_to_cs_elem(bi)
+                if second_elems and _has_inclusion(second_elems[-1], new_elem):
+                    second_elems[-1] = _merge_two(second_elems[-1], new_elem, inc_dir)
+                    _log.debug(f"    _try_end: {_bi_label(bi)} 与前元素包含,合并→{_elem_label(second_elems[-1])}")
+                else:
+                    second_elems.append(new_elem)
+                    _log.debug(f"    _try_end: 收集CS {_bi_label(bi)} → second_elems={len(second_elems)}个 (first_elem冻结)")
+                    if len(second_elems) >= min_second:
+                        ready = True
+            elif ready:
+                # 已收集到足够 second_elems，遇到非CS笔 → 停止收集，去检查分型
+                break
+            else:
+                # 未收集够 second_elems，检查同向笔是否创新极值（线段延伸）
+                if seg_type == 'up' and bi.type == 'up' and bi.high > seg_high:
+                    _log.debug(f"    _try_end: {_bi_label(bi)} 创新高({bi.high:.3f}>{seg_high:.3f}) → 线段应延伸,返回None")
+                    return None
+                if seg_type == 'down' and bi.type == 'down' and bi.low < seg_low:
+                    _log.debug(f"    _try_end: {_bi_label(bi)} 创新低({bi.low:.3f}<{seg_low:.3f}) → 线段应延伸,返回None")
+                    return None
+            i += 1
+        look_elems = [first_elem] + second_elems
+
+        if not look_elems:
+            return None
+
+        # ---- 步骤4 ----
+        # 按缠论原文章节 7.1：
+        #   "取分界点前线段的最后一个特征元素（第一元素）
+        #    取从转折点开始的第一笔（第二元素）"
+        # 也即特征序列分型的结构是固定的：
+        #   左肩 = 第一元素 = first_elem        → combined 中位置 = len(std_seg)
+        #   中心 = 第二元素 = second_elems[0]   → combined 中位置 = len(std_seg) + 1
+        #   右肩 = 第三元素 = second_elems[1]   → combined 中位置 = len(std_seg) + 2
+        # 因此分型中心点的位置是固定的，不能在整个 combined 中贪心搜索任意位置。
+        # 否则会错误地把 first_elem 之前的 std_seg 元素当成分型中心，违反 R8/章节 5.2
+        # （第一元素属于原段，不能与反向段元素一起参与分型判定）。
+        combined = std_seg + look_elems
+        if len(combined) < 3:
+            _log.debug(f"    _try_end: combined={len(combined)}个 < 3 → 不足以判断分型")
+            return None
+        # 分型中心固定为第二元素的位置：left=first_elem, mid=second_elems[0], right=second_elems[1]
+        mid_pos = len(std_seg) + 1  # = combined 中 second_elems[0] 的索引
+        if mid_pos + 1 >= len(combined):
+            # second_elems 不足 2 个，无法判定分型
+            elems_str = " ".join(_elem_label(e) for e in combined)
+            _log.debug(f"    _try_end: combined=[{elems_str}] → second_elems<2,无法判定{frac_name}")
+            return None
+        left, mid, right = combined[mid_pos - 1], combined[mid_pos], combined[mid_pos + 1]
+        if seg_type == 'up':
+            is_frac = mid['high'] > left['high'] and mid['high'] > right['high']
+        else:
+            is_frac = mid['low'] < left['low'] and mid['low'] < right['low']
+        elems_str = " ".join(_elem_label(e) for e in combined)
+        if not is_frac:
+            _log.debug(f"    _try_end: combined=[{elems_str}] mid_pos={mid_pos} → 无{frac_name}")
+            return None
+        frac_idx = mid_pos
+        _log.debug(f"    _try_end: combined=[{elems_str}] → {frac_name}在[{frac_idx}](固定第二元素位置)")
+
+        # ---- 步骤5 ----
+        mid_elem = combined[frac_idx]
+        if has_gap:
+            _log.debug(f"    _try_end: 第二种情况,进入_check_type2验证...")
+            if not self._check_type2(all_bis, mid_elem, seg_type):
+                _log.debug(f"    _try_end: _check_type2失败 → 返回None")
+                return None
+            _log.debug(f"    _try_end: _check_type2成功")
+
+        # ---- 步骤6: 定位当前线段结束位置 + 反向线段范围 ----
+        target_bi = _resolve_pivot_bi(mid_elem, seg_type)
+
+        end_bi_idx = self._bi_pos[id(target_bi)] - 1
+        if end_bi_idx <= seg_start or end_bi_idx >= len(all_bis):
+            _log.debug(f"    _try_end: end_bi_idx={end_bi_idx} 越界(seg_start={seg_start},len={len(all_bis)}) → 返回None")
+            return None
+        if all_bis[end_bi_idx].type != seg_type:
+            _log.debug(f"    _try_end: 终点笔{_bi_label(all_bis[end_bi_idx])} 方向≠{seg_type} → 返回None")
+            return None
+        if end_bi_idx - seg_start + 1 < 3:
+            _log.debug(f"    _try_end: 笔数{end_bi_idx - seg_start + 1}<3 → 返回None")
+            return None
+
+        # 反向线段: 起点=当前线段终点+1, 终点=look_elems中最远的CS笔位置
+        next_start = end_bi_idx + 1
+        # look_elems 的最后一个元素对应反向线段已探明的最远同向笔
+        last_look = look_elems[-1]
+        last_look_bis = last_look.get('merged_bis')
+        if last_look_bis:
+            next_end = max(self._bi_pos[id(b)] for b in last_look_bis)
+        else:
+            next_end = self._bi_pos[id(last_look['bi'])]
+        # 确保 next_end 至少为 next_start + 2（最少3笔）
+        next_end = max(next_end, next_start + 2) if next_end >= next_start else next_start + 2
+
+        _log.debug(f"    _try_end: ✓ 线段结束于{_bi_label(all_bis[end_bi_idx])}, "
+                   f"反向线段 bi[{all_bis[next_start].index}]~bi[{all_bis[min(next_end, len(all_bis)-1)].index}]")
+        return end_bi_idx, next_start, next_end
+
+    # ----------------------------------------------------------
+    # _check_type2
+    # ----------------------------------------------------------
+    def _check_type2(self, all_bis, mid_elem, seg_type) -> bool:
+
+        target_bi = _resolve_pivot_bi(mid_elem, seg_type)
+
+        start_pos = self._bi_pos[id(target_bi)] + 1
+        if start_pos >= len(all_bis):
+            _log.debug(f"      _check_type2: start_pos={start_pos}越界 → False")
+            return False
+
+        cs2_type = 'up' if seg_type == 'up' else 'down'
+        cs2_dir = 'down' if seg_type == 'up' else 'up'
+        frac2_name = '底分型' if seg_type == 'up' else '顶分型'
+
+        _log.debug(f"      _check_type2: 从{_bi_label(target_bi)}之后开始, 寻找反向线段CS({cs2_type}笔)的{frac2_name}")
+
+        def _is_tail_fractal(elems: List[dict]) -> bool:
+            """O(1) 检查最后三个元素是否构成反向段所需的分型。
+            up 段的反向段找底分型(mid.low < 两侧)；down 段反向段找顶分型(mid.high > 两侧)。
+            只检查尾部三元素：每次新追加/合并 cs2_elems 后调用一次即可，
+            等价于原 find_frac2(cs2_elems) 的语义但耗时从 O(k) 降到 O(1)。
+            """
+            if len(elems) < 3:
+                return False
+            a, b, c = elems[-3], elems[-2], elems[-1]
+            if seg_type == 'up':   # 反向 = down 段 → 找底分型
+                return b['low'] < a['low'] and b['low'] < c['low']
+            else:                  # 反向 = up 段   → 找顶分型
+                return b['high'] > a['high'] and b['high'] > c['high']
+
+        cs2_elems = []
+        i = start_pos
+        while i < len(all_bis):
+            bi = all_bis[i]
+
+            # 原线段严格创新高/低检查（> / <，等价不算创新极值）
+            # 修复点：原逻辑直接 return False，会让"等价新高 + 跨段后续创新高"误判为段延伸
+            #        现改为"先把这根创新高/低的笔收进 cs2_elems 再判定分型"，
+            #        若分型成立则反向段成立 → return True；否则才 return False。
+            is_strict_new_extreme = (
+                (seg_type == 'up' and bi.type == 'up' and bi.high > target_bi.high)
+                or (seg_type == 'down' and bi.type == 'down' and bi.low < target_bi.low)
+            )
+
+            if bi.type == cs2_type:
+                # 包含处理
+                new_elem = _bi_to_cs_elem(bi)
+                if cs2_elems and _has_inclusion(cs2_elems[-1], new_elem):
+                    cs2_elems[-1] = _merge_two(cs2_elems[-1], new_elem, cs2_dir)
+                    _log.debug(f"      _check_type2: {_bi_label(bi)} 与前元素包含,合并→{_elem_label(cs2_elems[-1])}")
+                else:
+                    cs2_elems.append(new_elem)
+                    _log.debug(f"      _check_type2: 收集CS {_bi_label(bi)} → cs2_elems={len(cs2_elems)}个")
+
+                # 每次添加/合并后立即检查分型（仅看尾部三元素，O(1)）
+                if _is_tail_fractal(cs2_elems):
+                    _log.debug(f"      _check_type2: 尾部三元素构成{frac2_name} → True")
+                    return True
+
+                # 收完后才判断"严格创新极值停止"：
+                # 此根 cs 笔创了原段方向的新极值，后续走势不可能再形成本段的反向段，
+                # 必须立即停止扫描；反向段是否成立由已收集的 cs2_elems 决定。
+                if is_strict_new_extreme:
+                    _log.debug(f"      _check_type2: {_bi_label(bi)} 创新极值且已收进 cs2_elems → 停止扫描")
+                    break
+            elif is_strict_new_extreme:
+                # 非 cs2 笔但创了新极值（兜底）：原段延伸，反向段不成立
+                _log.debug(f"      _check_type2: {_bi_label(bi)} 非CS笔但创新极值 → 原线段延伸,False")
+                return False
+            # 注：原此处对每根非 cs2 笔重复 find_frac2(cs2_elems) 的 elif 分支已删除——
+            # 分型只可能在新元素加入/合并时产生新结构，非 cs2 笔不会改变 cs2_elems，
+            # 重复检查纯属冗余且产生大量噪音日志。
+            i += 1
+
+        if len(cs2_elems) < 3:
+            _log.debug(f"      _check_type2: cs2_elems仅{len(cs2_elems)}个<3 → False")
+            return False
+        # 走到这里说明扫描结束（要么 i 越界，要么遇到 strict_new_extreme break）
+        # 由于循环内每次追加/合并后都已经检查过尾部分型，此处只需对最终状态做一次兜底检查。
+        result = _is_tail_fractal(cs2_elems)
+        elems_str = " ".join(_elem_label(e) for e in cs2_elems)
+        _log.debug(f"      _check_type2: 最终[{elems_str}] → {frac2_name}{'成立' if result else '不成立'} → {result}")
+        return result
+
+    # ----------------------------------------------------------
+    # 输出线段
+    # ----------------------------------------------------------
+    def _make_xd(self, seg_bis: List[BI], seg_type: str, done: bool) -> XD:
+        """构造并追加 XD 对象（_emit_segment 与 _emit_pending 的公共逻辑）。
+
+        Args:
+            seg_bis: 组成该线段的笔列表（首笔=段起点，末笔=段终点）
+            seg_type: 'up' / 'down'
+            done: 是否为已完成段
+                  - True  → zs_high/zs_low = (起点价, 终点价) 的 max/min（已完成段中枢）
+                  - False → zs_high/zs_low = 整段 high/low（未完成段无明确中枢，用宽口径）
+
+        Returns:
+            构造好的 XD 对象（已 append 到 self.xds）
+        """
+        xd = XD(
+            start=seg_bis[0].start,
+            end=seg_bis[-1].end,
+            start_line=seg_bis[0],
+            end_line=seg_bis[-1],
+            _type=seg_type,
+            index=len(self.xds),
+            default_zs_type=self.config.get('zs_type_xd', None),
+        )
+        xd.high = max(bi.high for bi in seg_bis)
+        xd.low = min(bi.low for bi in seg_bis)
+        if done:
+            sv, ev = seg_bis[0].start.val, seg_bis[-1].end.val
+            xd.zs_high, xd.zs_low = (max(sv, ev), min(sv, ev))
+        else:
+            xd.zs_high, xd.zs_low = xd.high, xd.low
+        xd.done = done
+        self.xds.append(xd)
+        return xd
+
+    def _emit_segment(self, all_bis, start, end, seg_type):
+        seg_bis = all_bis[start: end + 1]
+        xd = self._make_xd(seg_bis, seg_type, done=True)
+        sv, ev = seg_bis[0].start.val, seg_bis[-1].end.val
+        _log.info(f"[完成] XD[{xd.index}] {seg_type} {_bi_label(seg_bis[0])}~{_bi_label(seg_bis[-1])} ({len(seg_bis)}笔) {sv:.3f}→{ev:.3f}")
+
+    def _emit_pending(self, all_bis, start, seg_type):
+        """输出未完成线段（方案 A1：全局极值优先 + 兜底末尾同向笔）。
+
+        终点选择策略（双路保障，确保有 ≥3 根笔时必有输出）：
+
+        主路径（全局极值）：
+          扫描 candidates 中所有 seg_type 同向笔，取使段达到方向极值的那根作为终点
+            - up 段 → 取 high 最大的 up 笔
+            - down 段 → 取 low 最小的 down 笔
+          这与已完成段的"段 high/low 应为段内极值"语义一致。
+
+        兜底路径（确保有输出）：
+          若主路径选出的极值笔位置导致 pending_bis < 3 根
+          （典型场景：段第一根同向笔就是全段极值，后续震荡不再突破），
+          则改用 candidates 中**最后一根**同向笔作为终点。
+          这保证了"只要 candidates 有 ≥3 根 done 笔，就一定输出未完成段"。
+
+        缠论依据：
+          已完成段由 _try_end 严格判定终点；未完成段无完整反向特征序列可用，
+          只能保守估计。极值优先体现"线段记录方向极值"，兜底体现"实盘需有持续反馈"。
+        """
+        candidates = [bi for bi in all_bis[start:] if bi.is_done()]
+        if len(candidates) < 3:
+            return
+
+        # 主路径：找全局极值的同向笔
+        best_idx = -1
+        last_same_idx = -1  # 同时记录最后一根同向笔位置，作为兜底
+        for i in range(len(candidates)):
+            if candidates[i].type != seg_type:
+                continue
+            last_same_idx = i
+            if best_idx == -1:
+                best_idx = i
+                continue
+            cur = candidates[i]
+            best = candidates[best_idx]
+            if seg_type == 'up' and cur.high > best.high:
+                best_idx = i
+            elif seg_type == 'down' and cur.low < best.low:
+                best_idx = i
+
+        if best_idx == -1:
+            return
+
+        pending_bis = candidates[:best_idx + 1]
+        # 兜底：若全局极值导致段太短（<3 根），改用最后一根同向笔
+        if len(pending_bis) < 3 and last_same_idx > best_idx:
+            pending_bis = candidates[:last_same_idx + 1]
+
+        if len(pending_bis) < 3:
+            return
+
+        xd = self._make_xd(pending_bis, seg_type, done=False)
+        sv, ev = pending_bis[0].start.val, pending_bis[-1].end.val
+        _log.info(f"[未完成] XD[{xd.index}] {seg_type} {_bi_label(pending_bis[0])}~{_bi_label(pending_bis[-1])} ({len(pending_bis)}笔) {sv:.3f}→{ev:.3f}")

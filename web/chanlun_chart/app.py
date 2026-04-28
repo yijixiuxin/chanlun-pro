@@ -65,11 +65,12 @@ def main() -> None:
         s = HTTPServer(WSGIContainer(app, executor=ThreadPoolExecutor(10)))
         s.bind(9900, config.WEB_HOST)
 
+        # 先启动 symbol 预加载后台线程：daemon 线程，不阻塞主流程，
+        # 让其与 HTTP 服务启动并行，争取在用户首次发起请求前完成首轮缓存填充。
+        start_symbol_preload_thread()
+
         LogUtil.info("启动成功")
         s.start(1)
-
-        # 启动 symbol 预加载线程
-        start_symbol_preload_thread()
 
         if len(sys.argv) >= 2 and sys.argv[1] == "nobrowser":
             pass
