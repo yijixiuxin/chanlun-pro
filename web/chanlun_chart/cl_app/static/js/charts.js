@@ -13,6 +13,7 @@ const CHART_CONFIG = {
     BC_TEXT: "#fccbcd",
     MMD_UP: "#FA8072",
     MMD_DOWN: "#1E90FF",
+    AI_PRED: "#8E44AD",
   },
   LINE_STYLES: {
     SOLID: 0,
@@ -233,6 +234,7 @@ class ChartManager {
   setupEventListeners() {
     // 创建几个 button 按钮
     const global_widget = this.widget;
+    const manager = this;
     this.widget.headerReady().then(function () {
       // 重新加载数据的按钮
       var buttonReload = global_widget.createButton();
@@ -269,6 +271,34 @@ class ChartManager {
             }
           },
         });
+      });
+      var buttonAiPredict = global_widget.createButton();
+      buttonAiPredict.textContent = "AI预测";
+      buttonAiPredict.addEventListener("click", function () {
+        if (window.AIPrediction) {
+          window.AIPrediction.predict(manager);
+        }
+      });
+      var buttonLoadAiPredict = global_widget.createButton();
+      buttonLoadAiPredict.textContent = "显示AI预测";
+      buttonLoadAiPredict.addEventListener("click", function () {
+        if (window.AIPrediction) {
+          window.AIPrediction.loadLatest(manager);
+        }
+      });
+      var buttonClearAiPredict = global_widget.createButton();
+      buttonClearAiPredict.textContent = "清除AI预测";
+      buttonClearAiPredict.addEventListener("click", function () {
+        if (window.AIPrediction) {
+          window.AIPrediction.clear(manager);
+        }
+      });
+      var buttonDeleteAiPredict = global_widget.createButton();
+      buttonDeleteAiPredict.textContent = "删除AI预测";
+      buttonDeleteAiPredict.addEventListener("click", function () {
+        if (window.AIPrediction) {
+          window.AIPrediction.deleteLatest(manager);
+        }
       });
     });
     this.widget.onChartReady(() => {
@@ -643,11 +673,17 @@ class ChartManager {
 }
 
 var Charts = (function () {
+  const managers = {};
+
   return {
     // 图表展示
     show_tv_chart: function (id) {
       const chartManager = new ChartManager(id).init();
+      managers[id] = chartManager;
       return chartManager.widget;
+    },
+    get_manager: function (id) {
+      return managers[id];
     },
   };
 })();

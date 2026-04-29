@@ -1,17 +1,13 @@
-import time
+import datetime
 from typing import Union
-import MyTT
-import numpy as np
-import openai
-import requests
-import talib
 
+from chanlun import fun
 from chanlun.cl_interface import BI, ICL, XD
-from chanlun.exchange import get_exchange, Market
 from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
-from chanlun import config, fun
-import json, datetime
-from chanlun.db import db, TableByAIAnalyse
+from chanlun.db import TableByAIAnalyse, db
+from chanlun.exchange import Market, get_exchange
+from chanlun.tools.ai_client import request_ai_model
+from chanlun.tools.ai_predict import format_recent_kline_ma_table
 
 
 class AIAnalyse:
@@ -157,6 +153,11 @@ class AIAnalyse:
         prompt += "**输出格式：Markdown**\n\n"
         prompt += f"## 当前品种\n- **代码/名称**：`{cd.get_code()} - {stock_name}`\n- **数据周期**：`{cd.get_frequency()}`\n- **当前时间**：`{fun.datetime_to_str(k.date)}`\n- **最新价格**：`{round(k.c, precision)}`\n\n"
 
+        # 最近 K 线与均线结构化数据
+        prompt += "## 最近20根K线与均线表格\n\n"
+        prompt += "以下表格按时间升序排列，字段包含时间、开高低收、成交量、5日均线、10日均线，可用于判断短期量价与均线结构。\n\n"
+        prompt += f"{format_recent_kline_ma_table(cd.get_src_klines(), precision)}\n\n"
+
         # 笔数据
         bis_count = 9 if len(cd.get_bis()) >= 9 else len(cd.get_bis())
         prompt += f"## 最新的 {bis_count} 条缠论笔数据\n\n"
@@ -198,115 +199,9 @@ class AIAnalyse:
 
     def req_llm_ai_model(self, prompt: str) -> dict:
         """
-        根据配置，调用不同的大模型服务
+        根据配置，调用 OpenAI 兼容的大模型服务
         """
-        # TODO 这里直接返回成功的消息
-        # return {"ok": True, "msg": "已读乱回", "model": "No Model"}
-
-        if config.OPENROUTER_AI_KEYS != "" and config.OPENROUTER_AI_MODEL != "":
-            return self.req_openrouter_ai_model(prompt)
-        if config.AI_TOKEN != "" and config.AI_MODEL != "":
-            return self.req_siliconflow_ai_model(prompt)
-
-        return {
-            "ok": False,
-            "msg": "未正确配置大模型的 API key 和模型名称",
-            "model": "",
-        }
-
-    def req_siliconflow_ai_model(self, prompt: str) -> dict:
-
-        # TODO 测试
-        # msg = "根据缠论技术分析，结合当前行情数据，以下是操作建议：\n\n### 1. **当前笔分析**\n   - **最新笔**：方向向上，起始值3140.98，结束值3274.39，尚未完成（笔完成状态为False）。\n   - **上一笔**：方向向下，起始值3418.95，结束值3140.98，已完成（笔完成状态为True）。\n   - **当前笔尚未完成**，且处于上升趋势中。如果价格继续上涨并突破3274.39，可能会形成新的上升笔。如果价格回落并跌破3140.98，则当前笔可能结束并形成新的下降笔。\n\n### 2. **当前线段分析**\n   - **最新线段**：方向向下，起始值3674.41，结束值3140.98，尚未完成（线段完成状态为False）。\n   - **当前线段处于下降趋势中**，但最新笔的上升可能预示着线段的调整或反转。如果价格继续上涨并突破3674.41，则可能结束当前的下降线段并开始新的上升线段。\n\n### 3. **中枢分析**\n   - **标准中枢**：震荡中枢，最高值3674.41，最低值3140.98，中枢高点3509.82，中枢低点3227.35。\n   - **段内中枢**：震荡中枢，最高值3509.82，最低值3140.98，中枢高点3494.87，中枢低点3227.35。\n   - **当前价格3250.6位于标准中枢的中枢低点3227.35和中枢高点3509.82之间**。如果价格继续上涨并突破3509.82，可能会进入强势区域；如果价格回落并跌破3227.35，则可能进入弱势区域。\n\n### 4. **均线分析**\n   - **5日均线**：最新值为3238.39、3235.69、3234.52、3236.68、3237.93。\n   - **10日均线**：最新值为3220.37、3218.72、3220.6、3229.01、3237.99。\n   - **20日均线**：最新值为3272.92、3263"
-        # return {"ok": True, "msg": msg}
-
-        url = "https://api.siliconflow.cn/v1/chat/completions"
-
-        payload = {
-            "model": config.AI_MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            "stream": False,
-            "max_tokens": 4096,
-            "stop": ["null"],
-            "temperature": 0.7,
-            "top_p": 0.7,
-            "top_k": 50,
-            "frequency_penalty": 0.5,
-            "n": 1,
-            "response_format": {"type": "text"},
-        }
-        headers = {
-            "Authorization": f"Bearer {config.AI_TOKEN}",
-            "Content-Type": "application/json",
-        }
-
-        response = requests.request("POST", url, json=payload, headers=headers)
-        try:
-            ai_res = json.loads(response.text)
-        except Exception as e:
-            print("解析JSON 报错，返回的数据：", response.text)
-            return {"ok": False, "msg": f"JSON 解析异常：{e}", "model": config.AI_MODEL}
-
-        if response.status_code != 200:
-            return {
-                "ok": False,
-                "msg": f"AI 接口调用失败：{ai_res['message']}",
-                "model": config.AI_MODEL,
-            }
-
-        msg = ai_res["choices"][0]["message"]["content"]
-        return {"ok": True, "msg": msg, "model": config.AI_MODEL}
-
-    def req_openrouter_ai_model(self, prompt: str) -> dict:
-        """
-        调用大语言模型，返回回答内容。
-        :param key: OpenRouter API Key
-        :param model: 模型名称（如 openai/gpt-4o）
-        :param prompt: 问题内容（如 markdown 格式）
-        :return: 回答内容
-        """
-
-        try:
-            client = openai.OpenAI(
-                api_key=config.OPENROUTER_AI_KEYS,
-                base_url="https://openrouter.ai/api/v1",
-            )
-            response = client.chat.completions.create(
-                model=config.OPENROUTER_AI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            if (
-                response.choices[0].message.content == ""
-                and response.choices[0].message.refusal is not None
-            ):
-                return {
-                    "ok": False,
-                    "msg": f"**[OpenAI API 错误]**: {response.choices[0].message.refusal}",
-                    "model": config.OPENROUTER_AI_MODEL,
-                }
-
-            return {
-                "ok": True,
-                "msg": response.choices[0].message.content,
-                "model": config.OPENROUTER_AI_MODEL,
-            }
-        except openai.OpenAIError as oe:
-            return {
-                "ok": False,
-                "msg": f"**[OpenAI API 错误]**: {str(oe)}",
-                "model": config.OPENROUTER_AI_MODEL,
-            }
-        except Exception as e:
-            return {
-                "ok": False,
-                "msg": f"**[系统异常]**: {str(e)}",
-                "model": config.OPENROUTER_AI_MODEL,
-            }
+        return request_ai_model(prompt)
 
 
 if __name__ == "__main__":
