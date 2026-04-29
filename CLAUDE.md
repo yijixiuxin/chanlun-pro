@@ -1,61 +1,65 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## Project Overview
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-**chanlun-pro** is a 缠论 (Chan Lun) market analysis platform for Chinese financial markets. It implements the "缠中说禅" technical analysis theory for analyzing stocks, futures, and cryptocurrency markets.
+## 1. Think Before Coding
 
-Supported markets: 沪深A股, 港股, 美股, 国内期货, 纽约期货, 外汇, 数字货币
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## Setup Commands
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-```bash
-# Install dependencies (uv preferred)
-uv sync
+## 2. Simplicity First
 
-# Run web application (port 9900)
-uv run  web/chanlun_chart/app.py
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
 ```
 
-**Environment requirements:**
-- Python 3.11+
-- PYTHONPATH must be set to `src` directory: `export PYTHONPATH=/path/to/src`
-- PyArmor license file required at `src/pyarmor_runtime_005445/pyarmor.rkey`
-- Copy `src/chanlun/config.py.demo` to `src/chanlun/config.py` and configure
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## Architecture
+---
 
-```
-src/chanlun/           # Core缠论 library
-├── exchange/          # Market data adapters (get_exchange(market) factory)
-├── backtesting/       # Backtesting engine
-├── strategy/          # Strategy implementations
-├── trader/            # Live trading adapters
-├── xuangu/            # Stock screening
-├── cl.py              # Core缠论 calculation (PyArmor encrypted - DO NOT MODIFY)
-├── cl_analyse.py      # Analysis tools
-└── config.py          # Configuration (gitignored, use config.py.demo)
-
-web/chanlun_chart/     # Flask web UI
-├── app.py             # Entry point (runs on port 9900)
-└── cl_app/            # Flask application with TradingView charts
-
-notebook/              # Jupyter notebooks for backtesting
-cookbook/docs/         # Documentation (MkDocs)
-```
-
-## Key Patterns
-
-- **Market enum**: `from chanlun.base import Market` - defines markets like `Market.A`, `Market.HK`, `Market.FUTURES`
-- **Exchange factory**: `from chanlun.exchange import get_exchange` - creates exchange adapters
-- **Core缠论**: `from chanlun import cl_interface` - main interface to缠论 calculations
-- **Incremental kline processing**: `process_klines()` method for efficient incremental updates
-
-## Configuration
-
-`src/chanlun/config.py` is gitignored. Copy `config.py.demo` as template. Key settings:
-- `EXCHANGE_*` - market data adapters (tdx, baostock, futu, binance, etc.)
-- `DB_TYPE` - mysql or sqlite
-- `DATA_PATH` - where to store market data
-- Exchange API keys as needed (FUTU_HOST, BINANCE_APIKEY, etc.)
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

@@ -208,6 +208,25 @@ class TableByAIAnalyse(Base):
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
+class TableByAIPrediction(Base):
+    # AI 走势预测记录
+    __tablename__ = "cl_ai_predictions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    market = Column(String(20), comment="市场")
+    stock_code = Column(String(20), comment="标的")
+    stock_name = Column(String(100), comment="标的名称")
+    frequency = Column(String(10), comment="预测周期")
+    dt = Column(DateTime, comment="预测时间")
+    model = Column(String(100), comment="预测模型")
+    prompt = Column(Text, comment="预测提示词")
+    msg = Column(Text, comment="预测结论")
+    predictions = Column(Text, comment="结构化预测数据 JSON")
+    raw_response = Column(Text, comment="AI 原始响应")
+
+    # 添加配置设置编码
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+
+
 @fun.singleton
 class DB(object):
     global Base
