@@ -141,7 +141,7 @@ def time_logger(func):
         result = func(*args, **kwargs)
         end_ts = time.time()
         duration = end_ts - start_ts
-        LogUtil.info(f"<=== Finish: {func.__name__}, Duration: {duration:.4f}s")
+        LogUtil.debug(f"<=== Finish: {func.__name__}, Duration: {duration:.4f}s")
         return result
 
     return wrapper
@@ -231,6 +231,72 @@ class ExchangeChangQiao(Exchange):
         "us": Market.US,
     }
 
+    # static_info 单批上限：实测 500 OK，留点余量取 500（长桥未公开硬上限，但 500 已稳定）。
+    _STATIC_INFO_BATCH_SIZE = 500
+
+    def _enrich_us_names_with_static_info(self, stocks: List[Dict]) -> List[Dict]:
+        """用长桥 ``static_info`` 批量补全美股的中文名（``name_cn``）。
+
+        背景：``security_list`` 返回的 ``name_cn`` 经常为空，会 fallback 到 ``name_en``，
+        导致前端"标的列表"全是英文。``static_info`` 的同一字段几乎总有中文（实测 100%
+        命中率），且支持批量（500/批），11755 条总耗时 1~2s。
+
+        策略：
+        - 分批 ``_STATIC_INFO_BATCH_SIZE``，每批失败不影响其它批（降级保留原英文 name）。
+        - 优先 ``name_cn``，其次 ``name_en``，再次保留原 ``name``。
+        - 整体异常仍返回原列表，保证 ``all_stocks`` 不会因为补全失败而变空。
+        """
+        if not stocks:
+            return stocks
+
+        try:
+            qctx = self._quote_ctx()
+        except Exception as e:
+            LogUtil.info(f"_enrich_us_names: get quote_ctx failed, skip enrich: {e}")
+            return stocks
+
+        # 用 dict 把 code → name 重映射回去，避免 O(n*m) 查找
+        code_to_name: Dict[str, str] = {}
+        codes = [s["code"] for s in stocks if s.get("code")]
+        batch_size = self._STATIC_INFO_BATCH_SIZE
+        total_batches = (len(codes) + batch_size - 1) // batch_size
+
+        t0 = time.time()
+        ok_batches = 0
+        for i in range(0, len(codes), batch_size):
+            batch = codes[i:i + batch_size]
+            try:
+                infos = qctx.static_info(batch)
+                for info in infos:
+                    sym = getattr(info, "symbol", None)
+                    if not sym:
+                        continue
+                    cn = (getattr(info, "name_cn", "") or "").strip()
+                    en = (getattr(info, "name_en", "") or "").strip()
+                    code_to_name[sym] = cn or en or code_to_name.get(sym, "")
+                ok_batches += 1
+            except Exception as e:
+                # 单批失败仅记录，继续下一批；该批的标的保留原英文名。
+                LogUtil.info(
+                    f"_enrich_us_names: batch {i // batch_size + 1}/{total_batches} "
+                    f"failed (size={len(batch)}): {e}"
+                )
+
+        # 合并回原列表，没匹配上的保留原 name（英文兜底）。
+        enriched = []
+        cn_count = 0
+        for s in stocks:
+            new_name = code_to_name.get(s["code"], s.get("name", ""))
+            if new_name and new_name != s.get("name"):
+                cn_count += 1
+            enriched.append({"code": s["code"], "name": new_name})
+
+        LogUtil.info(
+            f"_enrich_us_names: total={len(stocks)} batches_ok={ok_batches}/{total_batches} "
+            f"updated={cn_count} elapsed={time.time() - t0:.2f}s"
+        )
+        return enriched
+
     def _fallback_all_stocks(self, market_key: str) -> List[Dict]:
         """当长桥 SDK 不支持时，借用项目里其它 exchange 实现拿全量列表。
 
@@ -245,7 +311,7 @@ class ExchangeChangQiao(Exchange):
                 from chanlun.exchange.exchange_tdx_hk import ExchangeTDXHK
                 ex = ExchangeTDXHK()
                 if getattr(ex, "init_failed", False):
-                    LogUtil.info(
+                    LogUtil.warning(
                         "all_stocks fallback: ExchangeTDXHK init_failed, return []"
                     )
                     return []
@@ -254,13 +320,13 @@ class ExchangeChangQiao(Exchange):
                 from chanlun.exchange.exchange_tdx import ExchangeTDX
                 ex = ExchangeTDX()
                 if getattr(ex, "init_failed", False):
-                    LogUtil.info(
+                    LogUtil.warning(
                         "all_stocks fallback: ExchangeTDX init_failed, return []"
                     )
                     return []
                 return ex.all_stocks() or []
         except Exception as e:
-            LogUtil.info(
+            LogUtil.error(
                 f"all_stocks fallback failed: market={market_key!r}, err={e}"
             )
         return []
@@ -293,6 +359,9 @@ class ExchangeChangQiao(Exchange):
                     {"code": info.symbol, "name": getattr(info, "name_cn", None) or info.name_en}
                     for info in resp
                 ]
+                # security_list 的 name_cn 大概率为空，用 static_info 批量补全中文名。
+                # 实测 11755 条 ÷ 500/批 ≈ 24 批，1~2 秒可全量补完，name_cn 命中率 100%。
+                stocks = self._enrich_us_names_with_static_info(stocks)
             else:
                 # 港股 / A 股 / 外汇：长桥不提供全量列表，借助通达信 exchange 拿。
                 stocks = self._fallback_all_stocks(market_key)
@@ -303,7 +372,7 @@ class ExchangeChangQiao(Exchange):
             self.stock_list_cache[market_key] = stocks
             return stocks
         except Exception as e:
-            LogUtil.info(f"Error in all_stocks(market={market_key!r}): {e}")
+            LogUtil.error(f"Error in all_stocks(market={market_key!r}): {e}")
             # 出错时也尝试 fallback，避免单点失败导致搜索完全不可用。
             if market_key not in self._LB_MARKET_MAP:
                 return self._fallback_all_stocks(market_key)
@@ -343,7 +412,7 @@ class ExchangeChangQiao(Exchange):
                         return False
                 return False
             except Exception as e:
-                LogUtil.info(f"Error checking trading session: {e}")
+                LogUtil.warning(f"Error checking trading session: {e}")
                 return False
 
         # Add timeout wrapper to prevent blocking the main thread
@@ -682,7 +751,7 @@ class ExchangeChangQiao(Exchange):
                 "circulating_shares": info.circulating_shares,
             }
         except Exception as e:
-            LogUtil.info(f"Error in stock_info: {e}")
+            LogUtil.error(f"Error in stock_info: {e}")
             return None
 
     def stock_owner_plate(self, code: str):
@@ -706,7 +775,7 @@ class ExchangeChangQiao(Exchange):
                 "currency": b.currency,
             }
         except Exception as e:
-            LogUtil.info(f"Error in balance: {e}")
+            LogUtil.error(f"Error in balance: {e}")
             return {}
 
     def positions(self, code: str = ""):
@@ -729,7 +798,7 @@ class ExchangeChangQiao(Exchange):
                 positions = [p for p in positions if p["code"] == code]
             return positions
         except Exception as e:
-            LogUtil.info(f"Error in positions: {e}")
+            LogUtil.error(f"Error in positions: {e}")
             return []
 
     def order(self, code: str, o_type: str, amount: float, args=None):
@@ -757,5 +826,5 @@ class ExchangeChangQiao(Exchange):
             )
             return resp.order_id
         except Exception as e:
-            LogUtil.info(f"Error in order: {e}")
+            LogUtil.error(f"Error in order: {e}")
             return None

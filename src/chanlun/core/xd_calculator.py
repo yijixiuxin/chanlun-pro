@@ -265,6 +265,9 @@ class XdCalculator:
     def _build_segments(self, all_bis: List[BI], start: int):
         pos = start
         reverse_end_hint = None  # 上一段 _try_end 已探明的反向线段终点位置
+        # ★ 记录"已被 _emit_segment 处理过的最后一个段终点位置"，
+        # 主循环结束后兜底用 _emit_pending 输出最后一段未完成线段（详见循环末尾注释）。
+        last_emitted_end_idx: int = -1
 
         while pos + 2 < len(all_bis):
             # 确定 seg_end 初始值
@@ -303,7 +306,7 @@ class XdCalculator:
                                      if all_bis[i].type == cs_bi_type]
 
             bi_s = all_bis[seg_start]
-            _log.info(f"[新线段] {seg_type} 起点={_bi_label(bi_s)}, seg_end={_bi_label(all_bis[seg_end])}, seg_high={seg_high:.3f}, seg_low={seg_low:.3f}")
+            _log.debug(f"[新线段] {seg_type} 起点={_bi_label(bi_s)}, seg_end={_bi_label(all_bis[seg_end])}, seg_high={seg_high:.3f}, seg_low={seg_low:.3f}")
 
             while check + 1 < len(all_bis):
                 # 仅刷新"顺方向"那一边的极值（反方向边恒等于 seg_anchor，无需重算）
@@ -340,6 +343,7 @@ class XdCalculator:
                     real_end, next_start, next_end = end_result
                     self._emit_segment(all_bis, seg_start, real_end, seg_type)
                     pos = next_start
+                    last_emitted_end_idx = real_end
                     # 用外层 check 作为反向线段已知终点（check 是反向线段同向笔）
                     if check >= next_start + 2 and check < len(all_bis):
                         reverse_end_hint = check
@@ -363,6 +367,36 @@ class XdCalculator:
             else:
                 self._emit_pending(all_bis, seg_start, seg_type)
                 break
+
+        # ★ 兜底输出最后一段未完成线段。
+        #
+        # 必要性：上面循环里 `_emit_pending` 仅在「内层 while 自然结束」（else 分支）时触发，
+        # 而以下场景内层不会自然结束、_emit_pending 永远跑不到，导致末尾的反向未完成段丢失：
+        #   1. 当前段在序列尾部附近被 _try_end 命中并 _emit_segment 完成后，
+        #      pos 跳到反向段起点 next_start；若 next_start + 2 >= len(all_bis)，
+        #      外层 while 直接退出，反向段（笔不够 3 根，含末尾 pending 笔）从未被构造。
+        #   2. 外层 `pos += 1; continue` 兜底分支把 pos 推到末尾，同样不会触发 _emit_pending。
+        #
+        # 现象：图表上"当前线段被破坏 + 新线段第三笔未完成"时看不到任何未完成线段。
+        #
+        # 修复策略：以「最后一个已完成段终点之后」（last_emitted_end_idx + 1）为新段起点，
+        # 再尝试一次 _emit_pending。新段方向 = last_emitted 段方向取反；若整轮没有任何
+        # _emit_segment（last_emitted_end_idx == -1），则用整段起点 + 起点笔方向。
+        # _emit_pending 内部已对「候选笔不足 3 根」做了保护，不会产出非法段。
+        if last_emitted_end_idx >= 0:
+            pending_start = last_emitted_end_idx + 1
+            if pending_start < len(all_bis):
+                last_seg_type = all_bis[last_emitted_end_idx].type
+                pending_seg_type = 'down' if last_seg_type == 'up' else 'up'
+                # 已存在 self.xds[-1] 时无需重复产出 pending（_make_xd 不去重）；
+                # 通过判断「最后一段是否已是同方向 pending」避免重复 append。
+                already_pending = bool(self.xds) and (not self.xds[-1].done) \
+                    and self.xds[-1].type == pending_seg_type
+                if not already_pending:
+                    self._emit_pending(all_bis, pending_start, pending_seg_type)
+        elif start < len(all_bis) and not self.xds:
+            # 整轮一次 _emit_segment 都没触发：尝试以 start 笔的方向输出未完成段
+            self._emit_pending(all_bis, start, all_bis[start].type)
 
     # ----------------------------------------------------------
     # _try_end
@@ -650,7 +684,7 @@ class XdCalculator:
         seg_bis = all_bis[start: end + 1]
         xd = self._make_xd(seg_bis, seg_type, done=True)
         sv, ev = seg_bis[0].start.val, seg_bis[-1].end.val
-        _log.info(f"[完成] XD[{xd.index}] {seg_type} {_bi_label(seg_bis[0])}~{_bi_label(seg_bis[-1])} ({len(seg_bis)}笔) {sv:.3f}→{ev:.3f}")
+        _log.debug(f"[完成] XD[{xd.index}] {seg_type} {_bi_label(seg_bis[0])}~{_bi_label(seg_bis[-1])} ({len(seg_bis)}笔) {sv:.3f}→{ev:.3f}")
 
     def _emit_pending(self, all_bis, start, seg_type):
         """输出未完成线段（方案 A1：全局极值优先 + 兜底末尾同向笔）。
@@ -707,4 +741,4 @@ class XdCalculator:
 
         xd = self._make_xd(pending_bis, seg_type, done=False)
         sv, ev = pending_bis[0].start.val, pending_bis[-1].end.val
-        _log.info(f"[未完成] XD[{xd.index}] {seg_type} {_bi_label(pending_bis[0])}~{_bi_label(pending_bis[-1])} ({len(pending_bis)}笔) {sv:.3f}→{ev:.3f}")
+        _log.debug(f"[未完成] XD[{xd.index}] {seg_type} {_bi_label(pending_bis[0])}~{_bi_label(pending_bis[-1])} ({len(pending_bis)}笔) {sv:.3f}→{ev:.3f}")

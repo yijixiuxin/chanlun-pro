@@ -6,8 +6,9 @@ import pickle
 import random
 import threading
 import time
+import uuid
 from decimal import Decimal
-from typing import Union
+from typing import Optional, Union
 
 import pandas as pd
 import pytz
@@ -52,6 +53,15 @@ class FileCacheDB(object):
 
         self.cache_pkl_path = self.project_path / "cache_pkl"
         self.cache_pkl_path.mkdir(parents=True, exist_ok=True)
+
+        # TV 图表缠论计算结果的落盘缓存目录（2026-04 新增）。
+        # 目的：让 web/chanlun_chart 的 `chart_data_cache` 拥有一层持久化兜底，
+        # 进程重启 / RAM TTL/maxsize 淘汰后仍可秒命中，全量预热结果不会浪费。
+        # 单文件 = 一个 cache_key（market_code_freq_cfgmd5），内容为 _build_chart_cache_entry 返回的 dict。
+        self.chart_cache_path = self.project_path / "chart_cache"
+        self.chart_cache_path.mkdir(parents=True, exist_ok=True)
+        # 落盘缓存的最长保留时间（秒），默认 7 天。超过此时长的文件被随机清理任务回收。
+        self.chart_cache_max_age_seconds = 7 * 24 * 60 * 60
 
         # 遍历 enum 中的值
         for market in Market:
@@ -131,13 +141,37 @@ class FileCacheDB(object):
     # 之前用 pickle.HIGHEST_PROTOCOL，从 3.8 升到 3.12 后旧 pkl 文件无法读取。
     _PICKLE_PROTOCOL = 4
 
+    @staticmethod
+    def _make_unique_tmp_path(path: pathlib.Path) -> pathlib.Path:
+        """生成保证唯一的 .tmp 文件路径。
+
+        2026-04 修复：之前只用毫秒时间戳，并发场景（用户 polling + 全市场预热同时写
+        同一个 cache_key 文件）下两个线程会拿到完全相同的 tmp 路径，触发 race：
+        线程 A 写完 tmp → A 调 os.replace 把 tmp move 走 → 线程 B 写完同名 tmp →
+        B 调 os.replace 时 tmp 已不存在 → 抛 FileNotFoundError，写盘失败。
+        日志体现为 ``[us-XXX-1m-...] 写入缓存失败 ... .tmp-XXX -> ...pkl``，
+        同时同一 cache_key 的请求 elapsed 飙到 10+ 秒（per-key chart_calc_locks
+        在 race 状态下被卡）。
+
+        修复：tmp 路径加上 pid + 线程 id + uuid4 后 8 位，让任意两个线程拿到的
+        tmp 路径不可能相同。最后哪个 os.replace 后到就用哪个的结果（idempotent，
+        反正同一 cache_key 算出来的内容等价）。
+        """
+        suffix = (
+            f".tmp-{int(time.time() * 1000)}"
+            f"-{os.getpid()}"
+            f"-{threading.get_ident()}"
+            f"-{uuid.uuid4().hex[:8]}"
+        )
+        return path.with_suffix(path.suffix + suffix)
+
     def _atomic_write_pickle(self, path: pathlib.Path, obj: object):
         """
         原子化写入 pickle，避免并发读到半写入文件。
 
         H2：失败时主动清理 .tmp 残留，避免临时文件长期堆积撑爆磁盘配额。
         """
-        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        tmp = self._make_unique_tmp_path(path)
         try:
             with open(tmp, "wb") as fp:
                 pickle.dump(obj, fp, protocol=self._PICKLE_PROTOCOL)
@@ -161,7 +195,7 @@ class FileCacheDB(object):
 
         H2：失败时主动清理 .tmp 残留。
         """
-        tmp = path.with_suffix(path.suffix + f".tmp-{int(time.time() * 1000)}")
+        tmp = self._make_unique_tmp_path(path)
         try:
             df.to_csv(tmp, index=False)
             os.replace(tmp, path)
@@ -538,6 +572,85 @@ class FileCacheDB(object):
             return None
         with open(self.cache_pkl_path / filename, "rb") as fp:
             return pickle.load(fp)
+
+    # ------------------------------------------------------------------
+    # TV 图表缓存（chart_data_cache）的磁盘持久化层（2026-04 新增）
+    # ------------------------------------------------------------------
+    # 设计要点：
+    # - 由 web/chanlun_chart/cl_app/blueprints/tv.py 的 _get/_set_chart_cache_entry 调用；
+    # - 一文件一 cache_key，内容是 dict（含 data / min_time / max_time / validated_at /
+    #   is_full_snapshot 字段），与 RAM 中 TTLCache 存的对象同构；
+    # - 文件名做安全字符替换（/ . → _），不再二次 hash，方便人工排错；
+    # - 写入走 _atomic_write_pickle，崩溃也不会留下半写文件；
+    # - 不在这里维护 in-memory 索引，调用方自己用 RAM 做热层。
+
+    def _chart_cache_path_for(self, cache_key: str) -> pathlib.Path:
+        # cache_key 形如 "us_GDS.US_30m_<md5hex>"；点 / 斜杠不是所有 FS 都安全，做轻度清洗。
+        safe = cache_key.replace("/", "_").replace(".", "_")
+        return self.chart_cache_path / f"{safe}.pkl"
+
+    def get_chart_cache(self, cache_key: str) -> Optional[dict]:
+        """读取 cache_key 对应的图表缓存条目；不存在或损坏返回 None。
+
+        损坏文件会被主动删除，避免长期占位。
+        """
+        path = self._chart_cache_path_for(cache_key)
+        if not path.is_file():
+            return None
+        try:
+            with open(path, "rb") as fp:
+                obj = pickle.load(fp)
+            if not isinstance(obj, dict):
+                # 老格式或被串改：直接当作 miss 处理。
+                path.unlink(missing_ok=True)
+                return None
+            return obj
+        except Exception as e:
+            LogUtil.warning(
+                f"[FileCacheDB.get_chart_cache] pkl 损坏 path={path} err={e}, 删除"
+            )
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return None
+
+    def set_chart_cache(self, cache_key: str, entry: dict) -> None:
+        """将一份 chart cache entry 写入磁盘（原子化）。
+
+        写盘失败仅 error 级日志，不抛——RAM 仍有副本，下次启动重新预热即可。
+        """
+        path = self._chart_cache_path_for(cache_key)
+        try:
+            self._atomic_write_pickle(path, entry)
+        except Exception as e:
+            LogUtil.error(
+                f"[FileCacheDB.set_chart_cache] 写入失败 path={path} err={e}"
+            )
+
+    def delete_chart_cache(self, cache_key: str) -> None:
+        path = self._chart_cache_path_for(cache_key)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    def clear_old_chart_cache(self) -> None:
+        """删除超过 chart_cache_max_age_seconds 的 pkl 文件（机会型清理）。"""
+        cutoff = time.time() - self.chart_cache_max_age_seconds
+        for fn in self.chart_cache_path.glob("*.pkl"):
+            try:
+                if fn.stat().st_mtime < cutoff:
+                    fn.unlink(missing_ok=True)
+            except Exception as exc:
+                LogUtil.debug(
+                    f"[FileCacheDB.clear_old_chart_cache] unlink failed "
+                    f"file={fn} err={exc}"
+                )
+
+    def maybe_cleanup_chart_cache(self) -> None:
+        """供外部调用方在低概率分支触发的清理入口（统一节流）。"""
+        self._try_run_cleanup("chart_cache", self.clear_old_chart_cache)
 
 
 fdb = FileCacheDB()

@@ -51,6 +51,80 @@
               flex-direction: column;
             "></div>
         </div>
+        {#
+          可拖拽分隔条：通过 ChartMenuResize 模块控制
+          - 左右拖动调整右栏「缠论解盘」宽度
+          - 双击重置为默认宽度
+          - 宽度持久化到 localStorage('chart_menu_width')
+        #}
+        <div
+          id="chart_resize_handle"
+          title="拖动调整宽度，双击重置"
+          style="
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 9999;
+            user-select: none;
+          "></div>
+        {#
+          收起按钮：仅在右栏「收起」状态下显示（贴屏幕右侧边缘，提示用户点击展开）
+          展开状态下不需要它——展开状态有右栏顶部内置的收起按钮 #chart_menu_inline_collapse
+        #}
+        <div
+          id="chart_menu_toggle"
+          title="展开缠论解盘"
+          style="
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 48px;
+            background: rgba(30, 159, 255, 0.85);
+            color: #fff;
+            border-radius: 4px 0 0 4px;
+            cursor: pointer;
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            user-select: none;
+            box-shadow: -1px 0 4px rgba(0,0,0,0.15);
+            transition: background 0.15s;
+          ">
+          <i class="layui-icon layui-icon-left"></i>
+        </div>
+        <style>
+          /* 分隔条 hover/拖拽时显示一条蓝色线，提供视觉反馈 */
+          #chart_resize_handle:hover,
+          #chart_resize_handle.is-dragging {
+            background: rgba(30, 159, 255, 0.5);
+          }
+          #chart_menu_toggle:hover {
+            background: rgba(30, 159, 255, 1) !important;
+          }
+          /* 拖拽进行中：禁用全局选中和指针事件，避免文本选中和 iframe 抢夺鼠标 */
+          body.chart-resizing {
+            cursor: col-resize !important;
+            user-select: none !important;
+          }
+          body.chart-resizing iframe {
+            pointer-events: none !important;
+          }
+          /* 右栏收起时：分隔条隐藏（避免无意义的拖拽），并显示贴边的展开按钮 */
+          body.chart-menu-collapsed #chart_resize_handle {
+            display: none;
+          }
+          body.chart-menu-collapsed #chart_menu_toggle {
+            display: flex !important;
+          }
+
+        </style>
         <div
           class="layui-col-xs2 layui-col-sm2 layui-col-md2"
           id="chart_menu"
@@ -100,6 +174,88 @@
             </form>
           </div>
           <div class="layui-collapse lay-accordion" lay-filter="collapse-opts">
+            <div class="layui-colla-item">
+              {# 标的列表：按市场浏览全部标的，点击代码列在新窗口打开图表 #}
+              <div class="layui-colla-title" data-ca-title="标的列表">标的列表</div>
+              <div class="layui-colla-content layui-show" style="padding: 8px;">
+                <form class="layui-form" onsubmit="return false;">
+                  <div class="layui-form-item" style="margin-bottom: 6px;">
+                    <div class="layui-input-block" style="margin-left: 0;">
+                      <select id="symbols_market_select" lay-filter="symbols_market_select">
+                        <option value="a">沪深A股</option>
+                        <option value="hk">港股</option>
+                        <option value="futures">国内期货</option>
+                        <option value="ny_futures">纽约期货</option>
+                        <option value="fx">外汇</option>
+                        <option value="us">美股</option>
+                        <option value="currency">数字货币(合约)</option>
+                        <option value="currency_spot">数字货币(现货)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="layui-form-item" style="margin-bottom: 6px;">
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <input type="text" id="symbols_search_input" autocomplete="off"
+                        placeholder="代码 / 名称 / 拼音（实时过滤）"
+                        class="layui-input layui-input-sm"
+                        style="flex: 1; min-width: 0; height: 30px;" />
+                    </div>
+                  </div>
+                </form>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                  <div id="symbols_total_tip" style="font-size: 12px; color: #888;"></div>
+                  {# 预热当前市场全部标的的缠论数据，避免后续切换时等待 #}
+                  <button type="button" id="symbols_prewarm_btn"
+                    class="layui-btn layui-btn-xs layui-btn-primary layui-border-blue"
+                    title="预热当前市场全部标的的常用周期(1m/5m/30m/日线)缠论数据，后续切换时秒开"
+                    style="height: 22px; line-height: 20px; padding: 0 8px;">
+                    <i class="layui-icon layui-icon-fire" style="font-size: 12px;"></i>
+                    <span id="symbols_prewarm_btn_text">预热全部</span>
+                  </button>
+                </div>
+                {# 预热进度条：默认隐藏，启动后展示 #}
+                <div id="symbols_prewarm_progress" style="display: none; margin-bottom: 6px; font-size: 12px;">
+                  <div style="display: flex; justify-content: space-between; color: #555; margin-bottom: 2px;">
+                    <span id="symbols_prewarm_label">准备中...</span>
+                    <span id="symbols_prewarm_count" style="color: #888;">0/0</span>
+                  </div>
+                  <div style="height: 4px; background: #eee; border-radius: 2px; overflow: hidden;">
+                    <div id="symbols_prewarm_bar"
+                      style="height: 100%; width: 0%; background: #1e9fff; transition: width .3s;"></div>
+                  </div>
+                  <div id="symbols_prewarm_current"
+                    style="margin-top: 2px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                </div>
+                <style>
+                  /* 键盘导航高亮：当前选中行用浅红底色 + 加粗代码列，与 layui 主题保持一致 */
+                  #symbols_list_tbody tr.symbols-row.is-active {
+                    background-color: #ffe9e9 !important;
+                  }
+                  #symbols_list_tbody tr.symbols-row.is-active td:first-child {
+                    font-weight: 600;
+                  }
+                </style>
+                <div id="symbols_list_wrap" tabindex="0"
+                  style="max-height: 360px; overflow-y: auto; border: 1px solid #eee; outline: none;">
+                  <table class="layui-table" lay-size="sm" style="margin: 0;">
+                    <colgroup>
+                      <col style="width: 45%;" />
+                      <col />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>代码</th>
+                        <th>名称</th>
+                      </tr>
+                    </thead>
+                    <tbody id="symbols_list_tbody">
+                      <tr><td colspan="2" style="text-align:center; color:#aaa;">加载中…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <hr class="layui-border-red" />
+              </div>
+            </div>
             <div class="layui-colla-item">
               {# 自选内容 #}
               <div class="layui-colla-title" data-ca-title="自选组">自选组</div>
@@ -283,6 +439,37 @@
     // 解析 json 字符串
     var market_frequencys = JSON.parse(market_frequencys);
 
+    // 支持通过 URL 参数 ?market=&code= 直接定位到指定标的（来自 /symbols 列表页跳转）。
+    // 解析后写入 localStorage，让下方 default_vals 与现有初始化逻辑无缝识别，无需改动其它 JS。
+    (function applyUrlSymbolParams() {
+      try {
+        var params = new URLSearchParams(window.location.search || "");
+        var urlMarket = (params.get("market") || "").trim().toLowerCase();
+        var urlCode = (params.get("code") || "").trim();
+        var allowedMarkets = [
+          "a", "hk", "futures", "ny_futures",
+          "fx", "us", "currency", "currency_spot"
+        ];
+        if (urlMarket && allowedMarkets.indexOf(urlMarket) !== -1) {
+          // 与 change_chart_ticker 内部使用的 key 完全一致，确保被后续渲染读取。
+          if (window.Utils && typeof Utils.set_local_data === "function") {
+            Utils.set_local_data("market", urlMarket);
+            if (urlCode) {
+              Utils.set_local_data(urlMarket + "_code", urlCode);
+            }
+          } else {
+            // Utils 尚未加载时退化到原生 localStorage，key 与 utils.js 的实现保持一致。
+            try {
+              localStorage.setItem("market", urlMarket);
+              if (urlCode) {
+                localStorage.setItem(urlMarket + "_code", urlCode);
+              }
+            } catch (_) { /* localStorage 不可用时直接忽略，不影响默认渲染 */ }
+          }
+        }
+      } catch (_) { /* URL 解析失败回退到默认行为，不阻塞图表初始化 */ }
+    })();
+
     var default_vals = {
       theme: "Light",
       market: "a",
@@ -352,6 +539,463 @@
   <script src="{{ url_for('static', filename='js/ai.js') }}"></script>
   <script src="{{ url_for('static', filename='js/bkgn.js') }}"></script>
   <script>
+    // 右栏「标的列表」区块：按市场浏览全部标的，点击代码列在新窗口打开缠论图表。
+    // 不依赖 layui.table，纯 jQuery + AJAX 渲染，避免折叠面板内表格高度计算问题。
+    $(function () {
+      layui.use(['form'], function () {
+        var lform = layui.form;
+
+        var SymbolsPanel = {
+          state: {
+            market: 'a',
+            q: '',
+            // 当前 visibleRows 中被键盘选中的行索引（-1 表示未选中）
+            selectedIndex: -1,
+            // 当前市场的全量数据（含 code / name / pinyin），切市场或刷新时重建
+            allRows: [],
+            // 经搜索过滤后的可见数据，键盘 ↑/↓ 走的就是这个数组
+            visibleRows: [],
+            // 防止短时间内多次切换市场带来的旧请求覆盖新结果
+            loadSeq: 0
+          },
+
+          // —— 通用切图函数：复用全局 change_chart_ticker，并同步右栏主市场下拉 ——
+          switchTo: function (market, code) {
+            if (!market || !code) return;
+            if (typeof change_chart_ticker === 'function') {
+              try {
+                var $mainMarket = $('select[name="market"]').first();
+                if ($mainMarket.length && $mainMarket.val() !== market) {
+                  $mainMarket.val(market);
+                  if (window.layui && layui.form) layui.form.render('select');
+                }
+              } catch (_) { /* 同步失败不阻塞切图 */ }
+              change_chart_ticker(market, code);
+            } else {
+              window.location.href = '/?market=' + encodeURIComponent(market)
+                + '&code=' + encodeURIComponent(code);
+            }
+          },
+
+          // —— 选中索引管理：更新高亮 + 滚动到可视区 + 触发切图 ——
+          setSelected: function (idx, opts) {
+            opts = opts || {};
+            var $rows = $('#symbols_list_tbody tr.symbols-row');
+            if ($rows.length === 0) {
+              this.state.selectedIndex = -1;
+              return;
+            }
+            if (idx < 0) idx = 0;
+            if (idx > $rows.length - 1) idx = $rows.length - 1;
+            this.state.selectedIndex = idx;
+            $rows.removeClass('is-active');
+            var $cur = $rows.eq(idx).addClass('is-active');
+
+            // 滚动选中行到可视区（块对齐到最近边）
+            var rowEl = $cur.get(0);
+            if (rowEl && typeof rowEl.scrollIntoView === 'function') {
+              rowEl.scrollIntoView({ block: 'nearest' });
+            }
+
+            if (opts.triggerSwitch !== false) {
+              this.switchTo($cur.data('market'), $cur.data('code'));
+            }
+          },
+
+          // —— 键盘事件：在表格容器（#symbols_list_wrap）上监听 ↑/↓/Enter ——
+          // 一次性全量加载后，键盘上下完全连续，不再有翻页中断。
+          handleKeydown: function (e) {
+            var key = e.key || '';
+            var rowsCount = this.state.visibleRows.length;
+            if (rowsCount === 0) return;
+
+            if (key === 'ArrowDown') {
+              e.preventDefault();
+              var next = this.state.selectedIndex < 0 ? 0 : this.state.selectedIndex + 1;
+              if (next > rowsCount - 1) next = rowsCount - 1;
+              if (next !== this.state.selectedIndex) this.setSelected(next);
+            } else if (key === 'ArrowUp') {
+              e.preventDefault();
+              var prev = this.state.selectedIndex <= 0 ? 0 : this.state.selectedIndex - 1;
+              if (prev !== this.state.selectedIndex) this.setSelected(prev);
+            } else if (key === 'Home') {
+              e.preventDefault();
+              if (rowsCount > 0) this.setSelected(0);
+            } else if (key === 'End') {
+              e.preventDefault();
+              if (rowsCount > 0) this.setSelected(rowsCount - 1);
+            } else if (key === 'Enter') {
+              e.preventDefault();
+              if (this.state.selectedIndex >= 0) {
+                var $cur = $('#symbols_list_tbody tr.symbols-row').eq(this.state.selectedIndex);
+                this.switchTo($cur.data('market'), $cur.data('code'));
+              }
+            }
+          },
+
+          init: function () {
+            var self = this;
+            // 与首页主市场下拉同步初值，保持当前查看市场一致
+            try {
+              var curMarket = (window.Utils && Utils.get_local_data)
+                ? Utils.get_local_data('market') : null;
+              if (curMarket) {
+                self.state.market = curMarket;
+                $('#symbols_market_select').val(curMarket);
+                lform.render('select');
+              }
+            } catch (_) { /* 读取 localStorage 失败不影响默认行为 */ }
+
+            lform.on('select(symbols_market_select)', function (data) {
+              self.state.market = data.value;
+              self.state.q = '';
+              self.state.selectedIndex = -1;
+              $('#symbols_search_input').val('');
+              self.load();
+              // 切换市场时同步刷新预热按钮状态（不同市场各自独立的进度）
+              PrewarmController.refreshOnMarketChange();
+            });
+
+            // 搜索：输入即时本地过滤，无需提交。带 80ms 节流防抖。
+            var searchDebounce = null;
+            $('#symbols_search_input').on('input', function () {
+              if (searchDebounce) clearTimeout(searchDebounce);
+              var val = ($(this).val() || '').trim();
+              searchDebounce = setTimeout(function () {
+                self.state.q = val;
+                self.applyFilter();
+              }, 80);
+            });
+            // Enter 键在搜索框里：直接选中当前过滤结果第一行
+            $('#symbols_search_input').on('keydown', function (e) {
+              if (e.keyCode === 13) {
+                e.preventDefault();
+                if (self.state.visibleRows.length > 0) {
+                  $('#symbols_list_wrap').focus();
+                  self.setSelected(0);
+                }
+              }
+            });
+
+            // 容器键盘监听：使用 keydown 优先于浏览器默认滚动
+            $('#symbols_list_wrap').on('keydown', function (e) {
+              self.handleKeydown(e);
+            });
+
+            // 行点击：选中并切图（不触发 setSelected 内的二次切图，避免重复调用）
+            $(document).on('click', '#symbols_list_tbody tr.symbols-row', function () {
+              var idx = $('#symbols_list_tbody tr.symbols-row').index(this);
+              if (idx >= 0) {
+                self.setSelected(idx, { triggerSwitch: false });
+                // 让容器获得焦点，后续可直接用键盘继续浏览
+                $('#symbols_list_wrap').focus();
+                self.switchTo($(this).data('market'), $(this).data('code'));
+              }
+            });
+
+            // 初始化预热控制器（启动/取消按钮 + 进度轮询）
+            PrewarmController.init(self);
+
+            self.load();
+          },
+
+          // 一次性全量加载该市场的所有标的，存到 allRows，立即应用当前过滤词渲染。
+          load: function () {
+            var self = this;
+            var $tbody = $('#symbols_list_tbody');
+            $tbody.html('<tr><td colspan="2" style="text-align:center; color:#aaa;">加载中…</td></tr>');
+            self.state.allRows = [];
+            self.state.visibleRows = [];
+            self.state.selectedIndex = -1;
+
+            var seq = ++self.state.loadSeq;
+            $.ajax({
+              url: '/symbols/list',
+              method: 'GET',
+              data: { market: self.state.market, all: 1 },
+              dataType: 'json'
+            }).done(function (res) {
+              // 旧请求覆盖新结果保护：用户在加载期间又切了市场，丢弃旧响应
+              if (seq !== self.state.loadSeq) return;
+              if (!res || res.ok !== true) {
+                $tbody.html('<tr><td colspan="2" style="text-align:center; color:#c00;">加载失败</td></tr>');
+                return;
+              }
+              var items = res.items || [];
+              // 预生成小写字段，本地过滤无需重复 toLowerCase
+              for (var i = 0; i < items.length; i++) {
+                var it = items[i];
+                it._codeL = (it.code || '').toLowerCase();
+                it._nameL = (it.name || '').toLowerCase();
+                it._pyL   = (it.pinyin || '').toLowerCase();
+              }
+              self.state.allRows = items;
+              self.applyFilter();
+            }).fail(function () {
+              if (seq !== self.state.loadSeq) return;
+              $tbody.html('<tr><td colspan="2" style="text-align:center; color:#c00;">网络错误</td></tr>');
+            });
+          },
+
+          // 在 allRows 上做本地过滤并重渲染
+          applyFilter: function () {
+            var q = (this.state.q || '').toLowerCase();
+            var rows = this.state.allRows;
+            var visible;
+            if (!q) {
+              visible = rows;
+            } else {
+              visible = [];
+              for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                if (r._codeL.indexOf(q) !== -1
+                    || r._nameL.indexOf(q) !== -1
+                    || r._pyL.indexOf(q) !== -1) {
+                  visible.push(r);
+                }
+              }
+            }
+            this.state.visibleRows = visible;
+            this.state.selectedIndex = -1;
+            this.renderRows();
+          },
+
+          // 把 visibleRows 渲染成表格 HTML（使用拼接字符串避免大量 jQuery 操作）
+          renderRows: function () {
+            var $tbody = $('#symbols_list_tbody');
+            var rows = this.state.visibleRows;
+            var market = this.state.market;
+            if (rows.length === 0) {
+              $tbody.html('<tr><td colspan="2" style="text-align:center; color:#aaa;">无数据</td></tr>');
+              $('#symbols_total_tip').text('共 0 条');
+              return;
+            }
+            var html = '';
+            for (var i = 0; i < rows.length; i++) {
+              var it = rows[i];
+              html += '<tr class="symbols-row" '
+                + 'data-market="' + market + '" '
+                + 'data-code="' + (it.code || '').replace(/"/g, '&quot;') + '" '
+                + 'style="cursor:pointer;">'
+                + '<td style="color:#1e9fff;">' + (it.code || '') + '</td>'
+                + '<td>' + (it.name || '') + '</td>'
+                + '</tr>';
+            }
+            $tbody.html(html);
+            // 列表更新后回滚到顶部，避免上一次滚动位置错乱
+            var wrap = document.getElementById('symbols_list_wrap');
+            if (wrap) wrap.scrollTop = 0;
+            // 顶部计数提示：搜索时显示 "命中/总"，否则只显示总数
+            var total = this.state.allRows.length;
+            if (this.state.q) {
+              $('#symbols_total_tip').text('命中 ' + rows.length + ' / 共 ' + total + ' 条');
+            } else {
+              $('#symbols_total_tip').text('共 ' + total + ' 条');
+            }
+          }
+        };
+
+        // ============================================================
+        // 预热控制器：触发后端预热任务 + 轮询进度 + 取消
+        // ============================================================
+        var PrewarmController = {
+          symbolsPanel: null,
+          pollTimer: null,
+          POLL_INTERVAL_MS: 1500,
+          // 当前 UI 显示的状态：'idle' | 'starting' | 'running' | 'done'
+          uiState: 'idle',
+
+          init: function (panel) {
+            var self = this;
+            self.symbolsPanel = panel;
+
+            $('#symbols_prewarm_btn').on('click', function () {
+              if (self.uiState === 'running' || self.uiState === 'starting') {
+                self.cancel();
+              } else {
+                self.start();
+              }
+            });
+
+            // 页面初始化时先查一次：可能有别的会话已经在跑
+            self.fetchStatusOnce();
+          },
+
+          // 切换市场后：停止旧轮询，立即查询新市场的状态
+          refreshOnMarketChange: function () {
+            this.stopPolling();
+            this.applyTaskToUI(null);
+            this.fetchStatusOnce();
+          },
+
+          start: function () {
+            var self = this;
+            var market = self.symbolsPanel.state.market;
+            self.uiState = 'starting';
+            self.setBtnText('启动中...', true);
+
+            $.ajax({
+              url: '/symbols/prewarm',
+              method: 'POST',
+              data: { market: market },
+              dataType: 'json'
+            }).done(function (res) {
+              if (res && res.ok) {
+                if (window.layer) layer.msg(res.msg || '预热已启动', { icon: 1, time: 1500 });
+                self.applyTaskToUI(res.task);
+                self.startPolling();
+              } else {
+                if (window.layer) layer.msg((res && res.msg) || '启动失败', { icon: 2, time: 2500 });
+                self.uiState = 'idle';
+                self.setBtnText('预热全部', false);
+              }
+            }).fail(function (xhr) {
+              var msg = '请求失败';
+              try { msg = (xhr.responseJSON && xhr.responseJSON.msg) || msg; } catch (_) {}
+              if (window.layer) layer.msg(msg, { icon: 2, time: 2500 });
+              self.uiState = 'idle';
+              self.setBtnText('预热全部', false);
+            });
+          },
+
+          cancel: function () {
+            var self = this;
+            var market = self.symbolsPanel.state.market;
+            $.ajax({
+              url: '/symbols/prewarm/cancel',
+              method: 'POST',
+              data: { market: market },
+              dataType: 'json'
+            }).done(function (res) {
+              if (window.layer) {
+                layer.msg((res && res.msg) || '已请求取消', { icon: res && res.ok ? 1 : 2, time: 2000 });
+              }
+              // 不立即停轮询，让任务在 worker 自然收敛后状态变 cancelled
+            });
+          },
+
+          fetchStatusOnce: function () {
+            var self = this;
+            var market = self.symbolsPanel.state.market;
+            $.ajax({
+              url: '/symbols/prewarm/status',
+              method: 'GET',
+              data: { market: market },
+              dataType: 'json'
+            }).done(function (res) {
+              if (res && res.ok) {
+                self.applyTaskToUI(res.task);
+                if (res.task && res.task.status === 'running') {
+                  self.startPolling();
+                }
+              }
+            });
+          },
+
+          startPolling: function () {
+            var self = this;
+            self.stopPolling();
+            self.pollTimer = setInterval(function () { self.poll(); }, self.POLL_INTERVAL_MS);
+          },
+
+          stopPolling: function () {
+            if (this.pollTimer) {
+              clearInterval(this.pollTimer);
+              this.pollTimer = null;
+            }
+          },
+
+          poll: function () {
+            var self = this;
+            var market = self.symbolsPanel.state.market;
+            $.ajax({
+              url: '/symbols/prewarm/status',
+              method: 'GET',
+              data: { market: market },
+              dataType: 'json'
+            }).done(function (res) {
+              if (!res || !res.ok) return;
+              self.applyTaskToUI(res.task);
+              if (!res.task || res.task.status !== 'running') {
+                self.stopPolling();
+              }
+            });
+          },
+
+          // 把后端任务对象映射到 UI（按钮文本、进度条、当前标的提示）
+          applyTaskToUI: function (task) {
+            var $progress = $('#symbols_prewarm_progress');
+            if (!task) {
+              $progress.hide();
+              this.uiState = 'idle';
+              this.setBtnText('预热全部', false);
+              return;
+            }
+
+            var pct = task.total > 0 ? Math.round(task.done * 100 / task.total) : 0;
+            var status = task.status;
+            var label, barColor;
+
+            if (status === 'running') {
+              this.uiState = 'running';
+              this.setBtnText('停止预热', true);
+              label = '预热中';
+              barColor = '#1e9fff';
+            } else if (status === 'finished') {
+              this.uiState = 'done';
+              this.setBtnText('预热全部', false);
+              label = '完成';
+              barColor = '#5fb878';
+            } else if (status === 'cancelled') {
+              this.uiState = 'done';
+              this.setBtnText('预热全部', false);
+              label = '已取消';
+              barColor = '#ffb800';
+            } else if (status === 'error') {
+              this.uiState = 'done';
+              this.setBtnText('预热全部', false);
+              label = '出错: ' + (task.error_msg || '未知');
+              barColor = '#ff5722';
+            } else {
+              label = status || '';
+              barColor = '#1e9fff';
+            }
+
+            $progress.show();
+            $('#symbols_prewarm_label').text(label);
+            $('#symbols_prewarm_count').text(
+              task.done + '/' + task.total
+              + ' (✓' + (task.succeeded || 0) + ' ✗' + (task.failed || 0) + ')'
+            );
+            $('#symbols_prewarm_bar').css({ width: pct + '%', background: barColor });
+
+            if (status === 'running' && task.current_code) {
+              var cur = task.current_code + (task.current_name ? ' - ' + task.current_name : '');
+              $('#symbols_prewarm_current').text('当前: ' + cur).show();
+            } else if (status === 'finished' || status === 'cancelled') {
+              var elapsed = task.elapsed ? Math.round(task.elapsed) + 's' : '';
+              $('#symbols_prewarm_current').text(elapsed ? '总耗时 ' + elapsed : '').show();
+            } else {
+              $('#symbols_prewarm_current').text('').hide();
+            }
+          },
+
+          setBtnText: function (text, isCancelMode) {
+            $('#symbols_prewarm_btn_text').text(text);
+            var $btn = $('#symbols_prewarm_btn');
+            if (isCancelMode) {
+              $btn.removeClass('layui-border-blue').addClass('layui-btn-warm');
+            } else {
+              $btn.removeClass('layui-btn-warm').addClass('layui-border-blue');
+            }
+          }
+        };
+
+        SymbolsPanel.init();
+      });
+    });
+  </script>
+  <script>
     $(function () {
       // 缠论配置项更改
       layui.use(function () {
@@ -365,6 +1009,13 @@
         dropdown.render({
           elem: "#toggle-menu",
           data: [
+            {
+              title: "收起缠论解盘",
+              templet:
+                '<div><i class="layui-icon layui-icon-shrink-right"></i> <span>收起缠论解盘</span></div>',
+              id: "collapse_menu",
+            },
+            { type: "-" },
             {
               title: "缠论配置项",
               templet:
@@ -435,7 +1086,12 @@
             },
           ],
           click: function (item) {
-            if (item.title === "缠论配置项") {
+            if (item.title === "收起缠论解盘") {
+              // 由 ChartMenuResize 模块挂载到 window 上的接口（在底部 IIFE 中暴露）
+              if (window.ChartMenuResize && typeof window.ChartMenuResize.collapse === 'function') {
+                window.ChartMenuResize.collapse();
+              }
+            } else if (item.title === "缠论配置项") {
               layer.open({
                 type: 2,
                 title: "缠论配置项变更",
@@ -588,8 +1244,8 @@
           location.reload();
         });
 
-        // 固定条，显示与隐藏菜单栏
-        Utils.render_fixbar();
+        // 固定条（"显示与隐藏菜单栏"按钮）已移除，改用右栏内置的收起按钮 #chart_menu_toggle
+        // Utils.render_fixbar();
 
         // AI 分析助手
         AI.init_ai_opts();
@@ -711,5 +1367,179 @@
       init_web();
       interval_update_rates = setInterval(ZiXuan.stocks_update_rate(), 30000);
     });
+  </script>
+
+  <script>
+    /**
+     * 右栏「缠论解盘」可拖拽宽度调整
+     *
+     * 设计要点：
+     * - 不动 LayUI 栅格 class（col-md10/col-md2），用 JS 行内 style 覆盖宽度
+     * - #chart_menu 是 position:fixed; right:0 → 改 width 即可
+     * - #chart_container 也要同步 width，避免 TV 图表容器跨过分隔条
+     * - 宽度记到 localStorage，下次加载自动恢复
+     * - 拖拽结束触发 window.resize，让 TV 图表自适应
+     * - 双击分隔条 = 重置为默认宽度
+     */
+    (function () {
+      var STORAGE_KEY = 'chart_menu_width';
+      var COLLAPSE_KEY = 'chart_menu_collapsed';  // '1' = 收起, 其它 = 展开
+      var DEFAULT_WIDTH = 320;   // 默认右栏宽度（px），略宽于原 col-md2 ≈ 17%
+      var MIN_WIDTH = 240;       // 最小宽度（拖拽时），避免拖没了又看不到收起按钮
+      var MAX_RATIO = 0.6;       // 最大占视口比例（防止把图表拖没）
+      var ABS_MAX_WIDTH = 900;   // 绝对上限
+
+      function readStoredWidth() {
+        try {
+          var raw = window.localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          var n = parseInt(raw, 10);
+          return isNaN(n) ? null : n;
+        } catch (_) { return null; }
+      }
+      function writeStoredWidth(px) {
+        try { window.localStorage.setItem(STORAGE_KEY, String(px)); } catch (_) {}
+      }
+      function readCollapsed() {
+        try { return window.localStorage.getItem(COLLAPSE_KEY) === '1'; }
+        catch (_) { return false; }
+      }
+      function writeCollapsed(v) {
+        try { window.localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0'); } catch (_) {}
+      }
+      function clampWidth(px) {
+        var max = Math.min(ABS_MAX_WIDTH, Math.floor(window.innerWidth * MAX_RATIO));
+        if (px < MIN_WIDTH) px = MIN_WIDTH;
+        if (px > max) px = max;
+        return px;
+      }
+      // 应用宽度到 DOM。collapsed=true 时右栏隐藏；展开状态由右栏内嵌的按钮控制收起，
+      // 收起后由屏幕右侧贴边的 #chart_menu_toggle 控制展开。
+      function applyWidth(px, collapsed) {
+        var menu = document.getElementById('chart_menu');
+        var container = document.getElementById('chart_container');
+        var handle = document.getElementById('chart_resize_handle');
+        if (!menu || !container || !handle) return;
+
+        if (collapsed) {
+          menu.style.width = '0px';
+          menu.style.maxWidth = '0px';
+          menu.style.overflow = 'hidden';
+          container.style.width = '100%';
+          container.style.maxWidth = '100%';
+          document.body.classList.add('chart-menu-collapsed');
+        } else {
+          menu.style.width = px + 'px';
+          menu.style.maxWidth = px + 'px';
+          menu.style.overflow = 'scroll';
+          container.style.width = 'calc(100% - ' + px + 'px)';
+          container.style.maxWidth = 'calc(100% - ' + px + 'px)';
+          handle.style.right = (px - 3) + 'px';
+          document.body.classList.remove('chart-menu-collapsed');
+        }
+      }
+      // 通知 TV 图表自适应：触发 window resize（多数 widget 会监听）
+      // 同时如果项目里暴露了 chart_widgets，调用其 resize
+      function notifyResize() {
+        try { window.dispatchEvent(new Event('resize')); } catch (_) {}
+        try {
+          if (Array.isArray(window.chart_widgets)) {
+            window.chart_widgets.forEach(function (w) {
+              if (w && typeof w.onChartReady === 'function') {
+                // TradingView Widget 会自动适配父容器尺寸，这里仅兜底
+              }
+            });
+          }
+        } catch (_) {}
+      }
+
+      // —— 拖拽实现 ——
+      var dragging = false;
+      var startX = 0;
+      var startWidth = 0;
+
+      function onMouseDown(e) {
+        dragging = true;
+        startX = e.clientX;
+        startWidth = parseInt(document.getElementById('chart_menu').style.width, 10) || DEFAULT_WIDTH;
+        document.body.classList.add('chart-resizing');
+        document.getElementById('chart_resize_handle').classList.add('is-dragging');
+        e.preventDefault();
+      }
+      function onMouseMove(e) {
+        if (!dragging) return;
+        // 鼠标向左移动 → 右栏变宽（startX - clientX 为正）
+        var newWidth = clampWidth(startWidth + (startX - e.clientX));
+        applyWidth(newWidth, false);
+      }
+      function onMouseUp() {
+        if (!dragging) return;
+        dragging = false;
+        document.body.classList.remove('chart-resizing');
+        var handle = document.getElementById('chart_resize_handle');
+        if (handle) handle.classList.remove('is-dragging');
+        var cur = parseInt(document.getElementById('chart_menu').style.width, 10);
+        if (cur && !isNaN(cur)) writeStoredWidth(cur);
+        notifyResize();
+      }
+      function onDblClick() {
+        applyWidth(DEFAULT_WIDTH, false);
+        writeStoredWidth(DEFAULT_WIDTH);
+        notifyResize();
+      }
+      // 收起：右栏内嵌按钮触发
+      function onCollapse() {
+        applyWidth(0, true);
+        writeCollapsed(true);
+        notifyResize();
+      }
+      // 展开：贴边小条按钮触发
+      function onExpand() {
+        var stored = readStoredWidth();
+        applyWidth(clampWidth(stored || DEFAULT_WIDTH), false);
+        writeCollapsed(false);
+        notifyResize();
+      }
+
+      function init() {
+        // 初始宽度：localStorage > 默认；初始收起状态：localStorage
+        var stored = readStoredWidth();
+        var initial = clampWidth(stored || DEFAULT_WIDTH);
+        var collapsed = readCollapsed();
+        applyWidth(initial, collapsed);
+
+        var handle = document.getElementById('chart_resize_handle');
+        var expandBtn = document.getElementById('chart_menu_toggle');
+        if (!handle) return;
+        handle.addEventListener('mousedown', onMouseDown);
+        handle.addEventListener('dblclick', onDblClick);
+        if (expandBtn) expandBtn.addEventListener('click', onExpand);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        // 暴露给外部使用（让 #toggle-menu 的 dropdown 菜单项调用收起）
+        window.ChartMenuResize = {
+          collapse: onCollapse,
+          expand: onExpand
+        };
+
+        // 视口尺寸变化时，确保当前宽度仍在合法区间（如把窗口缩到很小）
+        window.addEventListener('resize', function () {
+          if (readCollapsed()) return; // 收起状态下不调整
+          var cur = parseInt(document.getElementById('chart_menu').style.width, 10);
+          if (cur && !isNaN(cur)) {
+            var clamped = clampWidth(cur);
+            if (clamped !== cur) applyWidth(clamped, false);
+          }
+        });
+      }
+
+      // 等 DOM 就绪后再绑定
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
   </script>
 </html>

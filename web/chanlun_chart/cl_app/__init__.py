@@ -155,7 +155,7 @@ def create_app(test_config=None):
     from .blueprints.tv import tv_bp
     app.register_blueprint(tv_bp)
 
-    # 注册蓝图：自选、提醒、选股、设置、AI、板块概念、杂项、配置项
+    # 注册蓝图：自选、提醒、选股、设置、AI、板块概念、杂项、配置项、标的列表
     from .blueprints.zixuan import zixuan_bp
     from .blueprints.alert import alert_bp
     from .blueprints.xuangu import xuangu_bp
@@ -164,6 +164,7 @@ def create_app(test_config=None):
     from .blueprints.bkgn import bkgn_bp
     from .blueprints.other import other_bp
     from .blueprints.options import options_bp
+    from .blueprints.symbols import symbols_bp
 
     app.register_blueprint(zixuan_bp)
     app.register_blueprint(alert_bp)
@@ -173,6 +174,7 @@ def create_app(test_config=None):
     app.register_blueprint(bkgn_bp)
     app.register_blueprint(other_bp)
     app.register_blueprint(options_bp)
+    app.register_blueprint(symbols_bp)
 
     # 共享对象存入 app.extensions，供蓝图访问
     app.extensions = getattr(app, "extensions", {})
