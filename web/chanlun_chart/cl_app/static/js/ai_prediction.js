@@ -42,6 +42,7 @@ var AIPrediction = (function () {
     const container = manager.initChartContainer(symbolKey);
     container.ai_pred_bis = container.ai_pred_bis || [];
     container.ai_pred_labels = container.ai_pred_labels || [];
+    container.ai_pred_levels = container.ai_pred_levels || [];
     return container;
   }
 
@@ -57,13 +58,205 @@ var AIPrediction = (function () {
     });
   }
 
-  function draw(manager, predictions) {
-    if (!manager || !manager.chart || !Array.isArray(predictions)) return;
+  function classificationClasses(completeClassification) {
+    if (
+      completeClassification &&
+      Array.isArray(completeClassification.classes)
+    ) {
+      return completeClassification.classes;
+    }
+    return [];
+  }
+
+  function classColor(predictionClass, index) {
+    const colors = {
+      up: "#16A085",
+      down: "#C0392B",
+      range: "#8E44AD",
+      shock: "#8E44AD",
+    };
+    return (
+      predictionClass.color ||
+      colors[predictionClass.direction] ||
+      [CHART_CONFIG.COLORS.AI_PRED, "#2874A6", "#D68910"][index % 3]
+    );
+  }
+
+  function classLabel(predictionClass) {
+    const probability = Math.round(Number(predictionClass.probability || 0) * 100);
+    const parts = [predictionClass.name + " " + probability + "%"];
+    return parts.join("\n");
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function panelRoot(manager) {
+    if (typeof document === "undefined") return null;
+    const id = manager && manager.id ? "tv_chart_container_" + manager.id : "";
+    const root = id ? document.getElementById(id) : null;
+    if (!root) return null;
+    const position =
+      typeof getComputedStyle === "function"
+        ? getComputedStyle(root).position
+        : root.style.position;
+    if (!position || position === "static") {
+      root.style.position = "relative";
+    }
+    return root;
+  }
+
+  function classPanelHtml(predictionClass, index, color) {
+    const probability = Math.round(Number(predictionClass.probability || 0) * 100);
+    const open = index === 0 ? " open" : "";
+    return (
+      "<details class=\"ai-prediction-class\"" +
+      open +
+      ">" +
+      "<summary>" +
+      "<span style=\"display:inline-block;width:8px;height:8px;border-radius:50%;background:" +
+      color +
+      ";margin-right:6px;\"></span>" +
+      escapeHtml(predictionClass.name || "完全分类") +
+      " <strong>" +
+      probability +
+      "%</strong>" +
+      "</summary>" +
+      "<div class=\"ai-prediction-detail\">" +
+      detailRow("触发", predictionClass.trigger) +
+      detailRow("边界", predictionClass.boundary) +
+      detailRow("应对", predictionClass.action) +
+      detailRow("依据", predictionClass.basis) +
+      "</div>" +
+      "</details>"
+    );
+  }
+
+  function detailRow(label, value) {
+    if (!value) return "";
+    return (
+      "<div class=\"ai-prediction-row\"><b>" +
+      label +
+      "：</b>" +
+      escapeHtml(value) +
+      "</div>"
+    );
+  }
+
+  function renderPanel(manager, container, completeClassification, classes) {
+    const root = panelRoot(manager);
+    if (!root) return;
+    if (container.ai_pred_panel) {
+      container.ai_pred_panel.remove();
+      container.ai_pred_panel = null;
+    }
+    const panel = document.createElement("div");
+    panel.className = "ai-prediction-panel";
+    panel.style.position = "absolute";
+    panel.style.top = "44px";
+    panel.style.right = "66px";
+    panel.style.width = "360px";
+    panel.style.maxWidth = "42%";
+    panel.style.maxHeight = "52%";
+    panel.style.overflowY = "auto";
+    panel.style.zIndex = "20";
+    panel.style.padding = "10px 12px";
+    panel.style.border = "1px solid rgba(142, 68, 173, 0.22)";
+    panel.style.borderRadius = "6px";
+    panel.style.background = "rgba(255, 255, 255, 0.92)";
+    panel.style.boxShadow = "0 4px 18px rgba(0, 0, 0, 0.14)";
+    panel.style.fontSize = "12px";
+    panel.style.lineHeight = "1.55";
+    panel.style.color = "#1F2933";
+    panel.style.pointerEvents = "auto";
+    panel.innerHTML =
+      "<div style=\"font-weight:700;font-size:13px;margin-bottom:6px;\">AI完全分类</div>" +
+      "<div style=\"margin-bottom:6px;color:#4B5563;\">" +
+      escapeHtml(completeClassification.summary || "") +
+      "</div>" +
+      "<div style=\"margin-bottom:8px;color:#6B7280;\">" +
+      escapeHtml(completeClassification.current_structure || "") +
+      "</div>" +
+      classes
+        .map(function (predictionClass, index) {
+          return classPanelHtml(predictionClass, index, classColor(predictionClass, index));
+        })
+        .join("");
+    root.appendChild(panel);
+    container.ai_pred_panel = panel;
+  }
+
+  function drawLevel(manager, container, predictionClass, level, index, color) {
+    if (!level || !level.price) return;
+    const firstBi =
+      predictionClass.bis &&
+      predictionClass.bis[0] &&
+      predictionClass.bis[0].points
+        ? predictionClass.bis[0]
+        : null;
+    const startTime =
+      level.time || (firstBi && firstBi.points[0] ? firstBi.points[0].time : null);
+    if (!startTime) return;
+    const endTime =
+      firstBi && firstBi.points[1]
+        ? firstBi.points[1].time
+        : startTime + 1;
+    const line = {
+      points: [
+        { time: startTime, price: level.price },
+        { time: Math.max(endTime, startTime + 1), price: level.price },
+      ],
+      linestyle: level.type === "invalid" ? "2" : "1",
+    };
+    const key = JSON.stringify({ classKey: predictionClass.key, level, index });
+    container.ai_pred_levels.push({
+      time: startTime,
+      key,
+      id: ChartUtils.createLineShape(manager.chart, line, {
+        color: color,
+        linewidth: 1,
+        overrides: {
+          transparency: level.type === "invalid" ? 35 : 55,
+          linestyle: parseInt(line.linestyle) || 1,
+        },
+      }),
+    });
+    container.ai_pred_labels.push({
+      time: startTime,
+      key: key + "_label",
+      id: ChartUtils.createShape(
+        manager.chart,
+        { time: startTime, price: level.price },
+        {
+          shape: "text",
+          text: level.text || level.type || "分类边界",
+          overrides: {
+            color: color,
+            textColor: color,
+            fontsize: 11,
+          },
+        }
+      ),
+    });
+  }
+
+  function draw(manager, completeClassification) {
+    if (!manager || !manager.chart) return;
+    const classes = classificationClasses(completeClassification);
+    if (!classes.length) return;
 
     clear(manager);
     const container = ensureContainer(manager);
-    predictions.forEach(function (prediction, predictionIndex) {
+    renderPanel(manager, container, completeClassification, classes);
+    classes.forEach(function (prediction, predictionIndex) {
       const alpha = Math.max(35, 90 - predictionIndex * 20);
+      const color = classColor(prediction, predictionIndex);
       (prediction.bis || []).forEach(function (bi, biIndex) {
         if (!bi.points || bi.points.length !== 2) return;
         const key = JSON.stringify({ predictionIndex, biIndex, bi });
@@ -75,7 +268,7 @@ var AIPrediction = (function () {
           time: bi.points[0].time,
           key,
           id: ChartUtils.createLineShape(manager.chart, line, {
-            color: CHART_CONFIG.COLORS.AI_PRED,
+            color: color,
             linewidth: 2,
             overrides: {
               transparency: alpha,
@@ -87,10 +280,7 @@ var AIPrediction = (function () {
         const endPoint = bi.points[1];
         const labelText =
           bi.text ||
-          prediction.name +
-            " " +
-            Math.round(Number(prediction.probability || 0) * 100) +
-            "%";
+          classLabel(prediction);
         try {
           container.ai_pred_labels.push({
             time: endPoint.time,
@@ -99,8 +289,8 @@ var AIPrediction = (function () {
               shape: "balloon",
               text: labelText,
               overrides: {
-                markerColor: CHART_CONFIG.COLORS.AI_PRED,
-                backgroundColor: CHART_CONFIG.COLORS.AI_PRED,
+                markerColor: color,
+                backgroundColor: color,
                 textColor: "#FFFFFF",
                 transparency: 65,
                 backgroundTransparency: 65,
@@ -112,6 +302,9 @@ var AIPrediction = (function () {
           console.warn("Failed to draw AI prediction label:", e);
         }
       });
+      (prediction.levels || []).forEach(function (level, levelIndex) {
+        drawLevel(manager, container, prediction, level, levelIndex, color);
+      });
     });
   }
 
@@ -120,8 +313,14 @@ var AIPrediction = (function () {
     Object.values(manager.obj_charts).forEach(function (container) {
       removeItems(manager, container.ai_pred_bis || []);
       removeItems(manager, container.ai_pred_labels || []);
+      removeItems(manager, container.ai_pred_levels || []);
       container.ai_pred_bis = [];
       container.ai_pred_labels = [];
+      container.ai_pred_levels = [];
+      if (container.ai_pred_panel) {
+        container.ai_pred_panel.remove();
+        container.ai_pred_panel = null;
+      }
     });
   }
 
@@ -141,7 +340,7 @@ var AIPrediction = (function () {
           layer.msg("暂无AI预测记录");
           return;
         }
-        draw(manager, res.data[0].predictions);
+        draw(manager, res.data[0].complete_classification);
         layer.msg("AI预测已显示");
       },
       error: function () {
@@ -159,7 +358,7 @@ var AIPrediction = (function () {
       data: info,
       success: function (res) {
         if (res.ok === true) {
-          draw(manager, res.predictions);
+          draw(manager, res.complete_classification);
           layer.msg("AI预测完成");
           return;
         }
