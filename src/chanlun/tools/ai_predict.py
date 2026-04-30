@@ -127,7 +127,7 @@ class AITrendPredict:
             model=ai_res["model"],
             prompt=prompt,
             msg=normalized.get("msg", ""),
-            predictions=normalized["predictions"],
+            prediction_payload=normalized,
             raw_response=ai_res["msg"],
         )
         return {
@@ -135,7 +135,7 @@ class AITrendPredict:
             "msg": normalized.get("msg", ""),
             "id": record_id,
             "model": ai_res["model"],
-            "predictions": normalized["predictions"],
+            "complete_classification": normalized["complete_classification"],
         }
 
     def _load_cl_data(self, code: str, frequency: str) -> ICL:
@@ -158,9 +158,10 @@ class AITrendPredict:
         lines = []
         lines.append("# 角色与任务")
         lines.append(
-            "你是缠论行情分析助手。请根据给定的笔、线段、中枢数据，推演后续最可能的笔走势。"
+            "你是缠论行情分析助手。请根据给定的笔、线段、中枢数据，基于“走势必完美”和“完全分类”推演后续走势。"
         )
-        lines.append("预测必须是概率化假设，不得写成确定性结论。")
+        lines.append("任务不是猜唯一未来，而是穷尽当前结构后续可能进入的有限分类，并给出每类的触发、边界、失效与应对。")
+        lines.append("预测必须是概率化假设，不得写成确定性结论；每个分类必须有明确边界条件，避免含糊表述。")
         lines.append("")
         lines.append("# 当前品种")
         lines.append(f"- 代码/名称：{cd.get_code()} - {stock_name}")
@@ -203,9 +204,11 @@ class AITrendPredict:
         lines.append("")
         lines.append("# 严格输出要求")
         lines.append("只返回 JSON，不要 Markdown，不要代码块，不要额外解释。")
-        lines.append("必须返回 1 到 3 个 predictions，并按 probability 从高到低排序。")
-        lines.append("probability 必须是 0 到 1 的数字，所有候选概率之和不要求等于 1。")
-        lines.append("每个 prediction 至少包含 1 条 bis，每条 bi 必须有两个点。")
+        lines.append("必须返回 complete_classification.classes，分类应覆盖当前结构之后的全部主要演化，不允许只给单一路径。")
+        lines.append("通常至少包含：向上离开/突破、向下离开/破坏、继续围绕中枢震荡或延伸；若当前结构不适用，可按实际结构重命名，但要穷尽。")
+        lines.append("每个 class 的 probability 必须是 0 到 1 的数字，并按 probability 从高到低排序。")
+        lines.append("每个 class 至少包含 1 条 bis，每条 bi 必须有两个点。")
+        lines.append("每个 class 必须包含 trigger、boundary、action、basis；levels 可给触发线/失效线/中枢边界。")
         lines.append(
             "points 中优先使用 bar_offset 表示从当前 K 线之后第几根 K 线，bar_offset 必须为正整数；price 必须为数字。"
         )
@@ -214,25 +217,46 @@ class AITrendPredict:
         lines.append(
             json.dumps(
                 {
-                    "msg": "一句总述",
-                    "predictions": [
-                        {
-                            "name": "候选走势名称",
-                            "probability": 0.45,
-                            "basis": "缠论推断依据",
-                            "invalid_price": 0,
-                            "bis": [
-                                {
-                                    "points": [
-                                        {"bar_offset": 1, "price": 0},
-                                        {"bar_offset": 5, "price": 0},
-                                    ],
-                                    "linestyle": "1",
-                                    "text": "AI 45%",
-                                }
-                            ],
-                        }
-                    ],
+                    "msg": "一句总述：当前结构的完全分类结论",
+                    "complete_classification": {
+                        "summary": "完全分类总述",
+                        "current_structure": "当前缠论结构，例如：30分钟中枢震荡末端/上升线段未完成",
+                        "classes": [
+                            {
+                                "key": "up_break",
+                                "name": "向上突破/离开",
+                                "direction": "up",
+                                "probability": 0.4,
+                                "trigger": "触发条件，例如有效站上ZG并回抽不入中枢",
+                                "boundary": "分类边界，例如ZG=0，ZD=0",
+                                "action": "应对，例如等待三买确认后跟随",
+                                "basis": "缠论依据",
+                                "invalid_price": 0,
+                                "bis": [
+                                    {
+                                        "points": [
+                                            {"bar_offset": 1, "price": 0},
+                                            {"bar_offset": 5, "price": 0},
+                                        ],
+                                        "linestyle": "1",
+                                        "text": "上破 40%",
+                                    }
+                                ],
+                                "levels": [
+                                    {
+                                        "price": 0,
+                                        "type": "trigger",
+                                        "text": "触发线",
+                                    },
+                                    {
+                                        "price": 0,
+                                        "type": "invalid",
+                                        "text": "失效线",
+                                    },
+                                ],
+                            }
+                        ],
+                    },
                 },
                 ensure_ascii=False,
             )
@@ -258,71 +282,125 @@ class AITrendPredict:
     def normalize_response(data: dict) -> dict:
         if not isinstance(data, dict):
             raise ValueError("根节点必须是 JSON object")
-        raw_predictions = data.get("predictions")
-        if not isinstance(raw_predictions, list):
-            raise ValueError("predictions 必须是数组")
 
-        predictions = []
-        for raw_prediction in raw_predictions[:3]:
+        classification = AITrendPredict.normalize_complete_classification(data)
+        if not classification["classes"]:
+            raise ValueError("没有有效的完全分类数据")
+        classification["classes"].sort(
+            key=lambda item: item["probability"], reverse=True
+        )
+        return {
+            "msg": str(data.get("msg", "")),
+            "complete_classification": classification,
+        }
+
+    @staticmethod
+    def normalize_bis(raw_bis: list, probability: float) -> list[dict]:
+        bis = []
+        if not isinstance(raw_bis, list):
+            return bis
+        for raw_bi in raw_bis:
+            points = []
+            for raw_point in raw_bi.get("points", []):
+                point = {"price": float(raw_point["price"])}
+                if "time" in raw_point:
+                    point["time"] = int(raw_point["time"])
+                if "bar_offset" in raw_point:
+                    point["bar_offset"] = max(1, int(raw_point["bar_offset"]))
+                points.append(point)
+            if len(points) != 2:
+                continue
+            bi = {
+                "points": points,
+                "linestyle": str(raw_bi.get("linestyle", "1")),
+                "text": str(raw_bi.get("text", f"AI {round(probability * 100)}%")),
+            }
+            bis.append(bi)
+        return bis
+
+    @staticmethod
+    def normalize_complete_classification(data: dict) -> dict:
+        raw_classification = data.get("complete_classification")
+        if not isinstance(raw_classification, dict):
+            raise ValueError("complete_classification 必须是 object")
+        raw_classes = raw_classification.get("classes", [])
+        if not isinstance(raw_classes, list):
+            raise ValueError("complete_classification.classes 必须是数组")
+
+        classes = []
+        for index, raw_class in enumerate(raw_classes):
             try:
-                probability = float(raw_prediction.get("probability"))
+                probability = float(raw_class.get("probability"))
             except (TypeError, ValueError):
                 continue
             if probability < 0 or probability > 1:
                 continue
-
-            bis = []
-            for raw_bi in raw_prediction.get("bis", []):
-                points = []
-                for raw_point in raw_bi.get("points", []):
-                    point = {"price": float(raw_point["price"])}
-                    if "time" in raw_point:
-                        point["time"] = int(raw_point["time"])
-                    if "bar_offset" in raw_point:
-                        point["bar_offset"] = max(1, int(raw_point["bar_offset"]))
-                    points.append(point)
-                if len(points) != 2:
-                    continue
-                bi = {
-                    "points": points,
-                    "linestyle": str(raw_bi.get("linestyle", "1")),
-                    "text": str(raw_bi.get("text", f"AI {round(probability * 100)}%")),
-                }
-                bis.append(bi)
-
+            bis = AITrendPredict.normalize_bis(raw_class.get("bis", []), probability)
             if not bis:
                 continue
-            invalid_price = raw_prediction.get("invalid_price")
-            predictions.append(
+
+            invalid_price = raw_class.get("invalid_price")
+            levels = []
+            for raw_level in raw_class.get("levels", []):
+                try:
+                    level = {
+                        "price": float(raw_level["price"]),
+                        "type": str(raw_level.get("type", "boundary")),
+                        "text": str(raw_level.get("text", "")),
+                    }
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if "time" in raw_level:
+                    level["time"] = int(raw_level["time"])
+                if "bar_offset" in raw_level:
+                    level["bar_offset"] = max(1, int(raw_level["bar_offset"]))
+                levels.append(level)
+
+            classes.append(
                 {
-                    "name": str(raw_prediction.get("name", "AI预测走势")),
+                    "key": str(raw_class.get("key", f"class_{index + 1}")),
+                    "name": str(raw_class.get("name", "完全分类")),
+                    "direction": str(raw_class.get("direction", "range")),
                     "probability": probability,
-                    "basis": str(raw_prediction.get("basis", "")),
+                    "trigger": str(raw_class.get("trigger", "")),
+                    "boundary": str(raw_class.get("boundary", "")),
+                    "action": str(raw_class.get("action", "")),
+                    "basis": str(raw_class.get("basis", "")),
                     "invalid_price": (
                         None if invalid_price in [None, ""] else float(invalid_price)
                     ),
                     "bis": bis,
+                    "levels": levels,
                 }
             )
 
-        if not predictions:
-            raise ValueError("没有有效的预测笔数据")
-        predictions.sort(key=lambda item: item["probability"], reverse=True)
-        return {"msg": str(data.get("msg", "")), "predictions": predictions}
+        return {
+            "summary": str(raw_classification.get("summary", data.get("msg", ""))),
+            "current_structure": str(raw_classification.get("current_structure", "")),
+            "classes": classes,
+        }
 
     @classmethod
     def fill_missing_times(cls, data: dict, cd: ICL, frequency: str) -> dict:
         current_time = fun.datetime_to_int(cd.get_src_klines()[-1].date)
         step_seconds = cls.FREQUENCY_SECONDS.get(frequency, 86400)
-        for prediction in data["predictions"]:
-            for bi in prediction["bis"]:
-                for point in bi["points"]:
-                    if "time" not in point:
-                        point["time"] = (
-                            current_time + point["bar_offset"] * step_seconds
-                        )
-                    point.pop("bar_offset", None)
+        for item in data.get("complete_classification", {}).get("classes", []):
+            cls.fill_item_times(item, current_time, step_seconds)
+            for level in item.get("levels", []):
+                if "time" not in level:
+                    level["time"] = (
+                        current_time + level.get("bar_offset", 1) * step_seconds
+                    )
+                level.pop("bar_offset", None)
         return data
+
+    @staticmethod
+    def fill_item_times(item: dict, current_time: int, step_seconds: int) -> None:
+        for bi in item.get("bis", []):
+            for point in bi["points"]:
+                if "time" not in point:
+                    point["time"] = current_time + point["bar_offset"] * step_seconds
+                point.pop("bar_offset", None)
 
     def save_prediction(
         self,
@@ -332,7 +410,7 @@ class AITrendPredict:
         model: str,
         prompt: str,
         msg: str,
-        predictions: list[dict[str, Any]],
+        prediction_payload: dict[str, Any],
         raw_response: str,
     ) -> int:
         from chanlun.db import TableByAIPrediction, db
@@ -347,7 +425,7 @@ class AITrendPredict:
                 model=model,
                 prompt=prompt,
                 msg=msg,
-                predictions=json.dumps(predictions, ensure_ascii=False),
+                predictions=json.dumps(prediction_payload, ensure_ascii=False),
                 raw_response=raw_response,
             )
             session.add(record)
@@ -381,7 +459,10 @@ class AITrendPredict:
                 item = record.__dict__.copy()
                 item.pop("_sa_instance_state", None)
                 item["dt"] = fun.datetime_to_str(item["dt"])
-                item["predictions"] = json.loads(item["predictions"])
+                prediction_payload = json.loads(item["predictions"])
+                item["complete_classification"] = prediction_payload[
+                    "complete_classification"
+                ]
                 data.append(item)
             return data, total
 

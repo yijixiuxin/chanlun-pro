@@ -407,39 +407,41 @@ class ChartManager {
     console.log("清除已绘制的图表 : " + clear_type);
     if (clear_type == "last") {
       for (const symbolKey in this.obj_charts) {
-        for (const chartType in this.obj_charts[symbolKey]) {
-          if (this.obj_charts[symbolKey][chartType].length == 0) {
-            continue;
+        CHART_CONFIG.CHART_TYPES.forEach((chartType) => {
+          const chartItems = this.obj_charts[symbolKey][chartType] || [];
+          if (chartItems.length == 0) {
+            return;
           }
           const maxTime = Math.max(
-            ...this.obj_charts[symbolKey][chartType].map((item) => item.time)
+            ...chartItems.map((item) => item.time)
           );
-          for (const _i in this.obj_charts[symbolKey][chartType]) {
-            const item = this.obj_charts[symbolKey][chartType][_i];
+          for (const _i in chartItems) {
+            const item = chartItems[_i];
             if (item.time == maxTime) {
               item.id.then((_id) => this.chart.removeEntity(_id));
-              // console.log("remove ", symbolKey, chartType, item);
+              console.log("remove ", symbolKey, chartType, item);
             }
           }
-          this.obj_charts[symbolKey][chartType] = this.obj_charts[symbolKey][
-            chartType
-          ].filter((item) => item.time != maxTime);
-        }
+          this.obj_charts[symbolKey][chartType] = chartItems.filter(
+            (item) => item.time != maxTime
+          );
+        });
       }
     } else {
       Object.values(this.obj_charts).forEach((symbolData) => {
-        Object.values(symbolData).forEach((chartItems) => {
+        CHART_CONFIG.CHART_TYPES.forEach((chartType) => {
+          const chartItems = symbolData[chartType] || [];
           chartItems.forEach((item) => {
             try {
               item.id.then((_id) => this.chart.removeEntity(_id));
+              console.log("remove ", chartType, item);
             } catch (e) {
               console.warn("Failed to remove chart entity:", e);
             }
           });
+          symbolData[chartType] = [];
         });
       });
-      // 清空引用
-      this.obj_charts = {};
     }
   }
 
