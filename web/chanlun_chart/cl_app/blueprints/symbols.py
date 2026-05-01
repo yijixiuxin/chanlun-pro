@@ -654,9 +654,11 @@ class PrewarmManager:
             LogUtil.error(f"[prewarm] worker crashed market={market}: {e}")
         finally:
             # 终态强制持久化一次（保证崩溃 / 取消都能落盘最后状态）
+            # 捕获 _persist_task 可能 leak 出的异常类型：OSError(已被内部吞但保险起见)、
+            # TypeError(json.dumps 遇到非 JSON 友好字段)、ValueError(json 编码错误)。
             try:
                 self._persist_task(task)
-            except Exception as e:
+            except (OSError, TypeError, ValueError) as e:
                 LogUtil.warning(f"[prewarm] final persist failed: {e}")
 
             with self._lock:
