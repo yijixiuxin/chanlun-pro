@@ -297,6 +297,23 @@ class PrewarmTask:
             "error_msg": self.error_msg,
         }
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "PrewarmTask":
+        """从持久化 json 还原任务对象（仅恢复展示字段，不恢复 cancel_event 等运行时对象）。"""
+        t = cls(market=d["market"], total=int(d.get("total", 0)))
+        t.task_id = d.get("task_id", t.task_id)
+        t.done = int(d.get("done", 0))
+        t.succeeded = int(d.get("succeeded", 0))
+        t.failed = int(d.get("failed", 0))
+        t.current_code = d.get("current_code", "")
+        t.current_name = d.get("current_name", "")
+        t.status = d.get("status", "aborted")
+        t.started_at = float(d.get("started_at", time.time()))
+        finished = d.get("finished_at")
+        t.finished_at = float(finished) if finished is not None else None
+        t.error_msg = d.get("error_msg", "")
+        return t
+
 class PrewarmManager:
     """全局单例，按 market 维度管理预热任务。
 
