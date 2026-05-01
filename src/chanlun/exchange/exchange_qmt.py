@@ -153,9 +153,16 @@ class ExchangeQMT(Exchange):
                     if not stock_detail:
                         continue
 
+                    if _stock_type.get("stock"):
+                        sym_type = "stock_cn"
+                    elif _stock_type.get("etf"):
+                        sym_type = "etf_cn"
+                    else:
+                        sym_type = "index_cn"
                     all_stocks.append({
                         "code": tdx_code,
                         "name": stock_detail["InstrumentName"],
+                        "type": sym_type,
                         "precision": fun.reverse_decimal_to_power_of_ten(stock_detail["PriceTick"]),
                     })
 
