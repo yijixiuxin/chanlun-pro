@@ -34,6 +34,38 @@ class ExchangeBaostock(Exchange):
             "5m": "5m",
         }
 
+    @staticmethod
+    def _infer_baostock_type(code: str) -> str:
+        """根据 baostock code 前缀推断个股 / ETF。
+        - sh.6xxxxx / sz.0xxxxx / sz.3xxxxx (创业板) / bj.4|8xxxxx → stock_cn
+        - sh.5xxxxx / sz.1xxxxx → etf_cn
+        - 其他保留 unknown，由上层"未识别默认放行"兜底。
+        """
+        if "." not in code:
+            return "unknown"
+        market_part, num_part = code.split(".", 1)
+        if not num_part:
+            return "unknown"
+        head = num_part[0]
+        market_part = market_part.lower()
+        if market_part == "sh":
+            if head == "6":
+                return "stock_cn"
+            if head == "5":
+                return "etf_cn"
+            return "unknown"
+        if market_part == "sz":
+            if head in ("0", "3"):
+                return "stock_cn"
+            if head == "1":
+                return "etf_cn"
+            return "unknown"
+        if market_part == "bj":
+            if head in ("4", "8"):
+                return "stock_cn"
+            return "unknown"
+        return "unknown"
+
     def all_stocks(self):
         """
         获取支持的所有股票列表
@@ -52,7 +84,11 @@ class ExchangeBaostock(Exchange):
             row = rs.get_row_data()
             if row[0][:6] in ["sz.399", "sh.000"]:
                 continue
-            __all_stocks.append({"code": row[0], "name": row[2]})
+            __all_stocks.append({
+                "code": row[0],
+                "name": row[2],
+                "type": self._infer_baostock_type(row[0]),
+            })
         self.g_all_stocks = __all_stocks
         return self.g_all_stocks
 
