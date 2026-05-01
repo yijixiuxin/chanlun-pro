@@ -76,18 +76,21 @@ def config_get_feishu_keys(market: str) -> Dict[str, str]:
 
     DB cache `fs_keys` overrides defaults if present and complete.
     """
+    from chanlun.security import decrypt_str
     db_fs_key = db.cache_get("fs_keys")
-    if (
-        db_fs_key is not None
-        and db_fs_key.get("fs_app_id")
-        and db_fs_key.get("fs_app_secret")
-        and db_fs_key.get("fs_user_id")
-    ):
-        return {
-            "app_id": db_fs_key["fs_app_id"],
-            "app_secret": db_fs_key["fs_app_secret"],
-            "user_id": db_fs_key["fs_user_id"],
-        }
+    if db_fs_key is not None:
+        # fs_app_secret 在 web 设置页加密落库，这里解密；历史明文记录会被 decrypt_str 原样返回。
+        app_secret_plain = decrypt_str(db_fs_key.get("fs_app_secret"))
+        if (
+            db_fs_key.get("fs_app_id")
+            and app_secret_plain
+            and db_fs_key.get("fs_user_id")
+        ):
+            return {
+                "app_id": db_fs_key["fs_app_id"],
+                "app_secret": app_secret_plain,
+                "user_id": db_fs_key["fs_user_id"],
+            }
     keys = config.FEISHU_KEYS.get("default", {}).copy()
     if market in config.FEISHU_KEYS.keys():
         keys = config.FEISHU_KEYS[market].copy()

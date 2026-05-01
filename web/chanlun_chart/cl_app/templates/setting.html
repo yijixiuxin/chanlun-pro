@@ -28,7 +28,9 @@
             <label class="layui-form-label">飞书 App Secret</label>
             <div class="layui-input-block" title="飞书 App Secret">
                 <div class="layui-input-block">
-                    <input type="text" name="fs_app_secret" value="{{ fs_app_secret }}" placeholder="请输入 飞书 App Secret"
+                    <input type="text" name="fs_app_secret"
+                        value="{% if fs_app_secret_set %}{{ fs_app_secret_placeholder }}{% endif %}"
+                        placeholder="{% if fs_app_secret_set %}已配置（{{ fs_app_secret_mask }}），如需修改请直接覆盖{% else %}请输入 飞书 App Secret{% endif %}"
                         autocomplete="off" class="layui-input">
                 </div>
             </div>
