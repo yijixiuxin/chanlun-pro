@@ -13,6 +13,8 @@ apscheduler
 tenacity
 flask
 flask-login
+flask-wtf
+cryptography
 gevent
 tornado
 sqlalchemy
