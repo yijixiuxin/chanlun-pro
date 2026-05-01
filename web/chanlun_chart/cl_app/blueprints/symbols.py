@@ -340,8 +340,53 @@ class PrewarmManager:
         self._global_running: bool = False
         # worker 线程引用（仅用于调试，不主动 join）
         self._worker_thread: Optional[threading.Thread] = None
+        # 启动恢复：从磁盘载入历史 task；进程内首次构造时执行一次。
+        self._load_persisted_tasks()
 
     # ---------------- 持久化 ----------------
+
+    def _load_persisted_tasks(self) -> None:
+        """启动时扫描 prewarm_status/*.json 还原 _tasks。
+        - 损坏文件：warning + unlink + 跳过；
+        - status 仍为 "running"：说明上次进程异常退出，改写为 "aborted" 并落盘。
+        """
+        d = self._persist_dir()
+        if d is None:
+            return
+        try:
+            files = list(d.glob("*.json"))
+        except OSError as e:
+            LogUtil.warning(f"[prewarm] list persist dir failed: {e}")
+            return
+        for path in files:
+            try:
+                raw = path.read_text(encoding="utf-8")
+                data = json.loads(raw)
+                task = PrewarmTask.from_dict(data)
+            except (OSError, ValueError, KeyError) as e:
+                LogUtil.warning(f"[prewarm] load persisted task corrupt path={path} err={e}, 删除")
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                continue
+            if task.status == "running":
+                # 上次进程异常退出，改为 aborted 并立即写回
+                task.status = "aborted"
+                if task.finished_at is None:
+                    task.finished_at = time.time()
+                try:
+                    path.write_text(
+                        json.dumps(task.to_dict(), ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                except OSError as e:
+                    LogUtil.warning(f"[prewarm] write back aborted state failed: {e}")
+            self._tasks[task.market] = task
+            LogUtil.info(
+                f"[prewarm] restored task market={task.market} status={task.status} "
+                f"{task.done}/{task.total}"
+            )
 
     def _persist_dir(self) -> "pathlib.Path":
         """惰性获取持久化目录；首次调用时创建。失败返回 None 由调用方降级。"""
