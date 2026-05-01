@@ -35,6 +35,7 @@ from chanlun.exchange import get_exchange
 from chanlun.file_db import fdb
 from chanlun.tools.log_util import LogUtil
 
+from ..csrf import csrf
 from ..services.constants import (
     frequency_maps,
     resolution_maps,
@@ -1833,7 +1834,10 @@ def tv_marks():
     return marks
 
 
+# TradingView charting_library 是第三方 JS 库，无法注入 CSRF token，
+# 这些路由通过 @login_required 保证只有登录用户可访问，CSRF 风险可控。
 @tv_bp.route("/tv/del_marks", methods=["POST"])
+@csrf.exempt
 @login_required
 def tv_del_marks():
     symbol = request.form["symbol"]
@@ -1853,6 +1857,7 @@ def tv_time():
 
 
 @tv_bp.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
+@csrf.exempt
 @login_required
 def tv_charts(version):
     client_id = str(request.args.get("client"))
@@ -1922,6 +1927,7 @@ def tv_charts(version):
 
 
 @tv_bp.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
+@csrf.exempt
 @login_required
 def tv_study_templates(version):
     client_id = str(request.args.get("client"))
@@ -1957,6 +1963,7 @@ def tv_study_templates(version):
 
 
 @tv_bp.route("/tv/<version>/drawings", methods=["GET", "POST"])
+@csrf.exempt
 @login_required
 def tv_drawings(version):
     client_id = str(request.args.get("client"))

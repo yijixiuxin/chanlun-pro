@@ -1,4 +1,20 @@
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <script type="text/javascript">
+    // CSRF：所有非幂等 ajax 请求自动注入 X-CSRFToken header；
+    // 同源 GET/HEAD/OPTIONS/TRACE 默认豁免；跨域请求由 jQuery 的 crossDomain 标记跳过。
+    (function () {
+        if (typeof window.jQuery === 'undefined') { return; }
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta || !meta.content) { return; }
+        window.jQuery.ajaxSetup({
+            beforeSend: function (xhr, settings) {
+                if (settings.crossDomain) { return; }
+                if (/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type)) { return; }
+                xhr.setRequestHeader('X-CSRFToken', meta.content);
+            }
+        });
+    })();
+
     (function () {
         if (window.JSON && window.JSON.parse) {
             var c = document.getElementsByTagName("head");
@@ -24,13 +40,7 @@
         }
     })();
 
-    var _hmt = _hmt || [];
-    (function () {
-        var hm = document.createElement("script");
-        hm.src = "https://hm.baidu.com/hm.js?572abd07e459c48e1c15b1cb90a68ee4";
-        var s = document.getElementsByTagName("script")[0];
-        s.parentNode.insertBefore(hm, s);
-    })();
+    // 已移除百度统计脚本（hm.baidu.com）以减少第三方数据外发；如需开启可恢复。
 </script>
 <style>
     .layui-card-body p,

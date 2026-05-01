@@ -20,7 +20,9 @@ from apscheduler.schedulers.tornado import TornadoScheduler
 from flask import Flask, redirect, render_template, request
 from flask_login import LoginManager, UserMixin, login_required, login_user
 from chanlun import config, fun
+from chanlun.security import get_flask_secret_key, verify_login_password
 from .alert_tasks import AlertTasks
+from .csrf import csrf
 from .other_tasks import OtherTasks
 from .xuangu_tasks import XuanguTasks
 __all__ = ["create_app"]
@@ -102,7 +104,13 @@ def create_app(test_config=None):
     )  # 过滤静态资源请求日志
 
     # 添加登录验证
-    app.secret_key = "cl_pro_secret_key"
+    # secret_key 解析顺序：环境变量 CHANLUN_FLASK_SECRET_KEY > config.FLASK_SECRET_KEY > 数据目录持久化文件。
+    app.secret_key = get_flask_secret_key()
+
+    # CSRF 保护：图表页常长时间打开，禁用过期防止用户操作时报错（session 仍由 secret_key 签名兜底）。
+    app.config["WTF_CSRF_TIME_LIMIT"] = None
+    csrf.init_app(app)
+
     login_manager = LoginManager()  # 实例化登录管理对象
     login_manager.init_app(app)  # 初始化应用
     login_manager.login_view = "login_opt"  # 设置用户登录视图函数 endpoint
@@ -127,8 +135,9 @@ def create_app(test_config=None):
 
         emsg = ""
         if request.method == "POST":
-            password = request.form.get("password")
-            if password == config.LOGIN_PWD:
+            password = request.form.get("password") or ""
+            # 常量时间比较，并兼容 pbkdf2:/scrypt:/argon2: 形式的哈希配置。
+            if verify_login_password(password, config.LOGIN_PWD):
                 login_user(
                     LoginUser(), remember=True, duration=datetime.timedelta(days=365)
                 )
@@ -182,4 +191,18 @@ def create_app(test_config=None):
     app.extensions["alert_tasks"] = _alert_tasks
     app.extensions["xuangu_tasks"] = _xuangu_tasks
     # app.extensions["other_tasks"] = _other_tasks
+
+    # 全局安全响应头：仅添加可静态注入、不依赖业务上下文的几项；
+    # CSP 因 dark.html 注入了百度统计脚本（hm.baidu.com）会被阻断，故暂不开启。
+    @app.after_request
+    def _set_security_headers(resp):
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "same-origin")
+        resp.headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=(), payment=()",
+        )
+        return resp
+
     return app

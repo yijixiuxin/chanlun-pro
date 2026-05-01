@@ -21,7 +21,7 @@
                 <p> </p>
             </div>
             <form action="/login" method="post">
-
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <div class="layadmin-user-login-box layadmin-user-login-body layui-form">
                     <div class="layui-form-item">
