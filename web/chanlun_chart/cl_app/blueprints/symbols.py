@@ -65,6 +65,12 @@ MARKETS = [
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 500
 
+# 标的列表"仅显示个股"的 type 白名单。市场不在表中则不过滤。
+# 港股/美股因数据源不返回 type 字段，本期不过滤；期货/外汇/数字货币本无个股概念。
+STOCK_ONLY_TYPES_BY_MARKET: Dict[str, set] = {
+    "a": {"stock_cn"},
+}
+
 
 @symbols_bp.route("/symbols")
 @login_required
@@ -123,6 +129,15 @@ def symbols_list():
     except Exception as e:
         LogUtil.error(f"[symbols_list] get stocks failed market={market}: {e}")
         all_stocks = []
+
+    # 应用 type 白名单过滤（仅对配置了的市场生效）
+    allow_types = STOCK_ONLY_TYPES_BY_MARKET.get(market)
+    if allow_types is not None:
+        def _keep(s):
+            # 未带 type 字段或 type='unknown' 的条目默认放行，避免把"识别失败"误删。
+            t = s.get("type", "unknown")
+            return t in allow_types or t == "unknown"
+        all_stocks = [s for s in all_stocks if _keep(s)]
 
     if query:
         filtered = [
