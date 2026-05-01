@@ -23,6 +23,8 @@
 - 任务对象内存维护，TTL 1 小时自动清理（避免页面长期不刷导致泄漏）。
 """
 
+import json
+import pathlib
 import threading
 import time
 import uuid
@@ -242,6 +244,12 @@ PREWARM_TASK_RETAIN_SECONDS = 3600
 # 的标的提到队首。
 PREWARM_USER_RECENT_TRACK_SECONDS = 600  # 10 分钟内看过的算"用户关注"
 
+# 任务进度持久化目录与写盘频率
+_PREWARM_PERSIST_DIRNAME = "prewarm_status"
+# 写盘频率：每完成 N 个标的写一次（额外终态时强制写一次）。
+# 50 是经验值：典型 11k 标的预热 220 次写盘，IO 开销 < 1%；同时崩溃后丢失进度 < 50 个。
+_PREWARM_PERSIST_EVERY_N_DONE = 50
+
 # 全局信号量：所有预热请求（不论标的不论周期）都要先 acquire 才能发请求。
 # 这是防止打爆数据源的核心机制。
 _PREWARM_INFLIGHT_SEMAPHORE = threading.Semaphore(PREWARM_GLOBAL_INFLIGHT_LIMIT)
@@ -332,6 +340,44 @@ class PrewarmManager:
         self._global_running: bool = False
         # worker 线程引用（仅用于调试，不主动 join）
         self._worker_thread: Optional[threading.Thread] = None
+
+    # ---------------- 持久化 ----------------
+
+    def _persist_dir(self) -> "pathlib.Path":
+        """惰性获取持久化目录；首次调用时创建。失败返回 None 由调用方降级。"""
+        from chanlun.config import get_data_path
+        try:
+            d = get_data_path() / _PREWARM_PERSIST_DIRNAME
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+        except OSError as e:
+            LogUtil.warning(f"[prewarm] persist dir create failed: {e}")
+            return None
+
+    def _persist_task(self, task: "PrewarmTask") -> None:
+        """把单个 task 状态原子写到 <data>/prewarm_status/<market>.json。
+        写失败仅 warning，不影响内存进度。
+        多 worker 可能并发调用（_process_one 中按 done % 50 触发），tmp 名
+        带 uuid 避免互相覆盖；最终 rename 到同一目标，后到者覆盖前者，符合
+        "保留最新一次写入"语义。
+        """
+        d = self._persist_dir()
+        if d is None:
+            return
+        path = d / f"{task.market}.json"
+        tmp = d / f"{task.market}.json.tmp.{uuid.uuid4().hex}"
+        try:
+            data = task.to_dict()
+            tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            # Windows 上 Path.replace 是原子的（同卷），避免半截文件。
+            tmp.replace(path)
+        except OSError as e:
+            LogUtil.warning(f"[prewarm] persist task failed market={task.market}: {e}")
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
 
     # ---------------- 公开 API ----------------
 
@@ -488,6 +534,9 @@ class PrewarmManager:
                     f"[prewarm] progress market={market} "
                     f"{done_now}/{task.total} succeeded={task.succeeded} failed={task.failed}"
                 )
+            # 周期性持久化任务进度（崩溃后最多丢失 _PREWARM_PERSIST_EVERY_N_DONE 个标的的进度）
+            if done_now % _PREWARM_PERSIST_EVERY_N_DONE == 0:
+                self._persist_task(task)
 
         # 注册批量预热活动状态：tv.prewarm_common_intervals 看到此标记会让位，
         # 避免逐标的旧版 prewarm 与本任务双倍争抢 chart_calc_locks / 上游 HTTP 配额。
