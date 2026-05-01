@@ -608,6 +608,12 @@ class PrewarmManager:
                 task.finished_at = time.time()
             LogUtil.error(f"[prewarm] worker crashed market={market}: {e}")
         finally:
+            # 终态强制持久化一次（保证崩溃 / 取消都能落盘最后状态）
+            try:
+                self._persist_task(task)
+            except Exception as e:
+                LogUtil.warning(f"[prewarm] final persist failed: {e}")
+
             with self._lock:
                 self._global_running = False
             # 清除批量预热活动状态：必须在最外层 finally，确保异常路径也释放，
