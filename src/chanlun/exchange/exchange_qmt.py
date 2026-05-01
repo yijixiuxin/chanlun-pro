@@ -283,7 +283,10 @@ class ExchangeQMT(Exchange):
                     return empty_df
             elif len(time_col) == 0:
                 return empty_df
-        except Exception:
+        except Exception as e:
+            LogUtil.warning(
+                f"[exchange_qmt._build_empty_df] check time_col failed code={code} freq={frequency}: {e}"
+            )
             return empty_df
 
         # 5. 极速构建 DataFrame
@@ -311,7 +314,10 @@ class ExchangeQMT(Exchange):
 
             if frequency in ["d", "w", "m", "y"]:
                 klines_df["date"] = klines_df["date"].dt.normalize() + pd.Timedelta(hours=15)
-        except Exception:
+        except Exception as e:
+            LogUtil.warning(
+                f"[exchange_qmt] tz convert failed code={code} freq={frequency}: {e}"
+            )
             return empty_df
 
         klines_df["code"] = code

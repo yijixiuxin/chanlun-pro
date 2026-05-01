@@ -94,7 +94,8 @@ class MultiLevelAnalyse:
             ]
 
             return low_lines
-        except Exception:
+        except IndexError:
+            # 上/下方向 sorted 后取首/尾索引时若 low_lines 为空会抛 IndexError，视为"没有候选"。
             return []
 
     def _query_low_zss(self, low_lines: List[LINE], zs_type="bi"):

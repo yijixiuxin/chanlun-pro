@@ -567,7 +567,8 @@ def kcharts_frequency_h_l_map(
 
     try:
         return market_frequencs_map[market][frequency], f"{market}:{frequency}"
-    except Exception:
+    except KeyError:
+        # 不支持的 market/frequency 组合：返回 (None, None) 让调用方走默认分支。
         return None, None
 
 

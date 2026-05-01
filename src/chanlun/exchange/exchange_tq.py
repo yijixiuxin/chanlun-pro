@@ -111,6 +111,7 @@ class ExchangeTq(Exchange):
             try:
                 self.close_api()
             except Exception:
+                # 重启场景：旧实例已不可用，关闭失败不影响后续重建。
                 pass
             self.res_klines = {}
             self.res_ticks = {}

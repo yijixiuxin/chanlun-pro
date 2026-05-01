@@ -611,7 +611,8 @@ class FileCacheDB(object):
             )
             try:
                 path.unlink(missing_ok=True)
-            except Exception:
+            except OSError:
+                # 删除残破 pkl 失败（权限/被占用）不阻塞读取流程；外层日志已记录解析失败。
                 pass
             return None
 
@@ -632,7 +633,8 @@ class FileCacheDB(object):
         path = self._chart_cache_path_for(cache_key)
         try:
             path.unlink(missing_ok=True)
-        except Exception:
+        except OSError:
+            # 文件被占用/权限拒绝时静默：缓存淘汰是 best-effort，下次重写会覆盖。
             pass
 
     def clear_old_chart_cache(self) -> None:

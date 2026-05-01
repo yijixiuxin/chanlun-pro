@@ -188,6 +188,7 @@ class ExchangeChangQiao(Exchange):
             try:
                 inst.executor.shutdown(wait=False, cancel_futures=True)
             except Exception:
+                # atexit 钩子内进程已在退出，logger 可能也已关闭；任何异常都不再传播。
                 pass
 
         atexit.register(_shutdown_on_exit)
