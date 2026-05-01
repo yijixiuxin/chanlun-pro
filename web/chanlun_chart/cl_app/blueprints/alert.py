@@ -17,6 +17,7 @@ from chanlun.base import Market
 from chanlun import fun
 from chanlun.db import db
 from chanlun.exchange import get_exchange
+from chanlun.tools.log_util import LogUtil
 from chanlun.zixuan import ZiXuan
 
 
@@ -81,7 +82,13 @@ def alert_edit(market, id):
         "is_run": 1,
     }
     if id != "0":
-        _alert_config = _alert_tasks.alert_get(id)
+        # DB 查询失败（连接断开/表不存在等）时降级为默认 alert_config，避免编辑页 500，
+        # 让用户至少能看到表单；真因日志可观测。
+        try:
+            _alert_config = _alert_tasks.alert_get(id)
+        except Exception as e:
+            LogUtil.warning(f"[alert_edit] alert_get({id}) failed: {e}")
+            _alert_config = None
         if _alert_config is not None:
             check_idx_ma_info = (
                 json.loads(_alert_config.check_idx_ma_info)

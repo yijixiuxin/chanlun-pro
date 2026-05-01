@@ -13,17 +13,23 @@
 
 import json
 import os
+import uuid
 
 from flask import Blueprint, render_template, request, send_file
 from flask_login import login_required
+from werkzeug.utils import secure_filename
 
 from chanlun.base import Market
 from chanlun.config import get_data_path
 from chanlun.exchange import get_exchange
+from chanlun.tools.log_util import LogUtil
 from chanlun.zixuan import ZiXuan
 
 
 zixuan_bp = Blueprint("zixuan", __name__)
+
+# 自选导入文件大小上限 1 MiB；自选条目通常 < 1 万行（每行约 30 字节），1 MiB 已远超合理上限。
+_MAX_IMPORT_FILE_BYTES = 1 * 1024 * 1024
 
 
 @zixuan_bp.route("/get_zixuan_groups/<market>")
@@ -87,16 +93,16 @@ def opt_zixuan_export():
     output = ""
     for s in stock_list:
         output += f"{s['code']},{s['name']}\n"
+    # 用 uuid 命名，避免并发导出互相覆盖；下载名由用户传入，secure_filename 防注入。
+    down_file = get_data_path() / f"zx_export_{uuid.uuid4().hex}.txt"
+    safe_name = secure_filename(f"zixuan_{zx_group}.txt") or "zixuan.txt"
     try:
-        down_file = get_data_path() / "zx.txt"
         down_file.write_text(output, encoding="utf-8")
-        return send_file(
-            down_file, as_attachment=True, download_name=f"zixuan_{zx_group}.txt"
-        )
+        return send_file(down_file, as_attachment=True, download_name=safe_name)
     finally:
         try:
             os.remove(down_file)
-        except Exception:
+        except OSError:
             pass
 
 
@@ -106,47 +112,65 @@ def opt_zixuan_import():
     """
     导入自选
     """
-    market = request.form["market"]
-    zx_group = request.form["zx_group"]
-    file = request.files["file"]
-    import_file = get_data_path() / "zx.txt"
+    market = request.form.get("market", "")
+    zx_group = request.form.get("zx_group", "")
+    if market not in {m.value for m in Market}:
+        return {"ok": False, "msg": "无效的市场"}
+    if not zx_group:
+        return {"ok": False, "msg": "缺少自选组名"}
+
+    file = request.files.get("file")
+    if file is None or not file.filename:
+        return {"ok": False, "msg": "未上传文件"}
+
+    # 文件大小预检：先 seek 到末尾测大小，再 seek 回 0。
+    file.stream.seek(0, os.SEEK_END)
+    size = file.stream.tell()
+    file.stream.seek(0)
+    if size > _MAX_IMPORT_FILE_BYTES:
+        return {"ok": False, "msg": "文件过大（>1MB）"}
+
+    # 文件名经 secure_filename 处理 + uuid 去重，落到固定数据目录下，杜绝路径穿越。
+    import_file = get_data_path() / f"zx_import_{uuid.uuid4().hex}.txt"
     file.save(import_file)
+
     zx = ZiXuan(market)
     ex = get_exchange(Market(market))
     import_nums = 0
-    market_all_stocks = ex.all_stocks()
-    market_all_codes = [s["code"] for s in market_all_stocks]
-    with open(import_file, "r", encoding="utf-8") as fp:
-        for line in fp.readlines():
-            try:
-                import_infos = line.strip().split(",")
-                if len(import_infos) >= 2:
-                    code = import_infos[0].strip()
-                    name = import_infos[1].strip()
-                else:
-                    code = import_infos[0].strip()
-                    name = None
-
-                # 股票代码兼容性处理
-                if market == "a":
-                    code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
-
-                if code not in market_all_codes:
-                    same_codes = [_c for _c in market_all_codes if code in _c]
-                    if len(same_codes) == 1:
-                        code = same_codes[0]
-                    else:
-                        continue
-
-                zx.add_stock(zx_group, code, name)
-                import_nums += 1
-            except Exception as e:
-                print(line, e)
-
     try:
-        os.remove(import_file)
-    except Exception:
-        pass
+        market_all_stocks = ex.all_stocks()
+        market_all_codes = [s["code"] for s in market_all_stocks]
+        with open(import_file, "r", encoding="utf-8") as fp:
+            for line in fp:
+                try:
+                    import_infos = line.strip().split(",")
+                    if len(import_infos) >= 2:
+                        code = import_infos[0].strip()
+                        name = import_infos[1].strip()
+                    else:
+                        code = import_infos[0].strip()
+                        name = None
+
+                    # 股票代码兼容性处理
+                    if market == "a":
+                        code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
+
+                    if code not in market_all_codes:
+                        same_codes = [_c for _c in market_all_codes if code in _c]
+                        if len(same_codes) == 1:
+                            code = same_codes[0]
+                        else:
+                            continue
+
+                    zx.add_stock(zx_group, code, name)
+                    import_nums += 1
+                except Exception:
+                    LogUtil.warning(f"zixuan import skip line: {line.strip()!r}")
+    finally:
+        try:
+            os.remove(import_file)
+        except OSError:
+            pass
 
     return {"ok": True, "msg": f"成功导入 {import_nums} 条记录"}
 

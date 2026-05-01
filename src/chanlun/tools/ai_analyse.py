@@ -252,17 +252,32 @@ class AIAnalyse:
             "Content-Type": "application/json",
         }
 
-        response = requests.request("POST", url, json=payload, headers=headers)
+        # 双段超时：connect 10s 防 DNS/握手卡死；read 180s 容忍 R1 等推理较慢的模型。
+        try:
+            response = requests.request(
+                "POST", url, json=payload, headers=headers, timeout=(10, 180)
+            )
+        except requests.RequestException as e:
+            return {
+                "ok": False,
+                "msg": f"AI 接口调用网络异常：{e}",
+                "model": config.AI_MODEL,
+            }
+
         try:
             ai_res = json.loads(response.text)
         except Exception as e:
-            print("解析JSON 报错，返回的数据：", response.text)
-            return {"ok": False, "msg": f"JSON 解析异常：{e}", "model": config.AI_MODEL}
-
-        if response.status_code != 200:
             return {
                 "ok": False,
-                "msg": f"AI 接口调用失败：{ai_res['message']}",
+                "msg": f"JSON 解析异常：{e}",
+                "model": config.AI_MODEL,
+            }
+
+        if response.status_code != 200:
+            err_msg = ai_res.get("message") if isinstance(ai_res, dict) else str(ai_res)
+            return {
+                "ok": False,
+                "msg": f"AI 接口调用失败：{err_msg}",
                 "model": config.AI_MODEL,
             }
 

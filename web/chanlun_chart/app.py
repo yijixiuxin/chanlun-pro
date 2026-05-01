@@ -43,7 +43,6 @@ def _wrap_stdio_gbk() -> None:
     sys.stderr = _Filter(sys.stderr)
 
 
-import traceback
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from tornado.httpserver import HTTPServer
@@ -99,9 +98,10 @@ def main() -> None:
         IOLoop.instance().start()
 
     except Exception:
-        traceback.print_exc()
+        # 完整堆栈仅写入日志，控制台只提示简短信息，避免暴露内部路径与变量。
+        LogUtil.exception("启动 Web 服务时发生异常")
         if is_wpf_launcher is False:
-            input("出现异常，按回车键退出")
+            input("启动失败，详情见日志文件，按回车键退出")
 
 
 if __name__ == "__main__":
