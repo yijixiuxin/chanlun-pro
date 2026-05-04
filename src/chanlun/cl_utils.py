@@ -993,11 +993,13 @@ def cl_data_to_tv_chart(
     else:
         macd_idx = cd.get_idx()['macd']
 
-    _dif = macd_idx['dif']
-    _dea = macd_idx['dea']
-    _hist = macd_idx['hist']
-
-    _area = macd_idx.get('hist_area', [])
+    # 精度截断到 6 位小数, 与 higher_macd 保持一致 (tv.py:1558).
+    # 默认 json 序列化会输出 17 位精度浮点数, 每个数 ~19B; round(6) 后 ~9B,
+    # 4 个字段累计可省 ~200KB 响应体积.
+    _dif = np.round(macd_idx['dif'], 6).tolist()
+    _dea = np.round(macd_idx['dea'], 6).tolist()
+    _hist = np.round(macd_idx['hist'], 6).tolist()
+    _area = np.round(macd_idx.get('hist_area', []), 6).tolist()
 
     return {
         "t": kline_ts,

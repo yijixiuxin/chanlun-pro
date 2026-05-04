@@ -1459,6 +1459,22 @@ def tv_history():
                     cache_miss_reason = miss_reason
 
             if not is_cache_hit:
+                # 早返: 请求范围完全早于(或刚好接到)缓存最早时间 -> 必无数据.
+                # TradingView UDF 翻页时下一次请求的 _to 正好等于上次的 cache_min_time,
+                # 用 <= 才能覆盖这种边界. 切片逻辑 bisect_left 是左闭右开, _to == min_time
+                # 时切片 [0:0] 仍为空, 语义一致.
+                # 不早返会触发 ex.klines + web_batch_get_cl_datas 共耗 300-500ms.
+                if (
+                    is_range_request
+                    and _to > 0
+                    and cache_entry is not None
+                    and cache_entry.get("min_time") is not None
+                    and _to <= cache_entry["min_time"]
+                ):
+                    with cache_lock:
+                        _mark_chart_cache_validated(cache_key)
+                    return {"s": "no_data"}
+
                 LogUtil.debug(f"[tv_history] Cache miss ({cache_miss_reason}) req={req_tag}")
                 ex = get_exchange(Market(market))
                 frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(market, frequency)

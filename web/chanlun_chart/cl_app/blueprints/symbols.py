@@ -25,6 +25,7 @@
 
 import json
 import pathlib
+import re
 import threading
 import time
 import uuid
@@ -72,6 +73,42 @@ MAX_PAGE_SIZE = 500
 STOCK_ONLY_TYPES_BY_MARKET: Dict[str, set] = {
     "a": {"stock_cn"},
 }
+
+# 美股 name 黑名单(数据源不返回 type 字段, 用 name 推断非股票).
+# ETF/ETN 是缩写 -> 子串包含(普通股票名不会出现, 也能命中 '场ETF'/'ingETF' 这种粘连写法);
+# Fund/Warrant/... 是英文词 -> \b 边界(避免误删 Foundation/warranty 等).
+# 保留 Trust(REIT 算股票) 和 Index(用户可能想看指数), 如需扩展直接加词.
+US_NON_STOCK_SUBSTRINGS = ("ETF", "ETN")
+US_NON_STOCK_WORD_RE = re.compile(
+    r"\b(Fund|Funds|Warrant|Warrants|Right|Rights|Unit|Units|Note|Notes)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_us_non_stock(name: str) -> bool:
+    upper = name.upper()
+    return (
+        any(s in upper for s in US_NON_STOCK_SUBSTRINGS)
+        or US_NON_STOCK_WORD_RE.search(name) is not None
+    )
+
+
+def _apply_market_filter(market: str, all_stocks: List[dict]) -> List[dict]:
+    """对标的列表应用市场过滤(type 白名单 + 美股 name 黑名单).
+
+    供 symbols_list (展示) 和 symbols_prewarm (预热) 共用, 确保
+    预热范围与用户能搜到的标的一致, 不浪费 CPU/磁盘算 ETF 等.
+    """
+    allow_types = STOCK_ONLY_TYPES_BY_MARKET.get(market)
+    if allow_types is not None:
+        # 未带 type 或 'unknown' 默认放行, 避免把识别失败的当垃圾删掉.
+        all_stocks = [
+            s for s in all_stocks
+            if (s.get("type", "unknown") in allow_types or s.get("type", "unknown") == "unknown")
+        ]
+    if market == "us":
+        all_stocks = [s for s in all_stocks if not _is_us_non_stock(s.get("name", ""))]
+    return all_stocks
 
 
 @symbols_bp.route("/symbols")
@@ -132,14 +169,8 @@ def symbols_list():
         LogUtil.error(f"[symbols_list] get stocks failed market={market}: {e}")
         all_stocks = []
 
-    # 应用 type 白名单过滤（仅对配置了的市场生效）
-    allow_types = STOCK_ONLY_TYPES_BY_MARKET.get(market)
-    if allow_types is not None:
-        def _keep(s):
-            # 未带 type 字段或 type='unknown' 的条目默认放行，避免把"识别失败"误删。
-            t = s.get("type", "unknown")
-            return t in allow_types or t == "unknown"
-        all_stocks = [s for s in all_stocks if _keep(s)]
+    # 应用市场过滤(与预热路径共用同一函数, 确保展示列表和预热范围一致)
+    all_stocks = _apply_market_filter(market, all_stocks)
 
     if query:
         filtered = [
@@ -847,6 +878,9 @@ def symbols_prewarm():
     except Exception as e:
         LogUtil.error(f"[symbols_prewarm] get stocks failed market={market}: {e}")
         return jsonify({"ok": False, "msg": f"获取标的列表失败: {e}"}), 500
+
+    # 与展示列表过滤同步: 不预热被列表过滤掉的 ETF/Fund/非个股.
+    all_stocks = _apply_market_filter(market, all_stocks)
 
     codes = [
         {"code": s.get("code", ""), "name": s.get("name", "")}

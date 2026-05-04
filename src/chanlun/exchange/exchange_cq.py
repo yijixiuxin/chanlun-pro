@@ -235,6 +235,42 @@ class ExchangeChangQiao(Exchange):
     # static_info 单批上限：实测 500 OK，留点余量取 500（长桥未公开硬上限，但 500 已稳定）。
     _STATIC_INFO_BATCH_SIZE = 500
 
+    # 项目内部 code 与长桥 symbol 不是同一种格式：
+    #   美股: 项目 "TSLA.US"        ↔ 长桥 "TSLA.US"          （一致, 不用转换）
+    #   港股: 项目 "KH.00700"       ↔ 长桥 "00700.HK"         （前缀↔后缀互换）
+    #   A 股: 项目 "SH.600519"      ↔ 长桥 "600519.SH"        （前缀↔后缀互换）
+    # 长桥 OpenAPI 一律是 "<code>.<exchange>"; 项目历史代码里港股/A 股是 "<market_prefix>.<code>"。
+    # 之前 klines/ticks/stock_info 直接把项目 code 透传给长桥, 港股/A 股就一直拿不到数据。
+    _PREFIX_TO_LB_SUFFIX = {
+        "KH": "HK",   # 港股
+        "SH": "SH",   # 沪市 A 股
+        "SZ": "SZ",   # 深市 A 股
+    }
+    _LB_SUFFIX_TO_PREFIX = {v: k for k, v in _PREFIX_TO_LB_SUFFIX.items()}
+
+    @classmethod
+    def _to_lb_symbol(cls, code: str) -> str:
+        """项目内部 code → 长桥 symbol。无法识别的格式原样返回（向后兼容）。"""
+        if not code or "." not in code:
+            return code
+        head, tail = code.split(".", 1)
+        # 已经是 <code>.<exchange> 形式（美股 TSLA.US, 或调用方主动传长桥格式）
+        if head not in cls._PREFIX_TO_LB_SUFFIX:
+            return code
+        # 项目侧 KH.00700 → 长桥 00700.HK; A 股同理。
+        return f"{tail}.{cls._PREFIX_TO_LB_SUFFIX[head]}"
+
+    @classmethod
+    def _from_lb_symbol(cls, symbol: str) -> str:
+        """长桥 symbol → 项目内部 code。美股保持 TSLA.US 不变。"""
+        if not symbol or "." not in symbol:
+            return symbol
+        head, tail = symbol.split(".", 1)
+        # 美股不需要反转
+        if tail not in cls._LB_SUFFIX_TO_PREFIX or tail == "US":
+            return symbol
+        return f"{cls._LB_SUFFIX_TO_PREFIX[tail]}.{head}"
+
     def _enrich_us_names_with_static_info(self, stocks: List[Dict]) -> List[Dict]:
         """用长桥 ``static_info`` 批量补全美股的中文名（``name_cn``）。
 
@@ -528,6 +564,11 @@ class ExchangeChangQiao(Exchange):
         """
         tz = pytz.timezone("Asia/Shanghai")
 
+        # 长桥 API 需要 "<code>.<exchange>" 格式 (如 00700.HK / 600519.SH);
+        # 项目内部港股/A 股 code 是 "<prefix>.<code>" (如 KH.00700 / SH.600519)。
+        # 在请求边界一次性转换, 输出 DataFrame 的 code 列继续保留项目格式不变。
+        lb_symbol = self._to_lb_symbol(code)
+
         # 1. 默认回看周期配置
         DEFAULT_LOOKBACK = {
             "1m": timedelta(days=30),
@@ -614,7 +655,7 @@ class ExchangeChangQiao(Exchange):
 
             tasks.append(self.executor.submit(
                 self._fetch_segment_data,
-                code, period, adjust, curr_end, curr_start
+                lb_symbol, period, adjust, curr_end, curr_start
             ))
             curr_end = curr_start
             if curr_end <= start_dt:
@@ -697,7 +738,13 @@ class ExchangeChangQiao(Exchange):
         """
         def _do_ticks():
             try:
-                quotes = self._quote_ctx().quote(codes)
+                # 项目 code → 长桥 symbol (港股/A 股要换前后缀; 美股原样)。
+                # 同时建反向表, 把长桥返回的 symbol 映射回项目 code, 让调用方拿到的
+                # dict key 与传入 codes 一致 (上层经常用 ticks[code] 直接取)。
+                lb_symbols = [self._to_lb_symbol(c) for c in codes]
+                lb_to_project = {lb: orig for lb, orig in zip(lb_symbols, codes)}
+
+                quotes = self._quote_ctx().quote(lb_symbols)
                 res = {}
                 for q in quotes:
                     last_done = float(q.last_done)
@@ -707,8 +754,9 @@ class ExchangeChangQiao(Exchange):
                     if prev_close > 0:
                         cal_rate = round(((last_done - prev_close) / prev_close) * 100, 2)
 
-                    res[q.symbol] = Tick(
-                        code=q.symbol,
+                    project_code = lb_to_project.get(q.symbol, self._from_lb_symbol(q.symbol))
+                    res[project_code] = Tick(
+                        code=project_code,
                         last=last_done,
                         buy1=0.0,
                         sell1=0.0,
@@ -736,14 +784,16 @@ class ExchangeChangQiao(Exchange):
         获取股票基础信息
         """
         try:
-            # 兼容处理
-            symbol = code if code.endswith('.US') else f"{code}.US"
+            # 旧实现强行给 code 拼 ".US", 港股/A 股直接被拼成 "KH.00700.US" 之类的非法 symbol,
+            # static_info 返回空, 上层就以为"标的不存在"。这里改成走统一的 symbol 转换。
+            symbol = self._to_lb_symbol(code)
             infos = self._quote_ctx().static_info([symbol])
             if not infos:
                 return None
             info = infos[0]
             return {
-                "code": info.symbol,
+                # 对外仍然返回项目 code (KH.00700), 避免污染上层缓存键。
+                "code": self._from_lb_symbol(info.symbol),
                 "name": info.name_cn,
                 "exchange": info.exchange,
                 "currency": info.currency,
