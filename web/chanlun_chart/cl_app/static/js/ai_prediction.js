@@ -351,12 +351,13 @@ var AIPrediction = (function () {
 
   function predict(manager) {
     const info = symbolInfo(manager);
-    layer.msg("AI预测中...");
+    var loadingIndex = layer.msg("AI预测中", { icon: 16, shade: 0.3, time: 0 });
     $.post({
       url: "/ai/predict",
       dataType: "json",
       data: info,
       success: function (res) {
+        layer.close(loadingIndex);
         if (res.ok === true) {
           draw(manager, res.complete_classification);
           layer.msg("AI预测完成");
@@ -365,6 +366,7 @@ var AIPrediction = (function () {
         layer.msg(res.msg || "AI预测失败");
       },
       error: function () {
+        layer.close(loadingIndex);
         layer.msg("AI预测失败，查看控制台确认错误");
       },
     });
