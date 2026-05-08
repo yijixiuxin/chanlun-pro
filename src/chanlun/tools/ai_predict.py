@@ -25,9 +25,7 @@ def format_recent_kline_ma_data(
         if idx >= 4:
             ma5 = round(sum(_k.c for _k in klines[idx - 4 : idx + 1]) / 5, precision)
         if idx >= 9:
-            ma10 = round(
-                sum(_k.c for _k in klines[idx - 9 : idx + 1]) / 10, precision
-            )
+            ma10 = round(sum(_k.c for _k in klines[idx - 9 : idx + 1]) / 10, precision)
         rows.append(
             {
                 "time": fun.datetime_to_str(k.date),
@@ -160,8 +158,12 @@ class AITrendPredict:
         lines.append(
             "你是缠论行情分析助手。请根据给定的笔、线段、中枢数据，基于“走势必完美”和“完全分类”推演后续走势。"
         )
-        lines.append("任务不是猜唯一未来，而是穷尽当前结构后续可能进入的有限分类，并给出每类的触发、边界、失效与应对。")
-        lines.append("预测必须是概率化假设，不得写成确定性结论；每个分类必须有明确边界条件，避免含糊表述。")
+        lines.append(
+            "任务不是猜唯一未来，而是穷尽当前结构后续可能进入的有限分类，并给出每类的触发、边界、失效与应对。"
+        )
+        lines.append(
+            "预测必须是概率化假设，不得写成确定性结论；每个分类必须有明确边界条件，避免含糊表述。"
+        )
         lines.append("")
         lines.append("# 当前品种")
         lines.append(f"- 代码/名称：{cd.get_code()} - {stock_name}")
@@ -170,7 +172,9 @@ class AITrendPredict:
         lines.append(f"- 最新价格：{round(k.c, precision)}")
         lines.append("")
         lines.append("# 最近20根K线与均线")
-        lines.append("以下表格按时间升序排列，字段为时间、开高低收、成交量、5日均线、10日均线。")
+        lines.append(
+            "以下表格按时间升序排列，字段为时间、开高低收、成交量、5日均线、10日均线。"
+        )
         lines.append(format_recent_kline_ma_table(cd.get_src_klines(), precision))
         lines.append("")
         lines.append("# 最新笔")
@@ -204,11 +208,19 @@ class AITrendPredict:
         lines.append("")
         lines.append("# 严格输出要求")
         lines.append("只返回 JSON，不要 Markdown，不要代码块，不要额外解释。")
-        lines.append("必须返回 complete_classification.classes，分类应覆盖当前结构之后的全部主要演化，不允许只给单一路径。")
-        lines.append("通常至少包含：向上离开/突破、向下离开/破坏、继续围绕中枢震荡或延伸；若当前结构不适用，可按实际结构重命名，但要穷尽。")
-        lines.append("每个 class 的 probability 必须是 0 到 1 的数字，并按 probability 从高到低排序。")
+        lines.append(
+            "必须返回 complete_classification.classes，分类应覆盖当前结构之后的全部主要演化，不允许只给单一路径。"
+        )
+        lines.append(
+            "通常至少包含：向上离开/突破、向下离开/破坏、继续围绕中枢震荡或延伸；若当前结构不适用，可按实际结构重命名，但要穷尽。"
+        )
+        lines.append(
+            "每个 class 的 probability 必须是 0 到 1 的数字，并按 probability 从高到低排序。"
+        )
         lines.append("每个 class 至少包含 1 条 bis，每条 bi 必须有两个点。")
-        lines.append("每个 class 必须包含 trigger、boundary、action、basis；levels 可给触发线/失效线/中枢边界。")
+        lines.append(
+            "每个 class 必须包含 trigger、boundary、action、basis；levels 可给触发线/失效线/中枢边界。"
+        )
         lines.append(
             "points 中优先使用 bar_offset 表示从当前 K 线之后第几根 K 线，bar_offset 必须为正整数；price 必须为数字。"
         )
@@ -235,7 +247,7 @@ class AITrendPredict:
                                 "bis": [
                                     {
                                         "points": [
-                                            {"bar_offset": 1, "price": 0},
+                                            {"bar_offset": 0, "price": 0},
                                             {"bar_offset": 5, "price": 0},
                                         ],
                                         "linestyle": "1",
@@ -397,10 +409,23 @@ class AITrendPredict:
     @staticmethod
     def fill_item_times(item: dict, current_time: int, step_seconds: int) -> None:
         for bi in item.get("bis", []):
-            for point in bi["points"]:
+            for _i in range(len(bi["points"])):
+                point = bi["points"][_i]
                 if "time" not in point:
-                    point["time"] = current_time + point["bar_offset"] * step_seconds
+                    if _i == 0:
+                        point["time"] = (
+                            current_time + point["bar_offset"] * step_seconds
+                        )
+                    else:
+                        point["time"] = current_time + point["bar_offset"] * (
+                            step_seconds * 5
+                        )  # 这里 *5 拉大下距离，方便在图表查看
                 point.pop("bar_offset", None)
+
+            # for point in bi["points"]:
+            #     if "time" not in point:
+            #         point["time"] = current_time + point["bar_offset"] * step_seconds
+            #     point.pop("bar_offset", None)
 
     def save_prediction(
         self,

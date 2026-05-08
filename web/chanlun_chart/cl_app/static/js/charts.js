@@ -371,6 +371,9 @@ class ChartManager {
     Utils.set_local_data(`${market}_interval_${this.id}`, interval);
     console.log(`${this.id} 周期变化: ${interval}`);
 
+    if (window.AIPrediction) {
+      window.AIPrediction.clear(this);
+    }
     this.clear_draw_chanlun();
     this.debouncedDrawChanlun();
   }
