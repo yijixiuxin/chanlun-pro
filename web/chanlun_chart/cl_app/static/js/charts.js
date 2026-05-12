@@ -353,6 +353,9 @@ class ChartManager {
     console.log(`${this.id} 标的变化：${symbol.ticker}`);
 
     this.clear_draw_chanlun();
+    if (window.AIPrediction) {
+      window.AIPrediction.clear(this);
+    }
 
     if (typeof ZiXuan.render_zixuan_opts === "function") {
       ZiXuan.render_zixuan_opts();
