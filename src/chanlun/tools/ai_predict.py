@@ -408,24 +408,22 @@ class AITrendPredict:
 
     @staticmethod
     def fill_item_times(item: dict, current_time: int, step_seconds: int) -> None:
+        prev_end_time = current_time
         for bi in item.get("bis", []):
-            for _i in range(len(bi["points"])):
-                point = bi["points"][_i]
-                if "time" not in point:
-                    if _i == 0:
-                        point["time"] = (
-                            current_time + point["bar_offset"] * step_seconds
-                        )
-                    else:
-                        point["time"] = current_time + point["bar_offset"] * (
-                            step_seconds * 5
-                        )  # 这里 *5 拉大下距离，方便在图表查看
-                point.pop("bar_offset", None)
-
-            # for point in bi["points"]:
-            #     if "time" not in point:
-            #         point["time"] = current_time + point["bar_offset"] * step_seconds
-            #     point.pop("bar_offset", None)
+            pts = bi["points"]
+            if "time" not in pts[0]:
+                calc_start = current_time + pts[0]["bar_offset"] * step_seconds
+                pts[0]["time"] = max(calc_start, prev_end_time + step_seconds)
+            if "time" not in pts[1]:
+                stretched_end = current_time + pts[1]["bar_offset"] * (step_seconds * 5)
+                pts[1]["time"] = max(stretched_end, pts[0]["time"] + step_seconds)
+            for pt in pts:
+                pt.pop("bar_offset", None)
+            prev_end_time = pts[1]["time"]
+        for level in item.get("levels", []):
+            if "time" not in level:
+                level["time"] = current_time + level.get("bar_offset", 1) * step_seconds
+            level.pop("bar_offset", None)
 
     def save_prediction(
         self,
