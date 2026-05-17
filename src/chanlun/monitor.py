@@ -4,8 +4,11 @@
 
 import os
 import pathlib
+import subprocess
+import sys
 import time
 import traceback
+import threading
 from typing import List
 
 import lark_oapi as lark
@@ -22,7 +25,10 @@ from chanlun.cl_interface import ICL
 from chanlun.cl_utils import bi_td, web_batch_get_cl_datas
 from chanlun.db import db
 from chanlun.exchange import Market, get_exchange
-from chanlun.utils import send_fs_msg
+from chanlun.utils import config_get_feishu_keys, send_fs_msg
+
+
+_PLAYWRIGHT_LOCK = threading.Lock()
 
 
 def monitoring_code(
@@ -83,7 +89,12 @@ def monitoring_code(
 
     ex = get_exchange(Market(market))
 
-    klines = {f: ex.klines(code, f) for f in frequencys}
+    def _klines_args(frequency: str):
+        if frequency in ["y", "m", "w", "d", "1d"]:
+            return {"limit": 8000, "req_counts": 8000}
+        return {"limit": 2500, "req_counts": 2500}
+
+    klines = {f: ex.klines(code, f, args=_klines_args(f)) for f in frequencys}
     try:
         cl_datas: List[ICL] = web_batch_get_cl_datas(market, code, klines, cl_config)
 
@@ -475,7 +486,18 @@ def monitoring_code(
                        is_fresh = False
             
             if is_fresh:
-                send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+                signal_dt = jh.get("mark_dt") or jh.get("k_date") or jh.get("line_dt")
+                if signal_dt is None:
+                    signal_dt_str = ""
+                else:
+                    try:
+                        signal_dt_str = fun.datetime_to_str(signal_dt)
+                    except Exception:
+                        signal_dt_str = str(signal_dt)
+                if signal_dt_str != "":
+                    send_msgs.append(f"【{name} - {jh['frequency']}】[{signal_dt_str}] {msg}")
+                else:
+                    send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
             
             # 添加数据库记录
             db.alert_record_save(
@@ -511,7 +533,18 @@ def monitoring_code(
             # 之前没有，进行记录
             price_info = f" 价格:{jh['price']}" if "price" in jh else ""
             msg = f"触发 {jh['msg']}{price_info}"
-            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            signal_dt = jh.get("k_date")
+            if signal_dt is None:
+                signal_dt_str = ""
+            else:
+                try:
+                    signal_dt_str = fun.datetime_to_str(signal_dt)
+                except Exception:
+                    signal_dt_str = str(signal_dt)
+            if signal_dt_str != "":
+                send_msgs.append(f"【{name} - {jh['frequency']}】[{signal_dt_str}] {msg}")
+            else:
+                send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
             db.alert_record_save(
                 market,
                 task_name,
@@ -557,11 +590,13 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict, force: bool
     if force is False and config.FEISHU_KEYS["enable_img"] is False:
         return ""
 
-    fs_keys = (
-        config.FEISHU_KEYS[market]
-        if market in config.FEISHU_KEYS.keys()
-        else config.FEISHU_KEYS["default"]
-    )
+    fs_keys = config_get_feishu_keys(market)
+    if (
+        fs_keys is None
+        or fs_keys.get("app_id", "") == ""
+        or fs_keys.get("app_secret", "") == ""
+    ):
+        return ""
 
     png_path = config.get_data_path() / "png"
     if png_path.is_dir() is False:
@@ -578,24 +613,52 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict, force: bool
         + "_"
         + cd.get_frequency()
     )
-    cl_config["to_file"] = f"{str(png_path)}/{file_name}_{int(time.time())}.html"
-    png_file = f"{str(png_path)}/{file_name}_{int(time.time())}.png"
+    ts = time.time_ns()
+    html_file = f"{str(png_path)}/{file_name}_{ts}.html"
+    png_file = f"{str(png_path)}/{file_name}_{ts}.png"
+    cl_config["to_file"] = html_file
 
     try:
         # 渲染并保存图片
         render_file = kcharts.render_charts(title, cd, config=cl_config)
+        render_uri = pathlib.Path(render_file).as_uri()
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            # 设置页面的视口大小
-            page.set_viewport_size({"width": 1000, "height": 400})
-            page.goto(f"file://{render_file}")
-            # 等待页面加载完成
-            page.wait_for_load_state("domcontentloaded")
-            # 截图
-            page.screenshot(path=png_file, type="png", full_page=True)
-            browser.close()
+        if _PLAYWRIGHT_LOCK.acquire(timeout=5) is False:
+            return ""
+        try:
+            if threading.current_thread() is threading.main_thread():
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(timeout=60000)
+                    page = browser.new_page()
+                    page.set_default_timeout(60000)
+                    page.set_viewport_size({"width": 1000, "height": 400})
+                    page.goto(render_uri, wait_until="domcontentloaded", timeout=60000)
+                    page.wait_for_load_state("domcontentloaded", timeout=60000)
+                    page.screenshot(path=png_file, type="png", full_page=True)
+                    page.close()
+                    browser.close()
+            else:
+                res = subprocess.run(
+                    [sys.executable, "-c", _playwright_screenshot_script()],
+                    env={
+                        **os.environ,
+                        "CL_RENDER_URI": render_uri,
+                        "CL_PNG_FILE": png_file,
+                        "CL_PW_TIMEOUT_MS": "60000",
+                    },
+                    timeout=70,
+                    capture_output=True,
+                    text=True,
+                )
+                if res.returncode != 0:
+                    raise Exception(
+                        f"playwright subprocess failed: {res.returncode} {res.stderr}"
+                    )
+        finally:
+            _PLAYWRIGHT_LOCK.release()
+
+        if pathlib.Path(png_file).is_file() is False:
+            return ""
 
         # 上传图片
         # 创建client
@@ -629,6 +692,33 @@ def kchart_to_png(market: str, title: str, cd: ICL, cl_config: dict, force: bool
         # 删除本地图片
         if pathlib.Path(png_file).is_file():
             os.remove(png_file)
+        if pathlib.Path(html_file).is_file():
+            os.remove(html_file)
+
+
+def _playwright_screenshot_script() -> str:
+    return """
+import os
+from playwright.sync_api import sync_playwright
+
+render_uri = os.environ.get("CL_RENDER_URI", "")
+png_file = os.environ.get("CL_PNG_FILE", "")
+timeout_ms = int(os.environ.get("CL_PW_TIMEOUT_MS", "60000"))
+
+if not render_uri or not png_file:
+    raise SystemExit(2)
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(timeout=timeout_ms)
+    page = browser.new_page()
+    page.set_default_timeout(timeout_ms)
+    page.set_viewport_size({"width": 1000, "height": 400})
+    page.goto(render_uri, wait_until="domcontentloaded", timeout=timeout_ms)
+    page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+    page.screenshot(path=png_file, type="png", full_page=True)
+    page.close()
+    browser.close()
+"""
 
 
 if __name__ == "__main__":

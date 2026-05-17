@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import (
     Column,
     DateTime,
+    event,
     Float,
     Integer,
     String,
@@ -228,20 +229,49 @@ class DB(object):
                 pool_size=10,
                 max_overflow=20,
                 pool_timeout=10,
+                connect_args={"timeout": 60, "check_same_thread": False},
             )
         elif config.DB_TYPE == "mysql":
-            self.engine = create_engine(
-                f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
-                echo=False,
-                poolclass=QueuePool,
-                pool_recycle=3600,
-                pool_pre_ping=True,
-                pool_size=10,
-                max_overflow=20,
-                pool_timeout=10,
-            )
+            try:
+                import pymysql  # noqa: F401
+
+                self.engine = create_engine(
+                    f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
+                    echo=False,
+                    poolclass=QueuePool,
+                    pool_recycle=3600,
+                    pool_pre_ping=True,
+                    pool_size=10,
+                    max_overflow=20,
+                    pool_timeout=10,
+                )
+            except Exception as e:
+                print(f"MySQL 初始化失败({e})，自动切换到 sqlite")
+                config.DB_TYPE = "sqlite"
+                db_path = get_data_path() / "db"
+                if db_path.is_dir() is False:
+                    db_path.mkdir(parents=True)
+                self.engine = create_engine(
+                    f"sqlite:///{str(db_path / f'{config.DB_DATABASE}.sqlite')}",
+                    echo=False,
+                    poolclass=QueuePool,
+                    pool_size=10,
+                    max_overflow=20,
+                    pool_timeout=10,
+                    connect_args={"timeout": 60, "check_same_thread": False},
+                )
         else:
             raise Exception("DB_TYPE 配置错误")
+
+        if self.engine.dialect.name == "sqlite":
+            @event.listens_for(self.engine, "connect")
+            def _sqlite_pragmas(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL;")
+                cursor.execute("PRAGMA synchronous=NORMAL;")
+                cursor.execute("PRAGMA temp_store=MEMORY;")
+                cursor.execute("PRAGMA busy_timeout=60000;")
+                cursor.close()
 
         self.Session = sessionmaker(bind=self.engine)
 
@@ -292,6 +322,8 @@ class DB(object):
         elif market == Market.CURRENCY_SPOT.value:
             table_name = f"{market}_klines_{stock_code}"
         elif market == Market.FUTURES.value:
+            table_name = f"{market}_klines_{stock_code}"
+        elif market == Market.OPTION.value:
             table_name = f"{market}_klines_{stock_code}"
         else:
             raise Exception(f"市场错误：{market}")

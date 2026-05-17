@@ -80,8 +80,6 @@ var TvIdxASI = (function () {
           this.init = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
-            // State for Cumulative Sum
-            this._context.asi_val = 0;
           };
           this.main = function (context, inputCallback) {
             this._context = context;
@@ -110,7 +108,6 @@ var TvIdxASI = (function () {
             if (!isNaN(prev_c) && !isNaN(prev_o)) {
                 var limit = limit_move;
                 if (limit <= 0) {
-                    // Default to 10% of prev close if limit not set
                     limit = prev_c * 0.1;
                 }
                 
@@ -120,15 +117,15 @@ var TvIdxASI = (function () {
                 var D = Math.abs(prev_c - prev_o);
                 
                 var R = 0;
-                if (A > B && A > C) {
-                    R = A + 0.5 * B + 0.25 * D;
-                } else if (B > A && B > C) {
-                    R = B + 0.5 * A + 0.25 * D;
+                var K = Math.max(A, B);
+                if (A >= Math.max(B, C)) {
+                    R = A - 0.5 * B + 0.25 * D;
+                } else if (B >= Math.max(A, C)) {
+                    R = B - 0.5 * A + 0.25 * D;
                 } else {
                     R = C + 0.25 * D;
                 }
-                
-                var K = Math.max(A, B);
+
                 var X = (curr_c - prev_c) + 0.5 * (curr_c - curr_o) + 0.25 * (prev_c - prev_o);
                 
                 if (R !== 0 && limit !== 0) {
@@ -136,13 +133,13 @@ var TvIdxASI = (function () {
                 }
             }
             
-            // Accumulate
-            this._context.asi_val += si;
-            
-            var asi_series = this._context.new_var(this._context.asi_val);
-            var asi_ma = this._context.new_var(PineJS.Std.sma(asi_series, ma_length, this._context));
+            var asi_val = PineJS.Std.cum(si, this._context);
+            var asi_series = this._context.new_var(asi_val);
+            var asi_ma = this._context.new_var(
+              PineJS.Std.sma(asi_series, ma_length, this._context)
+            );
 
-            return [asi_series.get(0), asi_ma.get(0)];
+            return [asi_val, asi_ma.get(0)];
           };
         },
       };

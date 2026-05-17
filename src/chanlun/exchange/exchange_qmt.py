@@ -4,11 +4,30 @@ from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+try:
+    from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+except Exception:
+    def retry(*args, **kwargs):
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    def retry_if_result(*args, **kwargs):
+        return None
+
+    def stop_after_attempt(*args, **kwargs):
+        return None
+
+    def wait_random(*args, **kwargs):
+        return None
 
 from chanlun import fun
 from chanlun.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
-from xtquant import xtdata
+try:
+    from xtquant import xtdata
+except Exception:
+    xtdata = None
 
 import re
 """
@@ -23,6 +42,9 @@ class ExchangeQMT(Exchange):
     g_all_stocks = []
 
     def __init__(self):
+        if xtdata is None:
+            raise Exception("xtquant 未安装或不可用，无法使用 QMT 行情。请确认 xtquant 已放入 src 目录并可正常 import。")
+
         xtdata.enable_hello = False
 
         # 设置时区
@@ -74,6 +96,7 @@ class ExchangeQMT(Exchange):
         stop=stop_after_attempt(3),
         wait=wait_random(min=1, max=5),
         retry=retry_if_result(lambda _r: _r is None),
+        retry_error_callback=lambda _retry_state: None,
     )
     def klines(
         self,

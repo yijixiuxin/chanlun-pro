@@ -228,7 +228,7 @@ class ExchangeDB(Exchange):
                 "close": _k.c,
                 "volume": _k.v,
             }
-            if self.market == Market.FUTURES.value:
+            if self.market in [Market.FUTURES.value, Market.OPTION.value]:
                 _kline["position"] = _k.p
             kline_pd.append(_kline)
         if len(kline_pd) == 0:
