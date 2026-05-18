@@ -224,6 +224,7 @@ class ChartManager {
       TvIdxLTQS.idx(PineJS),
       TvIdxMA.idx(PineJS),
       TvIdxMACDBL.idx(PineJS),
+      TvIdxPinbar.idx(PineJS),
       TvIdxVegasMA.idx(PineJS),
       TvIdxVOL.idx(PineJS),
       TvIdxRSX.idx(PineJS),

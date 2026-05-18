@@ -14,7 +14,7 @@ echo UV_DIR: %UV_DIR%
 
 echo 2. 创建虚拟环境
 %UV_DIR% python install 3.11
-%UV_DIR% venv --python=3.11 .venv
+%UV_DIR% venv --python=3.11 .venv --clear
 %UV_DIR% sync
 
 echo 3. 获取机器信息
