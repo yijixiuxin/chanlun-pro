@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <title>缠论回测学习</title>
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/backtest.css') }}" />
+  {% include 'dark.html' %}
+</head>
+<body>
+  <div class="bt-container">
+    <!-- 左侧图表区 -->
+    <div class="bt-charts" id="bt-charts">
+      <div class="bt-chart-small" id="bt-chart-small">
+        <div id="tv_chart_small" style="width:100%;height:100%;"></div>
+      </div>
+      <div class="bt-chart-high" id="bt-chart-high">
+        <div id="tv_chart_high" style="width:100%;height:100%;"></div>
+      </div>
+    </div>
+    <!-- 右侧操作区 -->
+    <div class="bt-panel" id="bt-panel">
+      <div class="bt-panel-section">
+        <h3>操作控制</h3>
+        <div class="bt-btn-group">
+          <button class="layui-btn layui-btn-normal" id="bt-btn-start">开始</button>
+          <button class="layui-btn" id="bt-btn-pause">暂停</button>
+          <button class="layui-btn layui-btn-warm" id="bt-btn-stop">结束</button>
+        </div>
+        <div class="bt-speed">
+          <label>回放速度: <span id="bt-speed-label">2s</span></label>
+          <input type="range" id="bt-speed-slider" min="1" max="20" value="4" step="1" />
+          <div class="bt-speed-range">
+            <span>0.5s</span><span>10s</span>
+          </div>
+        </div>
+      </div>
+      <hr>
+      <div class="bt-panel-section">
+        <h3>股票信息</h3>
+        <div>股票: <span id="bt-stock-id">--</span></div>
+        <div>周期: <span id="bt-freqs">--</span></div>
+        <div>进度: <span id="bt-progress">--</span></div>
+        <div>当前时间: <span id="bt-current-time">--</span></div>
+      </div>
+      <hr>
+      <div class="bt-panel-section">
+        <h3>资金状况</h3>
+        <div>初始资金: <span id="bt-init-capital">¥100,000</span></div>
+        <div>当前资金: <span id="bt-current-capital">¥100,000</span></div>
+        <div>持仓市值: <span id="bt-position-value">¥0</span></div>
+        <div>浮动盈亏: <span id="bt-pnl">0.00%</span></div>
+      </div>
+      <hr>
+      <div class="bt-panel-section">
+        <h3>当前持仓</h3>
+        <div id="bt-position-display">无持仓</div>
+      </div>
+      <hr>
+      <div class="bt-panel-section">
+        <h3>交易操作</h3>
+        <div>当前价格: <span id="bt-current-price">--</span></div>
+        <div class="bt-trade-form">
+          <label>数量(股): <input type="number" id="bt-trade-qty" value="100" min="100" step="100" /></label>
+          <div class="bt-trade-btns">
+            <button class="layui-btn layui-btn-danger" id="bt-btn-buy">买入（做多）</button>
+            <button class="layui-btn layui-btn-danger" id="bt-btn-sell">卖出（做空）</button>
+            <button class="layui-btn" id="bt-btn-close">平仓</button>
+          </div>
+        </div>
+      </div>
+      <hr>
+      <div class="bt-panel-section">
+        <h3>交易记录</h3>
+        <table class="layui-table" id="bt-trade-records" style="font-size:12px;">
+          <thead><tr><th>时间</th><th>方向</th><th>价格</th><th>数量</th><th>盈亏</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='layui.js') }}"></script>
+  <script src="{{ url_for('static', filename='charting_library/charting_library.standalone.js') }}?version=1.0.0"></script>
+  <script src="{{ url_for('static', filename='js/backtest.js') }}"></script>
+</body>
+</html>
