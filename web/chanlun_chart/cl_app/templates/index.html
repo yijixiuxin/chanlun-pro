@@ -472,6 +472,12 @@
               ],
             },
             {
+              title: "缠论回测",
+              templet:
+                '<div><i class="layui-icon layui-icon-chart-screen"></i> <span>缠论回测学习</span></div>',
+              id: 9,
+            },
+            {
               title: "切换主题",
               templet:
                 '<div><i class="layui-icon layui-icon-engine"></i> <span>切换主题</span></div>',
@@ -567,6 +573,8 @@
                 Utils.set_local_data("theme", "Light");
               }
               location.reload();
+            } else if (item.title === "缠论回测") {
+              window.open("/backtest", "_blank");
             } else if (item.title === "系统设置") {
               layer.open({
                 type: 2,
