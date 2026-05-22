@@ -1,6 +1,7 @@
 // === 常量 ===
 const BT_CONFIG = {
   INITIAL_CAPITAL: 100000,
+  LS_KEY_PREFIX: "bt_trades_",
   COLORS: {
     DING: "#FA8072",
     DI: "#1E90FF",
@@ -14,6 +15,20 @@ const BT_CONFIG = {
     BC_TEXT: "#fccbcd",
     MMD_UP: "#FA8072",
     MMD_DOWN: "#1E90FF",
+  },
+};
+
+// === localStorage 工具 ===
+const BTLocalStore = {
+  loadTrades(sessionKey) {
+    const raw = localStorage.getItem(BT_CONFIG.LS_KEY_PREFIX + sessionKey);
+    try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
+  },
+  saveTrades(sessionKey, records) {
+    localStorage.setItem(BT_CONFIG.LS_KEY_PREFIX + sessionKey, JSON.stringify(records));
+  },
+  removeTrades(sessionKey) {
+    localStorage.removeItem(BT_CONFIG.LS_KEY_PREFIX + sessionKey);
   },
 };
 
@@ -127,7 +142,6 @@ function createBacktestDatafeed(chartKey) {
               volume: data.v[i],
             });
           }
-          // 存储缠论数据以便重绘
           self._bars = data;
           onResult(bars, { noData: bars.length === 0 });
         } else {
@@ -170,20 +184,18 @@ const BacktestApp = {
   datafeedHigh: null,
   timerId: null,
   speedMs: 2000,
+  sessionLoaded: false,
+  sessionKey: null,
   running: false,
   paused: false,
 
   // 交易状态
   capital: BT_CONFIG.INITIAL_CAPITAL,
-  position: { type: null, qty: 0, price: 0 },  // type: 'long'|'short'|null
+  position: { type: null, qty: 0, price: 0 },
   tradeRecords: [],
   drawnShapeIds: { small: [], high: [] },
 
   init() {
-    const winHeight = window.innerHeight;
-    const smallHeight = winHeight * 0.7;
-    const highHeight = winHeight * 0.3;
-
     this.datafeedSmall = createBacktestDatafeed("small");
     this.datafeedHigh = createBacktestDatafeed("high");
 
@@ -243,110 +255,77 @@ const BacktestApp = {
     });
 
     this.bindEvents();
+
+    // 页面加载后自动随机选股并展示初始数据
+    setTimeout(() => self.loadSession(), 500);
   },
 
-  redrawShapes(chartKey) {
-    const datafeed = chartKey === "small" ? this.datafeedSmall : this.datafeedHigh;
-    const chart = chartKey === "small" ? this.chartSmall : this.chartHigh;
-    const bars = datafeed._bars;
-    if (!bars || !chart) return;
-
-    // 清除旧形状
-    this.drawnShapeIds[chartKey].forEach(id => {
-      try { id.then(i => chart.removeEntity(i)); } catch (e) {}
-    });
-    this.drawnShapeIds[chartKey] = [];
-
-    const ids = this.drawnShapeIds[chartKey];
-
-    // 绘制分型
-    (bars.fxs || []).forEach(fx => {
-      ids.push({ id: BTChartUtils.createFxShape(chart, fx) });
-    });
-    // 绘制笔
-    (bars.bis || []).forEach(bi => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, bi, BT_CONFIG.COLORS.BI) });
-    });
-    // 绘制线段
-    (bars.xds || []).forEach(xd => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, xd, BT_CONFIG.COLORS.XD) });
-    });
-    // 绘制走势段
-    (bars.zsds || []).forEach(zsd => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, zsd, BT_CONFIG.COLORS.ZSD) });
-    });
-    // 绘制笔中枢
-    (bars.bi_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.BI_ZSS) });
-    });
-    // 绘制线段中枢
-    (bars.xd_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.XD_ZSS) });
-    });
-    // 绘制走势段中枢
-    (bars.zsd_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.ZSD_ZSS) });
-    });
-    // 绘制背驰
-    (bars.bcs || []).forEach(bc => {
-      ids.push({ id: BTChartUtils.createBcShape(chart, bc) });
-    });
-    // 绘制买卖点
-    (bars.mmds || []).forEach(mmd => {
-      ids.push({ id: BTChartUtils.createMmdShape(chart, mmd) });
-    });
-  },
-
-  bindEvents() {
-    const self = this;
-
-    $("#bt-btn-start").click(() => self.startReplay());
-    $("#bt-btn-pause").click(() => self.togglePause());
-    $("#bt-btn-stop").click(() => self.stopReplay());
-    $("#bt-btn-buy").click(() => self.trade("buy"));
-    $("#bt-btn-sell").click(() => self.trade("sell"));
-    $("#bt-btn-close").click(() => self.trade("close"));
-
-    $("#bt-speed-slider").on("input", function () {
-      const val = parseInt($(this).val());
-      self.speedMs = val * 500;  // 1-20 映射到 0.5s-10s
-      $("#bt-speed-label").text((self.speedMs / 1000).toFixed(1) + "s");
-    });
-  },
-
-  startReplay() {
+  // === 数据加载 ===
+  loadSession() {
     const self = this;
     $.post("/backtest/start", function (res) {
       if (!res.ok) { layer.msg(res.msg); return; }
+
+      self.sessionKey = res.session_key;
+      self.sessionLoaded = true;
 
       // 更新 UI
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text(res.small_freq + " / " + res.high_freq);
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
-      $("#bt-btn-start").addClass("layui-btn-disabled").attr("disabled", true);
 
       // 重置交易状态
-      self.capital = BT_CONFIG.INITIAL_CAPITAL;
-      self.position = { type: null, qty: 0, price: 0 };
-      self.tradeRecords = [];
-      self.updateCapitalDisplay();
-      self.updatePositionDisplay();
-      $("#bt-trade-records tbody").empty();
+      self.resetTradingState();
 
-      // 重新加载图表数据
+      // 从 localStorage 加载交易记录
+      self.tradeRecords = BTLocalStore.loadTrades(self.sessionKey);
+      self.renderTradeRecordsFromData();
+
+      // 加载图表数据
       self.widgetSmall.activeChart().resetData();
       self.widgetHigh.activeChart().resetData();
-
-      self.running = true;
-
-      // 等待 1 秒让图表初始化完成后开始回放
-      setTimeout(() => self.startTimer(), 1000);
     });
+  },
+
+  resetTradingState() {
+    this.capital = BT_CONFIG.INITIAL_CAPITAL;
+    this.position = { type: null, qty: 0, price: 0 };
+    this.tradeRecords = [];
+    this.updateCapitalDisplay();
+    this.updatePositionDisplay();
+    $("#bt-trade-records tbody").empty();
+  },
+
+  renderTradeRecordsFromData() {
+    $("#bt-trade-records tbody").empty();
+    this.tradeRecords.forEach(rec => {
+      const row = `<tr>
+        <td>${rec.time}</td>
+        <td>${rec.direction}</td>
+        <td>¥${rec.price.toFixed(2)}</td>
+        <td>${rec.qty}</td>
+        <td>${rec.pnl !== undefined ? "¥" + rec.pnl.toFixed(2) : "--"}</td>
+      </tr>`;
+      $("#bt-trade-records tbody").prepend(row);
+    });
+  },
+
+  // === 回放控制 ===
+  startReplay() {
+    if (!this.sessionLoaded) { layer.msg("数据加载中..."); return; }
+    if (this.running) return;
+
+    this.running = true;
+    this.paused = false;
+    $("#bt-btn-start").addClass("layui-btn-disabled").attr("disabled", true);
+    $("#bt-btn-pause").text("暂停");
+    this.startTimer();
   },
 
   startTimer() {
     const self = this;
+    this.stopTimer();
     this.timerId = setInterval(() => self.stepForward(), this.speedMs);
   },
 
@@ -355,27 +334,19 @@ const BacktestApp = {
     $.post("/backtest/step", function (res) {
       if (res.finished) {
         self.stopTimer();
+        self.running = false;
         layer.msg("回放已结束");
         return;
       }
       if (!res.ok) return;
 
-      // 更新 UI
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       const progress = ((res.current_pos / res.total_bars) * 100).toFixed(1);
       $("#bt-progress").text(progress + "%");
 
-      // 推送新 bar 到小级别图表
-      if (res.new_bar) {
-        self.datafeedSmall.pushBar(res.new_bar);
-      }
+      if (res.new_bar) { self.datafeedSmall.pushBar(res.new_bar); }
+      if (res.new_high_bar) { self.datafeedHigh.pushBar(res.new_high_bar); }
 
-      // 推送新 bar 到大级别图表
-      if (res.new_high_bar) {
-        self.datafeedHigh.pushBar(res.new_high_bar);
-      }
-
-      // 存储缠论数据并重绘
       if (res.cl_small) {
         self.datafeedSmall._bars = res.cl_small;
         self.redrawShapes("small");
@@ -385,7 +356,6 @@ const BacktestApp = {
         self.redrawShapes("high");
       }
 
-      // 更新持仓市值
       self.updateCapitalDisplay();
     });
   },
@@ -410,20 +380,95 @@ const BacktestApp = {
     }
   },
 
-  stopReplay() {
+  restartSession() {
+    // 停止当前回放
     this.stopTimer();
     this.running = false;
     this.paused = false;
-    $.post("/backtest/stop");
-    $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
-    $("#bt-btn-pause").text("暂停");
-    layer.msg("回放已结束");
+
+    // 清理旧 session 的 localStorage 交易记录
+    if (this.sessionKey) {
+      BTLocalStore.removeTrades(this.sessionKey);
+    }
+
+    // 服务端清理旧 session
+    $.post("/backtest/stop", () => {
+      // 重置 UI
+      this.sessionLoaded = false;
+      this.sessionKey = null;
+      $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
+      $("#bt-btn-pause").text("暂停");
+      $("#bt-progress").text("--");
+
+      // 重新随机选股
+      this.loadSession();
+    });
   },
 
+  // === 缠论绘制 ===
+  redrawShapes(chartKey) {
+    const datafeed = chartKey === "small" ? this.datafeedSmall : this.datafeedHigh;
+    const chart = chartKey === "small" ? this.chartSmall : this.chartHigh;
+    const bars = datafeed._bars;
+    if (!bars || !chart) return;
+
+    this.drawnShapeIds[chartKey].forEach(id => {
+      try { id.then(i => chart.removeEntity(i)); } catch (e) {}
+    });
+    this.drawnShapeIds[chartKey] = [];
+
+    const ids = this.drawnShapeIds[chartKey];
+
+    (bars.fxs || []).forEach(fx => {
+      ids.push({ id: BTChartUtils.createFxShape(chart, fx) });
+    });
+    (bars.bis || []).forEach(bi => {
+      ids.push({ id: BTChartUtils.createLineShape(chart, bi, BT_CONFIG.COLORS.BI) });
+    });
+    (bars.xds || []).forEach(xd => {
+      ids.push({ id: BTChartUtils.createLineShape(chart, xd, BT_CONFIG.COLORS.XD) });
+    });
+    (bars.zsds || []).forEach(zsd => {
+      ids.push({ id: BTChartUtils.createLineShape(chart, zsd, BT_CONFIG.COLORS.ZSD) });
+    });
+    (bars.bi_zss || []).forEach(zs => {
+      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.BI_ZSS) });
+    });
+    (bars.xd_zss || []).forEach(zs => {
+      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.XD_ZSS) });
+    });
+    (bars.zsd_zss || []).forEach(zs => {
+      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.ZSD_ZSS) });
+    });
+    (bars.bcs || []).forEach(bc => {
+      ids.push({ id: BTChartUtils.createBcShape(chart, bc) });
+    });
+    (bars.mmds || []).forEach(mmd => {
+      ids.push({ id: BTChartUtils.createMmdShape(chart, mmd) });
+    });
+  },
+
+  // === 事件绑定 ===
+  bindEvents() {
+    const self = this;
+
+    $("#bt-btn-start").click(() => self.startReplay());
+    $("#bt-btn-pause").click(() => self.togglePause());
+    $("#bt-btn-stop").click(() => self.restartSession());
+    $("#bt-btn-buy").click(() => self.trade("buy"));
+    $("#bt-btn-sell").click(() => self.trade("sell"));
+    $("#bt-btn-close").click(() => self.trade("close"));
+
+    $("#bt-speed-slider").on("input", function () {
+      const val = parseInt($(this).val());
+      self.speedMs = val * 500;
+      $("#bt-speed-label").text((self.speedMs / 1000).toFixed(1) + "s");
+    });
+  },
+
+  // === 交易逻辑 ===
   trade(action) {
-    if (!this.running || this.paused) {
-      layer.msg("请先开始回放"); return;
-    }
+    if (!this.sessionLoaded) { layer.msg("请等待数据加载完成"); return; }
 
     const priceText = $("#bt-current-price").text().replace("¥", "");
     const price = parseFloat(priceText);
@@ -438,7 +483,6 @@ const BacktestApp = {
       if (cost > this.capital) { layer.msg("资金不足"); return; }
       this.capital -= cost;
       if (this.position.type === "long") {
-        // 加仓
         const totalQty = this.position.qty + qty;
         const avgPrice = (this.position.price * this.position.qty + price * qty) / totalQty;
         this.position.qty = totalQty;
@@ -480,7 +524,14 @@ const BacktestApp = {
 
   addTradeRecord(direction, price, qty, pnl) {
     const time = $("#bt-current-time").text();
-    this.tradeRecords.push({ time, direction, price, qty, pnl: pnl || 0 });
+    const rec = { time, direction, price, qty, pnl: pnl || 0 };
+    this.tradeRecords.push(rec);
+
+    // 保存到 localStorage
+    if (this.sessionKey) {
+      BTLocalStore.saveTrades(this.sessionKey, this.tradeRecords);
+    }
+
     const row = `<tr>
       <td>${time}</td>
       <td>${direction}</td>

@@ -55,27 +55,47 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
         session_id = session.get("bt_session_id")
         rs = _replay_sessions.get(session_id)
         if rs is None:
-            return {"name": symbol, "ticker": symbol, "description": symbol,
-                    "exchange": "backtest", "type": "stock", "session": "24x7",
-                    "timezone": "Asia/Shanghai", "pricescale": 100,
-                    "minmov": 1, "minmov2": 0, "has_intraday": True,
-                    "has_daily": True, "has_weekly_and_monthly": True,
-                    "supported_resolutions": ["1", "5", "15", "30", "60", "1D"],
-                    "intraday_multipliers": ["1", "5", "15", "30", "60"],
-                    "seconds_multipliers": [],
-                    "daily_multipliers": ["1"],
-                    "visible_plots_set": "ohlcv"}
-        freq = rs["small_freq"] if symbol == "small" else rs["high_freq"]
-        return {"name": symbol, "ticker": symbol, "description": symbol,
-                "exchange": "backtest", "type": "stock", "session": "24x7",
-                "timezone": "Asia/Shanghai", "pricescale": 100,
-                "minmov": 1, "minmov2": 0, "has_intraday": True,
-                "has_daily": True, "has_weekly_and_monthly": True,
-                "supported_resolutions": [frequency_maps.get(freq, "1D")],
+            return {
+                "name": symbol,
+                "ticker": symbol,
+                "description": symbol,
+                "exchange": "backtest",
+                "type": "stock",
+                "session": "24x7",
+                "timezone": "Asia/Shanghai",
+                "pricescale": 100,
+                "minmov": 1,
+                "minmov2": 0,
+                "has_intraday": True,
+                "has_daily": True,
+                "has_weekly_and_monthly": True,
+                "supported_resolutions": ["1", "5", "15", "30", "60", "1D"],
                 "intraday_multipliers": ["1", "5", "15", "30", "60"],
                 "seconds_multipliers": [],
                 "daily_multipliers": ["1"],
-                "visible_plots_set": "ohlcv"}
+                "visible_plots_set": "ohlcv",
+            }
+        freq = rs["small_freq"] if symbol == "small" else rs["high_freq"]
+        return {
+            "name": symbol,
+            "ticker": symbol,
+            "description": symbol,
+            "exchange": "backtest",
+            "type": "stock",
+            "session": "24x7",
+            "timezone": "Asia/Shanghai",
+            "pricescale": 100,
+            "minmov": 1,
+            "minmov2": 0,
+            "has_intraday": True,
+            "has_daily": True,
+            "has_weekly_and_monthly": True,
+            "supported_resolutions": [frequency_maps.get(freq, "1D")],
+            "intraday_multipliers": ["1", "5", "15", "30", "60"],
+            "seconds_multipliers": [],
+            "daily_multipliers": ["1"],
+            "visible_plots_set": "ohlcv",
+        }
 
     @app.route("/backtest/tv/history")
     @login_required
@@ -167,10 +187,21 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
 
         return {
             "s": "ok",
-            "t": t, "c": c, "o": o, "h": h, "l": l, "v": v,
-            "fxs": fxs, "bis": bis, "xds": xds, "zsds": zsds,
-            "bi_zss": bi_zss, "xd_zss": xd_zss, "zsd_zss": zsd_zss,
-            "bcs": bcs, "mmds": mmds,
+            "t": t,
+            "c": c,
+            "o": o,
+            "h": h,
+            "l": l,
+            "v": v,
+            "fxs": fxs,
+            "bis": bis,
+            "xds": xds,
+            "zsds": zsds,
+            "bi_zss": bi_zss,
+            "xd_zss": xd_zss,
+            "zsd_zss": zsd_zss,
+            "bcs": bcs,
+            "mmds": mmds,
         }
 
     @app.route("/backtest/start", methods=["POST"])
@@ -181,8 +212,9 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
         all_stocks = ex.all_stocks()
 
         # 过滤：只要 60/00/30 开头的股票
-        valid_stocks = [s for s in all_stocks
-                        if s["code"].split(".")[-1][:2] in ["60", "00", "30"]]
+        valid_stocks = [
+            s for s in all_stocks if s["code"].split(".")[-1][:2] in ["60", "00", "30"]
+        ]
 
         # 随机周期对
         freq_pairs = [("d", "30m"), ("60m", "15m"), ("30m", "5m")]
@@ -204,11 +236,11 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
 
         # 初始计算小级别
         cd_small = cl.CL(stock["code"], small_freq, cl_config)
-        cd_small.process_klines(klines.iloc[:start_pos + 1])
+        cd_small.process_klines(klines.iloc[: start_pos + 1])
 
         # 初始计算大级别
         high_klines = convert_stock_kline_frequency(
-            klines.iloc[:start_pos + 1].copy(), high_freq
+            klines.iloc[: start_pos + 1].copy(), high_freq
         )
         cd_high = cl.CL(stock["code"], high_freq, cl_config)
         cd_high.process_klines(high_klines)
@@ -236,6 +268,7 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
         current_bar = klines.iloc[start_pos]
         return {
             "ok": True,
+            "session_key": session_id,
             "display_id": _replay_sessions[session_id]["display_id"],
             "small_freq": small_freq,
             "high_freq": high_freq,
@@ -261,11 +294,11 @@ def register_backtest_routes(app, frequency_maps, market_frequencys):
             return {"ok": False, "msg": "回放已结束", "finished": True}
 
         # 增量更新小级别 CL
-        rs["cl_small"].process_klines(klines.iloc[:pos + 1])
+        rs["cl_small"].process_klines(klines.iloc[: pos + 1])
 
         # 增量更新大级别 CL
         high_klines = convert_stock_kline_frequency(
-            klines.iloc[:pos + 1].copy(), rs["high_freq"]
+            klines.iloc[: pos + 1].copy(), rs["high_freq"]
         )
         rs["cl_high"].process_klines(high_klines)
 
