@@ -21,6 +21,7 @@
                     <select name="zixuan_opt">
                         <option value="ADD">添加自选组</option>
                         <option value="DEL">删除自选组</option>
+                        <option value="CLEAR">清空自选组</option>
                     </select>
                 </label>
             </div>
@@ -58,7 +59,7 @@
         <div class="layui-col-sm4">
             <div class="layui-input-block" title="导入文件">
                 <button type="button" class="layui-btn layui-bg-red" id="zixuan_opt_import_file"
-                    lay-options="{accept: 'file', exts: 'txt'}">
+                    lay-options="{accept: 'file', exts: 'txt|csv'}">
                     <i class="layui-icon layui-icon-upload"></i>
                     导入文件
                 </button>
@@ -74,18 +75,43 @@
     <blockquote class="layui-elem-quote layui-quote-nm">
         <h3>使用说明：</h3>
         <p>添加自选组，在相同市场不允许有相同名称的自选组</p>
-        <p>删除自选组，默认自选组 “我的关注” 是不允许删除的</p>
-        <p>导入/导出操作，先选择要进行导入或导出到的 <b>自选组</b>，然后在点击对应的操作</p>
-        <p>导入导出的格式，每一行包括代码与名称，用逗号分隔</p>
-        <p>沪深市场的代码格式支持：600519 / SH.600519 / SHSE.600519 格式</p>
+        <p>删除自选组，默认自选组 "我的关注" 是不允许删除的</p>
+        <p>导入/导出操作，先选择要进行导入或导出到的 <b>自选组</b>，然后再点击对应的操作</p>
+    </blockquote>
+
+    <blockquote class="layui-elem-quote layui-quote-nm" style="border-left: 5px solid #5fb878;">
+        <h3>导入/导出规则说明：</h3>
+        <p><b>支持的文件格式：</b>TXT、CSV（UTF-8 编码）</p>
+        <p><b>导出格式：</b>CSV 文件，每行格式为 <code>代码,名称</code></p>
+        <p><b>导入格式：</b>每行一条记录，支持以下两种写法：</p>
+        <ul style="margin: 8px 0 8px 24px;">
+            <li>仅股票代码（如：<code>SZ.000001</code>）—— 名称将留空</li>
+            <li>股票代码和名称（如：<code>SZ.000001,平安银行</code>）</li>
+        </ul>
+        <p><b>代码格式兼容规则（各市场）：</b></p>
+        <ul style="margin: 8px 0 8px 24px;">
+            <li><b>沪深A股：</b>支持 <code>600519</code> / <code>SH.600519</code> / <code>SHSE.600519</code> 三种格式</li>
+            <li><b>国内期货：</b>支持 <code>RB0000</code> / <code>RB.SHF</code> 格式</li>
+            <li><b>纽约期货：</b>支持 <code>GC</code> / <code>GC.NYMEX</code> 格式</li>
+            <li><b>数字货币：</b>支持 <code>BTC</code> / <code>BTC-USDT.SWAP</code> 格式</li>
+            <li><b>其他市场：</b>支持带或不带市场后缀的代码格式</li>
+        </ul>
+        <p><b>CSV 表头处理：</b>如果文件第一行以 <code>stock_code</code> 或 <code>code</code> 开头，会自动作为表头跳过</p>
+        <p style="color: #ff5722;"><b>注意事项：</b></p>
+        <ul style="margin: 8px 0 8px 24px; color: #ff5722;">
+            <li>导入时，如果代码在当前市场无法匹配到唯一标的，该行将被跳过</li>
+            <li>空行会自动忽略</li>
+            <li>导入是追加模式，不会覆盖已有的自选股</li>
+        </ul>
     </blockquote>
 
     <fieldset class="layui-elem-field">
-        <legend>导入/导出示例</legend>
+        <legend>导入文件示例（CSV/TXT 内容）</legend>
         <div class="layui-field-box">
-            <p>SZ.000001,平安银行</p>
-            <p>SZ.000002,万科A</p>
-            <p>SZ.000004,国华网安</p>
+            <pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px;">SH.600000,浦发银行
+SZ.000001,平安银行
+SH.600519,贵州茅台
+SZ.000002,万科A</pre>
         </div>
     </fieldset>
 
@@ -99,7 +125,7 @@
                 var upload = layui.upload;
                 const form = layui.form;
                 const layer = layui.layer;
-                // 自选新增/删除操作
+                // 自选新增/删除/清空操作
                 $('#zixuan_opt_submit').click(function () {
                     let opt = $(
                         '#zixuan_opt_form select[name="zixuan_opt"]'
@@ -115,6 +141,22 @@
                         layer.msg("默认自选组不允许删除");
                         return false;
                     }
+                    if (opt === "CLEAR") {
+                        layer.confirm(
+                            `确认要清空自选组 "${zx_group}" 中的所有股票吗？此操作不可恢复。`,
+                            { icon: 3, title: "警告" },
+                            function (index) {
+                                layer.close(index);
+                                doSubmit(opt, zx_group);
+                            }
+                        );
+                        return false;
+                    }
+                    doSubmit(opt, zx_group);
+                    return false;
+                });
+
+                function doSubmit(opt, zx_group) {
                     $.ajax({
                         type: "POST",
                         url: "/opt_zixuan_group/" + market,
@@ -128,8 +170,7 @@
                             }
                         },
                     });
-                    return false;
-                });
+                }
 
                 // 自选导出操作
                 $('#zixuan_opt_export_submit').click(function () {
@@ -143,7 +184,7 @@
                     url: '/zixuan_opt_import', // 此处配置你自己的上传接口即可
                     field: 'file', // 文件域的字段名
                     accept: 'file', // 普通文件
-                    exts: 'txt',
+                    exts: 'txt|csv',
                     data: { market: market, 'zx_group': function () { return $('#export_zx_group').val(); } },
                     done: function (res) {
                         if (res.ok) {
