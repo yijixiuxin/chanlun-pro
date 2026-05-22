@@ -1045,6 +1045,8 @@ def create_app(test_config=None):
         zx = ZiXuan(market)
         if opt == "DEL":
             return {"ok": zx.del_zx_group(zx_group)}
+        elif opt == "CLEAR":
+            return {"ok": zx.clear_zx_stocks(zx_group)}
         else:
             return {"ok": zx.add_zx_group(zx_group)}
 
@@ -1065,7 +1067,7 @@ def create_app(test_config=None):
             down_file = get_data_path() / "zx.txt"
             down_file.write_text(output, encoding="utf-8")
             return send_file(
-                down_file, as_attachment=True, download_name=f"zixuan_{zx_group}.txt"
+                down_file, as_attachment=True, download_name=f"zixuan_{zx_group}.csv"
             )
         finally:
             try:
@@ -1082,46 +1084,60 @@ def create_app(test_config=None):
         market = request.form["market"]
         zx_group = request.form["zx_group"]
         file = request.files["file"]
-        import_file = get_data_path() / "zx.txt"
+        import_file = get_data_path() / "zx_import.txt"
         file.save(import_file)
         zx = ZiXuan(market)
         ex = get_exchange(Market(market))
         import_nums = 0
+        skip_nums = 0
         market_all_stocks = ex.all_stocks()
         market_all_codes = [s["code"] for s in market_all_stocks]
-        with open(import_file, "r", encoding="utf-8") as fp:
-            for line in fp.readlines():
+        with open(import_file, "r", encoding="utf-8-sig") as fp:
+            lines = fp.readlines()
+            # 跳过 CSV 表头行（如果第一行是 stock_code 或 code 开头）
+            if lines and lines[0].strip().lower().startswith(("stock_code", "code")):
+                lines = lines[1:]
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
                 try:
-                    import_infos = line.strip().split(",")
+                    import_infos = line.split(",")
                     if len(import_infos) >= 2:
                         code = import_infos[0].strip()
                         name = import_infos[1].strip()
                     else:
                         code = import_infos[0].strip()
-                        name = None
+                        name = ""
 
-                    # 股票代码兼容性处理
-                    if market == "a":
-                        code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
+                    # 股票代码兼容性处理：统一前缀格式
+                    # SHSE. → SH.  /  SZSE. → SZ.  (兼容旧格式)
+                    # 也兼容 SH. / SZ. 格式（参考项目格式）
+                    code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
 
                     if code not in market_all_codes:
                         same_codes = [_c for _c in market_all_codes if code in _c]
                         if len(same_codes) == 1:
                             code = same_codes[0]
                         else:
+                            skip_nums += 1
                             continue
 
                     zx.add_stock(zx_group, code, name)
                     import_nums += 1
                 except Exception as e:
-                    print(line, e)
+                    skip_nums += 1
+                    print(f"导入失败: {line}, 错误: {e}")
 
         try:
             os.remove(import_file)
         except Exception:
             pass
 
-        return {"ok": True, "msg": f"成功导入 {import_nums} 条记录"}
+        msg = f"成功导入 {import_nums} 条记录"
+        if skip_nums > 0:
+            msg += f"，跳过 {skip_nums} 条无法匹配的记录"
+        return {"ok": True, "msg": msg}
 
     # 设置股票的自选组
     @app.route("/set_stock_zixuan", methods=["POST"])
