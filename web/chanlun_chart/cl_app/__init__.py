@@ -46,9 +46,9 @@ from chanlun.tools.ai_predict import AITrendPredict
 from chanlun.zixuan import ZiXuan
 
 from .alert_tasks import AlertTasks
+from .backtest_routes import register_backtest_routes
 from .other_tasks import OtherTasks
 from .xuangu_tasks import XuanguTasks
-from .backtest_routes import register_backtest_routes
 
 
 def create_app(test_config=None):
