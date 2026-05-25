@@ -112,10 +112,21 @@ def register_backtest_routes(app):
 
         return {
             "s": "ok",
-            "t": t, "c": c, "o": o, "h": h, "l": l, "v": v,
-            "fxs": fxs, "bis": bis, "xds": xds, "zsds": zsds,
-            "bi_zss": bi_zss, "xd_zss": xd_zss, "zsd_zss": zsd_zss,
-            "bcs": bcs, "mmds": mmds,
+            "t": t,
+            "c": c,
+            "o": o,
+            "h": h,
+            "l": l,
+            "v": v,
+            "fxs": fxs,
+            "bis": bis,
+            "xds": xds,
+            "zsds": zsds,
+            "bi_zss": bi_zss,
+            "xd_zss": xd_zss,
+            "zsd_zss": zsd_zss,
+            "bcs": bcs,
+            "mmds": mmds,
         }
 
     @app.route("/backtest/start", methods=["POST"])
