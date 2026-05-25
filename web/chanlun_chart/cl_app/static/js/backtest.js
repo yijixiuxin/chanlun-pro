@@ -262,72 +262,9 @@ const BacktestApp = {
   drawnShapeIds: { small: [], high: [] },
 
   init() {
-    this.datafeedSmall = createBacktestDatafeed("small");
-    this.datafeedHigh = createBacktestDatafeed("high");
-
-    // 小级别图表 (30m)
-    this.widgetSmall = new TradingView.widget({
-      debug: false,
-      autosize: true,
-      fullscreen: false,
-      container: "tv_chart_small",
-      symbol: "small",
-      interval: "30",
-      datafeed: this.datafeedSmall,
-      library_path: "static/charting_library/",
-      theme: "Light",
-      timezone: "Asia/Shanghai",
-      locale: "zh",
-      disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
-        "display_market_status", "symbol_info", "volume_force_overlay"],
-      enabled_features: [],
-      time_frames: [],
-      charts_storage_url: "/backtest/tv",
-      charts_storage_api_version: "1.1",
-      client_id: "bt_small",
-    });
-
-    // 大级别图表 (日线)
-    this.widgetHigh = new TradingView.widget({
-      debug: false,
-      autosize: true,
-      fullscreen: false,
-      container: "tv_chart_high",
-      symbol: "high",
-      interval: "1D",
-      datafeed: this.datafeedHigh,
-      library_path: "static/charting_library/",
-      theme: "Light",
-      timezone: "Asia/Shanghai",
-      locale: "zh",
-      disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
-        "display_market_status", "symbol_info", "volume_force_overlay",
-        "header_widget_dom_node", "header_interval_dialog_button"],
-      enabled_features: [],
-      time_frames: [],
-      charts_storage_url: "/backtest/tv",
-      charts_storage_api_version: "1.1",
-      client_id: "bt_high",
-    });
-
-    const self = this;
-    this.widgetSmall.onChartReady(() => {
-      self.chartSmall = self.widgetSmall.activeChart();
-      self.chartSmall.onDataLoaded().subscribe(null, () => self.redrawShapes("small"));
-    });
-    this.widgetHigh.onChartReady(() => {
-      self.chartHigh = self.widgetHigh.activeChart();
-      self.chartHigh.onDataLoaded().subscribe(null, () => self.redrawShapes("high"));
-    });
-
     this.bindEvents();
 
-    // 页面加载后自动随机选股并展示初始数据
-    setTimeout(() => self.loadSession(), 500);
-  },
-
-  // === 数据加载 ===
-  loadSession() {
+    // 先加载回放 session，再创建图表（避免图表在 session 就绪前请求数据）
     const self = this;
     $.post("/backtest/start", function (res) {
       if (!res.ok) { layer.msg(res.msg); return; }
@@ -349,9 +286,84 @@ const BacktestApp = {
       self.tradeRecords = BTLocalStore.loadTrades(self.sessionKey);
       self.renderTradeRecordsFromData();
 
-      // 加载图表数据
-      self.widgetSmall.activeChart().resetData();
-      self.widgetHigh.activeChart().resetData();
+      // session 就绪后创建图表
+      self.createCharts();
+    });
+  },
+
+  createCharts() {
+    this.datafeedSmall = createBacktestDatafeed("small");
+    this.datafeedHigh = createBacktestDatafeed("high");
+
+    this.widgetSmall = new TradingView.widget({
+      debug: false, autosize: true, fullscreen: false,
+      container: "tv_chart_small", symbol: "small", interval: "30",
+      datafeed: this.datafeedSmall,
+      library_path: "static/charting_library/",
+      theme: "Light", timezone: "Asia/Shanghai", locale: "zh",
+      disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
+        "display_market_status", "symbol_info", "volume_force_overlay"],
+      enabled_features: [], time_frames: [],
+      charts_storage_url: "/backtest/tv",
+      charts_storage_api_version: "1.1", client_id: "bt_small",
+    });
+
+    this.widgetHigh = new TradingView.widget({
+      debug: false, autosize: true, fullscreen: false,
+      container: "tv_chart_high", symbol: "high", interval: "1D",
+      datafeed: this.datafeedHigh,
+      library_path: "static/charting_library/",
+      theme: "Light", timezone: "Asia/Shanghai", locale: "zh",
+      disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
+        "display_market_status", "symbol_info", "volume_force_overlay",
+        "header_widget_dom_node", "header_interval_dialog_button"],
+      enabled_features: [], time_frames: [],
+      charts_storage_url: "/backtest/tv",
+      charts_storage_api_version: "1.1", client_id: "bt_high",
+    });
+
+    const self = this;
+    this.widgetSmall.onChartReady(() => {
+      self.chartSmall = self.widgetSmall.activeChart();
+      self.chartSmall.onDataLoaded().subscribe(null, () => self.redrawShapes("small"));
+    });
+    this.widgetHigh.onChartReady(() => {
+      self.chartHigh = self.widgetHigh.activeChart();
+      self.chartHigh.onDataLoaded().subscribe(null, () => self.redrawShapes("high"));
+    });
+  },
+
+  // === 数据加载（重新随机选股时调用） ===
+  reloadSession() {
+    const self = this;
+
+    // 销毁旧图表
+    if (this.widgetSmall) { this.widgetSmall.remove(); this.widgetSmall = null; this.chartSmall = null; }
+    if (this.widgetHigh) { this.widgetHigh.remove(); this.widgetHigh = null; this.chartHigh = null; }
+    $("#tv_chart_small, #tv_chart_high").empty();
+
+    $.post("/backtest/start", function (res) {
+      if (!res.ok) { layer.msg(res.msg); return; }
+
+      self.sessionKey = res.session_key;
+      self.sessionLoaded = true;
+
+      // 更新 UI
+      $("#bt-stock-id").text(res.display_id);
+      $("#bt-freqs").text("日线 / 30m");
+      $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
+      $("#bt-current-time").text(res.current_time);
+      $("#bt-progress").text("0%");
+
+      // 重置交易状态
+      self.resetTradingState();
+
+      // 从 localStorage 加载交易记录
+      self.tradeRecords = BTLocalStore.loadTrades(self.sessionKey);
+      self.renderTradeRecordsFromData();
+
+      // 重新创建图表
+      self.createCharts();
     });
   },
 
@@ -462,7 +474,7 @@ const BacktestApp = {
       $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
       $("#bt-btn-pause").text("暂停");
       $("#bt-progress").text("--");
-      this.loadSession();
+      this.reloadSession();
     });
   },
 
