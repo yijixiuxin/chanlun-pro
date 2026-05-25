@@ -18,57 +18,13 @@ HIGH_FREQ = "d"
 SMALL_FREQ = "30m"
 
 
-def register_backtest_routes(app, frequency_maps, market_frequencys):
+def register_backtest_routes(app):
 
     @app.route("/backtest")
     @login_required
     def backtest_page():
         """回测学习页面"""
         return render_template("backtest.html")
-
-    @app.route("/backtest/tv/config")
-    @login_required
-    def backtest_tv_config():
-        """回测 TV 图表配置"""
-        return {
-            "supports_search": False,
-            "supports_group_request": False,
-            "supported_resolutions": ["30", "1D"],
-            "supports_marks": False,
-            "supports_timescale_marks": False,
-            "supports_time": False,
-            "exchanges": [
-                {"value": "backtest", "name": "回测", "desc": "回测学习"},
-            ],
-        }
-
-    @app.route("/backtest/tv/symbols")
-    @login_required
-    def backtest_tv_symbols():
-        """回测 symbol 解析（固定 small=30m / high=1D）"""
-        symbol = request.args.get("symbol")
-        freq = "D" if symbol == "high" else "30"
-
-        return {
-            "name": symbol,
-            "ticker": symbol,
-            "description": symbol,
-            "exchange": "backtest",
-            "type": "stock",
-            "session": "24x7",
-            "timezone": "Asia/Shanghai",
-            "pricescale": 100,
-            "minmov": 1,
-            "minmov2": 0,
-            "has_intraday": True,
-            "has_daily": True,
-            "has_weekly_and_monthly": True,
-            "supported_resolutions": [freq],
-            "intraday_multipliers": ["30"],
-            "seconds_multipliers": [],
-            "daily_multipliers": ["1"],
-            "visible_plots_set": "ohlcv",
-        }
 
     @app.route("/backtest/tv/history")
     @login_required
