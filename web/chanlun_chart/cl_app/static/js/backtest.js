@@ -117,7 +117,7 @@ const backtestConfigData = {
 };
 
 const symbolInfoSmall = {
-  name: "small", ticker: "small", description: "small",
+  name: "缠论学习", ticker: "999999", description: "缠论回测学习",
   exchange: "backtest", listed_exchange: "backtest", type: "stock",
   session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
   has_intraday: true, intraday_multipliers: ["30"],
@@ -127,7 +127,7 @@ const symbolInfoSmall = {
 };
 
 const symbolInfoHigh = {
-  name: "high", ticker: "high", description: "high",
+  name: "缠论学习", ticker: "999999", description: "缠论回测学习",
   exchange: "backtest", listed_exchange: "backtest", type: "stock",
   session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
   has_intraday: true, intraday_multipliers: ["30"],
@@ -158,12 +158,20 @@ function createBacktestDatafeed(symbolName) {
     getBars: function (symbolInfo, resolution, periodParams, onHistoryCallback, onErrorCallback) {
       const { from, to, firstDataRequest } = periodParams;
       const self = this;
+
+      // 非首次请求不调接口，后续数据由 /backtest/step 通过 pushBar 推送
+      if (!firstDataRequest) {
+        onHistoryCallback([], { noData: true });
+        return;
+      }
+      if (from < 0 || to < 0) {
+        onHistoryCallback([], { noData: true });
+        return;
+      }
+
       $.getJSON("/backtest/tv/history", {
         symbol: symbolName,
         resolution: resolution,
-        from: from,
-        to: to,
-        firstDataRequest: firstDataRequest ? "true" : "false",
       }, function (data) {
         if (data.s === "ok") {
           const bars = [];
@@ -258,7 +266,7 @@ const BacktestApp = {
       library_path: "static/charting_library/",
       theme: "Light", timezone: "Asia/Shanghai", locale: "zh",
       disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
-        "display_market_status", "symbol_info", "volume_force_overlay"],
+        "display_market_status", "symbol_info", "volume_force_overlay", 'header_screenshot', 'use_localstorage_for_settings', 'save_chart_properties_to_local_storage'],
       enabled_features: [], time_frames: [],
       charts_storage_url: "/backtest/tv",
       charts_storage_api_version: "1.1", client_id: "bt_small",
@@ -271,8 +279,7 @@ const BacktestApp = {
       library_path: "static/charting_library/",
       theme: "Light", timezone: "Asia/Shanghai", locale: "zh",
       disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
-        "display_market_status", "symbol_info", "volume_force_overlay",
-        "header_widget_dom_node", "header_interval_dialog_button"],
+        "display_market_status", "symbol_info", "volume_force_overlay", 'header_screenshot', 'use_localstorage_for_settings', 'save_chart_properties_to_local_storage'],
       enabled_features: [], time_frames: [],
       charts_storage_url: "/backtest/tv",
       charts_storage_api_version: "1.1", client_id: "bt_high",
