@@ -101,30 +101,92 @@ const BTChartUtils = {
   },
 };
 
-// === 自定义 Datafeed ===
-function createBacktestDatafeed(chartKey) {
+// === DataFeed API ===
+// 配置数据（DatafeedConfiguration）
+const backtestConfigData = {
+  supports_search: false,
+  supports_group_request: false,
+  supported_resolutions: ["30", "1D"],
+  supports_marks: false,
+  supports_timescale_marks: false,
+  supports_time: false,
+  exchanges: [{ value: "backtest", name: "回测", desc: "回测学习" }],
+  symbols_types: [{ name: "stock", value: "stock" }],
+};
+
+// 小级别 symbol 信息
+const symbolInfoSmall = {
+  name: "small",
+  ticker: "small",
+  description: "small",
+  exchange: "backtest",
+  listed_exchange: "backtest",
+  type: "stock",
+  session: "24x7",
+  timezone: "Asia/Shanghai",
+  minmov: 1,
+  pricescale: 100,
+  has_intraday: true,
+  intraday_multipliers: ["30"],
+  has_daily: true,
+  daily_multipliers: ["1"],
+  has_weekly_and_monthly: true,
+  supported_resolutions: ["30"],
+  visible_plots_set: "ohlcv",
+  data_status: "streaming",
+};
+
+// 大级别 symbol 信息
+const symbolInfoHigh = {
+  name: "high",
+  ticker: "high",
+  description: "high",
+  exchange: "backtest",
+  listed_exchange: "backtest",
+  type: "stock",
+  session: "24x7",
+  timezone: "Asia/Shanghai",
+  minmov: 1,
+  pricescale: 100,
+  has_intraday: true,
+  intraday_multipliers: ["30"],
+  has_daily: true,
+  daily_multipliers: ["1"],
+  has_weekly_and_monthly: true,
+  supported_resolutions: ["1D"],
+  visible_plots_set: "ohlcv",
+  data_status: "streaming",
+};
+
+// 创建 DataFeed 对象
+function createBacktestDatafeed(symbolName) {
+  const symbolInfo = symbolName === "small" ? symbolInfoSmall : symbolInfoHigh;
+
   return {
     _realtimeCallback: null,
     _bars: {},
 
-    onReady(callback) {
-      $.getJSON("/backtest/tv/config", callback);
+    // DatafeedConfiguration
+    onReady: function (callback) {
+      setTimeout(() => callback(backtestConfigData), 0);
     },
 
-    searchSymbols(userInput, exchange, symbolType, onResult) {
-      onResult([]);
+    // 不支持搜索
+    searchSymbols: function (userInput, exchange, symbolType, onResultReadyCallback) {
+      onResultReadyCallback([]);
     },
 
-    resolveSymbol(symbolName, onResult, onError) {
-      $.getJSON("/backtest/tv/symbols", { symbol: symbolName }, function (data) {
-        onResult(data);
-      }).fail(onError);
+    // 解析 symbol
+    resolveSymbol: function (symbolName, onSymbolResolvedCallback, onResolveErrorCallback) {
+      onSymbolResolvedCallback(symbolInfo);
     },
 
-    getBars(symbolInfo, resolution, from, to, onResult, onError, firstDataRequest) {
+    // 获取历史 K 线
+    getBars: function (symbolInfo, resolution, periodParams, onHistoryCallback, onErrorCallback) {
+      const { from, to, firstDataRequest } = periodParams;
       const self = this;
       $.getJSON("/backtest/tv/history", {
-        symbol: symbolInfo.name,
+        symbol: symbolName,
         resolution: resolution,
         from: from,
         to: to,
@@ -143,32 +205,36 @@ function createBacktestDatafeed(chartKey) {
             });
           }
           self._bars = data;
-          onResult(bars, { noData: bars.length === 0 });
+          onHistoryCallback(bars, { noData: bars.length === 0 });
         } else {
-          onResult([], { noData: true });
+          onHistoryCallback([], { noData: true });
         }
-      }).fail(function () { onResult([], { noData: true }); });
+      }).fail(function () {
+        onHistoryCallback([], { noData: true });
+      });
     },
 
-    subscribeBars(symbolInfo, resolution, onRealtimeCallback, subscriberUID) {
+    // 订阅实时更新
+    subscribeBars: function (symbolInfo, resolution, onRealtimeCallback, subscriberUID) {
       this._realtimeCallback = onRealtimeCallback;
     },
 
-    unsubscribeBars(subscriberUID) {
+    // 取消订阅
+    unsubscribeBars: function (subscriberUID) {
       this._realtimeCallback = null;
     },
 
-    pushBar(bar) {
+    // 供回放使用：推送新 bar
+    pushBar: function (bar) {
       if (this._realtimeCallback) {
-        const tvBar = {
+        this._realtimeCallback({
           time: bar.time * 1000,
           close: bar.close,
           open: bar.open,
           high: bar.high,
           low: bar.low,
           volume: bar.volume,
-        };
-        this._realtimeCallback(tvBar);
+        });
       }
     },
   };
@@ -199,14 +265,14 @@ const BacktestApp = {
     this.datafeedSmall = createBacktestDatafeed("small");
     this.datafeedHigh = createBacktestDatafeed("high");
 
-    // 创建小级别图表
+    // 小级别图表 (30m)
     this.widgetSmall = new TradingView.widget({
       debug: false,
       autosize: true,
       fullscreen: false,
       container: "tv_chart_small",
       symbol: "small",
-      interval: "1D",
+      interval: "30",
       datafeed: this.datafeedSmall,
       library_path: "static/charting_library/",
       theme: "Light",
@@ -221,7 +287,7 @@ const BacktestApp = {
       client_id: "bt_small",
     });
 
-    // 创建大级别图表
+    // 大级别图表 (日线)
     this.widgetHigh = new TradingView.widget({
       debug: false,
       autosize: true,
@@ -271,9 +337,10 @@ const BacktestApp = {
 
       // 更新 UI
       $("#bt-stock-id").text(res.display_id);
-      $("#bt-freqs").text(res.small_freq + " / " + res.high_freq);
+      $("#bt-freqs").text("日线 / 30m");
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
+      $("#bt-progress").text("0%");
 
       // 重置交易状态
       self.resetTradingState();
@@ -381,26 +448,20 @@ const BacktestApp = {
   },
 
   restartSession() {
-    // 停止当前回放
     this.stopTimer();
     this.running = false;
     this.paused = false;
 
-    // 清理旧 session 的 localStorage 交易记录
     if (this.sessionKey) {
       BTLocalStore.removeTrades(this.sessionKey);
     }
 
-    // 服务端清理旧 session
     $.post("/backtest/stop", () => {
-      // 重置 UI
       this.sessionLoaded = false;
       this.sessionKey = null;
       $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
       $("#bt-btn-pause").text("暂停");
       $("#bt-progress").text("--");
-
-      // 重新随机选股
       this.loadSession();
     });
   },
@@ -527,7 +588,6 @@ const BacktestApp = {
     const rec = { time, direction, price, qty, pnl: pnl || 0 };
     this.tradeRecords.push(rec);
 
-    // 保存到 localStorage
     if (this.sessionKey) {
       BTLocalStore.saveTrades(this.sessionKey, this.tradeRecords);
     }
