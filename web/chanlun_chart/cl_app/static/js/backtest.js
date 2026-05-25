@@ -16,6 +16,7 @@ const BT_CONFIG = {
     MMD_UP: "#FA8072",
     MMD_DOWN: "#1E90FF",
   },
+  CHART_TYPES: ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "zsd_zss", "bcs", "mmds"],
 };
 
 // === localStorage 工具 ===
@@ -32,7 +33,7 @@ const BTLocalStore = {
   },
 };
 
-// === ChartUtils（简化版，仅绘制，无交互） ===
+// === ChartUtils ===
 const BTChartUtils = {
   createShape(chart, points, options = {}) {
     const defaults = {
@@ -40,7 +41,7 @@ const BTChartUtils = {
       disableUndo: true, showInObjectsTree: false, overrides: {},
     };
     const config = { ...defaults, ...options };
-    return config.shape === "trend_line" || config.shape === "rectangle"
+    return config.shape === "trend_line" || config.shape === "rectangle" || config.shape === "circle"
       ? chart.createMultipointShape(points, config)
       : chart.createShape(points, config);
   },
@@ -53,22 +54,24 @@ const BTChartUtils = {
     });
   },
 
-  createLineShape(chart, line, color) {
+  createLineShape(chart, line, color, linewidth) {
     return this.createShape(chart, line.points, {
       shape: "trend_line",
       overrides: {
         linestyle: parseInt(line.linestyle) || 0,
-        linewidth: 1, linecolor: color,
+        linewidth: linewidth || 1,
+        linecolor: color,
       },
     });
   },
 
-  createZhongshuShape(chart, zs, color) {
+  createZhongshuShape(chart, zs, color, linewidth) {
     return this.createShape(chart, zs.points, {
       shape: "rectangle",
       overrides: {
         linestyle: parseInt(zs.linestyle) || 0,
-        linewidth: 1, linecolor: color,
+        linewidth: linewidth || 1,
+        linecolor: color,
         backgroundColor: color, transparency: 95,
         fillBackground: true, filled: true,
       },
@@ -102,7 +105,6 @@ const BTChartUtils = {
 };
 
 // === DataFeed API ===
-// 配置数据（DatafeedConfiguration）
 const backtestConfigData = {
   supports_search: false,
   supports_group_request: false,
@@ -114,51 +116,26 @@ const backtestConfigData = {
   symbols_types: [{ name: "stock", value: "stock" }],
 };
 
-// 小级别 symbol 信息
 const symbolInfoSmall = {
-  name: "small",
-  ticker: "small",
-  description: "small",
-  exchange: "backtest",
-  listed_exchange: "backtest",
-  type: "stock",
-  session: "24x7",
-  timezone: "Asia/Shanghai",
-  minmov: 1,
-  pricescale: 100,
-  has_intraday: true,
-  intraday_multipliers: ["30"],
-  has_daily: true,
-  daily_multipliers: ["1"],
-  has_weekly_and_monthly: true,
-  supported_resolutions: ["30"],
-  visible_plots_set: "ohlcv",
-  data_status: "streaming",
+  name: "small", ticker: "small", description: "small",
+  exchange: "backtest", listed_exchange: "backtest", type: "stock",
+  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
+  has_intraday: true, intraday_multipliers: ["30"],
+  has_daily: true, daily_multipliers: ["1"],
+  has_weekly_and_monthly: true, supported_resolutions: ["30"],
+  visible_plots_set: "ohlcv", data_status: "streaming",
 };
 
-// 大级别 symbol 信息
 const symbolInfoHigh = {
-  name: "high",
-  ticker: "high",
-  description: "high",
-  exchange: "backtest",
-  listed_exchange: "backtest",
-  type: "stock",
-  session: "24x7",
-  timezone: "Asia/Shanghai",
-  minmov: 1,
-  pricescale: 100,
-  has_intraday: true,
-  intraday_multipliers: ["30"],
-  has_daily: true,
-  daily_multipliers: ["1"],
-  has_weekly_and_monthly: true,
-  supported_resolutions: ["1D"],
-  visible_plots_set: "ohlcv",
-  data_status: "streaming",
+  name: "high", ticker: "high", description: "high",
+  exchange: "backtest", listed_exchange: "backtest", type: "stock",
+  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
+  has_intraday: true, intraday_multipliers: ["30"],
+  has_daily: true, daily_multipliers: ["1"],
+  has_weekly_and_monthly: true, supported_resolutions: ["1D"],
+  visible_plots_set: "ohlcv", data_status: "streaming",
 };
 
-// 创建 DataFeed 对象
 function createBacktestDatafeed(symbolName) {
   const symbolInfo = symbolName === "small" ? symbolInfoSmall : symbolInfoHigh;
 
@@ -166,22 +143,18 @@ function createBacktestDatafeed(symbolName) {
     _realtimeCallback: null,
     _bars: {},
 
-    // DatafeedConfiguration
     onReady: function (callback) {
       setTimeout(() => callback(backtestConfigData), 0);
     },
 
-    // 不支持搜索
     searchSymbols: function (userInput, exchange, symbolType, onResultReadyCallback) {
       onResultReadyCallback([]);
     },
 
-    // 解析 symbol
     resolveSymbol: function (symbolName, onSymbolResolvedCallback, onResolveErrorCallback) {
       onSymbolResolvedCallback(symbolInfo);
     },
 
-    // 获取历史 K 线
     getBars: function (symbolInfo, resolution, periodParams, onHistoryCallback, onErrorCallback) {
       const { from, to, firstDataRequest } = periodParams;
       const self = this;
@@ -209,31 +182,23 @@ function createBacktestDatafeed(symbolName) {
         } else {
           onHistoryCallback([], { noData: true });
         }
-      }).fail(function () {
-        onHistoryCallback([], { noData: true });
-      });
+      }).fail(function () { onHistoryCallback([], { noData: true }); });
     },
 
-    // 订阅实时更新
     subscribeBars: function (symbolInfo, resolution, onRealtimeCallback, subscriberUID) {
       this._realtimeCallback = onRealtimeCallback;
     },
 
-    // 取消订阅
     unsubscribeBars: function (subscriberUID) {
       this._realtimeCallback = null;
     },
 
-    // 供回放使用：推送新 bar
     pushBar: function (bar) {
       if (this._realtimeCallback) {
         this._realtimeCallback({
           time: bar.time * 1000,
-          close: bar.close,
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          volume: bar.volume,
+          close: bar.close, open: bar.open,
+          high: bar.high, low: bar.low, volume: bar.volume,
         });
       }
     },
@@ -242,29 +207,24 @@ function createBacktestDatafeed(symbolName) {
 
 // === BacktestApp ===
 const BacktestApp = {
-  widgetSmall: null,
-  widgetHigh: null,
-  chartSmall: null,
-  chartHigh: null,
-  datafeedSmall: null,
-  datafeedHigh: null,
-  timerId: null,
-  speedMs: 2000,
-  sessionLoaded: false,
-  sessionKey: null,
-  running: false,
-  paused: false,
+  widgetSmall: null, widgetHigh: null,
+  chartSmall: null, chartHigh: null,
+  datafeedSmall: null, datafeedHigh: null,
+  timerId: null, speedMs: 2000,
+  sessionLoaded: false, sessionKey: null,
+  running: false, paused: false,
+
+  // 画图状态 — 按图表分别跟踪已画的元素（参照 charts.js 的 obj_charts 模式）
+  objCharts: { small: null, high: null },
 
   // 交易状态
   capital: BT_CONFIG.INITIAL_CAPITAL,
   position: { type: null, qty: 0, price: 0 },
   tradeRecords: [],
-  drawnShapeIds: { small: [], high: [] },
 
   init() {
     this.bindEvents();
 
-    // 先加载回放 session，再创建图表（避免图表在 session 就绪前请求数据）
     const self = this;
     $.post("/backtest/start", function (res) {
       if (!res.ok) { layer.msg(res.msg); return; }
@@ -272,21 +232,17 @@ const BacktestApp = {
       self.sessionKey = res.session_key;
       self.sessionLoaded = true;
 
-      // 更新 UI
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
       $("#bt-progress").text("0%");
 
-      // 重置交易状态
       self.resetTradingState();
-
-      // 从 localStorage 加载交易记录
       self.tradeRecords = BTLocalStore.loadTrades(self.sessionKey);
       self.renderTradeRecordsFromData();
 
-      // session 就绪后创建图表
+      self.objCharts = { small: null, high: null };
       self.createCharts();
     });
   },
@@ -325,19 +281,17 @@ const BacktestApp = {
     const self = this;
     this.widgetSmall.onChartReady(() => {
       self.chartSmall = self.widgetSmall.activeChart();
-      self.chartSmall.onDataLoaded().subscribe(null, () => self.redrawShapes("small"));
+      self.chartSmall.onDataLoaded().subscribe(null, () => self.drawChanlun("small"));
     });
     this.widgetHigh.onChartReady(() => {
       self.chartHigh = self.widgetHigh.activeChart();
-      self.chartHigh.onDataLoaded().subscribe(null, () => self.redrawShapes("high"));
+      self.chartHigh.onDataLoaded().subscribe(null, () => self.drawChanlun("high"));
     });
   },
 
-  // === 数据加载（重新随机选股时调用） ===
+  // === 数据加载 ===
   reloadSession() {
     const self = this;
-
-    // 销毁旧图表
     if (this.widgetSmall) { this.widgetSmall.remove(); this.widgetSmall = null; this.chartSmall = null; }
     if (this.widgetHigh) { this.widgetHigh.remove(); this.widgetHigh = null; this.chartHigh = null; }
     $("#tv_chart_small, #tv_chart_high").empty();
@@ -348,21 +302,17 @@ const BacktestApp = {
       self.sessionKey = res.session_key;
       self.sessionLoaded = true;
 
-      // 更新 UI
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
       $("#bt-progress").text("0%");
 
-      // 重置交易状态
       self.resetTradingState();
-
-      // 从 localStorage 加载交易记录
       self.tradeRecords = BTLocalStore.loadTrades(self.sessionKey);
       self.renderTradeRecordsFromData();
 
-      // 重新创建图表
+      self.objCharts = { small: null, high: null };
       self.createCharts();
     });
   },
@@ -379,12 +329,13 @@ const BacktestApp = {
   renderTradeRecordsFromData() {
     $("#bt-trade-records tbody").empty();
     this.tradeRecords.forEach(rec => {
+      const pnlStr = rec.pnl !== undefined ? "¥" + rec.pnl.toFixed(2) : "--";
       const row = `<tr>
         <td>${rec.time}</td>
         <td>${rec.direction}</td>
         <td>¥${rec.price.toFixed(2)}</td>
         <td>${rec.qty}</td>
-        <td>${rec.pnl !== undefined ? "¥" + rec.pnl.toFixed(2) : "--"}</td>
+        <td>${pnlStr}</td>
       </tr>`;
       $("#bt-trade-records tbody").prepend(row);
     });
@@ -403,8 +354,8 @@ const BacktestApp = {
   },
 
   startTimer() {
-    const self = this;
     this.stopTimer();
+    const self = this;
     this.timerId = setInterval(() => self.stepForward(), this.speedMs);
   },
 
@@ -428,11 +379,11 @@ const BacktestApp = {
 
       if (res.cl_small) {
         self.datafeedSmall._bars = res.cl_small;
-        self.redrawShapes("small");
+        self.drawChanlun("small");
       }
       if (res.cl_high) {
         self.datafeedHigh._bars = res.cl_high;
-        self.redrawShapes("high");
+        self.drawChanlun("high");
       }
 
       self.updateCapitalDisplay();
@@ -453,10 +404,7 @@ const BacktestApp = {
   },
 
   stopTimer() {
-    if (this.timerId) {
-      clearInterval(this.timerId);
-      this.timerId = null;
-    }
+    if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
   },
 
   restartSession() {
@@ -464,9 +412,7 @@ const BacktestApp = {
     this.running = false;
     this.paused = false;
 
-    if (this.sessionKey) {
-      BTLocalStore.removeTrades(this.sessionKey);
-    }
+    if (this.sessionKey) { BTLocalStore.removeTrades(this.sessionKey); }
 
     $.post("/backtest/stop", () => {
       this.sessionLoaded = false;
@@ -478,47 +424,193 @@ const BacktestApp = {
     });
   },
 
-  // === 缠论绘制 ===
-  redrawShapes(chartKey) {
+  // === 缠论绘制（参照 charts.js 的 draw_chanlun / drawChartElements 模式） ===
+
+  // 初始化图表容器
+  initChartContainer(chartKey) {
+    if (!this.objCharts[chartKey]) {
+      this.objCharts[chartKey] = {};
+      BT_CONFIG.CHART_TYPES.forEach(type => { this.objCharts[chartKey][type] = []; });
+    }
+    return this.objCharts[chartKey];
+  },
+
+  // 清除已画的图形：clearType='last' 只删除 time 最大的元素，否则全删
+  clearDrawChanlun(chartKey, clearType) {
+    const chart = chartKey === "small" ? this.chartSmall : this.chartHigh;
+    if (!chart || !this.objCharts[chartKey]) return;
+
+    const container = this.objCharts[chartKey];
+
+    if (clearType === "last") {
+      BT_CONFIG.CHART_TYPES.forEach(chartType => {
+        const items = container[chartType] || [];
+        if (items.length === 0) return;
+        const maxTime = Math.max(...items.map(item => item.time));
+        for (let i = items.length - 1; i >= 0; i--) {
+          if (items[i].time === maxTime) {
+            items[i].id.then(_id => chart.removeEntity(_id));
+          }
+        }
+        // 原地过滤保留非最新元素
+        const kept = [];
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].time !== maxTime) kept.push(items[i]);
+        }
+        container[chartType] = kept;
+      });
+    } else {
+      BT_CONFIG.CHART_TYPES.forEach(chartType => {
+        const items = container[chartType] || [];
+        items.forEach(item => {
+          try {
+            item.id.then(_id => {
+              try { chart.removeEntity(_id); } catch (e) { /* ignore */ }
+            });
+          } catch (e) { /* ignore */ }
+        });
+        container[chartType] = [];
+      });
+    }
+  },
+
+  // 绘制图表元素
+  drawChartElements(chartKey) {
     const datafeed = chartKey === "small" ? this.datafeedSmall : this.datafeedHigh;
     const chart = chartKey === "small" ? this.chartSmall : this.chartHigh;
     const bars = datafeed._bars;
     if (!bars || !chart) return;
 
-    this.drawnShapeIds[chartKey].forEach(id => {
-      try { id.then(i => chart.removeEntity(i)); } catch (e) {}
-    });
-    this.drawnShapeIds[chartKey] = [];
+    // 获取可见范围
+    const visibleRange = chart.getVisibleRange();
+    const from = (visibleRange && visibleRange.from) ? Math.floor(visibleRange.from / 1000) : 0;
 
-    const ids = this.drawnShapeIds[chartKey];
+    const container = this.initChartContainer(chartKey);
 
+    // 先清除最新一次画的元素（避免更新时出现重复的末段）
+    this.clearDrawChanlun(chartKey, "last");
+
+    // 分型
     (bars.fxs || []).forEach(fx => {
-      ids.push({ id: BTChartUtils.createFxShape(chart, fx) });
+      if (fx.points && fx.points[0] && fx.points[0].time >= from) {
+        const key = JSON.stringify(fx);
+        if (container.fxs.find(item => item.key === key)) return;
+        container.fxs.push({
+          time: fx.points[0].time,
+          key,
+          id: BTChartUtils.createFxShape(chart, fx),
+        });
+      }
     });
+
+    // 笔
     (bars.bis || []).forEach(bi => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, bi, BT_CONFIG.COLORS.BI) });
+      if (bi.points && bi.points[0] && bi.points[0].time >= from) {
+        const key = JSON.stringify(bi);
+        if (container.bis.find(item => item.key === key)) return;
+        container.bis.push({
+          time: bi.points[0].time,
+          key,
+          id: BTChartUtils.createLineShape(chart, bi, BT_CONFIG.COLORS.BI, 1),
+        });
+      }
     });
+
+    // 线段
     (bars.xds || []).forEach(xd => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, xd, BT_CONFIG.COLORS.XD) });
+      if (xd.points && xd.points[0] && xd.points[0].time >= from) {
+        const key = JSON.stringify(xd);
+        if (container.xds.find(item => item.key === key)) return;
+        container.xds.push({
+          time: xd.points[0].time,
+          key,
+          id: BTChartUtils.createLineShape(chart, xd, BT_CONFIG.COLORS.XD, 2),
+        });
+      }
     });
+
+    // 走势段
     (bars.zsds || []).forEach(zsd => {
-      ids.push({ id: BTChartUtils.createLineShape(chart, zsd, BT_CONFIG.COLORS.ZSD) });
+      if (zsd.points && zsd.points[0] && zsd.points[0].time >= from) {
+        const key = JSON.stringify(zsd);
+        if (container.zsds.find(item => item.key === key)) return;
+        container.zsds.push({
+          time: zsd.points[0].time,
+          key,
+          id: BTChartUtils.createLineShape(chart, zsd, BT_CONFIG.COLORS.ZSD, 3),
+        });
+      }
     });
+
+    // 笔中枢
     (bars.bi_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.BI_ZSS) });
+      if (zs.points && zs.points[0] && zs.points[0].time >= from) {
+        const key = JSON.stringify(zs);
+        if (container.bi_zss.find(item => item.key === key)) return;
+        container.bi_zss.push({
+          time: zs.points[0].time,
+          key,
+          id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.BI_ZSS, 1),
+        });
+      }
     });
+
+    // 线段中枢
     (bars.xd_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.XD_ZSS) });
+      if (zs.points && zs.points[0] && zs.points[0].time >= from) {
+        const key = JSON.stringify(zs);
+        if (container.xd_zss.find(item => item.key === key)) return;
+        container.xd_zss.push({
+          time: zs.points[0].time,
+          key,
+          id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.XD_ZSS, 2),
+        });
+      }
     });
+
+    // 走势段中枢
     (bars.zsd_zss || []).forEach(zs => {
-      ids.push({ id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.ZSD_ZSS) });
+      if (zs.points && zs.points[0] && zs.points[0].time >= from) {
+        const key = JSON.stringify(zs);
+        if (container.zsd_zss.find(item => item.key === key)) return;
+        container.zsd_zss.push({
+          time: zs.points[0].time,
+          key,
+          id: BTChartUtils.createZhongshuShape(chart, zs, BT_CONFIG.COLORS.ZSD_ZSS, 2),
+        });
+      }
     });
+
+    // 背驰
     (bars.bcs || []).forEach(bc => {
-      ids.push({ id: BTChartUtils.createBcShape(chart, bc) });
+      if (bc.points && bc.points.time >= from) {
+        const key = JSON.stringify(bc);
+        if (container.bcs.find(item => item.key === key)) return;
+        container.bcs.push({
+          time: bc.points.time,
+          key,
+          id: BTChartUtils.createBcShape(chart, bc),
+        });
+      }
     });
+
+    // 买卖点
     (bars.mmds || []).forEach(mmd => {
-      ids.push({ id: BTChartUtils.createMmdShape(chart, mmd) });
+      if (mmd.points && mmd.points.time >= from) {
+        const key = JSON.stringify(mmd);
+        if (container.mmds.find(item => item.key === key)) return;
+        container.mmds.push({
+          time: mmd.points.time,
+          key,
+          id: BTChartUtils.createMmdShape(chart, mmd),
+        });
+      }
     });
+  },
+
+  // 绘制缠论图表
+  drawChanlun(chartKey) {
+    this.drawChartElements(chartKey);
   },
 
   // === 事件绑定 ===
@@ -557,9 +649,8 @@ const BacktestApp = {
       this.capital -= cost;
       if (this.position.type === "long") {
         const totalQty = this.position.qty + qty;
-        const avgPrice = (this.position.price * this.position.qty + price * qty) / totalQty;
+        this.position.price = (this.position.price * this.position.qty + price * qty) / totalQty;
         this.position.qty = totalQty;
-        this.position.price = avgPrice;
       } else {
         this.position = { type: "long", qty: qty, price: price };
       }
@@ -571,9 +662,8 @@ const BacktestApp = {
       this.capital -= cost;
       if (this.position.type === "short") {
         const totalQty = this.position.qty + qty;
-        const avgPrice = (this.position.price * this.position.qty + price * qty) / totalQty;
+        this.position.price = (this.position.price * this.position.qty + price * qty) / totalQty;
         this.position.qty = totalQty;
-        this.position.price = avgPrice;
       } else {
         this.position = { type: "short", qty: qty, price: price };
       }
@@ -600,9 +690,7 @@ const BacktestApp = {
     const rec = { time, direction, price, qty, pnl: pnl || 0 };
     this.tradeRecords.push(rec);
 
-    if (this.sessionKey) {
-      BTLocalStore.saveTrades(this.sessionKey, this.tradeRecords);
-    }
+    if (this.sessionKey) { BTLocalStore.saveTrades(this.sessionKey, this.tradeRecords); }
 
     const row = `<tr>
       <td>${time}</td>
