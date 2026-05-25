@@ -29,16 +29,15 @@ def register_backtest_routes(app):
     @app.route("/backtest/tv/history")
     @login_required
     def backtest_tv_history():
-        """回测 TV 历史数据（仅返回到 current_pos）"""
-        symbol = request.args.get("symbol")
-        firstDataRequest = request.args.get("firstDataRequest", "true")
+        """回测 TV 历史数据 — 仅图表初始化时调用一次，全量返回到 current_pos"""
+        resolution = request.args.get("resolution")
 
         session_id = session.get("bt_session_id")
         rs = _replay_sessions.get(session_id)
         if rs is None:
             return {"s": "no_data"}
 
-        if symbol == "small":
+        if resolution == "30":
             cd = rs["cl_small"]
         else:
             cd = rs["cl_high"]
@@ -47,7 +46,7 @@ def register_backtest_routes(app):
         if cl_chart_data is None:
             return {"s": "no_data"}
 
-        # 只返回到 current_pos 的数据
+        # 截取所有数据到 current_pos
         current_pos = rs["current_pos"]
         small_klines = rs["all_klines"]
         if current_pos < len(small_klines):
@@ -55,11 +54,8 @@ def register_backtest_routes(app):
         else:
             cutoff_time = cl_chart_data["t"][-1] if cl_chart_data["t"] else 0
 
-        # 截取所有数据到 current_pos
-        def _slice(data_list, times, cutoff):
+        def _slice(data_list, cutoff):
             if not data_list:
-                return data_list
-            if not times:
                 return data_list
             result = []
             for item in data_list:
@@ -77,56 +73,24 @@ def register_backtest_routes(app):
 
         t = [v for v in cl_chart_data["t"] if v <= cutoff_time]
         idx = len(t)
-        c = cl_chart_data["c"][:idx]
-        o = cl_chart_data["o"][:idx]
-        h = cl_chart_data["h"][:idx]
-        l = cl_chart_data["l"][:idx]
-        v = cl_chart_data["v"][:idx]
-
-        fxs = _slice(cl_chart_data["fxs"], cl_chart_data["t"], cutoff_time)
-        bis = _slice(cl_chart_data["bis"], cl_chart_data["t"], cutoff_time)
-        xds = _slice(cl_chart_data["xds"], cl_chart_data["t"], cutoff_time)
-        zsds = _slice(cl_chart_data["zsds"], cl_chart_data["t"], cutoff_time)
-        bi_zss = _slice(cl_chart_data["bi_zss"], cl_chart_data["t"], cutoff_time)
-        xd_zss = _slice(cl_chart_data["xd_zss"], cl_chart_data["t"], cutoff_time)
-        zsd_zss = _slice(cl_chart_data["zsd_zss"], cl_chart_data["t"], cutoff_time)
-        bcs = _slice(cl_chart_data["bcs"], cl_chart_data["t"], cutoff_time)
-        mmds = _slice(cl_chart_data["mmds"], cl_chart_data["t"], cutoff_time)
-
-        if firstDataRequest == "false":
-            t = t[-10:]
-            c = c[-10:]
-            o = o[-10:]
-            h = h[-10:]
-            l = l[-10:]
-            v = v[-10:]
-            fxs = fxs[-5:]
-            bis = bis[-5:]
-            xds = xds[-5:]
-            zsds = zsds[-5:]
-            bi_zss = bi_zss[-5:]
-            xd_zss = xd_zss[-5:]
-            zsd_zss = zsd_zss[-5:]
-            bcs = bcs[-5:]
-            mmds = mmds[-5:]
 
         return {
             "s": "ok",
             "t": t,
-            "c": c,
-            "o": o,
-            "h": h,
-            "l": l,
-            "v": v,
-            "fxs": fxs,
-            "bis": bis,
-            "xds": xds,
-            "zsds": zsds,
-            "bi_zss": bi_zss,
-            "xd_zss": xd_zss,
-            "zsd_zss": zsd_zss,
-            "bcs": bcs,
-            "mmds": mmds,
+            "c": cl_chart_data["c"][:idx],
+            "o": cl_chart_data["o"][:idx],
+            "h": cl_chart_data["h"][:idx],
+            "l": cl_chart_data["l"][:idx],
+            "v": cl_chart_data["v"][:idx],
+            "fxs": _slice(cl_chart_data["fxs"], cutoff_time),
+            "bis": _slice(cl_chart_data["bis"], cutoff_time),
+            "xds": _slice(cl_chart_data["xds"], cutoff_time),
+            "zsds": _slice(cl_chart_data["zsds"], cutoff_time),
+            "bi_zss": _slice(cl_chart_data["bi_zss"], cutoff_time),
+            "xd_zss": _slice(cl_chart_data["xd_zss"], cutoff_time),
+            "zsd_zss": _slice(cl_chart_data["zsd_zss"], cutoff_time),
+            "bcs": _slice(cl_chart_data["bcs"], cutoff_time),
+            "mmds": _slice(cl_chart_data["mmds"], cutoff_time),
         }
 
     @app.route("/backtest/start", methods=["POST"])
