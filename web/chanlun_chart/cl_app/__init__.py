@@ -1610,6 +1610,6 @@ def create_app(test_config=None):
         return {"code": 0, "msg": "", "data": stocks, "count": len(stocks)}
 
     # 注册回测学习路由
-    register_backtest_routes(app, frequency_maps, market_frequencys)
+    register_backtest_routes(app)
 
     return app
