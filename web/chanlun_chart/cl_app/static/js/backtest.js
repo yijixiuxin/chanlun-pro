@@ -671,6 +671,16 @@ const BacktestApp = {
       self.speedMs = val * 500;
       $("#bt-speed-label").text((self.speedMs / 1000).toFixed(1) + "s");
     });
+
+    // 仓位百分比快捷输入：Math.floor(资金 * 百分比 / 价格 / 100) * 100
+    $(".bt-pct-btn").click(function () {
+      const pct = parseFloat($(this).data("pct"));
+      const priceText = $("#bt-current-price").text().replace("¥", "");
+      const price = parseFloat(priceText);
+      if (isNaN(price) || !self.sessionLoaded) return;
+      const qty = Math.max(100, Math.floor(self.capital * pct / price / 100) * 100);
+      $("#bt-trade-qty").val(qty);
+    });
   },
 
   // === 交易逻辑 ===

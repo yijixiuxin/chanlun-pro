@@ -62,6 +62,12 @@
         <div>当前价格: <span id="bt-current-price">--</span></div>
         <div class="bt-trade-form">
           <label>数量(股): <input type="number" id="bt-trade-qty" value="100" min="100" step="100" /></label>
+          <div class="bt-pct-btns">
+            <button type="button" class="bt-pct-btn" data-pct="0.25">25%</button>
+            <button type="button" class="bt-pct-btn" data-pct="0.5">50%</button>
+            <button type="button" class="bt-pct-btn" data-pct="0.75">75%</button>
+            <button type="button" class="bt-pct-btn" data-pct="1">100%</button>
+          </div>
           <div class="bt-trade-btns">
             <button class="layui-btn layui-btn-danger" id="bt-btn-buy">买入（做多）</button>
             <button class="layui-btn layui-btn-danger" id="bt-btn-sell">卖出（做空）</button>

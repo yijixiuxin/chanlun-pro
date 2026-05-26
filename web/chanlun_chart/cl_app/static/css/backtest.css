@@ -74,6 +74,15 @@ body { background: #131722; }
   border: 1px solid #363a45;
 }
 
+.bt-pct-btns { margin: 4px 0; }
+.bt-pct-btn {
+  padding: 2px 8px; margin-right: 4px;
+  font-size: 12px; cursor: pointer;
+  background: #2a2e39; color: #d1d4dc;
+  border: 1px solid #363a45; border-radius: 3px;
+}
+.bt-pct-btn:hover { background: #363a45; color: #fff; }
+
 .bt-trade-btns { margin-top: 4px; }
 .bt-trade-btns button { margin-right: 4px; margin-bottom: 4px; }
 
