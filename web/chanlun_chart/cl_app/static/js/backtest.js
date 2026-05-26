@@ -503,11 +503,9 @@ const BacktestApp = {
     const bars = datafeed._bars;
     if (!bars || !chart) return;
 
-    // 获取可见范围
+    // 获取可见范围（单位与 cl_data_to_tv_chart 的 points.time 一致，都是秒级时间戳）
     const visibleRange = chart.getVisibleRange();
-    console.log('可见区域：', visibleRange);
-    const from = (visibleRange && visibleRange.from) ? Math.floor(visibleRange.from / 1000) : 0;
-    console.log('from：', from);
+    const from = (visibleRange && visibleRange.from) ? visibleRange.from : 0;
     
     const container = this.initChartContainer(chartKey);
 
