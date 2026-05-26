@@ -119,7 +119,7 @@ const backtestConfigData = {
   supports_search: false,
   supports_group_request: false,
   supported_resolutions: ["30", "1D"],
-  supports_marks: false,
+  supports_marks: true,
   supports_timescale_marks: false,
   supports_time: false,
   exchanges: [{ value: "backtest", name: "回测", desc: "回测学习" }],
@@ -152,6 +152,8 @@ function createBacktestDatafeed(symbolName) {
   return {
     _realtimeCallback: null,
     _bars: {},
+    _marks: [],
+    _marksCallback: null,
 
     onReady: function (callback) {
       setTimeout(() => callback(backtestConfigData), 0);
@@ -211,6 +213,21 @@ function createBacktestDatafeed(symbolName) {
       this._realtimeCallback = null;
     },
 
+    getMarks: function (symbolInfo, startDate, endDate, onDataCallback, resolution) {
+      this._marksCallback = onDataCallback;
+      onDataCallback(this._marks);
+    },
+
+    addMark: function (mark) {
+      this._marks.push(mark);
+      if (this._marksCallback) this._marksCallback(this._marks);
+    },
+
+    clearAllMarks: function () {
+      this._marks = [];
+      if (this._marksCallback) this._marksCallback(this._marks);
+    },
+
     pushBar: function (bar) {
       if (this._realtimeCallback) {
         this._realtimeCallback({
@@ -228,7 +245,7 @@ const BacktestApp = {
   widgetSmall: null, widgetHigh: null,
   chartSmall: null, chartHigh: null,
   datafeedSmall: null, datafeedHigh: null,
-  timerId: null, speedMs: 2000,
+  timerId: null, speedMs: 2000, currentBarTime: 0,
   sessionLoaded: false, sessionKey: null, startPos: 0,
   running: false, paused: false,
 
@@ -421,7 +438,10 @@ const BacktestApp = {
       const progress = (((res.current_pos - self.startPos) / range) * 100).toFixed(1);
       $("#bt-progress").text(progress + "%");
 
-      if (res.new_bar) { self.datafeedSmall.pushBar(res.new_bar); }
+      if (res.new_bar) {
+        self.datafeedSmall.pushBar(res.new_bar);
+        self.currentBarTime = res.new_bar.time;
+      }
       if (res.new_high_bar) { self.datafeedHigh.pushBar(res.new_high_bar); }
 
       if (res.cl_small) {
@@ -466,6 +486,8 @@ const BacktestApp = {
     this.paused = false;
 
     if (this.sessionKey) { BTLocalStore.removeTrades(this.sessionKey); }
+    if (this.datafeedSmall) this.datafeedSmall.clearAllMarks();
+    if (this.datafeedHigh) this.datafeedHigh.clearAllMarks();
 
     $.post("/backtest/stop", () => {
       this.sessionLoaded = false;
@@ -765,6 +787,53 @@ const BacktestApp = {
       <td>${pnl !== undefined ? "¥" + pnl.toFixed(2) : "--"}</td>
     </tr>`;
     $("#bt-trade-records tbody").prepend(row);
+
+    // 添加图表 marks 标记
+    this.addTradeMark(direction, price, qty, pnl);
+  },
+
+  addTradeMark(direction, price, qty, pnl) {
+    const barTime = this.currentBarTime;
+    if (!barTime) return;
+
+    let mark;
+    if (direction === "买入") {
+      mark = {
+        id: Date.now(),
+        time: barTime,
+        color: "red",
+        text: `买入 ${qty}股 @¥${price.toFixed(2)}`,
+        label: "B",
+        labelFontColor: "white",
+        minSize: 20,
+      };
+    } else if (direction === "卖出") {
+      mark = {
+        id: Date.now(),
+        time: barTime,
+        color: "green",
+        text: `卖出 ${qty}股 @¥${price.toFixed(2)}`,
+        label: "S",
+        labelFontColor: "white",
+        minSize: 20,
+      };
+    } else if (direction === "平仓") {
+      const pnlStr = pnl !== undefined ? (pnl >= 0 ? "+¥" : "-¥") + Math.abs(pnl).toFixed(2) : "";
+      mark = {
+        id: Date.now(),
+        time: barTime,
+        color: pnl >= 0 ? "red" : "green",
+        text: `平仓 ${qty}股 @¥${price.toFixed(2)} ${pnlStr}`,
+        label: "C",
+        labelFontColor: "white",
+        minSize: 20,
+      };
+    }
+
+    if (mark) {
+      this.datafeedSmall.addMark(mark);
+      this.datafeedHigh.addMark(mark);
+    }
   },
 
   updateCapitalDisplay() {
