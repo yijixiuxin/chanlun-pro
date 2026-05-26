@@ -281,6 +281,16 @@ const BacktestApp = {
       enabled_features: [], time_frames: [],
       charts_storage_url: "/backtest/tv",
       charts_storage_api_version: "1.1", client_id: "bt_small",
+      custom_indicators_getter: function (PineJS) {
+        return Promise.resolve([
+          TvIdxAMA.idx(PineJS), TvIdxATR.idx(PineJS), TvIdxCDBB.idx(PineJS),
+          TvIdxCMCM.idx(PineJS), TvIdxDemo.idx(PineJS), TvIdxFCX.idx(PineJS),
+          TvIdxHDLY.idx(PineJS), TvIdxHeima.idx(PineJS), TvIdxHLBLW.idx(PineJS),
+          TvIdxHLFTX.idx(PineJS), TvIdxKDJ.idx(PineJS), TvIdxPinbar.idx(PineJS),
+          TvIdxLTQS.idx(PineJS), TvIdxMA.idx(PineJS), TvIdxMACDBL.idx(PineJS),
+          TvIdxVegasMA.idx(PineJS), TvIdxVOL.idx(PineJS), TvIdxRSX.idx(PineJS),
+        ]);
+      },
     });
 
     this.widgetHigh = new TradingView.widget({
@@ -294,6 +304,16 @@ const BacktestApp = {
       enabled_features: [], time_frames: [],
       charts_storage_url: "/backtest/tv",
       charts_storage_api_version: "1.1", client_id: "bt_high",
+      custom_indicators_getter: function (PineJS) {
+        return Promise.resolve([
+          TvIdxAMA.idx(PineJS), TvIdxATR.idx(PineJS), TvIdxCDBB.idx(PineJS),
+          TvIdxCMCM.idx(PineJS), TvIdxDemo.idx(PineJS), TvIdxFCX.idx(PineJS),
+          TvIdxHDLY.idx(PineJS), TvIdxHeima.idx(PineJS), TvIdxHLBLW.idx(PineJS),
+          TvIdxHLFTX.idx(PineJS), TvIdxKDJ.idx(PineJS), TvIdxPinbar.idx(PineJS),
+          TvIdxLTQS.idx(PineJS), TvIdxMA.idx(PineJS), TvIdxMACDBL.idx(PineJS),
+          TvIdxVegasMA.idx(PineJS), TvIdxVOL.idx(PineJS), TvIdxRSX.idx(PineJS),
+        ]);
+      },
     });
 
     const self = this;
