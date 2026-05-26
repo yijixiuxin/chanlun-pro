@@ -2,6 +2,7 @@
 const BT_CONFIG = {
   INITIAL_CAPITAL: 100000,
   LS_KEY_PREFIX: "bt_trades_",
+  DRAW_DEBOUNCE_MS: 500,
   COLORS: {
     DING: "#FA8072",
     DI: "#1E90FF",
@@ -18,6 +19,15 @@ const BT_CONFIG = {
   },
   CHART_TYPES: ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "zsd_zss", "bcs", "mmds"],
 };
+
+// === 工具函数 ===
+function btDebounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
 
 // === localStorage 工具 ===
 const BTLocalStore = {
@@ -224,6 +234,7 @@ const BacktestApp = {
 
   // 画图状态 — 按图表分别跟踪已画的元素（参照 charts.js 的 obj_charts 模式）
   objCharts: { small: null, high: null },
+  debouncedDraw: { small: null, high: null },
 
   // 交易状态
   capital: BT_CONFIG.INITIAL_CAPITAL,
@@ -288,11 +299,15 @@ const BacktestApp = {
     const self = this;
     this.widgetSmall.onChartReady(() => {
       self.chartSmall = self.widgetSmall.activeChart();
-      self.chartSmall.onDataLoaded().subscribe(null, () => self.drawChanlun("small"));
+      self.debouncedDraw.small = btDebounce(() => self.drawChanlun("small"), BT_CONFIG.DRAW_DEBOUNCE_MS);
+      self.chartSmall.onDataLoaded().subscribe(null, () => self.debouncedDraw.small());
+      self.chartSmall.onVisibleRangeChanged().subscribe(null, () => self.debouncedDraw.small());
     });
     this.widgetHigh.onChartReady(() => {
       self.chartHigh = self.widgetHigh.activeChart();
-      self.chartHigh.onDataLoaded().subscribe(null, () => self.drawChanlun("high"));
+      self.debouncedDraw.high = btDebounce(() => self.drawChanlun("high"), BT_CONFIG.DRAW_DEBOUNCE_MS);
+      self.chartHigh.onDataLoaded().subscribe(null, () => self.debouncedDraw.high());
+      self.chartHigh.onVisibleRangeChanged().subscribe(null, () => self.debouncedDraw.high());
     });
   },
 
@@ -386,11 +401,11 @@ const BacktestApp = {
 
       if (res.cl_small) {
         self.datafeedSmall._bars = res.cl_small;
-        self.drawChanlun("small");
+        self.debouncedDraw.small();
       }
       if (res.cl_high) {
         self.datafeedHigh._bars = res.cl_high;
-        self.drawChanlun("high");
+        self.debouncedDraw.high();
       }
 
       self.updateCapitalDisplay();
@@ -490,8 +505,10 @@ const BacktestApp = {
 
     // 获取可见范围
     const visibleRange = chart.getVisibleRange();
+    console.log('可见区域：', visibleRange);
     const from = (visibleRange && visibleRange.from) ? Math.floor(visibleRange.from / 1000) : 0;
-
+    console.log('from：', from);
+    
     const container = this.initChartContainer(chartKey);
 
     // 先清除最新一次画的元素（避免更新时出现重复的末段）
