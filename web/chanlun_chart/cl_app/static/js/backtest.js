@@ -440,11 +440,11 @@ const BacktestApp = {
       const progress = (((res.current_pos - self.startPos) / range) * 100).toFixed(1);
       $("#bt-progress").text(progress + "%");
 
-      if (res.new_bar) {
-        self.datafeedSmall.pushBar(res.new_bar);
-        self.currentBarTime = res.new_bar.time;
-      }
+      if (res.new_bar) { self.datafeedSmall.pushBar(res.new_bar); }
       if (res.new_high_bar) { self.datafeedHigh.pushBar(res.new_high_bar); }
+
+      self.currentBarTime = res.current_bar_time;
+      $("#bt-current-time").text(res.current_time);
 
       if (res.cl_small) {
         self.datafeedSmall._bars = res.cl_small;

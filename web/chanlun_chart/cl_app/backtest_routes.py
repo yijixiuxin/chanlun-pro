@@ -198,6 +198,8 @@ def register_backtest_routes(app):
             "cl_small": cl_small_data,
             "cl_high": cl_high_data,
             "current_price": float(current_bar["close"]),
+            "current_bar_time": new_bar["time"],
+            "current_time": fun.datetime_to_str(current_bar["date"]),
         }
 
     @app.route("/backtest/stop", methods=["POST"])
