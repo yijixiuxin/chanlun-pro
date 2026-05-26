@@ -1,5 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+body { background: #131722; }
+
 .bt-container {
   display: flex;
   height: 100vh;
@@ -23,7 +25,7 @@
   flex: 3;
   position: relative;
   min-height: 0;
-  border-top: 2px solid #e6e6e6;
+  border-top: 2px solid #2a2e39;
 }
 
 .bt-panel {
@@ -32,8 +34,10 @@
   max-width: 380px;
   overflow-y: auto;
   padding: 12px;
-  background: #f9f9f9;
-  border-left: 1px solid #e6e6e6;
+  background: #1e222d;
+  border-left: 1px solid #2a2e39;
+  color: #d1d4dc;
+  font-size: 13px;
 }
 
 .bt-panel-section {
@@ -43,6 +47,11 @@
 .bt-panel-section h3 {
   font-size: 14px;
   margin-bottom: 6px;
+  color: #e0e3eb;
+}
+
+.bt-panel hr {
+  border-color: #2a2e39;
 }
 
 .bt-btn-group { margin-bottom: 8px; }
@@ -50,23 +59,32 @@
 
 .bt-speed { margin: 10px 0; }
 .bt-speed label { display: block; margin-bottom: 4px; font-size: 13px; }
-.bt-speed input[type="range"] { width: 100%; }
-.bt-speed-range { display: flex; justify-content: space-between; font-size: 11px; color: #999; }
+.bt-speed input[type="range"] {
+  width: 100%;
+  background: #2a2e39;
+  accent-color: #5b9bd5;
+}
+.bt-speed-range { display: flex; justify-content: space-between; font-size: 11px; color: #787b86; }
 
 .bt-trade-form { margin-top: 6px; }
 .bt-trade-form label { display: block; margin-bottom: 6px; font-size: 13px; }
-.bt-trade-form input { width: 100px; padding: 2px 4px; }
+.bt-trade-form input {
+  width: 100px; padding: 2px 4px;
+  background: #2a2e39; color: #d1d4dc;
+  border: 1px solid #363a45;
+}
+
 .bt-trade-btns { margin-top: 4px; }
 .bt-trade-btns button { margin-right: 4px; margin-bottom: 4px; }
 
-#bt-pnl.positive { color: #e74c3c; }
-#bt-pnl.negative { color: #2ecc71; }
+#bt-pnl.positive { color: #ef5350; }
+#bt-pnl.negative { color: #26a69a; }
 
 #bt-trade-records { width: 100%; }
 #bt-trade-records td { padding: 2px 4px; }
 
-/* dark theme support */
-.dark .bt-panel { background: #1a1a1a; border-left-color: #333; color: #ccc; }
-.dark .bt-chart-high { border-top-color: #333; }
-.dark .bt-panel hr { border-color: #333; }
-.dark .layui-table { background: #1a1a1a; color: #ccc; }
+/* layui 暗黑适配 */
+.layui-table { background: #1e222d; color: #d1d4dc; }
+.layui-table th { background: #2a2e39; color: #787b86; }
+.layui-table td { border-color: #2a2e39; }
+.layui-table tbody tr:hover { background: #2a2e39; }
