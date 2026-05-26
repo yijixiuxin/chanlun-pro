@@ -770,6 +770,8 @@ const BacktestApp = {
   updateCapitalDisplay() {
     const priceText = $("#bt-current-price").text().replace("¥", "");
     const price = parseFloat(priceText);
+
+    // 持仓市值
     let positionValue = 0;
     if (this.position.type === "long" && !isNaN(price)) {
       positionValue = this.position.qty * price;
@@ -777,16 +779,26 @@ const BacktestApp = {
       positionValue = -this.position.qty * price;
     }
 
-    const totalValue = this.capital + positionValue;
-    const pnl = totalValue - BT_CONFIG.INITIAL_CAPITAL;
-    const pnlPct = ((pnl / BT_CONFIG.INITIAL_CAPITAL) * 100).toFixed(2);
+    // 浮动盈亏（未实现）：仅当前持仓的盈亏
+    let unrealizedPnl = 0;
+    if (this.position.type === "long" && !isNaN(price)) {
+      unrealizedPnl = (price - this.position.price) * this.position.qty;
+    } else if (this.position.type === "short" && !isNaN(price)) {
+      unrealizedPnl = (this.position.price - price) * this.position.qty;
+    }
+    const unrealizedPnlPct = ((unrealizedPnl / BT_CONFIG.INITIAL_CAPITAL) * 100).toFixed(2);
 
-    $("#bt-current-capital").text("¥" + totalValue.toFixed(2));
+    // 总市值 = 现金 + 持仓市值（含已平仓的已实现盈亏在 capital 中）
+    const totalValue = this.capital + positionValue;
+
+    $("#bt-current-capital").text("¥" + this.capital.toFixed(2));
     $("#bt-position-value").text("¥" + positionValue.toFixed(2));
+    // 浮动盈亏显示金额 + 比例
     const pnlEl = $("#bt-pnl");
-    pnlEl.text((pnl >= 0 ? "+" : "") + pnlPct + "%");
+    const sign = unrealizedPnl >= 0 ? "+" : "";
+    pnlEl.text(`${sign}¥${unrealizedPnl.toFixed(2)}  (${sign}${unrealizedPnlPct}%)`);
     pnlEl.removeClass("positive negative");
-    pnlEl.addClass(pnl >= 0 ? "positive" : "negative");
+    pnlEl.addClass(unrealizedPnl >= 0 ? "positive" : "negative");
   },
 
   updatePositionDisplay() {
