@@ -83,6 +83,11 @@ export declare const enum SearchInitiationPoint {
 	Compare = "compare",
 	IndicatorInputs = "indicatorInputs"
 }
+export declare const enum SharingMode {
+	NotShared = 0,
+	SharedInLayout = 1,
+	GloballyShared = 2
+}
 export declare const enum Status {
 	Offline = 0,
 	Resolving = 1,
@@ -563,6 +568,7 @@ export declare enum StandardFormatterName {
 	LocalDate = "localDate",
 	LocalDateOrDateTime = "localDateOrDateTime",
 	Percentage = "percentage",
+	ColoredPercentage = "coloredPercentage",
 	Pips = "pips",
 	Profit = "profit",
 	ProfitInInstrumentCurrency = "profitInInstrumentCurrency",
@@ -4710,6 +4716,41 @@ export interface ChartingLibraryWidgetOptions {
 	 * * If you would like to host the library on a separate origin to the page containing the chart then please view the following guide: [Hosting the library on a separate origin](https://www.tradingview.com/charting-library-docs/latest/configuration/Hosting-Library-Cross-Origin).
 	 */
 	library_path?: string;
+	/**
+	 * A cryptographic nonce (number used once) for Content Security Policy (CSP)
+	 * compliance. When provided, the library applies this nonce to all `<script>`
+	 * and `<style>` elements it creates inside its iframe, enabling the library to
+	 * work on pages with a strict `script-src` or `style-src` CSP directive
+	 * that uses nonce-based allowlisting (e.g., `script-src 'nonce-abc123'`).
+	 * Script nonce propagation is supported. Strict nonce-based `style-src`
+	 * CSP is not currently supported; library styles still require
+	 * `style-src 'unsafe-inline'`.
+	 *
+	 * If omitted, the library attempts to infer a nonce automatically by:
+	 * 1. Checking `window.__tvCspNonce` on the host page.
+	 * 2. Scanning the host page for any `<script>` element with a `nonce` attribute.
+	 *
+	 * **Important:** The nonce value must match the nonce served in your
+	 * server's `Content-Security-Policy` header for the current response. Nonces
+	 * must be unique per page load and should be cryptographically random
+	 * (at least 128 bits of entropy, base64-encoded).
+	 *
+	 * **Same-origin loading ([`iframe_loading_same_origin`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#iframe_loading_same_origin.md)):** If you use
+	 * same-origin loading via `sameorigin.html`, set `window.__tvCspNonce`
+	 * in a server-rendered inline script within that HTML file so the library
+	 * iframe can pick up the correct nonce before it loads its bundles.
+	 *
+	 * @example
+	 * ```js
+	 * new TradingView.widget({
+	 *   // ... other options
+	 *   nonce: 'server-generated-nonce-value',
+	 * });
+	 * ```
+	 *
+	 * @see {@link https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/nonce | MDN: nonce attribute}
+	 */
+	nonce?: string;
 	/**
 	 * Locale to be used by the library. See [Localization](https://www.tradingview.com/charting-library-docs/latest/configuration/Localization) section for details.
 	 *
@@ -13025,15 +13066,16 @@ export interface IExternalSaveLoadAdapter {
 	 * Save drawings and drawing groups associated with a chart layout.
 	 *
 	 * @param layoutId The chart layout ID
-	 * @param chartId The chart ID
+	 * @param chartId The chart ID within the layout
 	 * @param state The drawings and drawing groups state
+	 * @param context Optional save context with explicit sharing semantics
 	 */
-	saveLineToolsAndGroups(layoutId: string | undefined, chartId: string | number, state: LineToolsAndGroupsState): Promise<void>;
+	saveLineToolsAndGroups(layoutId: string | undefined, chartId: string | number, state: LineToolsAndGroupsState, context?: SaveLineToolsContext): Promise<void>;
 	/**
 	 * Load drawings and drawing groups associated with a chart layout.
 	 *
-	 * @param layoutId The chart layout ID
-	 * @param chartId The chart ID
+	 * @param layoutId The current chart layout ID
+	 * @param chartId The chart ID within the layout
 	 * @param requestType Type of load request
 	 * @param requestContext Additional information for the request
 	 *
@@ -14713,9 +14755,10 @@ export interface IWatchListApi {
 	 * Create a list of symbols with `listName` name. If the `listName` parameter is not provided or there is no WatchList then `null` will be returned;
 	 * @param  {string} [listName] - name for the watchlist
 	 * @param  {string[]} [symbols] - Symbol IDs for the watchlist. Any list item that has the `###` prefix is considered a section divider in the watchlist.
+	 * @param  {string} [listId] - Custom ID for the watchlist. When provided, if a watchlist with this ID already exists it will be updated with the given `symbols` instead of creating a duplicate. This allows syncing watchlist IDs with a remote backend to ensure consistency across tabs and prevent duplicate lists from being created. If omitted, a random ID is generated.
 	 * @returns WatchListSymbolList
 	 */
-	createList(listName?: string, symbols?: string[]): WatchListSymbolList | null;
+	createList(listName?: string, symbols?: string[], listId?: string): WatchListSymbolList | null;
 	/**
 	 * Save a list of symbols.
 	 * @param  {WatchListSymbolList} list
@@ -16070,6 +16113,10 @@ export interface LineToolState {
 export interface LineToolsAndGroupsLoadRequestContext {
 	/** The name / identifier of the symbol displayed as the main series on the chart. */
 	symbol?: string;
+	/** Optional sharing mode for the current load request. */
+	sharingMode?: SharingMode;
+	/** Optional main series source id associated with this load request. */
+	seriesSourceId?: string;
 }
 /**
  * Represents the state of drawings and groups
@@ -19854,6 +19901,17 @@ export interface SaveChartToServerOptions {
 	/** Default chart name */
 	defaultChartName?: string;
 }
+/**
+ * Additional information for the {@link IExternalSaveLoadAdapter.saveLineToolsAndGroups} request.
+ */
+export interface SaveLineToolsContext {
+	/** The sharing mode for the current save request. The library uses this property to determine how to handle the saved data, and your adapter uses it to route the data to the correct storage destination. */
+	sharingMode: SharingMode;
+	/** A unique identifier for the save request that can be used for debugging and logging purposes. */
+	requestId: string;
+	/** The name or identifier of the symbol displayed as the main series on the chart. Use this value to determine where or how to save the data. */
+	symbol?: string;
+}
 export interface SaveLoadChartRecord {
 	/** Unique id for chart */
 	id: string | number;
@@ -20648,6 +20706,9 @@ export interface StandardFormattersDependenciesMapping {
 	[StandardFormatterName.Percentage]: [
 		valueProperty: string
 	];
+	[StandardFormatterName.ColoredPercentage]: [
+		valueProperty: string
+	];
 	[StandardFormatterName.MarginPercent]: [
 		valueProperty: string
 	];
@@ -21211,6 +21272,8 @@ export interface StudyInputBaseInfo {
 	readonly hideWhenPlotsHidden?: string[];
 	/** Whether the input should be rendered based on user inputs */
 	readonly active?: boolean;
+	/** Creates a header above all inputs that share the same `group` string. This string is used as the header's display text in the *Settings* dialog. */
+	readonly group?: string;
 }
 /**
  * A description of a study input.
@@ -29775,7 +29838,9 @@ export type ChartingLibraryFeatureset =
  */
 "long_press_floating_tooltip" | 
 /**
- * Enables dynamic coloring of bar change values in the legend based on their value (positive, negative, or zero). Applies only to non-OHLC chart types.
+ * Enables dynamic coloring of bar change values in the legend.
+ * For non-OHLC chart types, values are colored based on their value (positive, negative, or zero).
+ * For OHLC chart types, the library uses the specific color settings of the series.
  * @default false
  */
 "legend_bar_change_colors_based_on_value" | 

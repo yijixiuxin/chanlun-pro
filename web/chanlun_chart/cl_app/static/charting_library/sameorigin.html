@@ -1,6 +1,5 @@
 <!--
 Used as the source of the library's iframe when the iframe_loading_same_origin feature is enabled.
-See CL-2137.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -8,11 +7,9 @@ See CL-2137.
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>sameorigin.html</title>
-	<script>
-		window.addEventListener('load', () => {
-			window.dispatchEvent(new Event('sameOriginLoad'));
-		});
-	</script>
+	<!-- Suggested server-side nonce injection for same-origin CSP:
+	<script nonce="{{ csp_nonce }}">window.__tvCspNonce = '{{ csp_nonce }}';</script>
+	-->
 </head>
 <body>
 </body>
