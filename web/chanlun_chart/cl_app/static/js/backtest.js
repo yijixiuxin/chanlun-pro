@@ -229,7 +229,7 @@ const BacktestApp = {
   chartSmall: null, chartHigh: null,
   datafeedSmall: null, datafeedHigh: null,
   timerId: null, speedMs: 2000,
-  sessionLoaded: false, sessionKey: null,
+  sessionLoaded: false, sessionKey: null, startPos: 0,
   running: false, paused: false,
 
   // 画图状态 — 按图表分别跟踪已画的元素（参照 charts.js 的 obj_charts 模式）
@@ -250,6 +250,8 @@ const BacktestApp = {
 
       self.sessionKey = res.session_key;
       self.sessionLoaded = true;
+      self.startPos = res.start_pos || 0;
+      self.totalBars = res.total_bars || 0;
 
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
@@ -343,6 +345,8 @@ const BacktestApp = {
 
       self.sessionKey = res.session_key;
       self.sessionLoaded = true;
+      self.startPos = res.start_pos || 0;
+      self.totalBars = res.total_bars || 0;
 
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
@@ -413,7 +417,8 @@ const BacktestApp = {
       if (!res.ok) return;
 
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
-      const progress = ((res.current_pos / res.total_bars) * 100).toFixed(1);
+      const range = self.totalBars - self.startPos || 1;
+      const progress = (((res.current_pos - self.startPos) / range) * 100).toFixed(1);
       $("#bt-progress").text(progress + "%");
 
       if (res.new_bar) { self.datafeedSmall.pushBar(res.new_bar); }
@@ -447,6 +452,12 @@ const BacktestApp = {
 
   stopTimer() {
     if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+  },
+
+  restartTimer() {
+    this.stopTimer();
+    const self = this;
+    this.timerId = setInterval(() => self.stepForward(), this.speedMs);
   },
 
   restartSession() {
@@ -670,6 +681,8 @@ const BacktestApp = {
       const val = parseInt($(this).val());
       self.speedMs = val * 500;
       $("#bt-speed-label").text((self.speedMs / 1000).toFixed(1) + "s");
+      // 回放运行中立即生效：重启定时器
+      if (self.running && !self.paused) self.restartTimer();
     });
 
     // 仓位百分比快捷输入：Math.floor(资金 * 百分比 / 价格 / 100) * 100
