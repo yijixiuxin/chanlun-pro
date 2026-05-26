@@ -131,6 +131,8 @@ def register_backtest_routes(app):
             "display_id": _replay_sessions[session_id]["display_id"],
             "small_freq": small_freq,
             "high_freq": high_freq,
+            "start_pos": start_pos,
+            "total_bars": len(klines),
             "current_price": float(current_bar["close"]),
             "current_time": fun.datetime_to_str(current_bar["date"]),
         }
