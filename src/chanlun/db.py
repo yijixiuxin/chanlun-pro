@@ -1392,10 +1392,10 @@ if __name__ == "__main__":
     # 添加图表标记
     db.marks_add_by_price(
         "a",
-        "SH.600378",
-        "昊华科技",
+        "SH.000001",
+        "上证指数",
         "30m",
-        fun.str_to_timeint("2025-07-03 14:00:00"),
+        fun.str_to_timeint("2026-05-22 14:30:00"),
         "A",
         "测试标记2",
         "green",

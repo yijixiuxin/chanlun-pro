@@ -118,7 +118,7 @@ const BTChartUtils = {
 const backtestConfigData = {
   supports_search: false,
   supports_group_request: false,
-  supported_resolutions: ["30", "1D"],
+  supported_resolutions: ["1", "30", "1D"],
   supports_marks: true,
   supports_timescale_marks: false,
   supports_time: false,
@@ -127,23 +127,25 @@ const backtestConfigData = {
 };
 
 const symbolInfoSmall = {
-  name: "缠论学习", ticker: "999999", description: "缠论回测学习",
-  exchange: "backtest", listed_exchange: "backtest", type: "stock",
-  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
-  has_intraday: true, intraday_multipliers: ["30"],
+  name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
+  exchange: "backtest", type: "stock",
+  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
+  has_intraday: true, intraday_multipliers: ['1', "30"],
   has_daily: true, daily_multipliers: ["1"],
-  has_weekly_and_monthly: true, supported_resolutions: ["30"],
-  visible_plots_set: "ohlcv", data_status: "streaming",
+  has_seconds: false,
+  has_weekly_and_monthly: false, supported_resolutions: ["30"],
+  visible_plots_set: "ohlcv",
 };
 
 const symbolInfoHigh = {
-  name: "缠论学习", ticker: "999999", description: "缠论回测学习",
-  exchange: "backtest", listed_exchange: "backtest", type: "stock",
-  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, pricescale: 100,
-  has_intraday: true, intraday_multipliers: ["30"],
+  name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
+  exchange: "backtest", type: "stock",
+  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
+  has_intraday: true, intraday_multipliers: ['1', "30"],
   has_daily: true, daily_multipliers: ["1"],
-  has_weekly_and_monthly: true, supported_resolutions: ["1D"],
-  visible_plots_set: "ohlcv", data_status: "streaming",
+  has_seconds: false,
+  has_weekly_and_monthly: false, supported_resolutions: ["1D"],
+  visible_plots_set: "ohlcv",
 };
 
 function createBacktestDatafeed(symbolName) {
@@ -215,11 +217,13 @@ function createBacktestDatafeed(symbolName) {
 
     getMarks: function (symbolInfo, startDate, endDate, onDataCallback, resolution) {
       this._marksCallback = onDataCallback;
+      console.log("getMarks:", this._marks);
       onDataCallback(this._marks);
     },
 
     addMark: function (mark) {
       this._marks.push(mark);
+      console.log("addMark:", this._marks);
       if (this._marksCallback) this._marksCallback(this._marks);
     },
 
@@ -445,6 +449,8 @@ const BacktestApp = {
 
       self.currentBarTime = res.current_bar_time;
       $("#bt-current-time").text(res.current_time);
+      console.log("current time: ", res.current_time, "current bar time: ", res.current_bar_time);
+
 
       if (res.cl_small) {
         self.datafeedSmall._bars = res.cl_small;
@@ -798,6 +804,8 @@ const BacktestApp = {
     const barTime = this.currentBarTime;
     if (!barTime) return;
 
+    console.log('记录 Mark 时间：', barTime);
+
     let mark;
     if (direction === "买入") {
       mark = {
@@ -813,6 +821,7 @@ const BacktestApp = {
       mark = {
         id: Date.now(),
         time: barTime,
+        tickmark: barTime,
         color: "green",
         text: `卖出 ${qty}股 @¥${price.toFixed(2)}`,
         label: "S",
@@ -824,6 +833,7 @@ const BacktestApp = {
       mark = {
         id: Date.now(),
         time: barTime,
+        tickmark: barTime,
         color: pnl >= 0 ? "red" : "green",
         text: `平仓 ${qty}股 @¥${price.toFixed(2)} ${pnlStr}`,
         label: "C",
