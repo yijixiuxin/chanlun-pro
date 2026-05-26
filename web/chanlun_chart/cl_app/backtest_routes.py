@@ -134,6 +134,7 @@ def register_backtest_routes(app):
             "start_pos": start_pos,
             "total_bars": len(klines),
             "current_price": float(current_bar["close"]),
+            "current_bar_time": fun.datetime_to_int(current_bar["date"]),
             "current_time": fun.datetime_to_str(current_bar["date"]),
         }
 

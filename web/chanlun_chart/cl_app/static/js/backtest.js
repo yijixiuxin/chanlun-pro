@@ -269,6 +269,7 @@ const BacktestApp = {
       self.sessionLoaded = true;
       self.startPos = res.start_pos || 0;
       self.totalBars = res.total_bars || 0;
+      self.currentBarTime = res.current_bar_time || 0;
 
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
@@ -364,6 +365,7 @@ const BacktestApp = {
       self.sessionLoaded = true;
       self.startPos = res.start_pos || 0;
       self.totalBars = res.total_bars || 0;
+      self.currentBarTime = res.current_bar_time || 0;
 
       $("#bt-stock-id").text(res.display_id);
       $("#bt-freqs").text("日线 / 30m");
