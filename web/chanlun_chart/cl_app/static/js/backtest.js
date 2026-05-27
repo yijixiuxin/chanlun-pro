@@ -118,7 +118,7 @@ const BTChartUtils = {
 const backtestConfigData = {
   supports_search: false,
   supports_group_request: false,
-  supported_resolutions: ["1", "30", "1D"],
+  supported_resolutions: ["1D", "1W"],
   supports_marks: true,
   supports_timescale_marks: false,
   supports_time: false,
@@ -130,10 +130,10 @@ const symbolInfoSmall = {
   name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
   exchange: "backtest", type: "stock",
   session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
-  has_intraday: true, intraday_multipliers: ['1', "30"],
+  has_intraday: false, intraday_multipliers: [],
   has_daily: true, daily_multipliers: ["1"],
   has_seconds: false,
-  has_weekly_and_monthly: false, supported_resolutions: ["30"],
+  has_weekly_and_monthly: true, supported_resolutions: ["1D"],
   visible_plots_set: "ohlcv",
 };
 
@@ -141,10 +141,10 @@ const symbolInfoHigh = {
   name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
   exchange: "backtest", type: "stock",
   session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
-  has_intraday: true, intraday_multipliers: ['1', "30"],
+  has_intraday: false, intraday_multipliers: [],
   has_daily: true, daily_multipliers: ["1"],
   has_seconds: false,
-  has_weekly_and_monthly: false, supported_resolutions: ["1D"],
+  has_weekly_and_monthly: true, supported_resolutions: ["1W"],
   visible_plots_set: "ohlcv",
 };
 
@@ -276,7 +276,7 @@ const BacktestApp = {
       self.currentBarTime = res.current_bar_time || 0;
 
       $("#bt-stock-id").text(res.display_id);
-      $("#bt-freqs").text("日线 / 30m");
+      $("#bt-freqs").text("日线 / 周线");
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
       $("#bt-progress").text("0%");
@@ -296,7 +296,7 @@ const BacktestApp = {
 
     this.widgetSmall = new TradingView.widget({
       debug: false, autosize: true, fullscreen: false,
-      container: "tv_chart_small", symbol: "small", interval: "30",
+      container: "tv_chart_small", symbol: "small", interval: "1D",
       datafeed: this.datafeedSmall,
       library_path: "static/charting_library/",
       theme: "Dark", timezone: "Asia/Shanghai", locale: "zh",
@@ -319,7 +319,7 @@ const BacktestApp = {
 
     this.widgetHigh = new TradingView.widget({
       debug: false, autosize: true, fullscreen: false,
-      container: "tv_chart_high", symbol: "high", interval: "1D",
+      container: "tv_chart_high", symbol: "high", interval: "1W",
       datafeed: this.datafeedHigh,
       library_path: "static/charting_library/",
       theme: "Dark", timezone: "Asia/Shanghai", locale: "zh",
@@ -372,7 +372,7 @@ const BacktestApp = {
       self.currentBarTime = res.current_bar_time || 0;
 
       $("#bt-stock-id").text(res.display_id);
-      $("#bt-freqs").text("日线 / 30m");
+      $("#bt-freqs").text("日线 / 周线");
       $("#bt-current-price").text("¥" + res.current_price.toFixed(2));
       $("#bt-current-time").text(res.current_time);
       $("#bt-progress").text("0%");
