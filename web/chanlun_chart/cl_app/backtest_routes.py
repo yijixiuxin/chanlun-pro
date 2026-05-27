@@ -13,9 +13,9 @@ from chanlun.exchange.exchange import convert_stock_kline_frequency
 # 回测回放 session 存储
 _replay_sessions: dict = {}
 
-# 固定周期：日线 + 30分钟
-HIGH_FREQ = "d"
-SMALL_FREQ = "30m"
+# 固定周期：日线 + 周线
+HIGH_FREQ = "w"
+SMALL_FREQ = "d"
 
 
 def register_backtest_routes(app):
@@ -37,7 +37,7 @@ def register_backtest_routes(app):
         if rs is None:
             return {"s": "no_data"}
 
-        if resolution == "30":
+        if resolution == "1D":
             cd = rs["cl_small"]
         else:
             cd = rs["cl_high"]
@@ -94,11 +94,11 @@ def register_backtest_routes(app):
 
         cl_config = query_cl_chart_config("a", stock["code"])
 
-        # 初始计算小级别（30m）
+        # 初始计算小级别（日线）
         cd_small = cl.CL(stock["code"], small_freq, cl_config)
         cd_small.process_klines(klines.iloc[: start_pos + 1])
 
-        # 初始计算大级别（日线）
+        # 初始计算大级别（周线）
         high_klines = convert_stock_kline_frequency(
             klines.iloc[: start_pos + 1].copy(), high_freq
         )
