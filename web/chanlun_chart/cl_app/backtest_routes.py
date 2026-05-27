@@ -84,13 +84,13 @@ def register_backtest_routes(app):
         for _ in range(max_attempts):
             stock = random.choice(valid_stocks)
             klines = ex.klines(stock["code"], small_freq)
-            if klines is not None and len(klines) >= 4000:
+            if klines is not None and len(klines) >= 2000:
                 break
         else:
             return {"ok": False, "msg": "无法找到满足条件的股票，请重试"}
 
-        # 从倒数 1000 根开始回放
-        start_pos = len(klines) - 1000
+        # 从倒数 500 根开始回放
+        start_pos = len(klines) - 500
 
         cl_config = query_cl_chart_config("a", stock["code"])
 
