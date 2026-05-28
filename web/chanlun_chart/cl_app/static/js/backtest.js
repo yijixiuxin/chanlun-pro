@@ -120,31 +120,51 @@ const backtestConfigData = {
   supports_group_request: false,
   supported_resolutions: ["1D", "1W"],
   supports_marks: true,
-  supports_timescale_marks: false,
+  supports_timescale_marks: true,
   supports_time: false,
   exchanges: [{ value: "backtest", name: "回测", desc: "回测学习" }],
   symbols_types: [{ name: "stock", value: "stock" }],
 };
 
 const symbolInfoSmall = {
-  name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
-  exchange: "backtest", type: "stock",
-  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
-  has_intraday: false, intraday_multipliers: [],
-  has_daily: true, daily_multipliers: ["1"],
+  name: "缠论学习",
+  ticker: "999999",
+  full_name: "缠论:999999",
+  description: "缠论回测学习",
+  exchange: "backtest",
+  type: "stock",
+  session: "24x7",
+  timezone: "Asia/Shanghai",
+  minmov: 1,
+  minmov2: 0,
+  pricescale: 100,
+  has_intraday: false,
   has_seconds: false,
-  has_weekly_and_monthly: true, supported_resolutions: ["1D"],
+  has_daily: true,
+  daily_multipliers: ["1"],
+  has_weekly_and_monthly: false,
+  supported_resolutions: ["1D"],
   visible_plots_set: "ohlcv",
 };
 
 const symbolInfoHigh = {
-  name: "缠论学习", ticker: "999999", full_name: '缠论:999999', description: "缠论回测学习",
-  exchange: "backtest", type: "stock",
-  session: "24x7", timezone: "Asia/Shanghai", minmov: 1, minmov2:0, pricescale: 100,
-  has_intraday: false, intraday_multipliers: [],
-  has_daily: true, daily_multipliers: ["1"],
+  name: "缠论学习",
+  ticker: "999999",
+  full_name: "缠论:999999",
+  description: "缠论回测学习",
+  exchange: "backtest",
+  type: "stock",
+  session: "24x7",
+  timezone: "Asia/Shanghai",
+  minmov: 1,
+  minmov2: 0,
+  pricescale: 100,
+  has_intraday: false,
   has_seconds: false,
-  has_weekly_and_monthly: true, supported_resolutions: ["1W"],
+  has_daily: true,
+  daily_multipliers: ["1"],
+  has_weekly_and_monthly: true,
+  supported_resolutions: ["1W"],
   visible_plots_set: "ohlcv",
 };
 
@@ -801,10 +821,9 @@ const BacktestApp = {
   },
 
   addTradeMark(direction, price, qty, pnl) {
-    const barTime = this.currentBarTime;
+    // barTime 是秒级，需转为毫秒以匹配 getBars 中的 bar time 格式
+    const barTime = this.currentBarTime * 1000;
     if (!barTime) return;
-
-    console.log('记录 Mark 时间：', barTime);
 
     let mark;
     if (direction === "买入") {
@@ -821,7 +840,6 @@ const BacktestApp = {
       mark = {
         id: Date.now(),
         time: barTime,
-        tickmark: barTime,
         color: "green",
         text: `卖出 ${qty}股 @¥${price.toFixed(2)}`,
         label: "S",
@@ -833,7 +851,6 @@ const BacktestApp = {
       mark = {
         id: Date.now(),
         time: barTime,
-        tickmark: barTime,
         color: pnl >= 0 ? "red" : "green",
         text: `平仓 ${qty}股 @¥${price.toFixed(2)} ${pnlStr}`,
         label: "C",
