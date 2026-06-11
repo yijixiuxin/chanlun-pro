@@ -822,7 +822,7 @@ const BacktestApp = {
 
   addTradeMark(direction, price, qty, pnl) {
     // barTime 是秒级，需转为毫秒以匹配 getBars 中的 bar time 格式
-    const barTime = this.currentBarTime * 1000;
+    const barTime = this.currentBarTime;
     if (!barTime) return;
 
     let mark;

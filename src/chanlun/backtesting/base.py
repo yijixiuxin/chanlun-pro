@@ -151,10 +151,12 @@ class Operation:
         self.msg: str = msg
         self.pos_rate: float = pos_rate  # 开仓 or 平仓 所占的比例
         # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
-        self.key: str = key
+        self.key: str = (
+            f"{code}:{opt}:{mmd}:{key}" if key != "id" else f"{code}:{opt}:{mmd}"
+        )
         self.code: str = code  # 操作的标的代码
         # 开车的标记uid，同一个uid同时只能有一个持仓
-        self.open_uid: str = f"{code}:{mmd}" if open_uid is None else open_uid
+        self.open_uid: str = f"{code}:{opt}:{mmd}" if open_uid is None else open_uid
         # 平仓的标记uid，在信号模式下，只有 clear 才算彻底清仓，其他只是标记
         self.close_uid: str = close_uid
 

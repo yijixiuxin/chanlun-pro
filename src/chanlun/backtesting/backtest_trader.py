@@ -757,12 +757,25 @@ class BackTestTrader(Trader):
             # 传递有持仓对象，则表示要进行平仓操作，判断当前是否有正确的持仓信息
             if pos is not None:
                 if pos.balance == 0.0 or pos.now_pos_rate == 0.0 or pos.amount == 0.0:
-                    return True
+                    return False
 
             opt_mmd = opt.mmd
             # 检查是否在允许做的买卖点上
             if self.allow_mmds is not None and opt_mmd not in self.allow_mmds:
-                return True
+                return False
+
+            # 如果是实盘交易，优先检查当前持仓是否超过最大持仓
+            _is_open = False
+            if "buy" in opt_mmd and opt.opt == "buy":
+                _is_open = True
+            if self.can_short and "sell" in opt_mmd and opt.opt == "buy":
+                _is_open = True
+            if (
+                _is_open
+                and self.mode == "trade"
+                and len(self.positions) >= self.max_pos
+            ):
+                return False
 
             if opt.opt == "buy":
                 # 检查当前是否有该持仓，如果持仓存在的话，则不进行操作
@@ -772,7 +785,7 @@ class BackTestTrader(Trader):
                 ):
                     pos = self.positions[opt.open_uid]
                     if pos.now_pos_rate >= 1:
-                        return True
+                        return False
                 else:
                     pos = POSITION(code=code, mmd=opt.mmd, open_uid=opt.open_uid)
                     self.positions[opt.open_uid] = pos

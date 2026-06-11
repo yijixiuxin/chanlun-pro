@@ -39,6 +39,13 @@
 ### 3. 在 `chanlun-pro` 目录，双击 `windows_run.bat` 运行项目
 
 
+> 如果 `windows_run.bat` 文件无法运行，请使用命令行运行
+> 
+> 在项目目录下右键，选择“在终端中打开”，然后输入如下命令启动项目：
+> 
+> .\script\bin\uv.exe run web\chanlun_chart\app.py
+
+
 ---
 ---
 ---
