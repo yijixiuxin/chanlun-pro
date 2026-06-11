@@ -1,5 +1,6 @@
 # 信号回测文件，转换成交易模式
 
+import copy
 import datetime
 import time
 from typing import Dict, List
@@ -53,7 +54,6 @@ class SignalToTrade(BackTestTrader):
 
         self.allow_codes: List[str] = None  # 允许交易的代码
 
-        self.real_trade_mode = "default"  # default 默认，按照信号顺序执行； full 满仓，只要有信号就一直满仓持有
         self.real_trade_full_sort = "default"  # default 默认，按照信号的顺序执行；zf 按照已有信号到目前的涨幅排序执行
 
         self.trade_strategy: Strategy = None
@@ -71,9 +71,6 @@ class SignalToTrade(BackTestTrader):
         self.market: str = None
         self.ex: ExchangeDB = None
         self.frequencys = []
-
-        # 记录当前应当持仓的所有信号
-        self.positions_now_holding: List[dict] = []
 
     def get_price(self, code):
         try:
@@ -196,122 +193,95 @@ class SignalToTrade(BackTestTrader):
             trade_pos_codes = self.position_codes()
 
             # 查询当前要平仓的仓位
-            close_poss: List[Dict] = []
+            close_pos_operations: List[Dict] = []
             if len(trade_pos_codes) > 0:
                 s_time = time.time()
-                close_poss: pd.DataFrame = pos_df.query(
-                    "code in @trade_pos_codes and close_datetime == @_d"
-                )
-                if len(close_poss) == 0:
-                    close_poss = []
-                else:
-                    close_poss = close_poss.to_dict(orient="records")
+                for _code, _poss in BT.trader.positions_history.items():
+                    if _code not in trade_pos_codes:
+                        continue
+                    for _p in _poss:
+                        for _c_p in _p.close_records:
+                            if (
+                                _c_p["datetime"] == _d
+                                and _c_p["close_uid"] in self.close_uids
+                            ):
+                                if _code in ["SZ.300496"]:
+                                    a = 1
+                                _add_c_oper = copy.copy(_c_p)
+                                _add_c_oper["code"] = _p.code
+                                _add_c_oper["mmd"] = _p.mmd
+                                close_pos_operations.append(_add_c_oper)
                 self.add_times("st_query_close_poss", time.time() - s_time)
 
             # 查询当前要开仓的仓位
             s_time = time.time()
-            open_poss: List[Dict] = pos_df.query("open_datetime == @_d").to_dict(
-                orient="records"
-            )
+            open_pos_operations: List[Dict] = []
+            for _code, _poss in BT.trader.positions_history.items():
+                for _p in _poss:
+                    for _o_r in _p.open_records:
+                        if _o_r["datetime"] == _d:
+                            _add_o_oper = copy.copy(_o_r)
+                            _add_o_oper["code"] = _code
+                            _add_o_oper["mmd"] = _p.mmd
+                            _add_o_oper["info"] = _p.info
+                            open_pos_operations.append(_add_o_oper)
             self.add_times("st_query_open_poss", time.time() - s_time)
 
             # 优先进行平仓操作
-            for _pos in close_poss:
-                # 删除在self.positions_now_holding中 _pos 持仓记录
-                self.positions_now_holding = [
-                    p
-                    for p in self.positions_now_holding
-                    if (
-                        (
-                            p["code"] == _pos["code"]
-                            and p["mmd"] == _pos["mmd"]
-                            and p["open_uid"] == _pos["open_uid"]
-                        )
-                        == False
-                    )
-                ]
-
+            for _c_oper in close_pos_operations:
                 opt = Operation(
-                    code=_pos["code"],
+                    code=_c_oper["code"],
                     opt="sell",
-                    mmd=_pos["mmd"],
-                    msg=_pos["close_msg"],
+                    mmd=_c_oper["mmd"],
+                    msg=_c_oper["close_msg"],
+                    pos_rate=_c_oper["pos_rate"],
                     close_uid="clear",
+                    key=_c_oper["close_key"],
                 )
-                # tqdm.write(
-                #     f"平仓: {_pos['code']} {_pos['mmd']} {_pos['profit_rate']} {_pos['close_msg']}"
-                # )
-                open_uid = f"{_pos['code']}:{_pos['open_uid']}"
+                tqdm.write(
+                    f"{_d} : 平仓: {_c_oper['code']} {_c_oper['mmd']} {_c_oper['close_msg']} 占比 {_c_oper['pos_rate']}"
+                )
                 _t_pos = [
                     p
                     for _, p in self.positions.items()
-                    if p.balance != 0 and p.open_uid == open_uid
+                    if p.balance != 0 and p.code == _c_oper["code"]
                 ]
                 if len(_t_pos) > 0:
-                    self.execute(_pos["code"], opt, _t_pos[0])
+                    self.execute(opt.code, opt, _t_pos[0])
+
+            # 只保留有资金的持仓
+            self.positions = {
+                _uid: _p for _uid, _p in self.positions.items() if _p.amount != 0
+            }
+
             # 进行开仓操作
             open_opts = []
-            for _pos in open_poss:
-                # 将产生的持仓添加到持仓信号列表中
-                self.positions_now_holding.append(_pos)
-
+            for _o_oper in open_pos_operations:
                 opt = Operation(
-                    code=_pos["code"],
+                    code=_o_oper["code"],
                     opt="buy",
-                    mmd=_pos["mmd"],
-                    loss_price=_pos["loss_price"],
-                    info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
-                    msg=_pos["open_msg"],
-                    open_uid=f"{_pos['code']}:{_pos['open_uid']}",
+                    mmd=_o_oper["mmd"],
+                    loss_price=_o_oper["price"],
+                    info={
+                        _k: _v for _k, _v in _o_oper["info"].items() if _k in info_keys
+                    },
+                    msg=_o_oper["open_msg"],
+                    open_uid=_o_oper["open_uid"],
+                    key=_o_oper["open_key"],
+                    pos_rate=_o_oper["pos_rate"],
                 )
-                # tqdm.write(
-                #     f"开仓: {_pos['code']} {_pos['mmd']} {_pos['price']} {_pos['open_msg']}"
-                # )
+
                 open_opts.append(opt)
             if BT.strategy.is_filter_opts():
                 open_opts = BT.strategy.filter_opts(open_opts, self)
 
             s_time = time.time()
             for _opt in open_opts:
-                self.execute(_opt.code, _opt)
+                if self.execute(_opt.code, _opt):
+                    tqdm.write(
+                        f"{_d} : 开仓: {_opt.code} {_opt.mmd} {_opt.msg} 占比 {_opt.pos_rate}"
+                    )
             self.add_times("st_execute", time.time() - s_time)
-
-            # 如果启动了补全交易模式，则进行补全操作（之前的持仓退出后，如果之前还有信号没有平仓，从未平仓的信号中，排序，并补充到最大持仓数量）
-            if (
-                self.real_trade_mode == "full"
-                and len(self.positions_now_holding) > 0
-                and len([_p for _p in self.positions.values() if _p.balance != 0])
-                < self.max_pos
-            ):
-                # 将当前还存在的持仓信号，生成操作信号
-                full_open_opts = []
-                for _pos in self.positions_now_holding:
-                    opt = Operation(
-                        code=_pos["code"],
-                        opt="buy",
-                        mmd=_pos["mmd"],
-                        loss_price=_pos["loss_price"],
-                        info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
-                        msg=_pos["open_msg"],
-                        open_uid=f"{_pos['code']}:{_pos['open_uid']}",
-                    )
-                    opt_now_price = self.get_price(_pos["code"])
-                    opt.info["__now_zf"] = (
-                        (opt_now_price["close"] - _pos["price"]) / _pos["price"] * 100
-                    )  # 记录持仓的价格
-                    full_open_opts.append(opt)
-                if self.real_trade_full_sort == "zf":
-                    # 按照 __now_zf 从高到低进行排序
-                    full_open_opts = sorted(
-                        full_open_opts, key=lambda x: x.info["__now_zf"], reverse=True
-                    )
-                else:
-                    if BT.strategy.is_filter_opts():
-                        full_open_opts = BT.strategy.filter_opts(full_open_opts, self)
-                s_time = time.time()
-                for _opt in full_open_opts:
-                    self.execute(_opt.code, _opt)
-                self.add_times("full_st_execute", time.time() - s_time)
 
             s_time = time.time()
             self.update_position_record()

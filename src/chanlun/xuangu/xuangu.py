@@ -836,7 +836,101 @@ def xg_single_xd_zs_nei_3mmds(
 
     return {
         "code": code,
-        "msg": f"线段中枢盘整后出现笔的三类买卖点",
+        "msg": "线段中枢盘整后出现笔的三类买卖点",
+    }
+
+
+def xg_single_tupo_zs(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+) -> Union[None, dict]:
+    """
+    单周期，查找进入中枢的笔的笔，是下跌线段的结束位置
+    """
+    opt_direction, opt_mmd = get_opt_types(opt_type)
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+
+    if len(cd.get_xds()) == 0:
+        return None
+    bi = cd.get_bis()[-1]
+    for _zs_type in cd.get_config()["zs_bi_type"]:
+        if len(cd.get_bi_zss(_zs_type)) == 0:
+            continue
+        bi_zs = cd.get_bi_zss(_zs_type)[-1]
+        if len(bi_zs.lines) < 7:
+            continue
+        if bi.index not in [_l.index for _l in bi_zs.lines]:
+            continue
+
+        pre_xd = None
+        for _xd in cd.get_xds():
+            if _xd.end.k.date == bi_zs.lines[0].start.k.date:
+                pre_xd = _xd
+                break
+        if pre_xd is None:
+            continue
+        if pre_xd.type not in opt_direction:
+            continue
+
+        if pre_xd.index - 1 < 0:
+            continue
+        if (
+            pre_xd.type == "down"
+            and pre_xd.end.val > cd.get_xds()[pre_xd.index - 1].start.val
+        ):
+            continue
+
+        if (
+            pre_xd.type == "up"
+            and pre_xd.end.val < cd.get_xds()[pre_xd.index - 1].start.val
+        ):
+            continue
+
+        return {
+            "code": code,
+            "msg": "当前中枢震荡，并且中枢前是一个下跌线段",
+        }
+    return None
+
+
+def xg_single_xd23mmd_bi3mmd(
+    code: str, mk_datas: MarketDatas, opt_type: list = []
+) -> Union[None, dict]:
+    """
+    单周期，线段2/3类买卖点（包括类买卖点）后笔出现3买卖点
+    """
+    opt_direction, opt_mmd = get_opt_types(opt_type)
+    cd = mk_datas.get_cl_data(code, mk_datas.frequencys[0])
+
+    if len(cd.get_xds()) <= 1:
+        return None
+
+    check_xd_mmds = []
+    check_bi_mmds = []
+    if "down" in opt_direction:
+        check_xd_mmds.extend(["2buy", "3buy", "l2buy", "l3buy"])
+        check_bi_mmds.extend(["3buy", "l3buy"])
+    if "up" in opt_direction:
+        check_xd_mmds.extend(["2sell", "3sell", "l2sell", "l3sell"])
+        check_bi_mmds.extend(["3sell", "l3sell"])
+
+    bi = cd.get_bis()[-1]
+    if bi.type not in opt_direction:
+        return None
+
+    # 笔没有3类买卖点
+    if bi.mmd_exists(check_bi_mmds, "|") is False:
+        return None
+
+    xd = cd.get_xds()[-1]
+    if xd.type not in opt_direction:
+        xd = cd.get_xds()[-2]
+
+    if xd.mmd_exists(check_xd_mmds, "|") is False:
+        return None
+
+    return {
+        "code": code,
+        "msg": "线段2/3类买卖点，笔三类买卖点",
     }
 
 
