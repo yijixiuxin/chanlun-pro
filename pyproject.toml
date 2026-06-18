@@ -3,12 +3,12 @@ name = "chanlun-pro"
 version = "1.0.0"
 description = "chanlun pro"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = "==3.11.*"
 dependencies = [
     "akshare>=1.16.98",
     "alpaca-py>=0.40.1",
     "apscheduler>=3.11.0",
-    "baostock>=0.8.9",
+    "baostock>=0.9.2",
     "ccxt==4.4.88",
     "chardet>=5.2.0",
     "dbutils>=3.1.1",
