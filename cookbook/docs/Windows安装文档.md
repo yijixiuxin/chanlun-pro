@@ -91,7 +91,7 @@ UV 和 Conda 任选一个自己喜欢的就行
       # PIP 安装项目依赖包
       pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
       pip3 install package/pytdx-1.72r2-py3-none-any.whl
-      pip3 install package/ta_lib-0.4.25-cp311-cp311-win_amd64.whl
+      pip3 install package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl
       pip3 install -r requirements.txt
 
       # 运行 Web 服务

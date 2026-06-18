@@ -1,15 +1,19 @@
-from typing import Union
-import baostock as bs
-from chanlun import fun
+import datetime
+from typing import Dict, List, Union
 
-from chanlun.exchange.exchange import *
+import baostock as bs
+import pandas as pd
+import pytz
+
+from chanlun import fun
+from chanlun.exchange.exchange import Exchange, Tick
 
 
 @fun.singleton
 class ExchangeBaostock(Exchange):
     """
     Baostock 行情接口服务，非实时
-    使用 baostock API 实现 : http://baostock.com/baostock/index.php/%E9%A6%96%E9%A1%B5
+    使用 baostock API 实现 : https://baostock.com/mainContent?file=home.md
     """
 
     g_all_stocks = []
@@ -81,7 +85,7 @@ class ExchangeBaostock(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         获取 Kline 线
         :param code:
