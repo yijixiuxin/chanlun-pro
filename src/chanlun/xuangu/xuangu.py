@@ -851,6 +851,18 @@ def xg_single_tupo_zs(
 
     if len(cd.get_xds()) == 0:
         return None
+
+    if "down" in opt_direction and "up" not in opt_direction:
+        # 如果只是做多，则判断macd的柱子是否大于0
+        idx_macd = cd.get_idx()["macd"]
+        if idx_macd["hist"][-1] < 0:
+            return None
+    if "up" in opt_direction and "down" not in opt_direction:
+        # 如果只是做空，则判断macd的柱子是否小于0
+        idx_macd = cd.get_idx()["macd"]
+        if idx_macd["hist"][-1] > 0:
+            return None
+
     bi = cd.get_bis()[-1]
     for _zs_type in cd.get_config()["zs_bi_type"]:
         if len(cd.get_bi_zss(_zs_type)) == 0:
