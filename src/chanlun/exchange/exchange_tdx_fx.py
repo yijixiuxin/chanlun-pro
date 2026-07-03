@@ -6,15 +6,21 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_result,
+    stop_after_attempt,
+    wait_random,
+)
 
 from chanlun import fun
 from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange.exchange import Exchange, Tick
+from chanlun.exchange.exchange import Exchange, Tick, convert_fx_kline_frequency
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
-from chanlun.exchange.exchange import convert_fx_kline_frequency
+
 
 @fun.singleton
 class ExchangeTDXFX(Exchange):
@@ -32,6 +38,7 @@ class ExchangeTDXFX(Exchange):
 
         # 文件缓存
         self.fdb = FileCacheDB()
+        self._client = None
 
         try:
             # 选择最优的服务器，并保存到 cache 中
@@ -75,6 +82,24 @@ class ExchangeTDXFX(Exchange):
         self.connect_info = connect_info
         return connect_info
 
+    def _ensure_client(self):
+        """获取复用的 TDX 客户端连接"""
+        if self._client is None:
+            self._client = TdxExHq_API(
+                multithread=True, raise_exception=True, auto_retry=True
+            )
+            self._client.connect(self.connect_info["ip"], self.connect_info["port"])
+        return self._client
+
+    def _reset_client(self):
+        """关闭并重置客户端连接"""
+        if self._client is not None:
+            try:
+                self._client.disconnect()
+            except Exception:
+                pass
+            self._client = None
+
     def default_code(self):
         return "FX.USDEUR"
 
@@ -94,6 +119,11 @@ class ExchangeTDXFX(Exchange):
             "1m": "1m",
         }
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random(min=1, max=5),
+        retry=retry_if_exception_type(TdxConnectionError),
+    )
     def all_stocks(self):
         """
         使用 通达信的方式获取所有外汇代码
@@ -102,8 +132,8 @@ class ExchangeTDXFX(Exchange):
             return self.g_all_stocks
 
         __all_stocks = []
-        client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+        client = self._ensure_client()
+        try:
             start_i = 0
             count = 1000
             market_map_short_names = {
@@ -128,10 +158,15 @@ class ExchangeTDXFX(Exchange):
                 if len(instruments) < count:
                     break
 
-        self.g_all_stocks = __all_stocks
-        # print(f"获取数量：{len(self.g_all_stocks)}")
+            self.g_all_stocks = __all_stocks
+            # print(f"获取数量：{len(self.g_all_stocks)}")
 
-        return self.g_all_stocks
+            return self.g_all_stocks
+        except TdxConnectionError:
+            print("连接失败，重新选择最优服务器")
+            self._reset_client()
+            self.reset_tdx_ip()
+            raise
 
     def to_tdx_code(self, code):
         """
@@ -186,39 +221,15 @@ class ExchangeTDXFX(Exchange):
 
         _s_time = time.time()
         try:
-            client = TdxExHq_API(
-                multithread=True, raise_exception=True, auto_retry=True
+            client = self._ensure_client()
+            klines: pd.DataFrame = self.fdb.get_tdx_klines(
+                Market.FX.value, code, frequency
             )
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.FX.value, code, frequency
-                )
-                if klines is None:
-                    # 获取 8*700 = 5600 条数据
-                    klines = pd.concat(
-                        [
-                            client.to_df(
-                                client.get_instrument_bars(
-                                    frequency_map[frequency],
-                                    market,
-                                    tdx_code,
-                                    (i - 1) * 700,
-                                    700,
-                                )
-                            )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    if len(klines) == 0:
-                        return pd.DataFrame([])
-                    klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
-                    klines.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
+            if klines is None:
+                # 获取 8*700 = 5600 条数据
+                klines = pd.concat(
+                    [
+                        client.to_df(
                             client.get_instrument_bars(
                                 frequency_map[frequency],
                                 market,
@@ -227,14 +238,35 @@ class ExchangeTDXFX(Exchange):
                                 700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = klines.iloc[-1]["date"]
-                        klines = pd.concat([klines, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
+                        for i in range(1, args["pages"] + 1)
+                    ],
+                    axis=0,
+                    sort=False,
+                )
+                if len(klines) == 0:
+                    return pd.DataFrame([])
+                klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
+                klines.sort_values("date", inplace=True)
+            else:
+                for i in range(1, args["pages"] + 1):
+                    # print(f'{code} 使用缓存，更新获取第 {i} 页')
+                    _ks = client.to_df(
+                        client.get_instrument_bars(
+                            frequency_map[frequency],
+                            market,
+                            tdx_code,
+                            (i - 1) * 700,
+                            700,
+                        )
+                    )
+                    _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                    _ks.sort_values("date", inplace=True)
+                    new_start_dt = _ks.iloc[0]["date"]
+                    old_end_dt = klines.iloc[-1]["date"]
+                    klines = pd.concat([klines, _ks], ignore_index=True)
+                    # 如果请求的第一个时间大于缓存的最后一个时间，退出
+                    if old_end_dt >= new_start_dt:
+                        break
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
@@ -255,6 +287,7 @@ class ExchangeTDXFX(Exchange):
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
+            self._reset_client()
             self.reset_tdx_ip()
         except Exception as e:
             print(f"获取行情异常 {code} Exception ：{str(e)}")
@@ -275,41 +308,35 @@ class ExchangeTDXFX(Exchange):
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        如果可以使用 富途 的接口，就用 富途的，否则就用 日线的 K线计算
-        使用 富途 的接口会很快，日线则很慢
-        获取日线的k线，并返回最后一根k线的数据
-        """
         ticks = {}
-        client = TdxExHq_API(multithread=True, raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            for _code in codes:
-                _market, _tdx_code = self.to_tdx_code(_code)
-                if _market is None:
-                    continue
-                _quote = client.get_instrument_quote(_market, _tdx_code)
-                if len(_quote) > 0:
-                    _quote = _quote[0]
-                    ticks[_code] = Tick(
-                        code=_code,
-                        last=_quote["price"],
-                        buy1=_quote["bid1"],
-                        sell1=_quote["ask1"],
-                        low=_quote["low"],
-                        high=_quote["high"],
-                        volume=_quote["zongliang"],
-                        open=_quote["open"],
-                        rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["price"] > 0
-                            else 0
-                        ),
-                    )
+        client = self._ensure_client()
+        for _code in codes:
+            _market, _tdx_code = self.to_tdx_code(_code)
+            if _market is None:
+                continue
+            _quote = client.get_instrument_quote(_market, _tdx_code)
+            if len(_quote) > 0:
+                _quote = _quote[0]
+                ticks[_code] = Tick(
+                    code=_code,
+                    last=_quote["price"],
+                    buy1=_quote["bid1"],
+                    sell1=_quote["ask1"],
+                    low=_quote["low"],
+                    high=_quote["high"],
+                    volume=_quote["zongliang"],
+                    open=_quote["open"],
+                    rate=(
+                        round(
+                            (_quote["price"] - _quote["pre_close"])
+                            / _quote["price"]
+                            * 100,
+                            2,
+                        )
+                        if _quote["price"] > 0
+                        else 0
+                    ),
+                )
         return ticks
 
     def now_trading(self):
@@ -344,12 +371,12 @@ if __name__ == "__main__":
     klines = ex.klines("FX.GBPEUR", "30m")
     print(len(klines))
     print(klines)
-    print('-----------------')
+    print("-----------------")
     klines = ex.klines("FX.GBPEUR", "60m")
     print(len(klines))
     print(klines)
-    print('-----------------')
+    print("-----------------")
     klines = ex.klines("FX.GBPEUR", "4h")
     print(len(klines))
     print(klines)
-    print('-----------------')
+    print("-----------------")

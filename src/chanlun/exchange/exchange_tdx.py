@@ -8,7 +8,13 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_result,
+    stop_after_attempt,
+    wait_random,
+)
 
 from chanlun import fun
 from chanlun.base import Market
@@ -52,6 +58,9 @@ class ExchangeTDX(Exchange):
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
+        # 复用的 TDX 客户端连接
+        self._client = None
+
     def reset_tdx_ip(self):
         """
         重新选择tdx最优ip，并返回
@@ -61,6 +70,22 @@ class ExchangeTDX(Exchange):
         db.cache_set("tdx_connect_ip", connect_info)
         self.connect_info = connect_info
         return connect_info
+
+    def _ensure_client(self):
+        """获取复用的 TDX 客户端连接"""
+        if self._client is None:
+            self._client = TdxHq_API(raise_exception=True, auto_retry=True)
+            self._client.connect(self.connect_info["ip"], self.connect_info["port"])
+        return self._client
+
+    def _reset_client(self):
+        """关闭并重置客户端连接"""
+        if self._client is not None:
+            try:
+                self._client.disconnect()
+            except Exception:
+                pass
+            self._client = None
 
     def default_code(self):
         return "SH.000001"
@@ -78,6 +103,11 @@ class ExchangeTDX(Exchange):
             "1m": "1m",
         }
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random(min=1, max=5),
+        retry=retry_if_exception_type(TdxConnectionError),
+    )
     def all_stocks(self):
         """
         使用 通达信的方式获取所有股票代码
@@ -88,42 +118,42 @@ class ExchangeTDX(Exchange):
         __all_stocks = []
         __codes = []
         try:
+            client = self._ensure_client()
             for market in range(2):
-                client = TdxHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                    count = client.get_security_count(market)
-                    data = pd.concat(
-                        [
-                            client.to_df(client.get_security_list(market, i * 1000))
-                            for i in range(int(count / 1000) + 1)
-                        ],
-                        axis=0,
-                        sort=False,
+                count = client.get_security_count(market)
+                data = pd.concat(
+                    [
+                        client.to_df(client.get_security_list(market, i * 1000))
+                        for i in range(int(count / 1000) + 1)
+                    ],
+                    axis=0,
+                    sort=False,
+                )
+                for _d in data.iterrows():
+                    code = _d[1]["code"]
+                    name = _d[1]["name"]
+                    sse = "SZ" if market == 0 else "SH"
+                    _type = self.for_sz(code) if market == 0 else self.for_sh(code)
+                    if _type in ["bond_cn", "undefined", "stockB_cn"]:
+                        continue
+                    code = f"{sse}.{str(code)}"
+                    if code in __codes:
+                        continue
+                    __codes.append(code)
+                    precision = 100 if _type == "stock_cn" else 1000
+                    __all_stocks.append(
+                        {
+                            "code": code,
+                            "name": name,
+                            "type": _type,
+                            "precision": precision,
+                        }
                     )
-                    for _d in data.iterrows():
-                        code = _d[1]["code"]
-                        name = _d[1]["name"]
-                        sse = "SZ" if market == 0 else "SH"
-                        _type = self.for_sz(code) if market == 0 else self.for_sh(code)
-                        if _type in ["bond_cn", "undefined", "stockB_cn"]:
-                            continue
-                        code = f"{sse}.{str(code)}"
-                        if code in __codes:
-                            continue
-                        __codes.append(code)
-                        precision = 100 if _type == "stock_cn" else 1000
-                        __all_stocks.append(
-                            {
-                                "code": code,
-                                "name": name,
-                                "type": _type,
-                                "precision": precision,
-                            }
-                        )
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
+            self._reset_client()
             self.reset_tdx_ip()
-            return self.all_stocks()
+            raise
 
         # 添加北京A股的股票
         for _c, _n in tdx_codes_by_bj.items():
@@ -222,42 +252,18 @@ class ExchangeTDX(Exchange):
             return None
 
         try:
-            client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                if "index" in _type:
-                    get_bars = client.get_index_bars
-                else:
-                    get_bars = client.get_security_bars
+            client = self._ensure_client()
+            if "index" in _type:
+                get_bars = client.get_index_bars
+            else:
+                get_bars = client.get_security_bars
 
-                ks: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.A.value, code, frequency
-                )
-                if ks is None or len(ks) == 0:
-                    # 获取 8*700 = 5600 条数据
-                    ks = pd.concat(
-                        [
-                            client.to_df(
-                                get_bars(
-                                    frequency_map[frequency],
-                                    market,
-                                    tdx_code,
-                                    (i - 1) * 700,
-                                    700,
-                                )
-                            )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    if len(ks) == 0:
-                        return pd.DataFrame([])
-                    ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
-                    ks.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
+            ks: pd.DataFrame = self.fdb.get_tdx_klines(Market.A.value, code, frequency)
+            if ks is None or len(ks) == 0:
+                # 获取 8*700 = 5600 条数据
+                ks = pd.concat(
+                    [
+                        client.to_df(
                             get_bars(
                                 frequency_map[frequency],
                                 market,
@@ -266,16 +272,37 @@ class ExchangeTDX(Exchange):
                                 700,
                             )
                         )
-                        if len(_ks) == 0:
-                            break
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = ks.iloc[-1]["date"]
-                        ks = pd.concat([ks, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
+                        for i in range(1, args["pages"] + 1)
+                    ],
+                    axis=0,
+                    sort=False,
+                )
+                if len(ks) == 0:
+                    return pd.DataFrame([])
+                ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
+                ks.sort_values("date", inplace=True)
+            else:
+                for i in range(1, args["pages"] + 1):
+                    # print(f'{code} 使用缓存，更新获取第 {i} 页')
+                    _ks = client.to_df(
+                        get_bars(
+                            frequency_map[frequency],
+                            market,
+                            tdx_code,
+                            (i - 1) * 700,
+                            700,
+                        )
+                    )
+                    if len(_ks) == 0:
+                        break
+                    _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                    _ks.sort_values("date", inplace=True)
+                    new_start_dt = _ks.iloc[0]["date"]
+                    old_end_dt = ks.iloc[-1]["date"]
+                    ks = pd.concat([ks, _ks], ignore_index=True)
+                    # 如果请求的第一个时间大于缓存的最后一个时间，退出
+                    if old_end_dt >= new_start_dt:
+                        break
             # TODO 如果是分钟数据，当天的数据会有问题，在 13:00，应该是 11:00
             if len(frequency) >= 2 and frequency.endswith("m"):
                 # 将 13:00 修改为 11:30
@@ -317,6 +344,7 @@ class ExchangeTDX(Exchange):
             return ks
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
+            self._reset_client()
             self.reset_tdx_ip()
         except Exception as e:
             print(f"获取行情异常 {code} Exception ：{str(e)}")
@@ -370,75 +398,75 @@ class ExchangeTDX(Exchange):
                     continue
                 query_stocks.append((_m, _c))
                 stock_types[_c] = _t
-        client = TdxHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            # 获取总数据量
-            total_quotes = len(query_stocks)
-            # 分批次获取数据
-            batch_size = 80
-            quotes = []
-            error_codes = []
-            for i in range(0, total_quotes, batch_size):
-                batch_stocks = query_stocks[i : i + batch_size]
-                try:
-                    batch_quotes = client.get_security_quotes(batch_stocks)
-                except Exception as e:
-                    error_codes += batch_stocks
-                    print(f"获取数据失败: {e}")
+        client = self._ensure_client()
+        # 获取总数据量
+        total_quotes = len(query_stocks)
+        # 分批次获取数据
+        batch_size = 80
+        quotes = []
+        for i in range(0, total_quotes, batch_size):
+            batch_stocks = query_stocks[i : i + batch_size]
+            try:
+                batch_quotes = client.get_security_quotes(batch_stocks)
+            except TdxConnectionError:
+                self._reset_client()
+                self.reset_tdx_ip()
+                client = self._ensure_client()
+                batch_quotes = client.get_security_quotes(batch_stocks)
+            except Exception as e:
+                print(f"获取数据失败: {e}")
+                continue
+            quotes += batch_quotes
+        # ('market', 0), ('code', '000001'), ('active1', 4390), ('price', 14.29), ('last_close', 14.24), ('open', 14.35),
+        # ('high', 14.37), ('low', 14.14), ('servertime', '14:59:55.939'), ('reversed_bytes0', 14998872),
+        # ('reversed_bytes1', -1429), ('vol', 690954), ('cur_vol', 11982), ('amount', 985552128.0), ('s_vol', 339925),
+        # ('b_vol', 351029), ('reversed_bytes2', -1), ('reversed_bytes3', 45188), ('bid1', 14.28), ('ask1', 14.29),
+        # ('bid_vol1', 2617), ('ask_vol1', 2391), ('bid2', 14.27), ('ask2', 14.3), ('bid_vol2', 1853),
+        # ('ask_vol2', 4075), ('bid3', 14.26), ('ask3', 14.31), ('bid_vol3', 2164), ('ask_vol3', 3421), ('bid4', 14.25),
+        # ('ask4', 14.32), ('bid_vol4', 2512), ('ask_vol4', 8679), ('bid5', 14.24), ('ask5', 14.33), ('bid_vol5', 889),
+        # ('ask_vol5', 5191), ('reversed_bytes4', (2518,)), ('reversed_bytes5', 0), ('reversed_bytes6', 0),
+        # ('reversed_bytes7', 0), ('reversed_bytes8', 0), ('reversed_bytes9', 0.0), ('active2', 4390)])
+        for _q in quotes:
+            if _q["code"] == "999999":
+                _code = "SH.000001"
+            else:
+                _code = [
+                    _c
+                    for _c in codes
+                    if _c[-6:] == _q["code"]
+                    and (
+                        (_c[:2] == "SZ" and _q["market"] == 0)
+                        or (_c[:2] == "SH" and _q["market"] == 1)
+                        or (_c[:2] == "BJ" and _q["market"] == 2)
+                    )
+                ]
+                if len(_code) == 0:
                     continue
-                quotes += batch_quotes
-            # ('market', 0), ('code', '000001'), ('active1', 4390), ('price', 14.29), ('last_close', 14.24), ('open', 14.35),
-            # ('high', 14.37), ('low', 14.14), ('servertime', '14:59:55.939'), ('reversed_bytes0', 14998872),
-            # ('reversed_bytes1', -1429), ('vol', 690954), ('cur_vol', 11982), ('amount', 985552128.0), ('s_vol', 339925),
-            # ('b_vol', 351029), ('reversed_bytes2', -1), ('reversed_bytes3', 45188), ('bid1', 14.28), ('ask1', 14.29),
-            # ('bid_vol1', 2617), ('ask_vol1', 2391), ('bid2', 14.27), ('ask2', 14.3), ('bid_vol2', 1853),
-            # ('ask_vol2', 4075), ('bid3', 14.26), ('ask3', 14.31), ('bid_vol3', 2164), ('ask_vol3', 3421), ('bid4', 14.25),
-            # ('ask4', 14.32), ('bid_vol4', 2512), ('ask_vol4', 8679), ('bid5', 14.24), ('ask5', 14.33), ('bid_vol5', 889),
-            # ('ask_vol5', 5191), ('reversed_bytes4', (2518,)), ('reversed_bytes5', 0), ('reversed_bytes6', 0),
-            # ('reversed_bytes7', 0), ('reversed_bytes8', 0), ('reversed_bytes9', 0.0), ('active2', 4390)])
-            for _q in quotes:
-                if _q["code"] == "999999":
-                    _code = "SH.000001"
-                else:
-                    _code = [
-                        _c
-                        for _c in codes
-                        if _c[-6:] == _q["code"]
-                        and (
-                            (_c[:2] == "SZ" and _q["market"] == 0)
-                            or (_c[:2] == "SH" and _q["market"] == 1)
-                            or (_c[:2] == "BJ" and _q["market"] == 2)
-                        )
-                    ]
-                    if len(_code) == 0:
-                        continue
-                    _code = _code[0]
-                # 如果 stock_type == etf_cn , 则价格需要 / 10
-                if stock_types[_q["code"]] == "etf_cn":
-                    _q["price"] /= 10
-                    _q["bid1"] /= 10
-                    _q["ask1"] /= 10
-                    _q["low"] /= 10
-                    _q["high"] /= 10
-                    _q["open"] /= 10
-                    _q["last_close"] /= 10
-                ticks[_code] = Tick(
-                    code=_code,
-                    last=_q["price"],
-                    buy1=_q["bid1"],
-                    sell1=_q["ask1"],
-                    low=_q["low"],
-                    high=_q["high"],
-                    volume=_q["vol"],
-                    open=_q["open"],
-                    rate=(
-                        round(
-                            (_q["price"] - _q["last_close"]) / _q["last_close"] * 100, 2
-                        )
-                        if _q["price"] != 0
-                        else 0
-                    ),
-                )
+                _code = _code[0]
+            # 如果 stock_type == etf_cn , 则价格需要 / 10
+            if stock_types[_q["code"]] == "etf_cn":
+                _q["price"] /= 10
+                _q["bid1"] /= 10
+                _q["ask1"] /= 10
+                _q["low"] /= 10
+                _q["high"] /= 10
+                _q["open"] /= 10
+                _q["last_close"] /= 10
+            ticks[_code] = Tick(
+                code=_code,
+                last=_q["price"],
+                buy1=_q["bid1"],
+                sell1=_q["ask1"],
+                low=_q["low"],
+                high=_q["high"],
+                volume=_q["vol"],
+                open=_q["open"],
+                rate=(
+                    round((_q["price"] - _q["last_close"]) / _q["last_close"] * 100, 2)
+                    if _q["price"] != 0
+                    else 0
+                ),
+            )
 
         return ticks
 
@@ -604,9 +632,8 @@ class ExchangeTDX(Exchange):
         ):
             need_update = True
         if need_update:
-            client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                data = client.to_df(client.get_xdxr_info(market, code))
+            client = self._ensure_client()
+            data = client.to_df(client.get_xdxr_info(market, code))
             if len(data) > 0:
                 data.loc[:, "date"] = (
                     data["year"].map(str)

@@ -8,7 +8,13 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    retry_if_result,
+    stop_after_attempt,
+    wait_random,
+)
 
 from chanlun import fun
 from chanlun.base import Market
@@ -35,6 +41,7 @@ class ExchangeTDXHK(Exchange):
 
         # 文件缓存
         self.fdb = FileCacheDB()
+        self._client = None
 
         try:
             # 选择最优的服务器，并保存到 cache 中
@@ -76,6 +83,22 @@ class ExchangeTDXHK(Exchange):
         self.connect_info = connect_info
         return connect_info
 
+    def _ensure_client(self):
+        """获取复用的 TDX 客户端连接"""
+        if self._client is None:
+            self._client = TdxExHq_API(raise_exception=True, auto_retry=True)
+            self._client.connect(self.connect_info["ip"], self.connect_info["port"])
+        return self._client
+
+    def _reset_client(self):
+        """关闭并重置客户端连接"""
+        if self._client is not None:
+            try:
+                self._client.disconnect()
+            except Exception:
+                pass
+            self._client = None
+
     def default_code(self):
         return "KH.00700"
 
@@ -93,6 +116,11 @@ class ExchangeTDXHK(Exchange):
             "1m": "1m",
         }
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random(min=1, max=5),
+        retry=retry_if_exception_type(TdxConnectionError),
+    )
     def all_stocks(self):
         """
         使用 通达信的方式获取所有股票代码
@@ -101,8 +129,8 @@ class ExchangeTDXHK(Exchange):
             return self.g_all_stocks
 
         __all_stocks = []
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+        client = self._ensure_client()
+        try:
             start_i = 0
             count = 1000
             market_map_short_names = {
@@ -113,6 +141,8 @@ class ExchangeTDXHK(Exchange):
                 for _i in instruments:
                     if _i["category"] != 2:
                         continue
+                    if _i["market"] not in market_map_short_names.keys():
+                        continue
                     __all_stocks.append(
                         {
                             "code": f"{market_map_short_names[_i['market']]}.{_i['code']}",
@@ -122,6 +152,11 @@ class ExchangeTDXHK(Exchange):
                 start_i += count
                 if len(instruments) < count:
                     break
+        except TdxConnectionError:
+            print("连接失败，重新选择最优服务器")
+            self._reset_client()
+            self.reset_tdx_ip()
+            raise
 
         self.g_all_stocks = __all_stocks
         # print(f"香港获取数量：{len(self.g_all_stocks)}")
@@ -178,35 +213,15 @@ class ExchangeTDXHK(Exchange):
 
         # _time_s = time.time()
         try:
-            client = TdxExHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.HK.value, code, frequency
-                )
-                if klines_df is None:
-                    # 获取 8*700 = 5600 条数据
-                    klines_df = pd.concat(
-                        [
-                            client.to_df(
-                                client.get_instrument_bars(
-                                    frequency_map[frequency],
-                                    market,
-                                    tdx_code,
-                                    (i - 1) * 700,
-                                    700,
-                                )
-                            )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    klines_df.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
-                    klines_df.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
+            client = self._ensure_client()
+            klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
+                Market.HK.value, code, frequency
+            )
+            if klines_df is None:
+                # 获取 8*700 = 5600 条数据
+                klines_df = pd.concat(
+                    [
+                        client.to_df(
                             client.get_instrument_bars(
                                 frequency_map[frequency],
                                 market,
@@ -215,14 +230,33 @@ class ExchangeTDXHK(Exchange):
                                 700,
                             )
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = klines_df.iloc[-1]["date"]
-                        klines_df = pd.concat([klines_df, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
+                        for i in range(1, args["pages"] + 1)
+                    ],
+                    axis=0,
+                    sort=False,
+                )
+                klines_df.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
+                klines_df.sort_values("date", inplace=True)
+            else:
+                for i in range(1, args["pages"] + 1):
+                    # print(f'{code} 使用缓存，更新获取第 {i} 页')
+                    _ks = client.to_df(
+                        client.get_instrument_bars(
+                            frequency_map[frequency],
+                            market,
+                            tdx_code,
+                            (i - 1) * 700,
+                            700,
+                        )
+                    )
+                    _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                    _ks.sort_values("date", inplace=True)
+                    new_start_dt = _ks.iloc[0]["date"]
+                    old_end_dt = klines_df.iloc[-1]["date"]
+                    klines_df = pd.concat([klines_df, _ks], ignore_index=True)
+                    # 如果请求的第一个时间大于缓存的最后一个时间，退出
+                    if old_end_dt >= new_start_dt:
+                        break
 
             # 删除重复数据
             klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
@@ -242,6 +276,7 @@ class ExchangeTDXHK(Exchange):
             return klines_df
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
+            self._reset_client()
             self.reset_tdx_ip()
 
         except Exception as e:
@@ -262,49 +297,43 @@ class ExchangeTDXHK(Exchange):
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        如果可以使用 富途 的接口，就用 富途的，否则就用 日线的 K线计算
-        使用 富途 的接口会很快，日线则很慢
-        获取日线的k线，并返回最后一根k线的数据
-        """
         ticks = {}
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            for _code in codes:
-                _market, _tdx_code = self.to_tdx_code(_code)
-                if _market is None:
-                    continue
-                _quote = client.get_instrument_quote(_market, _tdx_code)
-                # OrderedDict(
-                #     [('market', 1), ('code', '00700'), ('pre_close', 362.8000183105469), ('open', 372.20001220703125),
-                #      ('high', 374.8000183105469), ('low', 364.4000244140625), ('price', 367.6000061035156),
-                #      ('kaicang', 0), ('zongliang', 17784504), ('xianliang', 1189500), ('neipan', 8892299),
-                #      ('waipan', 8892205), ('chicang', 0), ('bid1', 0.0), ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0),
-                #      ('bid5', 0.0), ('bid_vol1', 0), ('bid_vol2', 0), ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0),
-                #      ('ask1', 0.0), ('ask2', 0.0), ('ask3', 0.0), ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 0),
-                #      ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0), ('ask_vol5', 0)])
-                if len(_quote) > 0:
-                    _quote = _quote[0]
-                    ticks[_code] = Tick(
-                        code=_code,
-                        last=_quote["price"],
-                        buy1=_quote["bid1"],
-                        sell1=_quote["ask1"],
-                        low=_quote["low"],
-                        high=_quote["high"],
-                        volume=_quote["zongliang"],
-                        open=_quote["open"],
-                        rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["price"] > 0
-                            else 0
-                        ),
-                    )
+        client = self._ensure_client()
+        for _code in codes:
+            _market, _tdx_code = self.to_tdx_code(_code)
+            if _market is None:
+                continue
+            _quote = client.get_instrument_quote(_market, _tdx_code)
+            # OrderedDict(
+            #     [('market', 1), ('code', '00700'), ('pre_close', 362.8000183105469), ('open', 372.20001220703125),
+            #      ('high', 374.8000183105469), ('low', 364.4000244140625), ('price', 367.6000061035156),
+            #      ('kaicang', 0), ('zongliang', 17784504), ('xianliang', 1189500), ('neipan', 8892299),
+            #      ('waipan', 8892205), ('chicang', 0), ('bid1', 0.0), ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0),
+            #      ('bid5', 0.0), ('bid_vol1', 0), ('bid_vol2', 0), ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0),
+            #      ('ask1', 0.0), ('ask2', 0.0), ('ask3', 0.0), ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 0),
+            #      ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0), ('ask_vol5', 0)])
+            if len(_quote) > 0:
+                _quote = _quote[0]
+                ticks[_code] = Tick(
+                    code=_code,
+                    last=_quote["price"],
+                    buy1=_quote["bid1"],
+                    sell1=_quote["ask1"],
+                    low=_quote["low"],
+                    high=_quote["high"],
+                    volume=_quote["zongliang"],
+                    open=_quote["open"],
+                    rate=(
+                        round(
+                            (_quote["price"] - _quote["pre_close"])
+                            / _quote["price"]
+                            * 100,
+                            2,
+                        )
+                        if _quote["price"] > 0
+                        else 0
+                    ),
+                )
         return ticks
 
     def now_trading(self):
@@ -386,8 +415,8 @@ class ExchangeTDXHK(Exchange):
 
 if __name__ == "__main__":
     ex = ExchangeTDXHK()
-    # stocks = ex.all_stocks()
-    # print(len(stocks))
+    stocks = ex.all_stocks()
+    print(len(stocks))
     # print(stocks)
     #
     # print(ex.to_tdx_code('KH.00700'))
