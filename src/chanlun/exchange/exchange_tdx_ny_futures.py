@@ -1,4 +1,4 @@
-import time
+import datetime
 import traceback
 from typing import Dict, List, Union
 
@@ -17,15 +17,15 @@ from tenacity import (
 from chanlun import fun
 from chanlun.base import Market
 from chanlun.db import db
-from chanlun.exchange.exchange import Exchange, Tick, convert_fx_kline_frequency
+from chanlun.exchange.exchange import Exchange, Tick
 from chanlun.file_db import FileCacheDB
 from chanlun.tools import tdx_best_ip as best_ip
 
 
 @fun.singleton
-class ExchangeTDXFX(Exchange):
+class ExchangeTDXNYFutures(Exchange):
     """
-    通达信外汇行情接口
+    通达信纽约期货行情接口
     """
 
     g_all_stocks = []
@@ -51,15 +51,13 @@ class ExchangeTDXFX(Exchange):
             self.market_maps = {}
             while True:
                 try:
-                    client = TdxExHq_API(
-                        multithread=True, raise_exception=True, auto_retry=True
-                    )
+                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
                     with client.connect(
                         self.connect_info["ip"], self.connect_info["port"]
                     ):
                         all_markets = client.get_markets()
                         for _m in all_markets:
-                            if _m["category"] == 4:
+                            if _m["category"] == 3 and _m["market"] in [16, 17]:
                                 self.market_maps[_m["short_name"]] = {
                                     "market": _m["market"],
                                     "category": _m["category"],
@@ -70,7 +68,7 @@ class ExchangeTDXFX(Exchange):
                     self.reset_tdx_ip()
         except Exception:
             print(traceback.format_exc())
-            print("通达信 外汇行情接口初始化失败，外汇行情不可用")
+            print("通达信 期货行情接口初始化失败，期货行情不可用")
 
     def reset_tdx_ip(self):
         """
@@ -85,9 +83,7 @@ class ExchangeTDXFX(Exchange):
     def _ensure_client(self):
         """获取复用的 TDX 客户端连接"""
         if self._client is None:
-            self._client = TdxExHq_API(
-                multithread=True, raise_exception=True, auto_retry=True
-            )
+            self._client = TdxExHq_API(raise_exception=True, auto_retry=True)
             self._client.connect(self.connect_info["ip"], self.connect_info["port"])
         return self._client
 
@@ -101,20 +97,17 @@ class ExchangeTDXFX(Exchange):
             self._client = None
 
     def default_code(self):
-        return "FX.USDEUR"
+        return "CO.GC00W"
 
     def support_frequencys(self):
         return {
             "y": "Y",
-            "q": "Q",
             "m": "M",
             "w": "W",
             "d": "D",
-            "4h": "4H",
             "60m": "60m",
             "30m": "30m",
             "15m": "15m",
-            "10m": "10m",
             "5m": "5m",
             "1m": "1m",
         }
@@ -126,7 +119,7 @@ class ExchangeTDXFX(Exchange):
     )
     def all_stocks(self):
         """
-        使用 通达信的方式获取所有外汇代码
+        使用 通达信的方式获取所有股票代码
         """
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
@@ -143,7 +136,7 @@ class ExchangeTDXFX(Exchange):
                 instruments = client.get_instrument_info(start_i, count)
                 for _i in instruments:
                     if (
-                        _i["category"] != 4
+                        _i["category"] != 3
                         or _i["market"] not in market_map_short_names.keys()
                     ):
                         continue
@@ -157,23 +150,27 @@ class ExchangeTDXFX(Exchange):
                 start_i += count
                 if len(instruments) < count:
                     break
-
-            self.g_all_stocks = __all_stocks
-            # print(f"获取数量：{len(self.g_all_stocks)}")
-
-            return self.g_all_stocks
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
             self._reset_client()
             self.reset_tdx_ip()
             raise
 
+        # 获取 tick ，如果没有tick 的，则不显示code
+        ticks = self.all_ticks()
+        tick_codes = [_c for _c, _t in ticks.items()]
+        __all_stocks = [_s for _s in __all_stocks if _s["code"] in tick_codes]
+
+        self.g_all_stocks = __all_stocks
+        # print(f"期货获取数量：{len(self.g_all_stocks)}")
+
+        return self.g_all_stocks
+
     def to_tdx_code(self, code):
         """
         转换为 tdx 对应的代码
         """
-        code_str = str(code)
-        code_infos = code_str.split(".")
+        code_infos = code.split(".")
         market_info = self.market_maps[code_infos[0]]
         return market_info["market"], code_infos[1]
 
@@ -196,7 +193,7 @@ class ExchangeTDXFX(Exchange):
         if args is None:
             args = {}
         if "pages" not in args.keys():
-            args["pages"] = 10
+            args["pages"] = 8
         else:
             args["pages"] = int(args["pages"])
 
@@ -206,11 +203,9 @@ class ExchangeTDXFX(Exchange):
             "m": 6,
             "w": 5,
             "d": 9,
-            "4h": 3,
             "60m": 3,
             "30m": 2,
             "15m": 1,
-            "10m": 0,
             "5m": 0,
             "1m": 8,
         }
@@ -219,11 +214,11 @@ class ExchangeTDXFX(Exchange):
             print("不支持的调用参数")
             return None
 
-        _s_time = time.time()
+        # _time_s = time.time()
         try:
             client = self._ensure_client()
             klines: pd.DataFrame = self.fdb.get_tdx_klines(
-                Market.FX.value, code, frequency
+                Market.NY_FUTURES.value, code, frequency
             )
             if klines is None:
                 # 获取 8*700 = 5600 条数据
@@ -246,6 +241,9 @@ class ExchangeTDXFX(Exchange):
                 if len(klines) == 0:
                     return pd.DataFrame([])
                 klines.loc[:, "date"] = pd.to_datetime(klines["datetime"])
+                klines["date"] = klines.apply(
+                    lambda x: self.fix_yp_date(code, x["date"]), axis=1
+                )
                 klines.sort_values("date", inplace=True)
             else:
                 for i in range(1, args["pages"] + 1):
@@ -260,6 +258,9 @@ class ExchangeTDXFX(Exchange):
                         )
                     )
                     _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
+                    _ks["date"] = _ks.apply(
+                        lambda x: self.fix_yp_date(code, x["date"]), axis=1
+                    )
                     _ks.sort_values("date", inplace=True)
                     new_start_dt = _ks.iloc[0]["date"]
                     old_end_dt = klines.iloc[-1]["date"]
@@ -270,20 +271,20 @@ class ExchangeTDXFX(Exchange):
 
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
-            self.fdb.save_tdx_klines(Market.FX.value, code, frequency, klines)
+            self.fdb.save_tdx_klines(Market.NY_FUTURES.value, code, frequency, klines)
 
             klines.loc[:, "code"] = code
             klines.loc[:, "volume"] = klines["trade"]
-            klines.loc[:, "date"] = pd.to_datetime(klines["datetime"]).dt.tz_localize(
+            klines.loc[:, "date"] = pd.to_datetime(klines["date"]).dt.tz_localize(
                 self.tz
             )
+            klines.sort_values("date", inplace=True)
+
+            # if frequency in {"y", "q", "m", "w", "d"}:
+            #     klines["date"] = klines["date"].apply(self.__convert_date)
 
             # 将 volume 转换成 float类型
             klines[["volume"]] = klines[["volume"]].astype(float)
-
-            # 转换时间周期
-            if frequency in ["4h"]:
-                klines = convert_fx_kline_frequency(klines, frequency)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
         except TdxConnectionError:
@@ -297,9 +298,18 @@ class ExchangeTDXFX(Exchange):
             # print(f'请求行情用时：{time.time() - _s_time}')
         return None
 
+    @staticmethod
+    def fix_yp_date(code: str, dt: datetime.datetime):
+        """
+        修复夜盘的时间，tdx将夜盘的时间归类到了第二天，修复为前一天
+        """
+        if dt.hour in [0, 1, 2, 3, 4, 5]:
+            dt = dt + datetime.timedelta(days=1)
+        return dt
+
     def stock_info(self, code: str) -> Union[Dict, None]:
         """
-        获取标的名称
+        获取股票名称
         """
         all_stock = self.all_stocks()
         stock = [_s for _s in all_stock if _s["code"] == code]
@@ -315,6 +325,13 @@ class ExchangeTDXFX(Exchange):
             if _market is None:
                 continue
             _quote = client.get_instrument_quote(_market, _tdx_code)
+            # [OrderedDict([('market', 1), ('code', 'FG2305'), ('pre_close', 1546.0), ('open', 1548.0),
+            # ('high', 1558.0), ('low', 1536.0), ('price', 1543.0), ('kaicang', 341886), ('zongliang', 367292),
+            # ('xianliang', 1), ('neipan', 192905), ('waipan', 174387), ('chicang', 993096), ('bid1', 1543.0),
+            # ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0), ('bid5', 0.0), ('bid_vol1', 903), ('bid_vol2', 0),
+            # ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0), ('ask1', 1544.0), ('ask2', 0.0), ('ask3', 0.0),
+            # ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 512), ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0),
+            # ('ask_vol5', 0)])]
             if len(_quote) > 0:
                 _quote = _quote[0]
                 ticks[_code] = Tick(
@@ -339,11 +356,64 @@ class ExchangeTDXFX(Exchange):
                 )
         return ticks
 
+    def all_ticks(self) -> Dict[str, Tick]:
+        ticks = {}
+        client = self._ensure_client()
+        for _name, _mc in self.market_maps.items():
+            _quotes = []
+            _req_start = 0
+            while True:
+                _qs = client.get_instrument_quote_list(
+                    _mc["market"],
+                    _mc["category"],
+                    start=_req_start,
+                    count=_req_start + 80,
+                )
+                _quotes.extend(_qs)
+                _req_start += 80
+                if len(_qs) < 80:
+                    break
+            for _quote in _quotes:
+                # OrderedDict([('market', 28), ('code', 'MA2509'),
+                # ('BiShu', 10569), ('ZuoJie', 2262.0), ('JinKai', 2260.0), ('ZuiGao', 2266.0), ('ZuiDi', 2242.0), ('MaiChu', 2258.0), ('KaiCang', 262905),
+                # ('ZongLiang', 254179), ('XianLiang', 2), ('ZongJinE', 5730089472.0), ('NeiPan', 128701), ('WaiPan', 125478),
+                # ('ChiCangLiang', 674677), ('MaiRuJia', 2257.0), ('MaiRuLiang', 72), ('MaiChuJia', 2258.0), ('MaiChuLiang', 25)])
+
+                if _quote["MaiChu"] == 0.0 or _quote["ZongLiang"] == 0.0:
+                    continue
+
+                ticks[f"{_name}.{_quote['code']}"] = Tick(
+                    code=f"{_name}.{_quote['code']}",
+                    last=_quote["MaiChu"],
+                    buy1=_quote["MaiRuJia"],
+                    sell1=_quote["MaiChuJia"],
+                    low=_quote["ZuiDi"],
+                    high=_quote["ZuiGao"],
+                    volume=_quote["ZongLiang"],
+                    open=_quote["JinKai"],
+                    rate=(
+                        round(
+                            (_quote["MaiChu"] - _quote["ZuoJie"])
+                            / _quote["MaiChu"]
+                            * 100,
+                            2,
+                        )
+                        if _quote["MaiChu"] > 0
+                        else 0
+                    ),
+                )
+        return ticks
+
     def now_trading(self):
         """
         返回当前是否是交易时间
         """
         return True
+
+    @staticmethod
+    def __convert_date(dt: datetime.datetime):
+        # 通达信行情是后对其的，统一将 日以上级别的行情日期转换成 23点
+        return dt.replace(hour=0, minute=0)
 
     def balance(self):
         raise Exception("交易所不支持")
@@ -362,21 +432,33 @@ class ExchangeTDXFX(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeTDXFX()
+    ex = ExchangeTDXNYFutures()
+    # print(ex.market_maps)
     # stocks = ex.all_stocks()
     # print(len(stocks))
-    # print(stocks)
-    # print(ex.market_maps)
 
-    klines = ex.klines("FX.GBPEUR", "30m")
+    # for _s in stocks:
+    #     print(_s["code"], _s["name"])
+
+    # for s in stocks:
+    #     #     if "黄金" in s["name"]:
+    #     print(s)
+    # print(len(stocks))
+    # print(ex.market_maps)
+    # for s in stocks:
+    #     if '原油' in s["name"]:
+    #         print(s)
+
+    # print(ex.to_tdx_code('QS.ZN2306'))
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))
+    # for _code, _tick in ticks.items():
+    #     print(_code, _tick.last, _tick.volume)
+
+    klines = ex.klines("CO.GC00W", "30m")
     print(len(klines))
     print(klines)
-    print("-----------------")
-    klines = ex.klines("FX.GBPEUR", "60m")
-    print(len(klines))
-    print(klines)
-    print("-----------------")
-    klines = ex.klines("FX.GBPEUR", "4h")
-    print(len(klines))
-    print(klines)
-    print("-----------------")
+
+    # ticks = ex.all_ticks()
+    # print(len(ticks))
