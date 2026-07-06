@@ -4,7 +4,7 @@ from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from pytdx.errors import TdxConnectionError
+from pytdx.errors import TdxConnectionError, TdxFunctionCallError
 from pytdx.exhq import TdxExHq_API
 from tenacity import (
     retry,
@@ -64,7 +64,7 @@ class ExchangeTDXNYFutures(Exchange):
                                     "name": _m["name"],
                                 }
                     break
-                except TdxConnectionError:
+                except (TdxConnectionError, TdxFunctionCallError):
                     self.reset_tdx_ip()
         except Exception:
             print(traceback.format_exc())
@@ -115,7 +115,7 @@ class ExchangeTDXNYFutures(Exchange):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_random(min=1, max=5),
-        retry=retry_if_exception_type(TdxConnectionError),
+        retry=retry_if_exception_type((TdxConnectionError, TdxFunctionCallError)),
     )
     def all_stocks(self):
         """
@@ -150,7 +150,7 @@ class ExchangeTDXNYFutures(Exchange):
                 start_i += count
                 if len(instruments) < count:
                     break
-        except TdxConnectionError:
+        except (TdxConnectionError, TdxFunctionCallError):
             print("连接失败，重新选择最优服务器")
             self._reset_client()
             self.reset_tdx_ip()
@@ -287,7 +287,7 @@ class ExchangeTDXNYFutures(Exchange):
             klines[["volume"]] = klines[["volume"]].astype(float)
 
             return klines[["code", "date", "open", "close", "high", "low", "volume"]]
-        except TdxConnectionError:
+        except (TdxConnectionError, TdxFunctionCallError):
             self._reset_client()
             self.reset_tdx_ip()
         except Exception as e:
