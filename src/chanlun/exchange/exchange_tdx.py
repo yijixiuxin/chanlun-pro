@@ -36,6 +36,7 @@ class ExchangeTDX(Exchange):
             # 选择最优的服务器，并保存到 cache 中
             self.connect_info = db.cache_get("tdx_connect_ip")
             # self.connect_info = None  # 手动重新选择最优服务器
+            # self.connect_info = {"ip": "60.12.136.250", "port": 7709}  # 手动指定服务器
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
                 # print(f"最优服务器：{self.connect_info}")
