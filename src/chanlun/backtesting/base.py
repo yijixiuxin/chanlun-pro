@@ -193,7 +193,7 @@ class MarketDatas(ABC):
     def last_k_info(self, code) -> dict:
         """
         获取最后一根K线数据，根据 frequencys 最后一个 小周期获取数据
-        return dict {'date', 'open', 'close', 'high', 'low'}
+        return dict {'date', 'open', 'close', 'high', 'low', 'volume'}
         """
 
     @abstractmethod

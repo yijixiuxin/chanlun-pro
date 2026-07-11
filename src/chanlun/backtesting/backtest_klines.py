@@ -154,6 +154,7 @@ class BackTestKlines(MarketDatas):
             "close": float(kline.iloc[-1]["close"]),
             "high": float(kline.iloc[-1]["high"]),
             "low": float(kline.iloc[-1]["low"]),
+            "volume": float(kline.iloc[-1]["volume"]),
         }
 
     def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
