@@ -36,10 +36,10 @@ class ExchangeTDX(Exchange):
             # 选择最优的服务器，并保存到 cache 中
             self.connect_info = db.cache_get("tdx_connect_ip")
             # self.connect_info = None  # 手动重新选择最优服务器
-            # self.connect_info = {"ip": "60.12.136.250", "port": 7709}  # 手动指定服务器
+            # self.connect_info = {"ip": "180.153.18.170", "port": 7709}  # 手动指定服务器
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
-                # print(f"最优服务器：{self.connect_info}")
+            # print(f"最优服务器：{self.connect_info}")
         except Exception:
             print(traceback.format_exc())
             print("通达信 沪深行情接口初始化失败，沪深行情不可用")
@@ -771,7 +771,7 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.512800", "d")
+    klines = ex.klines("SH.600519", "d")
     print(klines.tail(20))
 
     # stock = ex.stock_info("SH.512800")
