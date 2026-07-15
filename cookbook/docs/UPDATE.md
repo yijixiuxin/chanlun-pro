@@ -2,6 +2,19 @@
 
 ---
 
+### 2026-07-15
+
+> 数据库变更语句：
+
+```
+ALTER TABLE `cl_alert_task`
+	ADD COLUMN `check_bi_status` VARCHAR(50) NULL DEFAULT NULL COMMENT '检查笔的状态' AFTER `check_bi_mmd`;
+```
+
+* 新增 报警设置的笔状态过滤，可选择 未完成/已完成/停顿 三种状态进行提醒
+
+---
+
 ### 2026-07-10
 
 * 新增 通达信量化版本行情，但是目前不支持盘中实时的分钟数据

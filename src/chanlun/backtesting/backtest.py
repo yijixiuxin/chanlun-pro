@@ -610,6 +610,7 @@ class BackTest:
             and show_cl_config["not_show_lock_order"]
         ):
             orders = [o for o in orders if "锁仓" not in o["info"]]
+        orders = [o for o in orders if "无效" not in o["info"]]  # 过滤无效订单
         render = kcharts.render_charts(
             title, cd, to_frequency=to_frequency, orders=orders, config=show_cl_config
         )

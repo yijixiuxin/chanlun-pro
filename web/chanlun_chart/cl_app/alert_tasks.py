@@ -86,6 +86,9 @@ class AlertTasks(object):
                         "bi_types": alert_config.check_bi_type.split(","),
                         "bi_beichi": alert_config.check_bi_beichi.split(","),
                         "bi_mmd": alert_config.check_bi_mmd.split(","),
+                        "bi_status": alert_config.check_bi_status.split(",")
+                        if alert_config.check_bi_status
+                        else [],
                         "xd_types": alert_config.check_xd_type.split(","),
                         "xd_beichi": alert_config.check_xd_beichi.split(","),
                         "xd_mmd": alert_config.check_xd_mmd.split(","),

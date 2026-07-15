@@ -91,6 +91,7 @@ class TableByAlertTask(Base):
     check_xd_type = Column(String(20), comment="检查线段的类型")  # 检查线段的类型
     check_xd_beichi = Column(String(200), comment="检查线段的背驰")  # 检查线段的背驰
     check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
+    check_bi_status = Column(String(50), comment="检查笔的状态")  # 检查笔的状态
     check_idx_ma_info = Column(String(200), comment="检查指数的均线")
     check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
     is_run = Column(Integer, comment="是否运行")  # 是否运行
@@ -774,6 +775,7 @@ class DB(object):
         check_xd_type: str,
         check_xd_beichi: str,
         check_xd_mmd: str,
+        check_bi_status: str,
         check_idx_ma_info: str,
         check_idx_macd_info: str,
         is_run: int,
@@ -794,6 +796,7 @@ class DB(object):
                     check_xd_type=check_xd_type,
                     check_xd_beichi=check_xd_beichi,
                     check_xd_mmd=check_xd_mmd,
+                    check_bi_status=check_bi_status,
                     check_idx_ma_info=check_idx_ma_info,
                     check_idx_macd_info=check_idx_macd_info,
                     is_run=is_run,
@@ -840,6 +843,7 @@ class DB(object):
         check_xd_type: str,
         check_xd_beichi: str,
         check_xd_mmd: str,
+        check_bi_status: str,
         check_idx_ma_info: str,
         check_idx_macd_info: str,
         is_run: int,
@@ -861,6 +865,7 @@ class DB(object):
                     TableByAlertTask.check_xd_type: check_xd_type,
                     TableByAlertTask.check_xd_beichi: check_xd_beichi,
                     TableByAlertTask.check_xd_mmd: check_xd_mmd,
+                    TableByAlertTask.check_bi_status: check_bi_status,
                     TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
                     TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
                     TableByAlertTask.is_run: is_run,
