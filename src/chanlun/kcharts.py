@@ -87,12 +87,14 @@ def render_charts(
         "chart_show_ma": True,
         "chart_show_ama": True,
         "chart_show_boll": False,
+        "chart_show_gmma": False,
         "chart_show_futu": "macd",
         "chart_show_ld": "xd",
         "chart_show_atr_stop_loss": False,
         # 指标配置项
         "chart_kline_nums": 1000,
         "chart_idx_ma_period": "120,250",
+        "chart_idx_gmma_period": "3,5,8,10,12,15,30,35,40,45,50,60",
         "chart_idx_vol_ma_period": "5,60",
         "chart_idx_boll_period": 20,
         "chart_idx_rsi_period": 14,
@@ -124,6 +126,7 @@ def render_charts(
                     "chart_show_ld",
                     "chart_idx_ama_ags",
                     "chart_kline_type",
+                    "chart_idx_gmma_period",
                 ]:
                     config[_k] = str(config[_k])
                 elif _k in ["chart_idx_atr_multiplier"]:
@@ -935,6 +938,54 @@ def render_charts(
                         is_symbol_show=False,
                         y_axis=ma,
                         linestyle_opts=opts.LineStyleOpts(width=2, color=ma_colors[i]),
+                        label_opts=opts.LabelOpts(is_show=False),
+                    )
+                    .set_global_opts()
+                )
+            )
+    if config["chart_show_gmma"]:
+        # GMMA (Guppy Multiple Moving Average) 短期组 + 长期组 EMA
+        gmma_periods = [int(p) for p in config["chart_idx_gmma_period"].split(",")]
+        short_term_periods = [p for p in gmma_periods if p <= 15]
+        long_term_periods = [p for p in gmma_periods if p > 15]
+        short_colors = [
+            "#FF6B6B", "#FF8E72", "#FFA07A", "#FFB347", "#FFC107", "#FFD700"
+        ]
+        long_colors = [
+            "#4FC3F7", "#29B6F6", "#03A9F4", "#039BE5", "#0288D1", "#0277BD"
+        ]
+        close_arr = np.array(klines["close"].tolist())
+        for i, period in enumerate(short_term_periods):
+            ema = talib.EMA(close_arr, timeperiod=period)
+            overlap_kline = overlap_kline.overlap(
+                (
+                    Line()
+                    .add_xaxis(xaxis_data=klines_xaxis)
+                    .add_yaxis(
+                        series_name=f"GMMA{period}",
+                        is_symbol_show=False,
+                        y_axis=ema,
+                        linestyle_opts=opts.LineStyleOpts(
+                            width=1, color=short_colors[i % len(short_colors)]
+                        ),
+                        label_opts=opts.LabelOpts(is_show=False),
+                    )
+                    .set_global_opts()
+                )
+            )
+        for i, period in enumerate(long_term_periods):
+            ema = talib.EMA(close_arr, timeperiod=period)
+            overlap_kline = overlap_kline.overlap(
+                (
+                    Line()
+                    .add_xaxis(xaxis_data=klines_xaxis)
+                    .add_yaxis(
+                        series_name=f"GMMA{period}",
+                        is_symbol_show=False,
+                        y_axis=ema,
+                        linestyle_opts=opts.LineStyleOpts(
+                            width=1, color=long_colors[i % len(long_colors)]
+                        ),
                         label_opts=opts.LabelOpts(is_show=False),
                     )
                     .set_global_opts()

@@ -133,6 +133,19 @@
             </div>
         </div>
         <div class="layui-form-item">
+            <label class="layui-form-label">笔状态</label>
+            <div class="layui-input-block" title="笔状态">
+
+                    <input type="checkbox" name="check_bi_status" {% if 'undo' in check_bi_status.split(',') %} checked {%
+                        endif %} value="undo" title="未完成" lay-filter="alert_config" />
+                    <input type="checkbox" name="check_bi_status" {% if 'done' in check_bi_status.split(',') %} checked {%
+                        endif %} value="done" title="已完成" lay-filter="alert_config" />
+                    <input type="checkbox" name="check_bi_status" {% if 'td' in check_bi_status.split(',') %} checked {%
+                        endif %} value="td" title="停顿" lay-filter="alert_config" />
+
+            </div>
+        </div>
+        <div class="layui-form-item">
             <label class="layui-form-label">线段方向</label>
             <div class="layui-input-block" title="笔方向">
                 

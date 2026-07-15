@@ -1183,6 +1183,7 @@ def create_app(test_config=None):
                 "check_bi_type": _l.check_bi_type,
                 "check_bi_beichi": _l.check_bi_beichi,
                 "check_bi_mmd": _l.check_bi_mmd,
+                "check_bi_status": _l.check_bi_status if _l.check_bi_status else "",
                 "check_xd_type": _l.check_xd_type,
                 "check_xd_beichi": _l.check_xd_beichi,
                 "check_xd_mmd": _l.check_xd_mmd,
@@ -1209,6 +1210,7 @@ def create_app(test_config=None):
             "check_bi_type": "up,down",
             "check_bi_beichi": "pz,qs",
             "check_bi_mmd": "",
+            "check_bi_status": "done,td",
             "check_xd_type": "up,down",
             "check_xd_beichi": "pz,qs",
             "check_xd_mmd": "",
@@ -1256,6 +1258,11 @@ def create_app(test_config=None):
                     "check_bi_type": _alert_config.check_bi_type,
                     "check_bi_beichi": _alert_config.check_bi_beichi,
                     "check_bi_mmd": _alert_config.check_bi_mmd,
+                    "check_bi_status": (
+                        _alert_config.check_bi_status
+                        if _alert_config.check_bi_status
+                        else ""
+                    ),
                     "check_xd_type": _alert_config.check_xd_type,
                     "check_xd_beichi": _alert_config.check_xd_beichi,
                     "check_xd_mmd": _alert_config.check_xd_mmd,
@@ -1346,6 +1353,7 @@ def create_app(test_config=None):
             "check_bi_type": request.form["check_bi_type"],
             "check_bi_beichi": request.form["check_bi_beichi"],
             "check_bi_mmd": request.form["check_bi_mmd"],
+            "check_bi_status": request.form["check_bi_status"],
             "check_xd_type": request.form["check_xd_type"],
             "check_xd_beichi": request.form["check_xd_beichi"],
             "check_xd_mmd": request.form["check_xd_mmd"],

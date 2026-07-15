@@ -53,6 +53,7 @@ def monitoring_code(
             "bi_types": [],
             "bi_beichi": [],
             "bi_mmd": [],
+            "bi_status": [],
             "xd_types": [],
             "xd_beichi": [],
             "xd_mmd": [],
@@ -103,35 +104,49 @@ def monitoring_code(
         end_xd = cd.get_xds()[-1] if len(cd.get_xds()) > 0 else None
         # 检查背驰和买卖点
         if end_bi.type in check_cl_types["bi_types"]:
-            jh_cl_msgs.extend(
-                {
-                    "type": f"笔 {end_bi.type} {bc_maps[bc_type]}",
-                    "frequency": frequency,
-                    "bi": end_bi,
-                    "bi_td": bi_td(end_bi, cd),
-                    "fx_ld": end_bi.end.ld(),
-                    "line_dt": end_bi.start.k.date,
-                    "k_date": cd.get_src_klines()[-1].date,
-                    "line_type": end_bi.type,
-                }
-                for bc_type in check_cl_types["bi_beichi"]
-                if end_bi.bc_exists([bc_type], "|")
-            )
+            # 笔状态过滤
+            if len(check_cl_types.get("bi_status", [])) > 0:
+                _bi_status_match = False
+                _bi_is_done = end_bi.is_done()
+                _bi_is_td = bi_td(end_bi, cd)
+                if "undo" in check_cl_types["bi_status"] and not _bi_is_done:
+                    _bi_status_match = True
+                if "done" in check_cl_types["bi_status"] and _bi_is_done:
+                    _bi_status_match = True
+                if "td" in check_cl_types["bi_status"] and _bi_is_td:
+                    _bi_status_match = True
+                if not _bi_status_match:
+                    end_bi = None  # 不匹配，跳过笔的提醒
+            if end_bi is not None:
+                jh_cl_msgs.extend(
+                    {
+                        "type": f"笔 {end_bi.type} {bc_maps[bc_type]}",
+                        "frequency": frequency,
+                        "bi": end_bi,
+                        "bi_td": bi_td(end_bi, cd),
+                        "fx_ld": end_bi.end.ld(),
+                        "line_dt": end_bi.start.k.date,
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": end_bi.type,
+                    }
+                    for bc_type in check_cl_types["bi_beichi"]
+                    if end_bi.bc_exists([bc_type], "|")
+                )
 
-            jh_cl_msgs.extend(
-                {
-                    "type": f"笔 {mmd_maps[mmd]}",
-                    "frequency": frequency,
-                    "bi": end_bi,
-                    "bi_td": bi_td(end_bi, cd),
-                    "fx_ld": end_bi.end.ld(),
-                    "line_dt": end_bi.start.k.date,
-                    "k_date": cd.get_src_klines()[-1].date,
-                    "line_type": end_bi.type,
-                }
-                for mmd in check_cl_types["bi_mmd"]
-                if end_bi.mmd_exists([mmd], "|")
-            )
+                jh_cl_msgs.extend(
+                    {
+                        "type": f"笔 {mmd_maps[mmd]}",
+                        "frequency": frequency,
+                        "bi": end_bi,
+                        "bi_td": bi_td(end_bi, cd),
+                        "fx_ld": end_bi.end.ld(),
+                        "line_dt": end_bi.start.k.date,
+                        "k_date": cd.get_src_klines()[-1].date,
+                        "line_type": end_bi.type,
+                    }
+                    for mmd in check_cl_types["bi_mmd"]
+                    if end_bi.mmd_exists([mmd], "|")
+                )
 
         if end_xd:
             # 检查背驰和买卖点
