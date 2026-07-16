@@ -271,7 +271,7 @@ def monitoring_code(
         ):
             fx_ld = f" FX:{jh['fx_ld']}" if "fx_ld" in jh.keys() else ""  # 分型力度
             msg = f"触发 {jh['type']} ({is_done} - {is_td}{fx_ld})"
-            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            send_msgs.append(f"【{code}:{name} - {jh['frequency']}】{msg}")
             # 添加数据库记录
             db.alert_record_save(
                 market,
@@ -305,7 +305,7 @@ def monitoring_code(
         if is_exists is None:
             # 之前没有，进行记录
             msg = f"触发 {jh['msg']}"
-            send_msgs.append(f"【{name} - {jh['frequency']}】{msg}")
+            send_msgs.append(f"【{code}:{name} - {jh['frequency']}】{msg}")
             db.alert_record_save(
                 market,
                 task_name,
