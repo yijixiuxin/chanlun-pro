@@ -72,23 +72,37 @@ class AlertTasks(object):
         self.log.info(
             f"执行 {alert_config.task_name} 警报提醒，获取 {alert_config.zx_group} 自选组中 {len(stocks)} 数量股票"
         )
+        # 颜色字典
+        color_dict = {
+            "#ff5722": "红色",
+            "#ffb800": "橙色",
+            "#16baaa": "绿色",
+            "#1e9fff": "蓝色",
+            "#a233c6": "紫色",
+        }
         for s in tqdm(stocks):
             try:
                 s: Dict[str, str] = s
                 cl_config = query_cl_chart_config(alert_config.market, s["code"])
+                # 股票名称加上自选中设置的颜色
+                stock_name = s["name"]
+                if s["color"] and s["color"] in color_dict.keys():
+                    stock_name += f"[{color_dict.get(s['color'])}]"
                 monitor.monitoring_code(
                     alert_config.task_name,
                     alert_config.market,
                     s["code"],
-                    s["name"],
+                    stock_name,
                     [alert_config.frequency],
                     check_cl_types={
                         "bi_types": alert_config.check_bi_type.split(","),
                         "bi_beichi": alert_config.check_bi_beichi.split(","),
                         "bi_mmd": alert_config.check_bi_mmd.split(","),
-                        "bi_status": alert_config.check_bi_status.split(",")
-                        if alert_config.check_bi_status
-                        else [],
+                        "bi_status": (
+                            alert_config.check_bi_status.split(",")
+                            if alert_config.check_bi_status
+                            else []
+                        ),
                         "xd_types": alert_config.check_xd_type.split(","),
                         "xd_beichi": alert_config.check_xd_beichi.split(","),
                         "xd_mmd": alert_config.check_xd_mmd.split(","),
