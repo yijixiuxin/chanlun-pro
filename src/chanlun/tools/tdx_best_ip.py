@@ -28,8 +28,8 @@ stock_ip = [
     # {"ip": "114.80.149.22", "port": 7709},
     # {"ip": "114.80.149.84", "port": 7709},
     # {"ip": "114.80.80.222", "port": 7709},
-    # {"ip": "115.238.56.198", "port": 7709},
-    # {"ip": "115.238.90.165", "port": 7709},
+    {"ip": "115.238.56.198", "port": 7709},
+    {"ip": "115.238.90.165", "port": 7709},
     # {"ip": "117.184.140.156", "port": 7709},
     # {"ip": "119.147.164.60", "port": 7709},
     # {"ip": "119.147.171.206", "port": 7709},
@@ -64,7 +64,7 @@ stock_ip = [
     # {"ip": "61.153.209.139", "port": 7709},
     # {"ip": "hq.cjis.cn", "port": 7709},
     # {"ip": "hq1.daton.com.cn", "port": 7709},
-    # {"ip": "jstdx.gtjas.com", "port": 7709},
+    {"ip": "jstdx.gtjas.com", "port": 7709},
     {"ip": "shtdx.gtjas.com", "port": 7709},
     {"ip": "sztdx.gtjas.com", "port": 7709},
     # {"ip": "113.105.142.162", "port": 7721},
@@ -108,7 +108,7 @@ stock_ip = [
     # {"ip": "116.205.163.254", "port": 7709, "name": "通达信广州双线主站5"},
     # {"ip": "116.205.171.132", "port": 7709, "name": "通达信广州双线主站6"},
     # {"ip": "116.205.183.150", "port": 7709, "name": "通达信广州双线主站7"},
-    {"ip": "129.211.70.79", "port": 7709, "name": "上海双线主站16"},
+    # {"ip": "129.211.70.79", "port": 7709, "name": "上海双线主站16"},
     {"ip": "159.75.55.232", "port": 7709, "name": "北京双线主站8"},
     # {"ip": "43.139.95.83", "port": 7709},
     # {"ip": "124.223.163.242", "port": 7709},
@@ -254,15 +254,15 @@ if __name__ == "__main__":
             print("IP 异常：", ip, e)
 
     # 测试扩展所有ip
-    for ip in future_ip:
-        try:
-            client = TdxExHq_API()
-            # print("Run Test : ", ip)
-            with client.connect(ip["ip"], ip["port"]):
-                klines = client.get_instrument_bars(9, 74, "AAPL", 0, 100)
-                if klines is None or len(klines) < 10:
-                    print("bad ip: ", ip)
-                else:
-                    print("good ip: ", ip)
-        except Exception as e:
-            print("IP 异常：", ip, e)
+    # for ip in future_ip:
+    #     try:
+    #         client = TdxExHq_API()
+    #         # print("Run Test : ", ip)
+    #         with client.connect(ip["ip"], ip["port"]):
+    #             klines = client.get_instrument_bars(9, 74, "AAPL", 0, 100)
+    #             if klines is None or len(klines) < 10:
+    #                 print("bad ip: ", ip)
+    #             else:
+    #                 print("good ip: ", ip)
+    #     except Exception as e:
+    #         print("IP 异常：", ip, e)

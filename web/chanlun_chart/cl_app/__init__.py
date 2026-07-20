@@ -23,7 +23,7 @@ from apscheduler.events import (
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, redirect, render_template, request, send_file, session
+from flask import Flask, redirect, render_template, request, send_file
 from flask_login import LoginManager, UserMixin, login_required, login_user
 from tzlocal import get_localzone
 
