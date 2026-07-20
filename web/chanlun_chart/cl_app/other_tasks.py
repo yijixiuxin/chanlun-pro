@@ -1,8 +1,8 @@
-import datetime
-
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from chanlun.exchange.stocks_bkgn import StocksBKGN
+
+from .check_chart_loss_alert import check_and_alert
 
 
 class OtherTasks:
@@ -12,6 +12,20 @@ class OtherTasks:
         self.stock_bkgn = StocksBKGN()
 
         self.run_task()
+
+        self.run_check_and_alert()
+
+    def run_check_and_alert(self):
+        """
+        每 300 秒检查一次止损线并报警
+        """
+        self.scheduler.add_job(
+            check_and_alert,
+            trigger="interval",
+            seconds=300,
+            id="check_and_alert",
+            name="检查止损线并报警",
+        )
 
     def run_task(self):
         # 东方财富抓取的不好用了，建议直接用通达信本地的方式

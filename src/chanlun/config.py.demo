@@ -147,6 +147,11 @@ FEISHU_KEYS = {
         "app_id": "cli_********",
         "app_secret": "TlQXy9Y7********",
     },
+    # 前端图表止损警报消息通道设置
+    "alert": {
+        "app_id": "cli_********",
+        "app_secret": "TlQXy9Y7********",
+    },
     "user_id": "86********",
     "enable_img": False,
 }
