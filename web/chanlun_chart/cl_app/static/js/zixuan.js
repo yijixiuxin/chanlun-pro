@@ -206,6 +206,14 @@ var ZiXuan = (function () {
             {
               title: "色彩",
               id: "color_6",
+              color: "#778899",
+              templet: function () {
+                return '<div class="layui-bg-gray">灰色</div>';
+              },
+            },
+            {
+              title: "色彩",
+              id: "color_7",
               color: "",
               templet: function () {
                 return '<div class="layui-bg-gray">清除颜色</div>';

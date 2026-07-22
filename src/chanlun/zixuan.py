@@ -1,8 +1,7 @@
-from typing import List, Dict
+from typing import Dict, List
 
 from chanlun.base import Market
 from chanlun.db import db
-
 from chanlun.exchange import get_exchange
 
 
@@ -85,6 +84,7 @@ class ZiXuan(object):
         #16baaa  绿色
         #1e9fff  蓝色
         #a233c6  紫色
+        #778899  灰色
 
         """
         if zx_group not in self.zx_names:
