@@ -79,6 +79,7 @@ class AlertTasks(object):
             "#16baaa": "绿色",
             "#1e9fff": "蓝色",
             "#a233c6": "紫色",
+            "#778899": "灰色",
         }
         for s in tqdm(stocks):
             try:

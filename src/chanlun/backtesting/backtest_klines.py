@@ -31,7 +31,7 @@ class BackTestKlines(MarketDatas):
         """
         配置初始化
         :param market: 市场 支持 a hk currency
-        :param frequencys:
+        :param frequencys: 周期由大到小 ，如 ['w', 'd', '30m', '5m']
         :param start_date:
         :param end_date:
         """

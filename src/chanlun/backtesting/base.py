@@ -174,7 +174,7 @@ class MarketDatas(ABC):
         初始化
         """
         self.market = market
-        self.frequencys = frequencys
+        self.frequencys = frequencys  # 周期由大到小，例如 ['d', '30m', '5m', '1m']
         self.cl_config = cl_config
 
         # 按照 code_frequency 进行索引保存，存储周期对应的缠论数据
