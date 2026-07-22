@@ -233,3 +233,7 @@ def check_and_alert():
             logger.error(traceback.format_exc())
 
     # logger.info("Stop-loss check cycle completed")
+
+
+if __name__ == '__main__':
+    print(get_stop_loss_lines())

@@ -597,16 +597,6 @@
           let is_open = data.show; // 得到当前面板的展开状态，true or false
           let ca_title = $(data.title).attr("data-ca-title"); // 得到当前点击面板的标题区域对象
 
-          if (ca_title === "自选组") {
-            if (is_open) {
-              interval_update_rates = setInterval(
-                ZiXuan.stocks_update_rate(),
-                30000,
-              );
-            } else {
-              clearInterval(interval_update_rates);
-            }
-          }
           if (ca_title === "监控提醒") {
             if (is_open) {
               Alert.init();
@@ -758,10 +748,11 @@
           });
         }
         ZiXuan.render_zixuan_opts();
+        interval_update_rates = setInterval(ZiXuan.stocks_update_rate, 10000);
       }
 
       init_web();
-      interval_update_rates = setInterval(ZiXuan.stocks_update_rate(), 30000);
+      
     });
   </script>
 </html>
