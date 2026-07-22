@@ -46,6 +46,7 @@ var ZiXuan = (function () {
         codes.push($(this).data("code"));
       });
       if (codes.length === 0) {
+        console.log("没有自选股票");
         return true;
       }
       layui.use(["laytpl"], function () {
@@ -79,6 +80,7 @@ var ZiXuan = (function () {
             }
             let now_trading = ticks["now_trading"];
             if (now_trading !== true) {
+              console.log("停止更新自选列表涨跌幅");
               clearInterval(interval_update_rates);
             }
           },
@@ -270,6 +272,7 @@ var ZiXuan = (function () {
                       },
                       true
                     );
+                    ZiXuan.stocks_update_rate();
                   },
                 });
               } else if (
@@ -291,6 +294,7 @@ var ZiXuan = (function () {
                   success: function (res) {
                     // 再重新请求一遍自选列表，刷新
                     ZiXuan.render_zixuan_stocks();
+                    ZiXuan.stocks_update_rate();
                   },
                 });
               } else if (menuData["id"] === "dfcf") {
