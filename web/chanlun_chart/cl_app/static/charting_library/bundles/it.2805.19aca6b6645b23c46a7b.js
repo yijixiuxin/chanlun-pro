@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[2805],{31069(e){e.exports={en:["flip bars pattern"],it:["rovesciamento pattern a barre"]}},88584(e){e.exports={en:["mirror bars pattern"],it:["replica pattern a barre"]}},74934(e){e.exports={en:["Flipped"],it:["Invertita"]}},67769(e){e.exports={en:["Mirrored"],it:["Riflesso"]}}}]);

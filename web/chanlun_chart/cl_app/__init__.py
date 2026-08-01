@@ -72,7 +72,7 @@ def create_app(test_config=None):
             EVENT_JOB_ERROR: "执行异常",
             EVENT_JOB_MISSED: "未执行",
         }
-        if event.code not in state_map.keys():
+        if event.code not in state_map:
             return
         if hasattr(event, "job_id"):
             job_id = event.job_id
@@ -470,7 +470,7 @@ def create_app(test_config=None):
 
         if firstDataRequest == "false":
             # 判断在 5 秒内，同一个请求大于 5 次，返回 no_data
-            if _symbol_res_old_k_time_key not in __history_req_counter.keys():
+            if _symbol_res_old_k_time_key not in __history_req_counter:
                 __history_req_counter[_symbol_res_old_k_time_key] = {
                     "counter": 0,
                     "tm": now_time,
@@ -542,7 +542,7 @@ def create_app(test_config=None):
         # __log.info(f'{code} - {frequency} to tv chart data time : {time.time() - s_time}')
 
         # 根据 from_time 和 to_time 来获取对应的K线数据
-        if firstDataRequest == "false":
+        if firstDataRequest == "false" and "currency" not in market:
             _t = cl_chart_data["t"][-10:]
             _c = cl_chart_data["c"][-10:]
             _o = cl_chart_data["o"][-10:]

@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[4335],{31729:e=>{e.exports={en:["days"],ko:["날"]}},9:e=>{e.exports={en:["hours"],ko:["시"]}},54651:e=>{e.exports={en:["months"],ko:["달"]}},43757:e=>{e.exports={en:["minutes"],ko:["분"]}},48374:e=>{e.exports={en:["weeks"],ko:["주"]}},40910:e=>{e.exports={en:["View Only Mode"],ko:["뷰 온리 모드"]}}}]);

@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[9343,5577],{54910:e=>{e.exports={en:["Close menu"],zh_TW:["關閉選單"]}},99529:e=>{e.exports={en:["Add to favorites"],zh_TW:["加入收藏"]}},46936:e=>{e.exports={en:["Mixed"],zh_TW:["混合的"]}},52127:e=>{e.exports={en:["Search"],zh_TW:["搜尋"]}},16590:e=>{e.exports={en:["Remove from favorites"],zh_TW:["從收藏移除"]}}}]);

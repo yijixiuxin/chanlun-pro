@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[2805],{31069(r){r.exports={en:["flip bars pattern"],ms_MY:["terbalikkan corak bar"]}},88584(r){r.exports={en:["mirror bars pattern"],ms_MY:["cerminkan corak bar"]}},74934(r){r.exports={en:["Flipped"],ms_MY:["Terbalik"]}},67769(r){r.exports={en:["Mirrored"],ms_MY:["Dicerminkan"]}}}]);

@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5753,8899],{3443:e=>{e.exports={en:["Add text"],de:["Text hinzufügen"]}},58899:e=>{e.exports={en:["change {title} text"],de:["{title} Text ändern"]}}}]);

@@ -8,29 +8,6 @@
 declare const LINESTYLE_DASHED = 2;
 declare const LINESTYLE_DOTTED = 1;
 declare const LINESTYLE_SOLID = 0;
-/* eslint-disable jsdoc/require-jsdoc */
-declare const dateFormatFunctions: {
-	readonly "qq 'yy": (date: Date, local: boolean) => string;
-	readonly "qq yyyy": (date: Date, local: boolean) => string;
-	readonly "dd MMM 'yy": (date: Date, local: boolean) => string;
-	readonly "MMM 'yy": (date: Date, local: boolean) => string;
-	readonly "MMM dd, yyyy": (date: Date, local: boolean) => string;
-	readonly "MMM d, yyyy": (date: Date, local: boolean) => string;
-	readonly "MMM yyyy": (date: Date, local: boolean) => string;
-	readonly "MMM dd": (date: Date, local: boolean) => string;
-	readonly "dd MMM": (date: Date, local: boolean) => string;
-	readonly "yyyy-MM-dd": (date: Date, local: boolean) => string;
-	readonly "yy-MM-dd": (date: Date, local: boolean) => string;
-	readonly "yy/MM/dd": (date: Date, local: boolean) => string;
-	readonly "yyyy/MM/dd": (date: Date, local: boolean) => string;
-	readonly "dd-MM-yyyy": (date: Date, local: boolean) => string;
-	readonly "dd-MM-yy": (date: Date, local: boolean) => string;
-	readonly "dd/MM/yy": (date: Date, local: boolean) => string;
-	readonly "dd/MM/yyyy": (date: Date, local: boolean) => string;
-	readonly "MM/dd/yy": (date: Date, local: boolean) => string;
-	readonly "MM/dd/yyyy": (date: Date, local: boolean) => string;
-};
-/* eslint-enable jsdoc/require-jsdoc */
 declare enum ColorType {
 	Solid = "solid",
 	Gradient = "gradient"
@@ -61,6 +38,10 @@ declare enum StopType {
 	TrailingStop = 1,
 	GuaranteedStop = 2
 }
+export declare const SaveChartError: {
+	readonly prototype: SaveChartError;
+	new (info: SaveChartErrorInfo): SaveChartError;
+};
 export declare const enum BottomWidgetBarMode {
 	Minimized = "minimized",
 	Normal = "normal",
@@ -425,6 +406,7 @@ export declare enum MarketStatus {
 	Open = "market",
 	Pre = "pre_market",
 	Post = "post_market",
+	Overnight = "night",
 	Close = "out_of_session",
 	Holiday = "holiday"
 }
@@ -572,6 +554,7 @@ export declare enum StandardFormatterName {
 	Pips = "pips",
 	Profit = "profit",
 	ProfitInInstrumentCurrency = "profitInInstrumentCurrency",
+	ProfitInInstrumentCurrencyFloored = "profitInInstrumentCurrencyFloored",
 	ProfitInPercent = "profitInPercent",
 	Side = "side",
 	PositionSide = "positionSide",
@@ -655,6 +638,9 @@ export declare enum VisibilityType {
  * @returns The build version string.
  */
 export declare function version(): string;
+export declare type DeepPartial<T> = {
+	[P in keyof T]?: T[P] extends (infer U)[] ? DeepPartial<U>[] : T[P] extends readonly (infer X)[] ? readonly DeepPartial<X>[] : DeepPartial<T[P]>;
+};
 /**
  * This is the generic type useful for declaring a nominal type,
  * which does not structurally matches with the base type and
@@ -672,7 +658,7 @@ export declare type Nominal<T, Name extends string> = T & { /* eslint-disable-ne
 	[Symbol.species]: Name;
 };
 /**
- * Override properties for the Abcd drawing tool.
+ * Override properties for the ABCD pattern drawing tool.
  */
 export interface AbcdLineToolOverrides {
 	/** Default value: `false` */
@@ -891,8 +877,6 @@ export interface AccountManagerInfo {
 	pages: AccountManagerPage[];
 	/** Optional list of statuses to be used in the orders filter. Default list is used if it hasn't been set. */
 	possibleOrderStatuses?: OrderStatus[];
-	/** Margin used */
-	marginUsed?: IWatchedValue<number>;
 	/**
 	 * A function for creating a custom [context menu](https://www.tradingview.com/charting-library-docs/latest/ui_elements/context-menu) for positions and orders in the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/).
 	 * @param contextMenuEvent - MouseEvent or TouchEvent object passed by a browser
@@ -1176,7 +1160,7 @@ export interface AdvanceDeclineIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Overrides for the 'Anchored VWAP' indicator.
+ * Overrides for the 'anchored VWAP' indicator.
  *
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
@@ -1288,7 +1272,7 @@ export interface AnchoredVWAPIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Anchoredvp drawing tool.
+ * Override properties for the anchored volume profile drawing tool.
  */
 export interface AnchoredvpLineToolOverrides {
 	/** Default value: `undefined` */
@@ -1319,7 +1303,7 @@ export interface AnchoredvpLineToolOverrides {
 	"linetoolanchoredvp.styles.developingVALow.color": string;
 }
 /**
- * Override properties for the Anchoredvwap drawing tool.
+ * Override properties for the anchored VWAP drawing tool.
  */
 export interface AnchoredvwapLineToolOverrides {
 	/** Default value: `#4caf50` */
@@ -1454,7 +1438,7 @@ export interface AnchoredvwapLineToolOverrides {
 	"linetoolanchoredvwap.styles.VWAP.transparency": number;
 }
 /**
- * Override properties for the Arc drawing tool.
+ * Override properties for the arc drawing tool.
  */
 export interface ArcLineToolOverrides {
 	/** Default value: `rgba(233, 30, 99, 0.2)` */
@@ -1547,7 +1531,7 @@ export interface AroonIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Arrow drawing tool.
+ * Override properties for the arrow drawing tool.
  */
 export interface ArrowLineToolOverrides {
 	/** Default value: `false` */
@@ -1600,7 +1584,7 @@ export interface ArrowLineToolOverrides {
 	"linetoolarrow.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Arrowmarkdown drawing tool.
+ * Override properties for the arrow mark down drawing tool.
  */
 export interface ArrowmarkdownLineToolOverrides {
 	/** Default value: `#CC2F3C` */
@@ -1617,7 +1601,7 @@ export interface ArrowmarkdownLineToolOverrides {
 	"linetoolarrowmarkdown.showLabel": boolean;
 }
 /**
- * Override properties for the Arrowmarker drawing tool.
+ * Override properties for the arrow marker drawing tool.
  */
 export interface ArrowmarkerLineToolOverrides {
 	/** Default value: `#1E53E5` */
@@ -1632,7 +1616,7 @@ export interface ArrowmarkerLineToolOverrides {
 	"linetoolarrowmarker.textColor": string;
 }
 /**
- * Override properties for the Arrowmarkleft drawing tool.
+ * Override properties for the arrow mark left drawing tool.
  */
 export interface ArrowmarkleftLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -1649,7 +1633,7 @@ export interface ArrowmarkleftLineToolOverrides {
 	"linetoolarrowmarkleft.showLabel": boolean;
 }
 /**
- * Override properties for the Arrowmarkright drawing tool.
+ * Override properties for the arrow mark right drawing tool.
  */
 export interface ArrowmarkrightLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -1666,7 +1650,7 @@ export interface ArrowmarkrightLineToolOverrides {
 	"linetoolarrowmarkright.showLabel": boolean;
 }
 /**
- * Override properties for the Arrowmarkup drawing tool.
+ * Override properties for the arrow mark up drawing tool.
  */
 export interface ArrowmarkupLineToolOverrides {
 	/** Default value: `#089981` */
@@ -1803,7 +1787,7 @@ export interface BalanceofPowerIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Balloon drawing tool.
+ * Override properties for the balloon drawing tool.
  */
 export interface BalloonLineToolOverrides {
 	/** Default value: `rgba(156, 39, 176, 0.7)` */
@@ -1854,7 +1838,7 @@ export interface BarStylePreferences {
 	thinBars: boolean;
 }
 /**
- * Override properties for the Barspattern drawing tool.
+ * Override properties for the bars pattern drawing tool.
  */
 export interface BarspatternLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -1905,7 +1889,7 @@ export interface BaselineStylePreferences {
 	baseLevelPercentage: number;
 }
 /**
- * Override properties for the Beziercubic drawing tool.
+ * Override properties for the Bezier cubic drawing tool.
  */
 export interface BeziercubicLineToolOverrides {
 	/** Default value: `rgba(103, 58, 183, 0.2)` */
@@ -1930,7 +1914,7 @@ export interface BeziercubicLineToolOverrides {
 	"linetoolbeziercubic.transparency": number;
 }
 /**
- * Override properties for the Bezierquadro drawing tool.
+ * Override properties for the Bezier quadro drawing tool.
  */
 export interface BezierquadroLineToolOverrides {
 	/** Default value: `rgba(41, 98, 255, 0.2)` */
@@ -2297,8 +2281,9 @@ export interface BrokerConfigFlags {
 	 */
 	supportModifyTrailingStop?: boolean;
 	/**
-	 * Allows margin.
-	 * If `supportMargin` is set to `true`, you should call {@link IBrokerConnectionAdapterHost.marginAvailableUpdate} when the Trading Platform subscribes to margin available updates using {@link IBrokerTerminal.subscribeMarginAvailable}.
+	 * Enables the margin meter in the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#enable-margin-meter), which visually indicates how much available margin an order will use.
+	 * When set to `true`, you must implement {@link IBrokerTerminal.subscribeMarginAvailable} and provide margin updates via {@link IBrokerConnectionAdapterHost.marginAvailableUpdate}.
+	 * You should also return {@link InstrumentInfo.marginRate} from the {@link IBrokerTerminal.symbolInfo} method.
 	 * @default false
 	 */
 	supportMargin?: boolean;
@@ -2460,8 +2445,17 @@ export interface BrokerConfigFlags {
 	/**
 	 * Enables [multiple exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) (multiple take-profit and stop-loss orders) for a single parent order or position.
 	 * When enabled, the [Order Ticket](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket) allows users to *Add level* for brackets.
+	 * @default false
 	 */
 	supportMultipleExitLevels?: boolean;
+	/**
+	 * Enables support for unpaired [exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels)
+	 * within brackets.
+	 * Allows an exit level to consist of either a single bracket
+	 * (take-profit or stop-loss) or a paired combination of both.
+	 * @default false
+	 */
+	supportUnpairedExitLevels?: boolean;
 	/**
 	 * Allows brokers to add their own parameters that will be displayed in Order info.
 	 * @default false
@@ -2872,7 +2866,7 @@ export interface BrokerPositionOverrides {
 	"sell.disabled.text.textColor": string;
 }
 /**
- * Override properties for the Brush drawing tool.
+ * Override properties for the brush drawing tool.
  */
 export interface BrushLineToolOverrides {
 	/** Default value: `#00bcd4` */
@@ -2893,7 +2887,7 @@ export interface BrushLineToolOverrides {
 	"linetoolbrush.transparency": number;
 }
 /**
- * Override properties for the Callout drawing tool.
+ * Override properties for the callout drawing tool.
  */
 export interface CalloutLineToolOverrides {
 	/** Default value: `rgba(0, 151, 167, 0.7)` */
@@ -3468,7 +3462,7 @@ export interface ChartPropertiesOverrides {
 	 */
 	"mainSeriesProperties.style": ChartStyle;
 	/**
-	 * Displays the countdown to the bar closing on the price scale. Available only for [intraday](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/configure-datafeed-resolutions#resolution-in-minutes-intraday) resolutions.
+	 * Displays the countdown to the bar closing on the price scale.
 	 *
 	 * @default false
 	 */
@@ -4680,7 +4674,7 @@ export interface ChartingLibraryWidgetOptions {
 	 *     type: 'black',
 	 *     tools: [
 	 *         {
-	 *             name: 'Trend Line',
+	 *             name: 'Trendline',
 	 *             grayed: true
 	 *         },
 	 *     ]
@@ -5227,12 +5221,12 @@ export interface ChartingLibraryWidgetOptions {
 	 * It accepts the original text, the singular form of the text, and the translated text as arguments.
 	 * The function should return a string with the new translation or `null` to fall back to the default translation.
 	 *
-	 * The example below shows how to rename the "Trend Line" drawing to "Line Drawing".
+	 * The example below shows how to rename the "trendline" drawing to "line drawing".
 	 *
 	 * ```javascript
 	 * custom_translate_function: (originalText, singularOriginalText, translatedText) => {
-	 *     if (originalText === "Trend Line") {
-	 *         return "Line Drawing";
+	 *     if (originalText === "trendline") {
+	 *         return "line drawing";
 	 *     }
 	 *     return null;
 	 * }
@@ -5306,6 +5300,12 @@ export interface ChartingLibraryWidgetOptions {
 	 * By default images have no size limit and are saved in the chart layout which may not be suitable, depending on your chart storage implementation.
 	 */
 	image_storage_adapter?: IImageStorageAdapter;
+	/**
+	 * Configures whether the library should attempt to use a worker thread for supported internal chart workloads.
+	 *
+	 * When enabled, the library attempts to run chart calculations and processing, including indicator calculations, off the main thread. If the worker cannot be started, the library automatically falls back to the main-thread implementation.
+	 */
+	workers?: WorkersConfiguration;
 }
 export interface CheckboxFieldMetaInfo extends CustomFieldMetaInfoBase {
 	/** @inheritDoc */
@@ -5388,7 +5388,7 @@ export interface ChoppinessIndexIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Circle drawing tool.
+ * Override properties for the circle drawing tool.
  */
 export interface CircleLineToolOverrides {
 	/** Default value: `rgba(255, 152, 0, 0.2)` */
@@ -5414,7 +5414,7 @@ export interface ClientSnapshotOptions {
 	/** Border color */
 	borderColor: string;
 	/** Font */
-	font: string;
+	font?: string;
 	/** Size of font */
 	fontSize: number;
 	/** Legend Mode. */
@@ -5443,7 +5443,7 @@ export interface ColumnStylePreferences {
 	baselinePosition: ColumnStyleBaselinePosition;
 }
 /**
- * Override properties for the Comment drawing tool.
+ * Override properties for the comment drawing tool.
  */
 export interface CommentLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -6022,7 +6022,7 @@ export interface CrossHairMovedEventSourceValue {
 	value: string;
 }
 /**
- * Override properties for the Crossline drawing tool.
+ * Override properties for the crossline drawing tool.
  */
 export interface CrosslineLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -6338,7 +6338,7 @@ export interface CustomTimezoneInfo {
 	title: string;
 }
 /**
- * Override properties for the Cypherpattern drawing tool.
+ * Override properties for the cypher pattern drawing tool.
  */
 export interface CypherpatternLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -6470,7 +6470,7 @@ export interface DatafeedConfiguration {
 export interface DatafeedQuoteValues {
 	/**
 	 * Price change. It is usually calculated as a difference between the current price and close price of the previous day (regular session).
-	 * In the UI, `ch` and {@link chp} are represented as the last day change parameter in *Data Window*.
+	 * In the UI, `ch` and {@link chp} are represented as the last day change parameter in *data window*.
 	 * You can also display these values in the [legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
 	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
 	 *
@@ -6478,7 +6478,7 @@ export interface DatafeedQuoteValues {
 	 */
 	ch?: number;
 	/**
-	 * Price change percentage. In the UI, `chp` and {@link ch} are represented as the last day change parameter in *Data Window*.
+	 * Price change percentage. In the UI, `chp` and {@link ch} are represented as the last day change parameter in *data window*.
 	 * You can also display these values in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend#last-day-change-values).
 	 * If `ch` and `chp` are not provided, `0.00 (0.00%)` is displayed instead.
 	 *
@@ -6535,7 +6535,7 @@ export interface DatafeedSymbolType {
 	value: string;
 }
 /**
- * Override properties for the Dateandpricerange drawing tool.
+ * Override properties for the date and price range drawing tool.
  */
 export interface DateandpricerangeLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -6592,7 +6592,7 @@ export interface DateandpricerangeLineToolOverrides {
 	"linetooldateandpricerange.textColor": string;
 }
 /**
- * Override properties for the Daterange drawing tool.
+ * Override properties for the date range drawing tool.
  */
 export interface DaterangeLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -6769,7 +6769,7 @@ export interface DisconnectionInfo {
 	disconnectType?: DisconnectType;
 }
 /**
- * Override properties for the Disjointangle drawing tool.
+ * Override properties for the disjoint angle drawing tool.
  */
 export interface DisjointangleLineToolOverrides {
 	/** Default value: `rgba(8, 153, 129, 0.2)` */
@@ -7068,7 +7068,7 @@ export interface EldersForceIndexIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Elliottcorrection drawing tool.
+ * Override properties for the Elliott correction wave (ABC) drawing tool.
  */
 export interface ElliottcorrectionLineToolOverrides {
 	/** Default value: `#3d85c6` */
@@ -7081,7 +7081,7 @@ export interface ElliottcorrectionLineToolOverrides {
 	"linetoolelliottcorrection.showWave": boolean;
 }
 /**
- * Override properties for the Elliottdoublecombo drawing tool.
+ * Override properties for the Elliott double combo wave (WXY) drawing tool.
  */
 export interface ElliottdoublecomboLineToolOverrides {
 	/** Default value: `#6aa84f` */
@@ -7094,7 +7094,7 @@ export interface ElliottdoublecomboLineToolOverrides {
 	"linetoolelliottdoublecombo.showWave": boolean;
 }
 /**
- * Override properties for the Elliottimpulse drawing tool.
+ * Override properties for the Elliott impulse wave (12345) drawing tool.
  */
 export interface ElliottimpulseLineToolOverrides {
 	/** Default value: `#3d85c6` */
@@ -7107,7 +7107,7 @@ export interface ElliottimpulseLineToolOverrides {
 	"linetoolelliottimpulse.showWave": boolean;
 }
 /**
- * Override properties for the Elliotttriangle drawing tool.
+ * Override properties for the Elliott triangle wave (ABCDE) drawing tool.
  */
 export interface ElliotttriangleLineToolOverrides {
 	/** Default value: `#FF9800` */
@@ -7120,7 +7120,7 @@ export interface ElliotttriangleLineToolOverrides {
 	"linetoolelliotttriangle.showWave": boolean;
 }
 /**
- * Override properties for the Elliotttriplecombo drawing tool.
+ * Override properties for the Elliott triple combo wave (WXYXZ) drawing tool.
  */
 export interface ElliotttriplecomboLineToolOverrides {
 	/** Default value: `#6aa84f` */
@@ -7133,7 +7133,7 @@ export interface ElliotttriplecomboLineToolOverrides {
 	"linetoolelliotttriplecombo.showWave": boolean;
 }
 /**
- * Override properties for the Ellipse drawing tool.
+ * Override properties for the ellipse drawing tool.
  */
 export interface EllipseLineToolOverrides {
 	/** Default value: `rgba(242, 54, 69, 0.2)` */
@@ -7156,7 +7156,7 @@ export interface EllipseLineToolOverrides {
 	"linetoolellipse.transparency": number;
 }
 /**
- * Override properties for the Emoji drawing tool.
+ * Override properties for the emoji drawing tool.
  */
 export interface EmojiLineToolOverrides {
 	/** Default value: `1.5707963267948966` */
@@ -7272,9 +7272,11 @@ export interface Execution extends CustomFields {
 	fee?: number;
 	/** Net amount for executed trade */
 	netAmount?: number;
+	/** The conversion rate between account and symbol currency */
+	currencyRate?: number;
 }
 /**
- * Override properties for the Execution drawing tool.
+ * Override properties for the execution drawing tool.
  */
 export interface ExecutionLineToolOverrides {
 	/** Default value: `#4094e8` */
@@ -7334,6 +7336,8 @@ export interface ExitLevelTemplate extends ExitLevel {
 	slRiskInPercent?: number;
 	tpParentPricePercent?: number;
 	slParentPricePercent?: number;
+	tpRiskInCurrency?: number;
+	slRiskInCurrency?: number;
 }
 export interface ExportDataOptions {
 	/**
@@ -7401,7 +7405,7 @@ export interface ExportedData {
 	displayedData: string[][];
 }
 /**
- * Override properties for the Extended drawing tool.
+ * Override properties for the extended line drawing tool.
  */
 export interface ExtendedLineToolOverrides {
 	/** Default value: `false` */
@@ -7487,7 +7491,7 @@ export interface Favorites<TChartTypeFavorites> {
 	drawingTools?: DrawingToolIdentifier[];
 }
 /**
- * Override properties for the Fibchannel drawing tool.
+ * Override properties for the fib channel drawing tool.
  */
 export interface FibchannelLineToolOverrides {
 	/** Default value: `false` */
@@ -7660,7 +7664,7 @@ export interface FibchannelLineToolOverrides {
 	"linetoolfibchannel.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Fibcircles drawing tool.
+ * Override properties for the fib circles drawing tool.
  */
 export interface FibcirclesLineToolOverrides {
 	/** Default value: `false` */
@@ -7791,7 +7795,7 @@ export interface FibcirclesLineToolOverrides {
 	"linetoolfibcircles.trendline.visible": boolean;
 }
 /**
- * Override properties for the Fibretracement drawing tool.
+ * Override properties for the fib retracement drawing tool.
  */
 export interface FibretracementLineToolOverrides {
 	/** Default value: `false` */
@@ -8030,7 +8034,7 @@ export interface FibretracementLineToolOverrides {
 	"linetoolfibretracement.vertTextAlign": string;
 }
 /**
- * Override properties for the Fibspeedresistancearcs drawing tool.
+ * Override properties for the fib speed resistance arcs drawing tool.
  */
 export interface FibspeedresistancearcsLineToolOverrides {
 	/** Default value: `true` */
@@ -8161,7 +8165,7 @@ export interface FibspeedresistancearcsLineToolOverrides {
 	"linetoolfibspeedresistancearcs.trendline.visible": boolean;
 }
 /**
- * Override properties for the Fibspeedresistancefan drawing tool.
+ * Override properties for the fib speed resistance fan drawing tool.
  */
 export interface FibspeedresistancefanLineToolOverrides {
 	/** Default value: `true` */
@@ -8276,7 +8280,7 @@ export interface FibspeedresistancefanLineToolOverrides {
 	"linetoolfibspeedresistancefan.vlevel7.visible": boolean;
 }
 /**
- * Override properties for the Fibtimezone drawing tool.
+ * Override properties for the fib time zone drawing tool.
  */
 export interface FibtimezoneLineToolOverrides {
 	/** Default value: `false` */
@@ -8409,7 +8413,7 @@ export interface FibtimezoneLineToolOverrides {
 	"linetoolfibtimezone.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Fibwedge drawing tool.
+ * Override properties for the fib wedge drawing tool.
  */
 export interface FibwedgeLineToolOverrides {
 	/** Default value: `true` */
@@ -8592,7 +8596,7 @@ export interface FisherTransformIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Fivepointspattern drawing tool.
+ * Override properties for the XABCD pattern drawing tool.
  */
 export interface FivepointspatternLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -8665,14 +8669,14 @@ export interface FixedRangeIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Flagmark drawing tool.
+ * Override properties for the flag mark drawing tool.
  */
 export interface FlagmarkLineToolOverrides {
 	/** Default value: `#2962FF` */
 	"linetoolflagmark.flagColor": string;
 }
 /**
- * Override properties for the Flatbottom drawing tool.
+ * Override properties for the flat bottom drawing tool.
  */
 export interface FlatbottomLineToolOverrides {
 	/** Default value: `rgba(255, 152, 0, 0.2)` */
@@ -8749,7 +8753,7 @@ export interface FormatterParseResult {
 	res: boolean;
 }
 /**
- * Override properties for the Ganncomplex drawing tool.
+ * Override properties for the Gann square drawing tool.
  */
 export interface GanncomplexLineToolOverrides {
 	/** Default value: `#FF9800` */
@@ -9028,7 +9032,7 @@ export interface GanncomplexLineToolOverrides {
 	"linetoolganncomplex.showLabels": boolean;
 }
 /**
- * Override properties for the Gannfan drawing tool.
+ * Override properties for the Gann fan drawing tool.
  */
 export interface GannfanLineToolOverrides {
 	/** Default value: `true` */
@@ -9149,7 +9153,7 @@ export interface GannfanLineToolOverrides {
 	"linetoolgannfan.transparency": number;
 }
 /**
- * Override properties for the Gannfixed drawing tool.
+ * Override properties for the Gann square fixed drawing tool.
  */
 export interface GannfixedLineToolOverrides {
 	/** Default value: `#FF9800` */
@@ -9418,7 +9422,7 @@ export interface GannfixedLineToolOverrides {
 	"linetoolgannfixed.reverse": boolean;
 }
 /**
- * Override properties for the Gannsquare drawing tool.
+ * Override properties for the Gann box drawing tool.
  */
 export interface GannsquareLineToolOverrides {
 	/** Default value: `rgba(21, 56, 153, 0.8)` */
@@ -9541,7 +9545,7 @@ export interface GetNewsResponse {
 	newsItems: NewsItem[];
 }
 /**
- * Override properties for the Ghostfeed drawing tool.
+ * Override properties for the ghost feed drawing tool.
  */
 export interface GhostfeedLineToolOverrides {
 	/** Default value: `20` */
@@ -9815,7 +9819,7 @@ export interface HLine {
 	id: string;
 }
 /**
- * Override properties for the Headandshoulders drawing tool.
+ * Override properties for the head and shoulders drawing tool.
  */
 export interface HeadandshouldersLineToolOverrides {
 	/** Default value: `#089981` */
@@ -9880,7 +9884,7 @@ export interface HiLoStylePreferences {
 	drawBody: boolean;
 }
 /**
- * Override properties for the Highlighter drawing tool.
+ * Override properties for the highlighter drawing tool.
  */
 export interface HighlighterLineToolOverrides {
 	/** Default value: `rgba(242, 54, 69, 0.2)` */
@@ -9963,7 +9967,7 @@ export interface HollowCandleStylePreferences {
 	wickDownColor: string;
 }
 /**
- * Horizontal Line Preferences
+ * Horizontal line preferences
  */
 export interface HorizLinePreferences {
 	/** Is visible if set to `true` */
@@ -9978,7 +9982,7 @@ export interface HorizLinePreferences {
 	showPrice?: boolean;
 }
 /**
- * Override properties for the Horzline drawing tool.
+ * Override properties for the horizontal line drawing tool.
  */
 export interface HorzlineLineToolOverrides {
 	/** Default value: `false` */
@@ -10003,7 +10007,7 @@ export interface HorzlineLineToolOverrides {
 	"linetoolhorzline.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Horzray drawing tool.
+ * Override properties for the horizontal ray drawing tool.
  */
 export interface HorzrayLineToolOverrides {
 	/** Default value: `false` */
@@ -10670,9 +10674,8 @@ export interface IBrokerTerminal extends IBrokerCommon, IBrokerAccountInfo {
 	 */
 	subscribeEquity?(): void;
 	/**
-	 * The method should be implemented if you use the standard Order Ticket and want to show the margin meter.
-	 *
-	 * Once this method is called the broker should provide margin available updates via {@link IBrokerConnectionAdapterHost.marginAvailableUpdate} method.
+	 * The library calls `subscribeMarginAvailable` to request margin updates for the given symbol to display the margin meter in the Order Ticket.
+	 * Once called, your implementation should provide the current margin available value via {@link IBrokerConnectionAdapterHost.marginAvailableUpdate}.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	subscribeMarginAvailable?(symbol: string): void;
@@ -10693,9 +10696,8 @@ export interface IBrokerTerminal extends IBrokerCommon, IBrokerAccountInfo {
 	 */
 	unsubscribePipValue?(symbol: string): void;
 	/**
-	 * The method should be implemented if you use the standard Order Ticket want to show the margin meter.
-	 *
-	 * Once this method is called the broker should stop providing margin available updates.
+	 * The library calls `unsubscribeMarginAvailable` when it no longer needs margin available updates for the given symbol.
+	 * Once called, your implementation should stop providing updates via {@link IBrokerConnectionAdapterHost.marginAvailableUpdate} for this symbol.
 	 * @param  {string} symbol - symbol identifier
 	 */
 	unsubscribeMarginAvailable?(symbol: string): void;
@@ -10798,19 +10800,31 @@ export interface IChartWidgetApi {
 	 */
 	onChartTypeChanged(): ISubscription<(chartType: SeriesType) => void>;
 	/**
-	 * Provide a callback function that will be called when chart data is loaded.
-	 * If chart data is already loaded when this method is called, the callback is called immediately.
+	 * Returns a promise that resolves when chart data is loaded.
+	 * If chart data is already loaded when this method is called, the promise resolves immediately.
+	 *
+	 * Starting from version 32, calling `dataReady()` without a callback returns a `Promise<boolean>`.
+	 * Code that needs to run after the data is loaded should await the promise. Code that relied on the
+	 * previous synchronous boolean return value should be migrated to an explicit synchronous state check.
 	 *
 	 * **Example**
 	 * ```javascript
-	 * widget.activeChart().dataReady(() => {
+	 * widget.activeChart().dataReady().then(() => {
 	 *     // ...
-	 * }
+	 * });
 	 * ```
 	 *
-	 * @param callback A callback function called when chart data is loaded.
+	 * @returns A promise that resolves with `true` when chart data is loaded.
 	 */
-	dataReady(callback?: () => void): boolean;
+	dataReady(): Promise<boolean>;
+	/**
+	 * Provide a callback function that will be called when chart data is loaded.
+	 * If chart data is already loaded when this method is called, the callback is called immediately.
+	 *
+	 * @param callback A callback function called when chart data is loaded.
+	 * @deprecated Use {@link dataReady} instead.
+	 */
+	dataReady(callback: () => void): boolean;
 	/**
 	 * Get a subscription object for the crosshair moving over the chart.
 	 *
@@ -10886,10 +10900,25 @@ export interface IChartWidgetApi {
 	 * ```
 	 *
 	 * @param type A chart type.
-	 * @param callback An optional callback function. Called when the chart type has changed and data has loaded.
-	 * @returns A promise that resolves with a boolean value. It's `true` when the chart type has been set and `false` when setting the chart type is not possible.
+	 * @returns A promise that resolves when the chart type has changed and data has loaded.
+	 * @throws {Error} If the new chart type cannot load data. The error is created within the
+	 * library iframe, so an `instanceof Error` check in the embedding page will fail. Check the
+	 * `name` and `message` properties instead.
 	 */
-	setChartType(type: SeriesType, callback?: () => void): void;
+	setChartType(type: SeriesType): Promise<void>;
+	/**
+	 * Change the chart's type.
+	 *
+	 * **Example**
+	 * ```javascript
+	 * widget.activeChart().setChartType(12); // Specifies the High-low type
+	 * ```
+	 *
+	 * @param type A chart type.
+	 * @param callback An optional callback function. Called when the chart type has changed and data has loaded.
+	 * @deprecated Use {@link setChartType} instead.
+	 */
+	setChartType(type: SeriesType, callback: () => void): void;
 	/**
 	 * Force the chart to re-request data, for example if there are [internet connection issues](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues#internet-connection-issues).
 	 * Before calling this function the {@link IChartWidgetApi.resetCache} method should be called.
@@ -11534,7 +11563,7 @@ export interface IChartWidgetApi {
 	 */
 	canZoomOutWV(): IWatchedValueReadonly<boolean>;
 	/**
-	 * Zoom out. The method has the same effect as clicking on the "Zoom out" button.
+	 * Zoom out. The method has the same effect as clicking on the "zoom out" button.
 	 */
 	zoomOut(): void;
 	/**
@@ -11710,8 +11739,13 @@ export interface IChartingLibraryWidget {
 	 * The library will call `callback` when the chart is ready to be used.
 	 *
 	 * @param callback A function that will be called when the chart is ready to be used.
+	 * @deprecated Use {@link chartReady} instead.
 	 */
 	onChartReady(callback: EmptyCallback): void;
+	/**
+	 * A promise that resolves when the chart is ready to be used.
+	 */
+	chartReady(): Promise<void>;
 	/**
 	 * The library will call `callback` when a greyed-out drawing tool or study is clicked.
 	 *
@@ -11763,6 +11797,7 @@ export interface IChartingLibraryWidget {
 	 * @param symbol A symbol to load.
 	 * @param interval A interval (resolution) to load.
 	 * @param callback A callback. Called when the symbol's data has finished loading.
+	 * @deprecated Use {@link IChartWidgetApi.setSymbol widget.activeChart().setSymbol} instead.
 	 */
 	setSymbol(symbol: string, interval: ResolutionString, callback: EmptyCallback): void;
 	/**
@@ -11794,10 +11829,10 @@ export interface IChartingLibraryWidget {
 	 */
 	selectLineTool(linetool: "icon", options?: IconOptions): Promise<void>;
 	/**
-	 * Select the Emoji line tool. It's the same as clicking on the corresponding button in the left toolbar.
+	 * Select the emoji line tool. It's the same as clicking on the corresponding button in the left toolbar.
 	 *
 	 * @param linetool Emoji line tool.
-	 * @param options Options for the Emoji line tool
+	 * @param options Options for the emoji line tool
 	 */
 	selectLineTool(linetool: "emoji", options?: EmojiOptions): Promise<void>;
 	/**
@@ -11816,8 +11851,16 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Saves the chart state to an object. This method is part of the [low-level save/load API](https://www.tradingview.com/charting-library-docs/latest/saving_loading/low-level-api).
 	 *
+	 * @param options Options for customising the saved data.
+	 * @returns A promise that resolves with the chart state.
+	 */
+	save(options?: SaveChartOptions): Promise<object>;
+	/**
+	 * Saves the chart state to an object. This method is part of the [low-level save/load API](https://www.tradingview.com/charting-library-docs/latest/saving_loading/low-level-api).
+	 *
 	 * @param callback A function called with the chart state as the first argument.
 	 * @param options Options for customising the saved data.
+	 * @deprecated Use {@link save} instead.
 	 */
 	save(callback: (state: object) => void, options?: SaveChartOptions): void;
 	/**
@@ -11830,7 +11873,14 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Get a list of chart descriptions saved to the server for the current user.
 	 *
+	 * @returns A promise that resolves with an array of saved chart information.
+	 */
+	getSavedCharts(): Promise<SaveLoadChartRecord[]>;
+	/**
+	 * Get a list of chart descriptions saved to the server for the current user.
+	 *
 	 * @param callback A function called with an array of saved chart information as the first argument.
+	 * @deprecated Use {@link getSavedCharts} instead.
 	 */
 	getSavedCharts(callback: (chartRecords: SaveLoadChartRecord[]) => void): void;
 	/**
@@ -11842,16 +11892,33 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Save the current chart to the server.
 	 *
+	 * @param options An optional object of options for saving the chart.
+	 * @returns A promise that resolves when the chart is successfully saved.
+	 * @throws {SaveChartError} If the chart fails to save.
+	 */
+	saveChartToServer(options?: SaveChartToServerOptions): Promise<void>;
+	/**
+	 * Save the current chart to the server.
+	 *
 	 * @param onComplete An optional callback function called when the chart is successfully saved.
 	 * @param onFail An optional callback function called when the chart fails to save.
 	 * @param options An optional object of options for saving the chart.
+	 * @deprecated Use {@link saveChartToServer} instead.
 	 */
 	saveChartToServer(onComplete?: EmptyCallback, onFail?: (error: SaveChartErrorInfo) => void, options?: SaveChartToServerOptions): void;
 	/**
 	 * Remove a saved chart from the server.
 	 *
 	 * @param chartId A chart ID from a {@link SaveLoadChartRecord} (returned by {@link getSavedCharts}).
-	 * @param onCompleteCallback A callback function called when the chart is successfully saved.
+	 * @returns A promise that resolves when the chart is removed.
+	 */
+	removeChartFromServer(chartId: string | number): Promise<void>;
+	/**
+	 * Remove a saved chart from the server.
+	 *
+	 * @param chartId A chart ID from a {@link SaveLoadChartRecord} (returned by {@link getSavedCharts}).
+	 * @param onCompleteCallback A callback function called when the chart is successfully removed.
+	 * @deprecated Use {@link removeChartFromServer} instead.
 	 */
 	removeChartFromServer(chartId: string | number, onCompleteCallback: EmptyCallback): void;
 	/**
@@ -11860,7 +11927,7 @@ export interface IChartingLibraryWidget {
 	 *
 	 * **Example**
 	 * ```javascript
-	 * widget.onChartReady(function() {
+	 * widget.chartReady().then(function() {
 	 *     widget.onContextMenu(function(unixtime, price) {
 	 *         return [{
 	 *             position: "top",
@@ -11947,7 +12014,7 @@ export interface IChartingLibraryWidget {
 	 *             },
 	 *             {
 	 *                 title: 'item#2',
-	 *                 onSelect: () => {widget.setSymbol('IBM', '1D');},
+	 *                 onSelect: () => {widget.activeChart().setSymbol('IBM').then(() => widget.activeChart().setResolution('1D'));},
 	 *             },
 	 *             {
 	 *                 title: 'item#3',
@@ -11984,12 +12051,27 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Show a dialog with custom title and text along with an "OK" buttons.
 	 * @param params A object of options for the created dialog.
+	 * @returns A promise that resolves when the dialog is closed.
+	 */
+	showNoticeDialog(params: NoticeDialogParams): Promise<void>;
+	/**
+	 * Show a dialog with custom title and text along with an "OK" buttons.
+	 * @param params A object of options for the created dialog.
+	 * @deprecated Use {@link showNoticeDialog} instead.
 	 */
 	showNoticeDialog(params: DialogParams<() => void>): void;
 	/**
 	 * Show a dialog with custom title and text along with "OK" and "CANCEL" buttons.
 	 *
 	 * @param params A object of options for the created dialog.
+	 * @returns A promise that resolves with the confirmation result.
+	 */
+	showConfirmDialog(params: ConfirmDialogParams): Promise<boolean>;
+	/**
+	 * Show a dialog with custom title and text along with "OK" and "CANCEL" buttons.
+	 *
+	 * @param params A object of options for the created dialog.
+	 * @deprecated Use {@link showConfirmDialog} instead.
 	 */
 	showConfirmDialog(params: DialogParams<(confirmed: boolean) => void>): void;
 	/**
@@ -12215,15 +12297,15 @@ export interface IChartingLibraryWidget {
 	 */
 	takeClientScreenshot(options?: Partial<ClientSnapshotOptions>): Promise<HTMLCanvasElement>;
 	/**
-	 * Get a watched value that can be used to read/write/subscribe to the state of the "Lock All Drawing Tools" button.
+	 * Get a watched value that can be used to read/write/subscribe to the state of the "lock all drawing tools" button.
 	 *
-	 * @returns A watched value of the state of the "Lock All Drawing Tools" button.
+	 * @returns A watched value of the state of the "lock all drawing tools" button.
 	 */
 	lockAllDrawingTools(): IWatchedValue<boolean>;
 	/**
-	 * Get a watched value that can be used to read/write/subscribe to the state of the "Hide All Drawing Tools" button.
+	 * Get a watched value that can be used to read/write/subscribe to the state of the "hide all drawing tools" button.
 	 *
-	 * @returns A watched value of the state of the "Hide All Drawing Tools" button.
+	 * @returns A watched value of the state of the "hide all drawing tools" button.
 	 */
 	hideAllDrawingTools(): IWatchedValue<boolean>;
 	/**
@@ -12374,7 +12456,7 @@ export interface IChartingLibraryWidget {
 	supportedChartTypes(): IWatchedValueReadonly<ChartStyle[]>;
 	/**
 	 * Get an API object for adjusting the watermarks present on the charts.
-	 * This can only be accessed when the chart is ready to be used. ({@link onChartReady})
+	 * This can only be accessed when the chart is ready to be used. ({@link chartReady})
 	 *
 	 * @returns An API object for adjusting the watermark settings.
 	 */
@@ -13123,12 +13205,12 @@ export interface ILineDataSourceApi {
 	 */
 	setSavingEnabled(enable: boolean): void;
 	/**
-	 * Is the drawing shown in the Object Tree Panel
+	 * Is the drawing shown in the object tree panel
 	 * @returns `true` when the drawing is visible in the tree.
 	 */
 	isShowInObjectsTreeEnabled(): boolean;
 	/**
-	 * Enables or disables the visibility of the drawing in the Object Tree panel
+	 * Enables or disables the visibility of the drawing in the object tree panel
 	 * @param  {boolean} enabled - if `true` then the drawing will be visible
 	 */
 	setShowInObjectsTreeEnabled(enabled: boolean): void;
@@ -14087,12 +14169,14 @@ export interface IProjectionStudyResult {
 	projectionTime?: number;
 }
 /**
- * Allows you to select entities ([drawings](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/) and [indicators](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/)) on the chart. Consider the following example:
+ * Allows you to select entities ([drawings](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/),
+ * [indicators](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/), and drawings groups) on the chart.
+ * Consider the following example:
  *
  * ```js
  * var chart = tvWidget.activeChart();
  * // Prints all selection changes to the console
- * chart.selection().onChanged().subscribe(null, s => console.log(chart.selection().allSources()));
+ * chart.selection().onChanged().subscribe(null, s => console.log(chart.selection().allItems()));
  * // Creates an indicator and saves its ID
  * var studyId = chart.createStudy("Moving Average", false, false, { length: 10 });
  * // Adds the indicator to the selection ([<id>] is printed to the console)
@@ -14105,36 +14189,41 @@ export interface IProjectionStudyResult {
  *
  * Multiple selection has the following specifics:
  *
- * - Either indicators or drawings can be selected at the same time.
+ * - Either indicators or drawings (including drawings groups) can be selected at the same time.
+ * - Drawings groups are multi-selectable and can coexist with symbol-bound drawings in the selection.
  * - If you add an indicator to the selection, other entities are removed from it.
  * - Adding an array of objects to the selection works the same as adding these objects one by one.
  */
 export interface ISelectionApi {
 	/**
-	 * Add entity / entities to selection
-	 * @param  {EntityId[]|EntityId} entities - entities to be added to selection
+	 * Add entity / entities to selection. Accepts drawing/indicator ids as well as drawings-group ids.
+	 * @param  {SelectableItem[]|SelectableItem} entities - entities to be added to selection
 	 */
-	add(entities: EntityId[] | EntityId): void;
+	add(entities: SelectableItem[] | SelectableItem): void;
 	/**
-	 * Set entity / entities as the selection
-	 * @param  {EntityId[]|EntityId} entities - entities to be selected
+	 * Set entity / entities as the selection. Accepts drawing/indicator ids as well as drawings-group ids.
+	 * @param  {SelectableItem[]|SelectableItem} entities - entities to be selected
 	 */
-	set(entities: EntityId[] | EntityId): void;
+	set(entities: SelectableItem[] | SelectableItem): void;
 	/**
-	 * Remove entities from the selection
-	 * @param  {EntityId[]} entities - entities to be removed from the selection
+	 * Remove entities from the selection. Accepts drawing/indicator ids as well as drawings-group ids.
+	 * @param  {SelectableItem[]|SelectableItem} entities - entities to be removed from the selection
 	 */
-	remove(entities: EntityId[]): void;
+	remove(entities: SelectableItem[] | SelectableItem): void;
 	/**
-	 * Does the selection contain the entity
-	 * @param  {EntityId} entity - entity to be checked
+	 * Does the selection contain the entity. Accepts a drawing/indicator id or a drawings-group id.
+	 * @param  {SelectableItem} entity - entity to be checked
 	 * @returns `true` when entity is in the selection
 	 */
-	contains(entity: EntityId): boolean;
+	contains(entity: SelectableItem): boolean;
 	/**
-	 * Returns all the entities in the selection
+	 * @deprecated Use {@link allItems} instead.
 	 */
-	allSources(): EntityId[];
+	allSources(): SelectableItem[];
+	/**
+	 * Returns all selected entities — drawings, indicators, and drawings groups.
+	 */
+	allItems(): SelectableItem[];
 	/**
 	 * Is the selection empty
 	 * @returns `true` when empty
@@ -14149,11 +14238,11 @@ export interface ISelectionApi {
 	 */
 	onChanged(): ISubscription<() => void>;
 	/**
-	 * Whether the entity can be added to the selection
-	 * @param  {EntityId} entity - entity to be checked
+	 * Whether the entity can be added to the selection. Accepts a drawing/indicator id or a drawings-group id.
+	 * @param  {SelectableItem} entity - entity to be checked
 	 * @returns `true` when entity can be added to the selection
 	 */
-	canBeAddedToSelection(entity: EntityId): boolean;
+	canBeAddedToSelection(entity: SelectableItem): boolean;
 }
 export interface ISeparator extends IMenuItem {
 	/** @inheritDoc */
@@ -14981,7 +15070,7 @@ export interface IchimokuCloudIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Icon drawing tool.
+ * Override properties for the icon drawing tool.
  */
 export interface IconLineToolOverrides {
 	/** Default value: `1.5707963267948966` */
@@ -15001,7 +15090,7 @@ export interface IconOptions {
 	icon: number;
 }
 /**
- * Override properties for the Image drawing tool.
+ * Override properties for the image drawing tool.
  */
 export interface ImageLineToolOverrides {
 	/** Default value: `0` */
@@ -15047,7 +15136,7 @@ export interface IndividualPositionBase {
 	exitLevels?: ExitLevel[];
 }
 /**
- * Override properties for the Infoline drawing tool.
+ * Override properties for the info line drawing tool.
  */
 export interface InfolineLineToolOverrides {
 	/** Default value: `true` */
@@ -15111,7 +15200,7 @@ export interface InputFunctions {
 	symbol(defaultValue: string, title: string, options?: Partial<SymbolInputOptions>): string;
 }
 /**
- * Override properties for the Insidepitchfork drawing tool.
+ * Override properties for the inside pitchfork drawing tool.
  */
 export interface InsidepitchforkLineToolOverrides {
 	/** Default value: `false` */
@@ -15303,6 +15392,11 @@ export interface IsTradableResult {
 	solutions?: TradableSolutions;
 	/** shortReason is displayed in the legend */
 	shortReason?: string;
+	/**
+	 * Text of the main action button in the non-tradable symbol dialog.
+	 * Ignored when `solutions` is provided — in that case the solution's title is used as the button text.
+	 */
+	confirmButtonText?: string;
 }
 export interface KagiStylePreferences {
 	/** Up line color */
@@ -16995,7 +17089,7 @@ export interface NewsProvider {
 	id: string;
 	/** Name of the news provider  */
 	name: string;
-	/** Provider-related logo ID. It is used to generate a link to the provider’s logo */
+	/** Provider-related logo ID. It is used to generate a link to the provider's logo */
 	logo_id?: string;
 	url?: string;
 }
@@ -17113,7 +17207,7 @@ export interface OrderDurationMetaInfo {
 	supportedOrderTypes?: OrderType[];
 }
 /**
- * Override properties for the Order drawing tool.
+ * Override properties for the order drawing tool.
  */
 export interface OrderLineToolOverrides {
 	/** Default value: `rgba(255, 255, 255, 0.25)` */
@@ -17463,7 +17557,7 @@ export interface ParabolicSARIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Parallelchannel drawing tool.
+ * Override properties for the parallel channel drawing tool.
  */
 export interface ParallelchannelLineToolOverrides {
 	/** Default value: `rgba(41, 98, 255, 0.2)` */
@@ -17506,7 +17600,7 @@ export interface ParallelchannelLineToolOverrides {
 	"linetoolparallelchannel.transparency": number;
 }
 /**
- * Override properties for the Path drawing tool.
+ * Override properties for the path drawing tool.
  */
 export interface PathLineToolOverrides {
 	/** Default value: `0` */
@@ -18448,7 +18542,7 @@ export interface PipValues {
 	sellPipValue: number;
 }
 /**
- * Override properties for the Pitchfan drawing tool.
+ * Override properties for the pitchfan drawing tool.
  */
 export interface PitchfanLineToolOverrides {
 	/** Default value: `true` */
@@ -18555,7 +18649,7 @@ export interface PitchfanLineToolOverrides {
 	"linetoolpitchfan.transparency": number;
 }
 /**
- * Override properties for the Pitchfork drawing tool.
+ * Override properties for the pitchfork drawing tool.
  */
 export interface PitchforkLineToolOverrides {
 	/** Default value: `false` */
@@ -18770,7 +18864,7 @@ export interface PolygonPreferences {
 	color: string;
 }
 /**
- * Override properties for the Polyline drawing tool.
+ * Override properties for the polyline drawing tool.
  */
 export interface PolylineLineToolOverrides {
 	/** Default value: `rgba(0, 188, 212, 0.2)` */
@@ -18824,7 +18918,7 @@ export interface PositionBase {
 export interface PositionDialogOptions extends TradingDialogOptions {
 }
 /**
- * Override properties for the Position drawing tool.
+ * Override properties for the position drawing tool.
  */
 export interface PositionLineToolOverrides {
 	/** Default value: `rgba(255, 255, 255, 0.25)` */
@@ -18958,7 +19052,7 @@ export interface PreOrder extends OrderTemplateBase {
 	exitLevels?: ExitLevel[];
 }
 /**
- * Override properties for the Prediction drawing tool.
+ * Override properties for the position forecast drawing tool.
  */
 export interface PredictionLineToolOverrides {
 	/** Default value: `#202020` */
@@ -19108,7 +19202,7 @@ export interface PricedPoint extends TimePoint {
 	price: number;
 }
 /**
- * Override properties for the Pricelabel drawing tool.
+ * Override properties for the price label drawing tool.
  */
 export interface PricelabelLineToolOverrides {
 	/** Default value: `#2962FF` */
@@ -19125,7 +19219,7 @@ export interface PricelabelLineToolOverrides {
 	"linetoolpricelabel.transparency": number;
 }
 /**
- * Override properties for the Projection drawing tool.
+ * Override properties for the sector drawing tool.
  */
 export interface ProjectionLineToolOverrides {
 	/** Default value: `rgba(41, 98, 255, 0.2)` */
@@ -19381,14 +19475,14 @@ export interface RawStudyMetaInfoBase {
 	/** array with study plots info. See dedicated article: [Custom Studies OHLC Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-OHLC-Plots) */
 	readonly ohlcPlots?: MappedObject<Readonly<StudyOhlcStylesInfo>>;
 	/** Financial Period */
-	readonly financialPeriod?: FinancialPeriod;
+	readonly financialPeriod?: FinancialPeriodOrAggregated;
 	/** Key for grouping studies */
 	readonly groupingKey?: string;
 	/** Define should be study on series level or not */
 	readonly behind_chart?: boolean;
 }
 /**
- * Override properties for the Ray drawing tool.
+ * Override properties for the ray drawing tool.
  */
 export interface RayLineToolOverrides {
 	/** Default value: `false` */
@@ -19441,7 +19535,7 @@ export interface RayLineToolOverrides {
 	"linetoolray.vertLabelsAlign": string;
 }
 /**
- * Overrides for the 'Regression Trend' indicator.
+ * Overrides for the 'regression trend' indicator.
  *
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
  */
@@ -19449,7 +19543,7 @@ export interface RegressionTrendIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Regressiontrend drawing tool.
+ * Override properties for the regression trend drawing tool.
  */
 export interface RegressiontrendLineToolOverrides {
 	/** Default value: `0` */
@@ -19792,7 +19886,7 @@ export interface RiskrewardshortLineToolOverrides {
 	"linetoolriskrewardshort.textcolor": string;
 }
 /**
- * Override properties for the Rotatedrectangle drawing tool.
+ * Override properties for the rotated rectangle drawing tool.
  */
 export interface RotatedrectangleLineToolOverrides {
 	/** Default value: `rgba(76, 175, 80, 0.2)` */
@@ -19874,6 +19968,10 @@ export interface SMIErgodicIndicatorOscillatorIndicatorOverrides {
 	"oscillator.color": string;
 	[key: string]: StudyOverrideValueType;
 }
+export interface SaveChartError extends Error {
+	readonly info: SaveChartErrorInfo;
+	readonly status: number | undefined;
+}
 /**
  * Save chart error information
  */
@@ -19935,7 +20033,7 @@ export interface SavedStateMetaInfo {
 	description: string;
 }
 /**
- * Override properties for the Schiffpitchfork2 drawing tool.
+ * Override properties for the Schiff pitchfork drawing tool.
  */
 export interface Schiffpitchfork2LineToolOverrides {
 	/** Default value: `false` */
@@ -20046,7 +20144,7 @@ export interface Schiffpitchfork2LineToolOverrides {
 	"linetoolschiffpitchfork2.transparency": number;
 }
 /**
- * Override properties for the Schiffpitchfork drawing tool.
+ * Override properties for the modified Schiff pitchfork drawing tool.
  */
 export interface SchiffpitchforkLineToolOverrides {
 	/** Default value: `false` */
@@ -20368,7 +20466,7 @@ export interface SetVisibleRangeOptions {
 	rejectByTimeout?: number;
 }
 /**
- * Override properties for the Signpost drawing tool.
+ * Override properties for the signpost drawing tool.
  */
 export interface SignpostLineToolOverrides {
 	/** Default value: `false` */
@@ -20385,7 +20483,7 @@ export interface SignpostLineToolOverrides {
 	"linetoolsignpost.showImage": boolean;
 }
 /**
- * Override properties for the Sineline drawing tool.
+ * Override properties for the sine line drawing tool.
  */
 export interface SinelineLineToolOverrides {
 	/** Default value: `#159980` */
@@ -20700,6 +20798,10 @@ export interface StandardFormattersDependenciesMapping {
 		profitProperty: string,
 		currencyProperty: string
 	];
+	[StandardFormatterName.ProfitInInstrumentCurrencyFloored]: [
+		profitProperty: string,
+		currencyProperty: string
+	];
 	[StandardFormatterName.ProfitInPercent]: [
 		plPercent: string
 	];
@@ -20724,7 +20826,7 @@ export interface StickedPoint extends TimePoint {
 	channel: "open" | "high" | "low" | "close";
 }
 /**
- * Override properties for the Sticker drawing tool.
+ * Override properties for the sticker drawing tool.
  */
 export interface StickerLineToolOverrides {
 	/** Default value: `1.5707963267948966` */
@@ -27597,7 +27699,7 @@ export interface TextFieldMetaInfo extends CustomInputFieldMetaInfo {
 	maskWithAsterisk?: boolean;
 }
 /**
- * Override properties for the Text drawing tool.
+ * Override properties for the text drawing tool.
  */
 export interface TextLineToolOverrides {
 	/** Default value: `rgba(41, 98, 255, 0.25)` */
@@ -27651,7 +27753,7 @@ export interface TextWithCheckboxValue {
 	checked: boolean;
 }
 /**
- * Override properties for the Textabsolute drawing tool.
+ * Override properties for the anchored text drawing tool.
  */
 export interface TextabsoluteLineToolOverrides {
 	/** Default value: `rgba(41, 98, 255, 0.25)` */
@@ -27680,7 +27782,7 @@ export interface TextabsoluteLineToolOverrides {
 	"linetooltextabsolute.wordWrapWidth": number;
 }
 /**
- * Override properties for the Threedrivers drawing tool.
+ * Override properties for the three drives pattern drawing tool.
  */
 export interface ThreedriversLineToolOverrides {
 	/** Default value: `rgba(149, 40, 204, 0.5)` */
@@ -27778,7 +27880,7 @@ export interface TimeScaleOptions {
 	min_bar_spacing?: number;
 }
 /**
- * Override properties for the Timecycles drawing tool.
+ * Override properties for the time cycles drawing tool.
  */
 export interface TimecyclesLineToolOverrides {
 	/** Default value: `rgba(106, 168, 79, 0.5)` */
@@ -28088,7 +28190,7 @@ export interface TrendStrengthIndexIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Override properties for the Trendangle drawing tool.
+ * Override properties for the trend angle drawing tool.
  */
 export interface TrendangleLineToolOverrides {
 	/** Default value: `false` */
@@ -28125,7 +28227,7 @@ export interface TrendangleLineToolOverrides {
 	"linetooltrendangle.statsPosition": number;
 }
 /**
- * Override properties for the Trendbasedfibextension drawing tool.
+ * Override properties for the trend-based fib extension drawing tool.
  */
 export interface TrendbasedfibextensionLineToolOverrides {
 	/** Default value: `false` */
@@ -28364,7 +28466,7 @@ export interface TrendbasedfibextensionLineToolOverrides {
 	"linetooltrendbasedfibextension.vertTextAlign": string;
 }
 /**
- * Override properties for the Trendbasedfibtime drawing tool.
+ * Override properties for the trend-based fib time drawing tool.
  */
 export interface TrendbasedfibtimeLineToolOverrides {
 	/** Default value: `true` */
@@ -28497,7 +28599,7 @@ export interface TrendbasedfibtimeLineToolOverrides {
 	"linetooltrendbasedfibtime.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Trendline drawing tool.
+ * Override properties for the trendline drawing tool.
  */
 export interface TrendlineLineToolOverrides {
 	/** Default value: `false` */
@@ -28550,7 +28652,7 @@ export interface TrendlineLineToolOverrides {
 	"linetooltrendline.vertLabelsAlign": string;
 }
 /**
- * Override properties for the Triangle drawing tool.
+ * Override properties for the triangle drawing tool.
  */
 export interface TriangleLineToolOverrides {
 	/** Default value: `rgba(8, 153, 129, 0.2)` */
@@ -28565,7 +28667,7 @@ export interface TriangleLineToolOverrides {
 	"linetooltriangle.transparency": number;
 }
 /**
- * Override properties for the Trianglepattern drawing tool.
+ * Override properties for the triangle pattern drawing tool.
  */
 export interface TrianglepatternLineToolOverrides {
 	/** Default value: `#673ab7` */
@@ -28799,7 +28901,7 @@ export interface ValueByStyleId<TValue> {
 	[styleId: string]: TValue | undefined;
 }
 /**
- * Vertical Line Preferences
+ * Vertical line preferences
  */
 export interface VertLinePreferences {
 	/** Is visible if set to `true` */
@@ -28812,7 +28914,7 @@ export interface VertLinePreferences {
 	style: LineStyle;
 }
 /**
- * Override properties for the Vertline drawing tool.
+ * Override properties for the vertical line drawing tool.
  */
 export interface VertlineLineToolOverrides {
 	/** Default value: `false` */
@@ -29408,6 +29510,21 @@ export interface WilliamsRIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
+ * Configures worker-thread usage for chart calculations and processing.
+ */
+export interface WorkersConfiguration {
+	/**
+	 * Allows the library to use a dedicated worker thread for chart calculations and processing, including indicator calculations.
+	 *
+	 * Set this property to `true` to attempt worker mode. Set it to `false` to keep chart calculations and processing on the main thread.
+	 *
+	 * **Note:** If you are using custom indicators via the `custom_indicators_getter` option, your indicators must be pure.
+	 * They should not access any global variables, DOM APIs, or any values outside of the indicator's `init` and `main` functions,
+	 * as these will not be available within the worker thread context.
+	 */
+	enabled: boolean;
+}
+/**
  * Overrides for the 'Zig Zag' indicator.
  *
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
@@ -29885,6 +30002,7 @@ export type ColorTypes = "solid" | "gradient";
  * Determines the baseline position for column series, either at the bottom of the pane or aligned with the price scale's zero value.
  */
 export type ColumnStyleBaselinePosition = "bottom" | "zero";
+export type ConfirmDialogParams = Omit<DialogParams<(confirmed: boolean) => void>, "callback">;
 /**
  * Context menu items processor signature
  * @param  {readonlyIActionVariant[]} items - an array of items the library wants to display
@@ -29913,7 +30031,7 @@ export type CustomTableFormatElementFunction<T extends TableFormatterInputValues
  * Identifier for a custom timezone (string).
  */
 export type CustomTimezoneId = Nominal<"CustomTimezoneId", string>;
-export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Halifax" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Kabul" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
+export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Halifax" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Kabul" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/Ljubljana" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Sofia" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zagreb" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 /**
  * Custom translation function
  * @param  {string} originalText - original raw text taking into account pluralization rules
@@ -29923,7 +30041,7 @@ export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Joh
 export type CustomTranslateFunction = (originalText: string, singularOriginalText: string, translatedText?: string) => string | null;
 export type DOMCallback = (data: DOMData) => void;
 export type DatafeedErrorCallback = (reason: string) => void;
-export type DateFormat = keyof typeof dateFormatFunctions;
+export type DateFormat = "qq 'yy" | "qq yyyy" | "dd MMM 'yy" | "MMM 'yy" | "MMM dd, yyyy" | "MMM d, yyyy" | "MMM yyyy" | "MMM dd" | "dd MMM" | "yyyy-MM-dd" | "yy-MM-dd" | "yy/MM/dd" | "yyyy/MM/dd" | "dd-MM-yyyy" | "dd-MM-yy" | "dd/MM/yy" | "dd/MM/yyyy" | "MM/dd/yy" | "MM/dd/yyyy";
 export type DeepWriteable<T> = {
 	-readonly [P in keyof T]: DeepWriteable<T[P]>;
 };
@@ -29991,7 +30109,8 @@ export type EntityId = Nominal<string, "EntityId">;
  */
 export type FieldDescriptor = TimeFieldDescriptor | UserTimeFieldDescriptor | SeriesFieldDescriptor | StudyFieldDescriptor;
 export type FillOptions = SolidFillOptions | GradientFillOptions;
-export type FinancialPeriod = "FY" | "FQ" | "FH" | "TTM";
+export type FinancialPeriod = "FY" | "FQ" | "FH" | "TTM" | "NFY" | "NFQ" | "NFH" | "N4FQ" | "N4FY" | "N4FH" | "NTM";
+export type FinancialPeriodOrAggregated = FinancialPeriod | "AGG" | "NOAGG";
 export type FormatterName = Nominal<string, "FormatterName">;
 export type GetMarksCallback<T> = (marks: T[]) => void;
 export type GetNewsFunction = (symbol: string, callback: (response: GetNewsResponse) => void) => void;
@@ -30075,7 +30194,7 @@ export type LayoutSizes = Record<LayoutType, LayoutSizesState>;
 export type LayoutSizesState = SubLayoutSizesState[];
 export type LayoutType = SingleChartLayoutType | MultipleChartsLayoutType;
 export type LegendMode = "horizontal" | "vertical";
-export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarket";
+export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarket" | "24h" | "night";
 /**
  * Plot Style. Used for `plottype` properties within [Indicator overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/indicator-overrides).
  */
@@ -30089,6 +30208,7 @@ export type LineToolsAndGroupsLoadRequestType = "allLineTools" | "lineToolsWitho
 export type MarkConstColors = "red" | "green" | "blue" | "yellow";
 export type MarkupText = (string | HyperlinkInfo)[];
 export type MultipleChartsLayoutType = "2h" | "2v" | "3h" | "3v" | "3s" | "3r" | "2-1" | "1-2" | "4" | "4v" | "4h" | "4s" | "4s-l" | "1-3" | "3-1" | "2-2-l" | "2-2-r" | "2-2" | "1-4" | "5h" | "5v" | "5s" | "5s-l" | "2-3" | "3-2" | "4-1" | "2-3-l" | "2-3-r" | "6" | "6h" | "6v" | "6c" | "2-4" | "4-2" | "4-3" | "7h" | "7s" | "8" | "8c" | "8h" | "8v";
+export type NoticeDialogParams = Omit<DialogParams<() => void>, "callback">;
 export type ObservableCallback<T> = (value: T) => void;
 export type OmitActionId<T extends {
 	actionId: ActionId;
@@ -30163,6 +30283,11 @@ export type ResolveCallback = (symbolInfo: LibrarySymbolInfo) => void;
 export type RssNewsFeedItem = RssNewsFeedInfo | RssNewsFeedInfo[];
 export type SearchSymbolsCallback = (items: SearchSymbolResultItem[]) => void;
 export type SearchSymbolsPaginatedCallback = (items: SearchSymbolResultItem[], symbolsRemaining: number) => void;
+/**
+ * Identifier of an entity that can participate in selection — either a drawing/indicator
+ * ([EntityId]) or a drawings group ([ShapesGroupId]).
+ */
+export type SelectableItem = EntityId | ShapesGroupId;
 /** An event related to the series. Currently the only possible value for this argument is `price_scale_changed` */
 export type SeriesEventType = "price_scale_changed";
 export type SeriesFormat = "price" | "volume";
@@ -30278,11 +30403,11 @@ export type TickerId = Nominal<string, "Ticker">;
  *
  * Examples:
  * 1. a timeframe object, `{type, value}`:
- *     * `type`: `period-back`.
- *     * `value`: valid timeframe is a number with letter D for days and M for months.
+ * * `type`: `period-back`.
+ * * `value`: valid timeframe is a number with letter D for days and M for months.
  * 2. a range object, `{type, from, to}`
- *     * `type`: `time-range`.
- *     * `from`, `to`: UNIX timestamps, UTC.
+ * * `type`: `time-range`.
+ * * `from`, `to`: UNIX timestamps, UTC.
  */
 export type TimeFrameValue = TimeFramePeriodBack | TimeFrameTimeRange;
 export type TimeScaleMarkShape = "circle" | "earningUp" | "earningDown" | "earning";
@@ -30356,7 +30481,7 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
 "watchlist_import_export" | 
 /** Enables DOM widget visibility @default false */
 "dom_widget" | 
-/** Keeps Object Tree widget in the right toolbar. If the right toolbar is not enabled this feature will have no effect. @default false */
+/** Keeps object tree widget in the right toolbar. If the right toolbar is not enabled this feature will have no effect. @default false */
 "keep_object_tree_widget_in_right_toolbar" | 
 /** Show only the last price and change values in the main series legend @default false */
 "show_last_price_and_change_only_in_series_legend" | 
@@ -30425,7 +30550,19 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  * Enables the DOM widget's static mode.
  * @default false
  */
-"static_dom";
+"static_dom" | 
+/**
+ * When enabled, drawings created via {@link IChartWidgetApi.createShape} or
+ * {@link IChartWidgetApi.createMultipointShape} inherit the group of the
+ * previously selected drawing or group, provided no explicit `zOrder` is
+ * passed in the call options.
+ *
+ * Toolbar-, hotkey- and paste-driven drawing creation always uses this
+ * behavior regardless of the featureset.
+ *
+ * @default false
+ */
+"keep_selected_group_on_tool_creation";
 export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c" | "hlc";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;
@@ -30444,7 +30581,3 @@ export type WidgetOverrides = DrawingOverrides & {
 export as namespace TradingView;
 
 export {};
-
-declare type DeepPartial<T> = {
-	[P in keyof T]?: T[P] extends (infer U)[] ? DeepPartial<U>[] : T[P] extends readonly (infer X)[] ? readonly DeepPartial<X>[] : DeepPartial<T[P]>;
-};
