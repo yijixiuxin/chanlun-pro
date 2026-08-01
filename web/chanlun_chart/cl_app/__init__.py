@@ -187,6 +187,13 @@ def create_app(test_config=None):
 
     # 记录请求次数，超过则返回 no_data
     __history_req_counter = {}
+    __is_no_datas = {}
+
+    def __set_symbol_no_data(symbol, flag):
+        __is_no_datas[symbol] = flag
+
+    def __get_symbol_no_data(symbol):
+        return __is_no_datas.get(symbol, False)
 
     _alert_tasks = AlertTasks(scheduler)
     _alert_tasks.run()
@@ -493,6 +500,11 @@ def create_app(test_config=None):
                         "counter": 0,
                         "tm": now_time,
                     }
+        else:
+            __set_symbol_no_data(_symbol_res_old_k_time_key, False)
+
+        if s == "no_data":
+            __set_symbol_no_data(_symbol_res_old_k_time_key, True)
 
         market = symbol.split(":")[0].lower()
         code = symbol.split(":")[1]
@@ -501,6 +513,7 @@ def create_app(test_config=None):
 
         # 判断当前是否可交易时间
         if firstDataRequest == "false" and ex.now_trading() is False:
+            __set_symbol_no_data(_symbol_res_old_k_time_key, True)
             return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
 
         frequency = resolution_maps[resolution]
@@ -531,7 +544,8 @@ def create_app(test_config=None):
             # __log.info(f'{code} - {frequency} get cd time : {time.time() - s_time}')
 
         # 如果图表指定返回的时间太早，直接返回无数据
-        if int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
+        if int(_to) <= fun.datetime_to_int(klines.iloc[0]["date"]):
+            __set_symbol_no_data(_symbol_res_old_k_time_key, True)
             return {"s": "no_data"}
 
         # 将缠论数据，转换成 tv 画图的坐标数据
@@ -542,7 +556,10 @@ def create_app(test_config=None):
         # __log.info(f'{code} - {frequency} to tv chart data time : {time.time() - s_time}')
 
         # 根据 from_time 和 to_time 来获取对应的K线数据
-        if firstDataRequest == "false" and "currency" not in market:
+        if (
+            firstDataRequest == "false"
+            and __get_symbol_no_data(_symbol_res_old_k_time_key) is False
+        ):
             _t = cl_chart_data["t"][-10:]
             _c = cl_chart_data["c"][-10:]
             _o = cl_chart_data["o"][-10:]
@@ -574,6 +591,7 @@ def create_app(test_config=None):
             _zsd_zss = cl_chart_data["zsd_zss"]
             _bcs = cl_chart_data["bcs"]
             _mmds = cl_chart_data["mmds"]
+            __set_symbol_no_data(_symbol_res_old_k_time_key, False)
 
         info = {
             "s": s,
