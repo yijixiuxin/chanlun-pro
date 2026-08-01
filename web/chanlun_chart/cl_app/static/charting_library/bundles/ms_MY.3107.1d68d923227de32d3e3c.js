@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[3107],{25488:a=>{a.exports={en:["Next time you can use {shortcut} for quick paste"],ms_MY:["Lain kali anda boleh menggunakan {shortcut} untuk tampalan pantas"]}}}]);

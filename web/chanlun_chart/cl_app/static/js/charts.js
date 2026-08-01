@@ -302,7 +302,7 @@ class ChartManager {
         }
       });
     });
-    this.widget.onChartReady(() => {
+    this.widget.chartReady().then(() => {
       this.chart = this.widget.activeChart();
       if (!this.chart) {
         console.error("Failed to get active chart");
@@ -323,7 +323,7 @@ class ChartManager {
         .subscribe(null, () => this.handleDataLoaded(), true);
 
       // 数据准备事件
-      this.chart.dataReady(() => this.handleDataReady());
+      this.chart.dataReady().then(() => this.handleDataReady());
 
       // 数据更新事件
       this.widget.subscribe("onTick", () => this.handleTick());

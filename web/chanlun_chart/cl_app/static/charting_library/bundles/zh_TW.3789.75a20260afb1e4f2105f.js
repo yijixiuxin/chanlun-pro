@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[3789],{61880:e=>{e.exports={en:["Save template as"],zh_TW:["將模板另存為"]}},54237:e=>{e.exports={en:["Template '{themeName}' already exists. Do you really want to replace it?"],zh_TW:["模板“{themeName}”已存在。您要更換它嗎？"]}},76465:e=>{e.exports={en:["Template name"],zh_TW:["範本名稱"]}}}]);

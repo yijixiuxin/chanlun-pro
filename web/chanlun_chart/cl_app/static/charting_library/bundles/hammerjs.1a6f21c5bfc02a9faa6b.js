@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5652],{35955:(e,a,r)=>{r.r(a),r.d(a,{HammerJS:()=>n.a});var i=r(72141),n=r.n(i)}}]);

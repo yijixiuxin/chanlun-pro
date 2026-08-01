@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5753,8899],{3443:e=>{e.exports={en:["Add text"],ko:["텍스트 넣기"]}},58899:e=>{e.exports={en:["change {title} text"],ko:["{title} 텍스트 바꾸기"]}}}]);

@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[9813,8899,6775],{58899:e=>{e.exports={en:["change {title} text"],vi:["thay đổi văn bản {title}"]}},66775:e=>{e.exports={en:["erase level line"],vi:["xóa vạch mức"]}}}]);

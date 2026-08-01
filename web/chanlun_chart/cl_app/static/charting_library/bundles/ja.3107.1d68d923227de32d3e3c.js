@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[3107],{25488:e=>{e.exports={en:["Next time you can use {shortcut} for quick paste"],ja:["次回からは、{shortcut} で素早く貼り付けることができます"]}}}]);

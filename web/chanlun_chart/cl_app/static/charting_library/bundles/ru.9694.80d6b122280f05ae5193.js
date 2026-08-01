@@ -1,1 +1,0 @@
-(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[9694],{69694:e=>{e.exports={en:["Don't show again"],ru:["Больше не показывать это сообщение"]}}}]);

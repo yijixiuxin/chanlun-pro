@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[3616],{21553:(r,s,e)=>{e.d(s,{SavingLineToolsError:()=>o,SavingLineToolsLibraryError:()=>i});class o extends Error{constructor(r,s){super(s),this.shouldBeCooled=r}}class i extends Error{constructor(r,s=!1){super(r),this.safe=s,this.name="SavingLineToolsLibraryError"}}}}]);
