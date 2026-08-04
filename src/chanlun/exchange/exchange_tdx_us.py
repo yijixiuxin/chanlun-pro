@@ -1,6 +1,5 @@
 import datetime
 import traceback
-from typing import Dict, List, Union
 
 import akshare as ak
 import pandas as pd
@@ -123,7 +122,7 @@ class ExchangeTDXUS(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         通达信，不支持按照时间查找
         """
@@ -141,7 +140,7 @@ class ExchangeTDXUS(Exchange):
             "y": 11,
             "q": 10,
             "m": 6,
-            "w": 5,
+            "w": 9,
             "d": 9,
             "60m": 3,
             "30m": 2,
@@ -220,17 +219,18 @@ class ExchangeTDXUS(Exchange):
                 ["code", "date", "open", "close", "high", "low", "volume"]
             ]
 
-            if frequency in ["10m", "2m"]:
+            if args["fq_type"] == "qfq":
+                klines_df = self.klines_qfq(code, klines_df)
+
+            if frequency in ["10m", "2m", "w"]:
                 klines_df = convert_us_tdx_kline_frequency(klines_df, frequency)
 
-            if args["fq_type"] == "qfq":
-                return self.klines_qfq(code, klines_df)
-            else:
-                return klines_df
+            return klines_df
+
         except TdxConnectionError:
             self.reset_tdx_ip()
         except Exception as e:
-            print(f"获取行情异常 {code} - {frequency} Exception ：{str(e)}")
+            print(f"获取行情异常 {code} - {frequency} Exception ：{e!s}")
             traceback.print_exc()
 
         return None
@@ -250,7 +250,7 @@ class ExchangeTDXUS(Exchange):
             _dt = _dt + datetime.timedelta(days=1)
         return _dt.astimezone(self.tz)
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         获取股票名称
         """
@@ -260,7 +260,7 @@ class ExchangeTDXUS(Exchange):
             return None
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         ticks = {}
         client = TdxExHq_API(raise_exception=True, auto_retry=True)
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
@@ -344,6 +344,8 @@ class ExchangeTDXUS(Exchange):
             qfq_factor_df["qfq_factor"] = qfq_factor_df["qfq_factor"].astype(float)
             qfq_factor_df = qfq_factor_df.drop(columns=["date", "adjust"])
 
+            # print(qfq_factor_df)
+
             # 合并k线与复权因子，进行复权计算
             df = pd.concat([klines, qfq_factor_df], axis=0)
             df["qfq_date"].fillna(df["date"], inplace=True)
@@ -408,7 +410,7 @@ if __name__ == "__main__":
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    klines = ex.klines("AAPL", "30m")
+    klines = ex.klines("TSLA", "w")
     print(klines.tail(20))
 
     # ticks = ex.ticks([ex.default_code()])
