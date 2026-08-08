@@ -1,7 +1,6 @@
 import datetime
 import math
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
 
 import MyTT
 import numpy as np
@@ -22,21 +21,21 @@ class POSITION:
         self,
         code: str,
         mmd: str,
-        type: str = None,
+        type: str | None = None,
         balance: float = 0,
         price: float = 0,
         amount: float = 0,
-        loss_price: float = None,
-        open_date: str = None,
-        open_datetime: datetime.datetime = None,
-        close_datetime: datetime.datetime = None,
+        loss_price: float | None = None,
+        open_date: str | None = None,
+        open_datetime: datetime.datetime | None = None,
+        close_datetime: datetime.datetime | None = None,
         profit_rate: float = 0,
         max_profit_rate: float = 0,
         max_loss_rate: float = 0,
         open_msg: str = "",
         close_msg: str = "",
-        info: Dict = None,
-        open_uid: str = None,
+        info: dict | None = None,
+        open_uid: str | None = None,
     ):
         self.code: str = code
         self.mmd: str = mmd
@@ -56,22 +55,22 @@ class POSITION:
         self.max_loss_rate: float = max_loss_rate  # 仅供参考，不太精确
         self.open_msg: str = open_msg
         self.close_msg: str = close_msg
-        self.info: Dict = info
+        self.info: dict = info
         self.open_uid: str = open_uid
         # 仓位控制相关
         # 记录当前开仓所占比例
         self.now_pos_rate: float = 0
         # 记录开仓的唯一key记录，避免多次重复开仓
-        self.open_keys: Dict[str, float] = {}
+        self.open_keys: dict[str, float] = {}
         # 记录平仓的唯一key记录，避免多次重复平仓
-        self.close_keys: Dict[str, float] = {}
+        self.close_keys: dict[str, float] = {}
 
         # 开仓记录信息
-        self.open_records: List[dict] = []
+        self.open_records: list[dict] = []
         # 平仓记录信息
-        self.close_records: List[dict] = []
+        self.close_records: list[dict] = []
 
-    def __close_records_by_uids(self, uids: List[str] = None):
+    def __close_records_by_uids(self, uids: list[str] | None = None):
         """
         根据 uid 关闭记录
         """
@@ -90,7 +89,7 @@ class POSITION:
             f"{self.code} - {self.mmd} - {self.open_datetime} 没有找到对应的平仓记录: {uids}"
         )
 
-    def get_close_profit(self, uids: List[str] = None):
+    def get_close_profit(self, uids: list[str] | None = None):
         if uids is None:
             return {
                 "close_datetime": self.close_datetime,
@@ -140,14 +139,14 @@ class Operation:
         }
         # 旧的 操作指示  buy  买入  sell  卖出 （buy 表示开仓 sell 表示平仓，新的用 open  close 进行表示了）
         # 新的 操作指示  open 开仓  close  平仓
-        self.opt: str = opt if opt not in opt_map.keys() else opt_map[opt]
+        self.opt: str = opt_map.get(opt, opt)
 
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
         # 背驰点 例如：down_bi_bc_buy down_pz_bc_buy down_qs_bc_buy up_bi_bc_sell up_pz_bc_sell up_qs_bc_sell
         self.mmd: str = mmd  # 触发买卖点
         self.loss_price: float = loss_price  # 止损价格
-        self.info: Dict[str, object] = info  # 自定义保存的一些信息
+        self.info: dict[str, object] = info  # 自定义保存的一些信息
         self.msg: str = msg
         self.pos_rate: float = pos_rate  # 开仓 or 平仓 所占的比例
         # 避免同一位置多次开平仓，需要在该位置设置一个独立的 key 值，例如当前笔结束的日期等
@@ -169,7 +168,7 @@ class MarketDatas(ABC):
     市场数据类，用于在回测与实盘获取指定行情数据类
     """
 
-    def __init__(self, market: str, frequencys: List[str], cl_config=None):
+    def __init__(self, market: str, frequencys: list[str], cl_config=None):
         """
         初始化
         """
@@ -178,10 +177,10 @@ class MarketDatas(ABC):
         self.cl_config = cl_config
 
         # 按照 code_frequency 进行索引保存，存储周期对应的缠论数据
-        self.cl_datas: Dict[str, ICL] = {}
+        self.cl_datas: dict[str, ICL] = {}
 
         # 按照 code_frequency 进行索引保存，减少多次计算时间消耗；每次循环缓存的计算，在下次循环会重置为 {}
-        self.cache_cl_datas: Dict[str, ICL] = {}
+        self.cache_cl_datas: dict[str, ICL] = {}
 
     @abstractmethod
     def klines(self, code, frequency) -> pd.DataFrame:
@@ -197,7 +196,7 @@ class MarketDatas(ABC):
         """
 
     @abstractmethod
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
+    def get_cl_data(self, code, frequency, cl_config: dict | None = None) -> ICL:
         """
         获取标的周期的缠论数据
         @param code: 获取缠论数据的标的代码
@@ -210,11 +209,10 @@ class MarketDatas(ABC):
         """
         获取自定义数据
         """
-        return None
+        return
 
 
 class Trader(ABC):
-
     def __init__(
         self,
         name,
@@ -238,7 +236,7 @@ class Trader(ABC):
         """
 
     @abstractmethod
-    def hold_positions(self) -> List[POSITION]:
+    def hold_positions(self) -> list[POSITION]:
         """
         返回所有持仓记录
         """
@@ -256,10 +254,9 @@ class Strategy(ABC):
         #       字典格式：{'buy': ['a', 'b'], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
         self.allow_close_uids = None
         self.use_times = {}
-        pass
 
     def add_times(self, key: str, use_time: float):
-        if key not in self.use_times.keys():
+        if key not in self.use_times:
             self.use_times[key] = {"num": 1, "times": use_time}
         else:
             self.use_times[key]["num"] += 1
@@ -273,8 +270,8 @@ class Strategy(ABC):
 
     @abstractmethod
     def open(
-        self, code, market_data: MarketDatas, poss: List[POSITION]
-    ) -> List[Operation]:
+        self, code, market_data: MarketDatas, poss: list[POSITION]
+    ) -> list[Operation]:
         """
         观察行情数据，给出开仓操作建议
         :param code:
@@ -286,7 +283,7 @@ class Strategy(ABC):
     @abstractmethod
     def close(
         self, code, mmd: str, pos: POSITION, market_data: MarketDatas
-    ) -> Union[Operation, None, List[Operation]]:
+    ) -> Operation | None | list[Operation]:
         """
         盯当前持仓，给出平仓当下建议
         :param code:
@@ -302,7 +299,6 @@ class Strategy(ABC):
 
         @param bt: 回测 BackTest 对象
         """
-        pass
 
     def is_filter_opts(self):
         """
@@ -313,7 +309,7 @@ class Strategy(ABC):
 
     def filter_opts(
         self,
-        opts: List[Operation],
+        opts: list[Operation],
         trader: Trader = None,
     ):
         """
@@ -326,7 +322,6 @@ class Strategy(ABC):
         """
         回测专用，回测结束后，清理一些不需要的变量，避免被 pickle 保存
         """
-        pass
 
     @staticmethod
     def idx_ma(cd: ICL, period=5, is_all_prices=False):
@@ -624,16 +619,14 @@ class Strategy(ABC):
                 code=cd.get_code(),
                 opt="close",
                 mmd=pos.mmd,
-                msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
-                % (pos.mmd, low_stop_loss_price, price),
+                msg=f"{pos.mmd} ATR止损 （止损价格 {low_stop_loss_price} 当前价格 {price}）",
             )
         elif "sell" in pos.mmd and price >= high_stop_loss_price:
             return Operation(
                 code=cd.get_code(),
                 opt="close",
                 mmd=pos.mmd,
-                msg="%s ATR止损 （止损价格 %s 当前价格 %s）"
-                % (pos.mmd, high_stop_loss_price, price),
+                msg=f"{pos.mmd} ATR止损 （止损价格 {high_stop_loss_price} 当前价格 {price}）",
             )
         return None
 
@@ -652,20 +645,17 @@ class Strategy(ABC):
                     code=pos.code,
                     opt="close",
                     mmd=mmd,
-                    msg="%s 止损 （止损价格 %s 当前价格 %s）"
-                    % (mmd, pos.loss_price, price),
+                    msg=f"{mmd} 止损 （止损价格 {pos.loss_price} 当前价格 {price}）",
                     close_uid="clear",
                 )
-        elif "sell" in mmd:
-            if price > pos.loss_price:
-                return Operation(
-                    code=pos.code,
-                    opt="close",
-                    mmd=mmd,
-                    msg="%s 止损 （止损价格 %s 当前价格 %s）"
-                    % (mmd, pos.loss_price, price),
-                    close_uid="clear",
-                )
+        elif "sell" in mmd and price > pos.loss_price:
+            return Operation(
+                code=pos.code,
+                opt="close",
+                mmd=mmd,
+                msg=f"{mmd} 止损 （止损价格 {pos.loss_price} 当前价格 {price}）",
+                close_uid="clear",
+            )
         return None
 
     @staticmethod
@@ -696,7 +686,7 @@ class Strategy(ABC):
             )
             if profit_rate > 0 and pos.max_profit_rate - profit_rate >= max_back_rate:
                 return Operation(
-                    code=pos.code, opt="close", mmd=mmd, msg="%s 回调止损" % mmd
+                    code=pos.code, opt="close", mmd=mmd, msg=f"{mmd} 回调止损"
                 )
         return None
 
@@ -724,12 +714,11 @@ class Strategy(ABC):
             (max_loss_rate / 100 * balance) / abs(open_price - loss_price) * open_price
         )
         pos_rate = round(open_balance / balance, 2)
-        if pos_rate > 1:
-            pos_rate = 1
+        pos_rate = min(pos_rate, 1)
         return pos_rate
 
     @staticmethod
-    def last_done_bi(bis: List[BI]):
+    def last_done_bi(bis: list[BI]):
         """
         获取最后一个 完成笔
         """
@@ -759,7 +748,7 @@ class Strategy(ABC):
             return cd.get_xds()[-2]
 
     @staticmethod
-    def last_done_xd(xds: List[XD]):
+    def last_done_xd(xds: list[XD]):
         """
         获取最后一个 完成线段
         """
@@ -779,9 +768,9 @@ class Strategy(ABC):
         if len(next_ks) == 0:
             return False
         for _nk in next_ks:
-            if bi.type == "up" and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
-                return True
-            elif bi.type == "down" and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
+            if (bi.type == "up" and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l) or (
+                bi.type == "down" and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h
+            ):
                 return True
 
         return False
@@ -805,15 +794,13 @@ class Strategy(ABC):
         ):
             return True
         # 如果笔向下，k线要变红，进行转折
-        if (
+        return bool(
             bi.type == "down"
             and mean_klines[-2].o < mean_klines[-2].c
             and mean_klines[-1].l > bi.end.val
             and mean_klines[-1].c > mean_klines[-1].o
             and mean_klines[-1].c > mean_klines[-2].o
-        ):
-            return True
-        return False
+        )
 
     @staticmethod
     def bi_qiang_td(bi: BI, cd: ICL):
@@ -830,21 +817,16 @@ class Strategy(ABC):
             return False
         if bi.end.klines[-1].index == last_k.index:
             return False
-        if (
+        return bool(
             bi.end.type == "ding"
             and last_k.o > last_k.c
             and last_k.c
             < bi.end.low(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
-        ):
-            return True
-        elif (
-            bi.end.type == "di"
+            or bi.end.type == "di"
             and last_k.o < last_k.c
             and last_k.c
             > bi.end.high(cd.get_config()["fx_qj"], cd.get_config()["fx_qy"])
-        ):
-            return True
-        return False
+        )
 
     @staticmethod
     def bi_yanzhen_fx(bi: BI, cd: ICL):
@@ -888,7 +870,7 @@ class Strategy(ABC):
                 return True
         return False
 
-    def dynamic_change_loss_by_bi(self, pos: POSITION, bis: List[BI]):
+    def dynamic_change_loss_by_bi(self, pos: POSITION, bis: list[BI]):
         """
         动态按照笔进行止损价格的移动
         """
@@ -903,7 +885,7 @@ class Strategy(ABC):
         return
 
     @staticmethod
-    def points_jiaodu(points: List[float], position="up"):
+    def points_jiaodu(points: list[float], position="up"):
         """
         提供一系列数据点，给出其趋势角度，以此判断其方向
         用于判断类似 macd 背驰，macd柱子创新低而黄白线则新高
@@ -928,9 +910,7 @@ class Strategy(ABC):
                 position == "up"
                 and p1[1] <= p2[1]
                 and ((p3 is not None and p2[1] >= p3[1]) or p3 is None)
-            ):
-                fxs.append(p2)
-            elif (
+            ) or (
                 position == "down"
                 and p1[1] >= p2[1]
                 and ((p3 is not None and p2[1] <= p3[1]) or p3 is None)
@@ -940,9 +920,7 @@ class Strategy(ABC):
         if len(fxs) < 2:
             return 0
         # 按照大小排序
-        fxs = sorted(
-            fxs, key=lambda f: f[1], reverse=True if position == "up" else False
-        )
+        fxs = sorted(fxs, key=lambda f: f[1], reverse=position == "up")
 
         def jiaodu(_p1: list, _p2: list):
             # 计算斜率
@@ -1084,7 +1062,6 @@ def fee_us(opt: str, price: float, amlunt: float):
     """
     美股的交易费用计算
     """
-    pass
 
 
 if __name__ == "__main__":

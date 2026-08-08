@@ -9,7 +9,6 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
 from pathlib import Path
-from typing import Dict, List
 
 import empyrical as ep
 import numpy as np
@@ -40,7 +39,7 @@ class BackTest:
     回测类
     """
 
-    def __init__(self, config: dict = None):
+    def __init__(self, config: dict | None = None):
         # 日志记录
         self.log = fun.get_logger("my_backtest.log")
         # 资源管理
@@ -67,8 +66,8 @@ class BackTest:
             "strategy",
         ]
         for _k in check_keys:
-            if _k not in config.keys():
-                raise Exception(f"回测配置缺少必要参数:{_k}")
+            if _k not in config:
+                raise Exception(f"回测配置缺少必要参数:{_k}")  # noqa: TRY002
 
         self.mode = config["mode"]
         self.market = config["market"]
@@ -187,7 +186,6 @@ class BackTest:
             self.cl_config,
         )
         # self.log.info('Load OK')
-        return
 
     def info(self):
         """
@@ -211,8 +209,8 @@ class BackTest:
 
     def run(
         self,
-        next_frequency: str = None,
-        begin_start_dt: datetime.datetime = None,
+        next_frequency: str | None = None,
+        begin_start_dt: datetime.datetime | None = None,
         loop_callback_fun: object = None,
     ):
         """
@@ -228,7 +226,7 @@ class BackTest:
 
         if begin_start_dt is not None:
             self.log.info(f"起始数据回放位置：{begin_start_dt}")
-            for _f, _dts in self.datas.loop_datetime_list.items():
+            for _dts in self.datas.loop_datetime_list.values():
                 _dts = [_d for _d in _dts if _d >= begin_start_dt]
 
         _st = time.time()
@@ -240,7 +238,7 @@ class BackTest:
             # 更新持仓盈亏与资金变化
             try:
                 self.trader.update_position_record()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.log.error(f"执行记录持仓信息 : {self.datas.now_date} 异常")
                 self.log.error(traceback.format_exc())
 
@@ -248,7 +246,7 @@ class BackTest:
                 try:
                     self.strategy.on_bt_loop_start(self)
                     self.trader.run(code, is_filter=self.strategy.is_filter_opts())
-                except Exception:
+                except Exception:  # noqa: BLE001
                     self.log.error(f"执行 {code} : {self.datas.now_date} 异常")
                     self.log.error(traceback.format_exc())
                     # raise e
@@ -258,7 +256,7 @@ class BackTest:
                     self.trader.buffer_opts, self.trader
                 )
                 self.trader.run_buffer_opts()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.log.error(f"执行 {code} 操作二次过滤 : {self.datas.now_date} 异常")
                 self.log.error(traceback.format_exc())
             if loop_callback_fun:
@@ -299,13 +297,16 @@ class BackTest:
         return self.save_file
 
     def run_process(
-        self, next_frequency: str = None, max_workers: int = None, re_again=False
+        self,
+        next_frequency: str | None = None,
+        max_workers: int | None = None,
+        re_again=False,
     ):
         """
         多进程执行回测模式
         """
         if self.mode != "signal":
-            raise Exception(f"多进程回测，不支持 {self.mode} 回测模式")
+            raise Exception(f"多进程回测，不支持 {self.mode} 回测模式")  # noqa: TRY002
 
         if next_frequency is None:
             next_frequency = self.frequencys[-1]
@@ -338,7 +339,7 @@ class BackTest:
                     self.trader.positions_history[_code] = _poss
                 # 持仓盈亏合并
                 for _dt, _hold_profits in BT.trader.hold_profit_history.items():
-                    if _dt not in self.trader.hold_profit_history.keys():
+                    if _dt not in self.trader.hold_profit_history:
                         self.trader.hold_profit_history[_dt] = 0
                     self.trader.hold_profit_history[_dt] += _hold_profits
                 # 合并订单记录
@@ -361,15 +362,15 @@ class BackTest:
                 bh_df = pd.DataFrame(balance_history.values())
                 bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
                 self.trader.balance_history = bh_df.sum(axis=1)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.log.error("合并资金历史记录异常")
                 self.log.error(traceback.format_exc())
 
                 self.log.info("合并回测结果完成，可调用 save 方法进行保存")
-            except Exception as e:
+            except Exception:  # noqa: B025
                 self.log.error("多进程回测执行异常")
                 self.log.error(traceback.format_exc())
-                raise e
+                raise
             finally:
                 # 确保资源被释放
                 gc.collect()
@@ -386,7 +387,7 @@ class BackTest:
         """
         copy_cl_config = copy.deepcopy(self.cl_config)
         for k, v in new_cl_setting.items():
-            if "default" in copy_cl_config.keys():
+            if "default" in copy_cl_config:
                 copy_cl_config["default"][k] = v
             else:
                 copy_cl_config[k] = v
@@ -449,7 +450,7 @@ class BackTest:
             balance = pos_pd[self.evaluate].sum() if len(pos_pd) > 0 else 0
 
             BT.log.info(f"回测{new_cl_setting} : {new_save_file} 结果：{balance}")
-        except Exception:
+        except Exception:  # noqa: BLE001
             BT.log.error(f"执行回测异常：{new_cl_setting} : {new_save_file}")
             BT.log.error(traceback.format_exc())
 
@@ -462,8 +463,8 @@ class BackTest:
     def run_optimization(
         self,
         optimization_setting: OptimizationSetting,
-        max_workers: int = None,
-        next_frequency: str = None,
+        max_workers: int | None = None,
+        next_frequency: str | None = None,
         evaluate: str = "profit_rate",
         load_data_to_cache: bool = True,
     ):
@@ -475,7 +476,7 @@ class BackTest:
         @param evaluate: 评价的指标 允许 profit_rate /  max_profit_rate
         @param load_data_to_cache: 批量优化，如果使用加载数据到内存中的做法，会占用太多内存，这里可以设置为 False，直接读取数据到方式执行
         """
-        cl_settings: List[Dict] = optimization_setting.generate_cl_settings()
+        cl_settings: list[dict] = optimization_setting.generate_cl_settings()
 
         self.log.info("开始执行穷举算法优化")
         self.log.info(f"参数优化空间：{len(cl_settings)}")
@@ -493,7 +494,7 @@ class BackTest:
             results.sort(reverse=True, key=lambda _r: _r["end_balance"])
 
             end = time.perf_counter()
-            cost: int = int((end - start))
+            cost: int = int(end - start)
             self.log.info(f"穷举算法优化完成，耗时{cost}秒")
             try:
                 for r in results:
@@ -501,10 +502,10 @@ class BackTest:
                         BT = BackTest()
                         BT.load(r["save_file"])
                         print("* * " * 10)
-                        print(f'参数：{r["params"]}')
-                        print(f'落地文件：{r["save_file"]}')
+                        print(f"参数：{r['params']}")
+                        print(f"落地文件：{r['save_file']}")
                         BT.result(True)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         self.log.error(f"处理优化结果异常：{r['save_file']}")
                         self.log.error(traceback.format_exc())
                         continue
@@ -516,15 +517,15 @@ class BackTest:
                             BT.datas = None
                             del BT
                             gc.collect()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.log.error("处理优化结果集异常")
                 self.log.error(traceback.format_exc())
 
                 return results
-            except Exception as e:
+            except Exception:  # noqa: B025
                 self.log.error("参数优化执行异常")
                 self.log.error(traceback.format_exc())
-                raise e
+                raise
             finally:
                 # 确保资源被释放
                 gc.collect()
@@ -533,10 +534,10 @@ class BackTest:
         self,
         code,
         frequency,
-        merge_kline_freq: str = None,
-        to_minutes: int = None,
+        merge_kline_freq: str | None = None,
+        to_minutes: int | None = None,
         to_dt_align_type: str = "bob",
-        to_frequency: str = None,
+        to_frequency: str | None = None,
         change_cl_config=None,
         chart_config=None,
     ):
@@ -553,11 +554,11 @@ class BackTest:
         @param chart_config: 覆盖画图配置项
         """
         # 根据配置中指定的缠论配置进行展示图表
-        if code in self.cl_config.keys():
+        if code in self.cl_config:
             cl_config = self.cl_config[code]
-        elif frequency in self.cl_config.keys():
+        elif frequency in self.cl_config:
             cl_config = self.cl_config[frequency]
-        elif "default" in self.cl_config.keys():
+        elif "default" in self.cl_config:
             cl_config = self.cl_config["default"]
         else:
             cl_config = self.cl_config
@@ -585,12 +586,12 @@ class BackTest:
             cl_config=show_cl_config,
         )
         bk.klines(code, frequency)
-        klines = bk.all_klines["%s-%s" % (code, frequency)]
-        title = "%s - %s" % (code, frequency)
+        klines = bk.all_klines[f"{code}_{frequency}"]
+        title = f"{code} - {frequency}"
         if to_minutes is not None:
             kg = KlinesGenerator(to_minutes, show_cl_config, to_dt_align_type)
             cd: ICL = kg.update_klines(klines)
-            title = "%s - (%s to %s)" % (code, frequency, to_minutes)
+            title = f"{code} - ({frequency} to {to_minutes})"
         elif merge_kline_freq is not None:
             m_freq_info = merge_kline_freq.split(":")
             if m_freq_info[0] == "a":
@@ -600,15 +601,12 @@ class BackTest:
             else:
                 klines = convert_currency_kline_frequency(klines, m_freq_info[1])
             cd: ICL = cl.CL(code, m_freq_info[1], show_cl_config).process_klines(klines)
-            title = "%s - %s" % (code, "Merge " + m_freq_info[1])
+            title = "{} - {}".format(code, "Merge " + m_freq_info[1])
         else:
             cd: ICL = cl.CL(code, frequency, show_cl_config).process_klines(klines)
-        orders = self.trader.orders[code] if code in self.trader.orders else []
+        orders = self.trader.orders.get(code, [])
         # 是否屏蔽锁仓订单
-        if (
-            "not_show_lock_order" in show_cl_config
-            and show_cl_config["not_show_lock_order"]
-        ):
+        if show_cl_config.get("not_show_lock_order"):
             orders = [o for o in orders if "锁仓" not in o["info"]]
         orders = [o for o in orders if "无效" not in o["info"]]  # 过滤无效订单
         render = kcharts.render_charts(
@@ -635,7 +633,7 @@ class BackTest:
             base_close = float(base_klines.iloc[-1]["close"])
 
             # 每年交易日设置
-            annual_days = 240 if self.market in ["a", "us", "hk" "futures"] else 365
+            annual_days = 240 if self.market in ["a", "us", "hkfutures"] else 365
             # 无风险收益率
             risk_free = 0.03
 
@@ -771,7 +769,7 @@ class BackTest:
         total_loss_num = 0  # 总的亏损数量
         total_win_balance = 0
         total_loss_balance = 0
-        for k in self.trader.results.keys():
+        for k in self.trader.results:
             mmd = mmds[k]
             win_num = self.trader.results[k]["win_num"]
             loss_num = self.trader.results[k]["loss_num"]
@@ -803,7 +801,7 @@ class BackTest:
                     mmd,
                     win_num,
                     loss_num,
-                    f"{str(round(shenglv, 2))}%",
+                    f"{round(shenglv, 2)!s}%",
                     round(win_balance, 2),
                     round(loss_balance, 2),
                     round(net_balance, 2),
@@ -865,25 +863,24 @@ class BackTest:
         """
         if res["mode"] == "trade":
             print(
-                f'首个交易日：{res["start_date"]} 最后交易日：{res["end_date"]} 总交易日：{res["total_days"]}'
+                f"首个交易日：{res['start_date']} 最后交易日：{res['end_date']} 总交易日：{res['total_days']}"
             )
             print(
-                f'起始资金：{res["init_balance"]:,.2f} 结束资金：{res["end_balance"]:,.2f} 总手续费：{res["total_fee"]:,.2f}'
+                f"起始资金：{res['init_balance']:,.2f} 结束资金：{res['end_balance']:,.2f} 总手续费：{res['total_fee']:,.2f}"
             )
             print(
-                f'基准收益率：{res["base_return"]:,.2f}%  基准年化收益：{res["base_annual_return"]:,.2f}%%'
+                f"基准收益率：{res['base_return']:,.2f}%  基准年化收益：{res['base_annual_return']:,.2f}%%"
             )
             print(
-                f'总收益率：{res["total_return"]:,.2f}% 年化收益率：{res["annual_return"]:,.2f}%'
+                f"总收益率：{res['total_return']:,.2f}% 年化收益率：{res['annual_return']:,.2f}%"
             )
             print(
-                f'最大回撤：{res["max_drawdown"]:,.2f} 百分比最大回撤：{res["max_ddpercent"]:,.2f}% 最长回撤天数：{res["max_drawdown_duration"]}'
+                f"最大回撤：{res['max_drawdown']:,.2f} 百分比最大回撤：{res['max_ddpercent']:,.2f}% 最长回撤天数：{res['max_drawdown_duration']}"
             )
             print(
-                f'日均收益率：{res["daily_return"]:,.2f}% 收益标准差：{res["return_std"]:,.2f}% Sharpe Ratio: {res["sharpe_ratio"]:,.2f} 收益回撤比：{res["return_drawdown_ratio"]:,.2f} '
+                f"日均收益率：{res['daily_return']:,.2f}% 收益标准差：{res['return_std']:,.2f}% Sharpe Ratio: {res['sharpe_ratio']:,.2f} 收益回撤比：{res['return_drawdown_ratio']:,.2f} "
             )
         print(res["mmd_infos"])
-        return
 
     def result_by_pyfolio(self, live_start_date=None, is_return=False):
         """
@@ -935,7 +932,7 @@ class BackTest:
         positions = {}
         for _dt, _pos_balance in self.trader.positions_balance_history.items():
             _dt = fun.str_to_datetime(_dt[0:10], "%Y-%m-%d")
-            if _dt not in positions.keys():
+            if _dt not in positions:
                 positions[_dt] = {}
             for _code, _b in _pos_balance.items():
                 if _code == "Cash":
@@ -1010,7 +1007,7 @@ class BackTest:
         # 按照时间统计当前时间持仓累计盈亏
         _hold_profit_sums = {}
         for _dt, _p in self.trader.hold_profit_history.items():
-            if _dt not in _hold_profit_sums.keys():
+            if _dt not in _hold_profit_sums:
                 _hold_profit_sums[_dt] = _p
             else:
                 _hold_profit_sums[_dt] += _p
@@ -1021,7 +1018,7 @@ class BackTest:
             base_prices["datetime"].append(_dt)
 
             # 资金余额
-            if _dt in self.trader.balance_history.keys():
+            if _dt in self.trader.balance_history:
                 balance_history["datetime"].append(_dt)
                 balance_history["val"].append(self.trader.balance_history[_dt])
             else:
@@ -1032,7 +1029,7 @@ class BackTest:
 
             # 当前时间持仓累计
             hold_profit_history["datetime"].append(_dt)
-            if _dt in _hold_profit_sums.keys():
+            if _dt in _hold_profit_sums:
                 hold_profit_history["val"].append(_hold_profit_sums[_dt])
             else:
                 hold_profit_history["val"].append(0)
@@ -1055,13 +1052,13 @@ class BackTest:
         base_prices["val"] = list(base_klines["close"].to_list())
 
         # 获取所有的持仓历史，并按照平仓时间排序
-        positions: List[POSITION] = []
-        for _code in self.trader.positions_history.keys():
+        positions: list[POSITION] = []
+        for _code in self.trader.positions_history:
             positions.extend(iter(self.trader.positions_history[_code]))
         positions = sorted(positions, key=lambda p: p.close_datetime, reverse=False)
 
         # 持仓中的唯一买卖点
-        mmds = list(set([p.mmd for p in positions]))
+        mmds = list({p.mmd for p in positions})
         # 记录不同买卖点的收益总和
         dts_mmd_nps = {_m: {} for _m in mmds}
         # 按照平仓时间统计其中的收益总和
@@ -1147,12 +1144,12 @@ class BackTest:
                 width="96%", height="100%", pos_left="1%", pos_right="3%"
             ),
         )
-        if "JPY_PARENT_PID" in os.environ.keys() or "VSCODE_CWD" in os.environ.keys():
+        if "JPY_PARENT_PID" in os.environ or "VSCODE_CWD" in os.environ:
             return chart.render_notebook()
         else:
             return chart.dump_options()
 
-    def __get_close_profit(self, pos: POSITION, uids: List[str] = None):
+    def __get_close_profit(self, pos: POSITION, uids: list[str] | None = None):
         # 记录开仓的占用保证金与手续费
         hold_balance = 0
         hold_amount = 0
@@ -1208,7 +1205,7 @@ class BackTest:
                     break
 
         if release_balance == 0:
-            raise Exception(
+            raise Exception(  # noqa: TRY002
                 f"{pos.code} - {pos.mmd} - {pos.open_datetime} 没有找到对应的平仓记录: {query_uids}"
             )
 
@@ -1246,16 +1243,16 @@ class BackTest:
 
     def positions(
         self,
-        code: str = None,
-        add_columns: List[str] = None,
-        close_uids: List[str] = None,
+        code: str | None = None,
+        add_columns: list[str] | None = None,
+        close_uids: list[str] | None = None,
     ):
         """
         输出历史持仓信息
         如果 code 为 str 返回 特定 code 的数据
         """
         pos_objs = []
-        for _code in self.trader.positions_history.keys():
+        for _code in self.trader.positions_history:
             if code is not None and _code != code:
                 continue
             for p in self.trader.positions_history[_code]:
@@ -1281,7 +1278,7 @@ class BackTest:
                 }
                 if add_columns is not None:
                     for _col in add_columns:
-                        if _col in p.info.keys():
+                        if _col in p.info:
                             p_obj[_col] = p.info[_col]
                         else:
                             p_obj[_col] = "--"
@@ -1289,7 +1286,7 @@ class BackTest:
 
         return pd.DataFrame(pos_objs)
 
-    def orders(self, code: str = None):
+    def orders(self, code: str | None = None):
         """
         输出订单列表
         如果 code 返回 特定 code 的数据
@@ -1302,13 +1299,13 @@ class BackTest:
         return pd.DataFrame(order_objs)
 
     @staticmethod
-    def __orders_pd(trades: List[BackTestTrader]):
+    def __orders_pd(trades: list[BackTestTrader]):
         """
         持仓历史转换成 pandas 数据，便于做分析
         """
         order_objs = []
         for td in trades:
-            for code, orders in td.orders.items():
+            for orders in td.orders.values():
                 order_objs.extend(iter(orders))
         return pd.DataFrame(order_objs)
 
@@ -1321,7 +1318,6 @@ class BackTest:
         :return:
         """
         main_name = "资金变化"
-        main_x = balance_history["datetime"]
         main_y = balance_history["val"]
 
         main_chart = (
@@ -1441,7 +1437,7 @@ class BackTest:
                 pos_bottom="0%",
             ),
         )
-        if "JPY_PARENT_PID" in os.environ.keys() or "VSCODE_CWD" in os.environ.keys():
+        if "JPY_PARENT_PID" in os.environ or "VSCODE_CWD" in os.environ:
             return chart.render_notebook()
         else:
             return chart.dump_options()

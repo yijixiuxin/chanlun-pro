@@ -1,6 +1,5 @@
 import os
 import pathlib
-from typing import List
 
 import MyTT
 import numpy as np
@@ -17,9 +16,10 @@ from pyecharts.globals import CurrentConfig
 from chanlun.backtesting.base import Strategy
 from chanlun.cl_analyse import LinesFormAnalyse
 from chanlun.cl_interface import ICL, LINE, ZS
-from chanlun.cl_utils import cl_qstd, klines_to_heikin_ashi_klines
+from chanlun.cl_utils import cl_qstd
 from chanlun.exchange import exchange
 from chanlun.fun import str_to_datetime
+from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
 
 if "JPY_PARENT_PID" in os.environ:
     from pyecharts.globals import NotebookType
@@ -33,7 +33,7 @@ if "JPY_PARENT_PID" in os.environ:
 
 
 def render_charts(
-    title, cl_data: ICL, to_frequency: str = None, orders=None, config=None
+    title, cl_data: ICL, to_frequency: str | None = None, orders=None, config=None
 ):
     """
     缠论数据图表化展示
@@ -113,7 +113,7 @@ def render_charts(
 
     # 配置项整理
     for _k, _v in default_config.items():
-        if _k not in config.keys():
+        if _k not in config:
             config[_k] = _v
         else:
             try:
@@ -135,7 +135,7 @@ def render_charts(
                     config[_k] = bool(int(config[_k]))
                 elif "chart_idx_" in _k or "chart_kline_nums" in _k:
                     config[_k] = int(config[_k])
-            except Exception:
+            except Exception:  # noqa: BLE001
                 print(f"{_k} val error {config[_k]}")
                 config[_k] = _v
 
@@ -160,8 +160,8 @@ def render_charts(
     color_qstd_up = "RGB(255,127,80,0.7)"
     color_qstd_down = "RGB(100,149,237,0.7)"
 
-    color_last_bi_zs = "RGB(144,238,144,0.5)"
-    color_last_xd_zs = "RGB(255,182,193,0.5)"
+    # color_last_bi_zs = "RGB(144,238,144,0.5)"
+    # color_last_xd_zs = "RGB(255,182,193,0.5)"
 
     color_qstd_up = "RGB(255,127,80,0.7)"
     color_qstd_down = "RGB(100,149,237,0.7)"
@@ -220,7 +220,7 @@ def render_charts(
         elif market == "currency":
             klines = exchange.convert_currency_kline_frequency(klines, frequency)
         else:
-            raise Exception(f"图表周期数据转换，不支持的市场 {market}")
+            raise Exception(f"图表周期数据转换，不支持的市场 {market}")  # noqa: TRY002
 
         target_dates = klines["date"].tolist()
 
@@ -368,7 +368,7 @@ def render_charts(
     fx_bcs_mmds = {}
     for _bi in bis:
         _fx = _bi.end
-        if _fx.index not in fx_bcs_mmds.keys():
+        if _fx.index not in fx_bcs_mmds:
             fx_bcs_mmds[_fx.index] = {
                 "fx": _fx,
                 "bcs": {"bi": [], "xd": [], "zsd": [], "qsd": []},
@@ -386,7 +386,7 @@ def render_charts(
                 fx_bcs_mmds[_fx.index]["mmds"]["bi"].append(_mmd)
     for _xd in xds:
         _fx = _xd.end
-        if _fx.index not in fx_bcs_mmds.keys():
+        if _fx.index not in fx_bcs_mmds:
             fx_bcs_mmds[_fx.index] = {
                 "fx": _fx,
                 "bcs": {"bi": [], "xd": [], "zsd": [], "qsd": []},
@@ -404,7 +404,7 @@ def render_charts(
                 fx_bcs_mmds[_fx.index]["mmds"]["xd"].append(_mmd)
     for _zsd in zsds:
         _fx = _zsd.end
-        if _fx.index not in fx_bcs_mmds.keys():
+        if _fx.index not in fx_bcs_mmds:
             fx_bcs_mmds[_fx.index] = {
                 "fx": _fx,
                 "bcs": {"bi": [], "xd": [], "zsd": [], "qsd": []},
@@ -421,7 +421,7 @@ def render_charts(
             fx_bcs_mmds[_fx.index]["mmds"]["zsd"].append(_mmd)
     for _qsd in qsds:
         _fx = _qsd.end
-        if _fx.index not in fx_bcs_mmds.keys():
+        if _fx.index not in fx_bcs_mmds:
             fx_bcs_mmds[_fx.index] = {
                 "fx": _fx,
                 "bcs": {"bi": [], "xd": [], "zsd": [], "qsd": []},
@@ -448,7 +448,7 @@ def render_charts(
         "qs": "趋势背驰",
     }
     line_type_maps = {"bi": "笔", "xd": "线段", "zsd": "走势段", "qsd": "趋势段"}
-    for fx_index, fx_bc_info in fx_bcs_mmds.items():
+    for fx_bc_info in fx_bcs_mmds.values():
         bc_label = ""
         fx = fx_bc_info["fx"]
         for line_type, bcs in fx_bc_info["bcs"].items():
@@ -459,7 +459,7 @@ def render_charts(
                     bc_label += f"{bc_str} / "
         if bc_label != "":
             scatter_bc["i"].append(fx.k.date)
-            scatter_bc["val"].append([fx.val, bc_label.strip(" / ")])
+            scatter_bc["val"].append([fx.val, bc_label.strip(" / ")])  # noqa: B005
 
     # 画买卖点
     mmd_maps = {
@@ -476,7 +476,7 @@ def render_charts(
     }
     scatter_buy = {"i": [], "val": []}
     scatter_sell = {"i": [], "val": []}
-    for fx_index, fx_mmd_info in fx_bcs_mmds.items():
+    for fx_mmd_info in fx_bcs_mmds.values():
         fx = fx_mmd_info["fx"]
         fx_mmds = fx_mmd_info["mmds"]
         buy_label = ""
@@ -485,12 +485,22 @@ def render_charts(
             for mmd in mmds:
                 # 避免信息混乱，只显示同类型的一个
                 mmd_str = f"{line_type_maps[line_type]}{mmd_maps[mmd.name]}"
-                if mmd_str not in buy_label:
-                    if mmd.name in ["1buy", "2buy", "3buy", "l2buy", "l3buy"]:
-                        buy_label += "%s /" % mmd_str
-                if mmd_str not in sell_label:
-                    if mmd.name in ["1sell", "2sell", "3sell", "l2sell", "l3sell"]:
-                        sell_label += "%s /" % mmd_str
+                if mmd_str not in buy_label and mmd.name in [
+                    "1buy",
+                    "2buy",
+                    "3buy",
+                    "l2buy",
+                    "l3buy",
+                ]:
+                    buy_label += f"{mmd_str} / "
+                if mmd_str not in sell_label and mmd.name in [
+                    "1sell",
+                    "2sell",
+                    "3sell",
+                    "l2sell",
+                    "l3sell",
+                ]:
+                    sell_label += f"{mmd_str} / "
         if buy_label != "":
             scatter_buy["i"].append(fx.k.date)
             scatter_buy["val"].append([fx.val, buy_label.strip("/")])
@@ -533,7 +543,7 @@ def render_charts(
                 scatter_buy_orders["val"].append(
                     [
                         o["price"],
-                        f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]:{'' if 'info' not in o else o['info']}",
+                        f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]:{o.get('info', '')}",
                     ]
                 )
             elif o["type"] in ["sell", "close_long", "open_short"]:
@@ -541,7 +551,7 @@ def render_charts(
                 scatter_sell_orders["val"].append(
                     [
                         o["price"],
-                        f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]:{'' if 'info' not in o else o['info']}",
+                        f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]:{o.get('info', '')}",
                     ]
                 )
 
@@ -623,105 +633,89 @@ def render_charts(
 
     # 画 完成笔
     overlap_kline = klines_chart.overlap(
-        (
-            Line()
-            .add_xaxis(line_bis["index"])
-            .add_yaxis(
-                "笔",
-                line_bis["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(width=1, color=color_bi),
-            )
+        Line()
+        .add_xaxis(line_bis["index"])
+        .add_yaxis(
+            "笔",
+            line_bis["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=1, color=color_bi),
         )
     )
 
     # 画 未完成笔
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_xu_bis["index"])
-            .add_yaxis(
-                "笔",
-                line_xu_bis["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(
-                    width=1, type_="dashed", color=color_bi
-                ),
-            )
+        Line()
+        .add_xaxis(line_xu_bis["index"])
+        .add_yaxis(
+            "笔",
+            line_xu_bis["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=1, type_="dashed", color=color_bi),
         )
     )
 
     if config["chart_show_fx"]:
         # 画顶底分型
         overlap_kline = overlap_kline.overlap(
-            (
-                Scatter()
-                .add_xaxis(point_ding["index"])
-                .add_yaxis(
-                    "分型",
-                    point_ding["val"],
-                    itemstyle_opts=opts.ItemStyleOpts(color="red"),
-                    symbol_size=2,
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .set_series_opts(
-                    label_opts=opts.LabelOpts(
-                        color="rgb(255,200,44,0.3)",
-                        position="top",
-                        font_weight="bold",
-                        formatter=JsCode("function (params) {return params.value[2];}"),
-                    )
+            Scatter()
+            .add_xaxis(point_ding["index"])
+            .add_yaxis(
+                "分型",
+                point_ding["val"],
+                itemstyle_opts=opts.ItemStyleOpts(color="red"),
+                symbol_size=2,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_series_opts(
+                label_opts=opts.LabelOpts(
+                    color="rgb(255,200,44,0.3)",
+                    position="top",
+                    font_weight="bold",
+                    formatter=JsCode("function (params) {return params.value[2];}"),
                 )
             )
         )
         overlap_kline = overlap_kline.overlap(
-            (
-                Scatter()
-                .add_xaxis(point_di["index"])
-                .add_yaxis(
-                    "分型",
-                    point_di["val"],
-                    itemstyle_opts=opts.ItemStyleOpts(color="green"),
-                    symbol_size=2,
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .set_series_opts(
-                    label_opts=opts.LabelOpts(
-                        color="rgb(255,200,44,0.3)",
-                        position="bottom",
-                        font_weight="bold",
-                        formatter=JsCode("function (params) {return params.value[2];}"),
-                    )
+            Scatter()
+            .add_xaxis(point_di["index"])
+            .add_yaxis(
+                "分型",
+                point_di["val"],
+                itemstyle_opts=opts.ItemStyleOpts(color="green"),
+                symbol_size=2,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_series_opts(
+                label_opts=opts.LabelOpts(
+                    color="rgb(255,200,44,0.3)",
+                    position="bottom",
+                    font_weight="bold",
+                    formatter=JsCode("function (params) {return params.value[2];}"),
                 )
             )
         )
 
     # 画 完成线段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_xds["index"])
-            .add_yaxis(
-                "线段",
-                line_xds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(width=2, color=color_xd),
-            )
+        Line()
+        .add_xaxis(line_xds["index"])
+        .add_yaxis(
+            "线段",
+            line_xds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, color=color_xd),
         )
     )
     # 画 未完成线段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_xu_xds["index"])
-            .add_yaxis(
-                "线段",
-                line_xu_xds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(
-                    width=2, type_="dashed", color=color_xd
-                ),
-            )
+        Line()
+        .add_xaxis(line_xu_xds["index"])
+        .add_yaxis(
+            "线段",
+            line_xu_xds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, type_="dashed", color=color_xd),
         )
     )
 
@@ -785,59 +779,47 @@ def render_charts(
 
     # 画 完成走势段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_zsds["index"])
-            .add_yaxis(
-                "走势段",
-                line_zsds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(width=2, color=color_zsd),
-            )
+        Line()
+        .add_xaxis(line_zsds["index"])
+        .add_yaxis(
+            "走势段",
+            line_zsds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, color=color_zsd),
         )
     )
     # 画 未完成走势段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_xu_zsds["index"])
-            .add_yaxis(
-                "走势段",
-                line_xu_zsds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(
-                    width=2, type_="dashed", color=color_zsd
-                ),
-            )
+        Line()
+        .add_xaxis(line_xu_zsds["index"])
+        .add_yaxis(
+            "走势段",
+            line_xu_zsds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, type_="dashed", color=color_zsd),
         )
     )
 
     # 画 完成趋势段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_qsds["index"])
-            .add_yaxis(
-                "趋势段",
-                line_qsds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(width=2, color=color_qsd),
-            )
+        Line()
+        .add_xaxis(line_qsds["index"])
+        .add_yaxis(
+            "趋势段",
+            line_qsds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, color=color_qsd),
         )
     )
     # 画 未完成趋势段
     overlap_kline = overlap_kline.overlap(
-        (
-            Line()
-            .add_xaxis(line_xu_qsds["index"])
-            .add_yaxis(
-                "趋势段",
-                line_xu_qsds["val"],
-                label_opts=opts.LabelOpts(is_show=False),
-                linestyle_opts=opts.LineStyleOpts(
-                    width=2, type_="dashed", color=color_qsd
-                ),
-            )
+        Line()
+        .add_xaxis(line_xu_qsds["index"])
+        .add_yaxis(
+            "趋势段",
+            line_xu_qsds["val"],
+            label_opts=opts.LabelOpts(is_show=False),
+            linestyle_opts=opts.LineStyleOpts(width=2, type_="dashed", color=color_qsd),
         )
     )
 
@@ -849,29 +831,25 @@ def render_charts(
     )
     if idx_qstd is not None:
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(idx_qstd["up"]["chart"]["x"])
-                .add_yaxis(
-                    "趋势通道线",
-                    idx_qstd["up"]["chart"]["y"],
-                    is_connect_nones=True,
-                    is_clip=False,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(width=3, color=color_qstd_up),
-                )
+            Line()
+            .add_xaxis(idx_qstd["up"]["chart"]["x"])
+            .add_yaxis(
+                "趋势通道线",
+                idx_qstd["up"]["chart"]["y"],
+                is_connect_nones=True,
+                is_clip=False,
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(width=3, color=color_qstd_up),
             )
         )
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(idx_qstd["down"]["chart"]["x"])
-                .add_yaxis(
-                    "趋势通道线",
-                    idx_qstd["down"]["chart"]["y"],
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(width=3, color=color_qstd_down),
-                )
+            Line()
+            .add_xaxis(idx_qstd["down"]["chart"]["x"])
+            .add_yaxis(
+                "趋势通道线",
+                idx_qstd["down"]["chart"]["y"],
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(width=3, color=color_qstd_down),
             )
         )
 
@@ -883,38 +861,36 @@ def render_charts(
         )
         # 画 指标线
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(xaxis_data=klines_xaxis)
-                .add_yaxis(
-                    series_name="BOLL",
-                    is_symbol_show=False,
-                    y_axis=boll_up,
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=1, type_="dashed", color="#99CC99"
-                    ),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .add_yaxis(
-                    series_name="BOLL",
-                    is_symbol_show=False,
-                    y_axis=boll_mid,
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=1, type_="dashed", color="#FF6D00"
-                    ),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .add_yaxis(
-                    series_name="BOLL",
-                    is_symbol_show=False,
-                    y_axis=boll_low,
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=1, type_="dashed", color="#99CC99"
-                    ),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .set_global_opts()
+            Line()
+            .add_xaxis(xaxis_data=klines_xaxis)
+            .add_yaxis(
+                series_name="BOLL",
+                is_symbol_show=False,
+                y_axis=boll_up,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="dashed", color="#99CC99"
+                ),
+                label_opts=opts.LabelOpts(is_show=False),
             )
+            .add_yaxis(
+                series_name="BOLL",
+                is_symbol_show=False,
+                y_axis=boll_mid,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="dashed", color="#FF6D00"
+                ),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .add_yaxis(
+                series_name="BOLL",
+                is_symbol_show=False,
+                y_axis=boll_low,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="dashed", color="#99CC99"
+                ),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts()
         )
     if config["chart_show_ma"]:
         # 计算ma线
@@ -930,18 +906,16 @@ def render_charts(
             ma_period = ma_periods[i]
             ma = talib.MA(np.array(klines["close"].tolist()), timeperiod=int(ma_period))
             overlap_kline = overlap_kline.overlap(
-                (
-                    Line()
-                    .add_xaxis(xaxis_data=klines_xaxis)
-                    .add_yaxis(
-                        series_name=f"MA{ma_period}",
-                        is_symbol_show=False,
-                        y_axis=ma,
-                        linestyle_opts=opts.LineStyleOpts(width=2, color=ma_colors[i]),
-                        label_opts=opts.LabelOpts(is_show=False),
-                    )
-                    .set_global_opts()
+                Line()
+                .add_xaxis(xaxis_data=klines_xaxis)
+                .add_yaxis(
+                    series_name=f"MA{ma_period}",
+                    is_symbol_show=False,
+                    y_axis=ma,
+                    linestyle_opts=opts.LineStyleOpts(width=2, color=ma_colors[i]),
+                    label_opts=opts.LabelOpts(is_show=False),
                 )
+                .set_global_opts()
             )
     if config["chart_show_gmma"]:
         # GMMA (Guppy Multiple Moving Average) 短期组 + 长期组 EMA
@@ -949,47 +923,46 @@ def render_charts(
         short_term_periods = [p for p in gmma_periods if p <= 15]
         long_term_periods = [p for p in gmma_periods if p > 15]
         short_colors = [
-            "#FF6B6B", "#FF8E72", "#FFA07A", "#FFB347", "#FFC107", "#FFD700"
+            "#FF6B6B",
+            "#FF8E72",
+            "#FFA07A",
+            "#FFB347",
+            "#FFC107",
+            "#FFD700",
         ]
-        long_colors = [
-            "#4FC3F7", "#29B6F6", "#03A9F4", "#039BE5", "#0288D1", "#0277BD"
-        ]
+        long_colors = ["#4FC3F7", "#29B6F6", "#03A9F4", "#039BE5", "#0288D1", "#0277BD"]
         close_arr = np.array(klines["close"].tolist())
         for i, period in enumerate(short_term_periods):
             ema = talib.EMA(close_arr, timeperiod=period)
             overlap_kline = overlap_kline.overlap(
-                (
-                    Line()
-                    .add_xaxis(xaxis_data=klines_xaxis)
-                    .add_yaxis(
-                        series_name=f"GMMA{period}",
-                        is_symbol_show=False,
-                        y_axis=ema,
-                        linestyle_opts=opts.LineStyleOpts(
-                            width=1, color=short_colors[i % len(short_colors)]
-                        ),
-                        label_opts=opts.LabelOpts(is_show=False),
-                    )
-                    .set_global_opts()
+                Line()
+                .add_xaxis(xaxis_data=klines_xaxis)
+                .add_yaxis(
+                    series_name=f"GMMA{period}",
+                    is_symbol_show=False,
+                    y_axis=ema,
+                    linestyle_opts=opts.LineStyleOpts(
+                        width=1, color=short_colors[i % len(short_colors)]
+                    ),
+                    label_opts=opts.LabelOpts(is_show=False),
                 )
+                .set_global_opts()
             )
         for i, period in enumerate(long_term_periods):
             ema = talib.EMA(close_arr, timeperiod=period)
             overlap_kline = overlap_kline.overlap(
-                (
-                    Line()
-                    .add_xaxis(xaxis_data=klines_xaxis)
-                    .add_yaxis(
-                        series_name=f"GMMA{period}",
-                        is_symbol_show=False,
-                        y_axis=ema,
-                        linestyle_opts=opts.LineStyleOpts(
-                            width=1, color=long_colors[i % len(long_colors)]
-                        ),
-                        label_opts=opts.LabelOpts(is_show=False),
-                    )
-                    .set_global_opts()
+                Line()
+                .add_xaxis(xaxis_data=klines_xaxis)
+                .add_yaxis(
+                    series_name=f"GMMA{period}",
+                    is_symbol_show=False,
+                    y_axis=ema,
+                    linestyle_opts=opts.LineStyleOpts(
+                        width=1, color=long_colors[i % len(long_colors)]
+                    ),
+                    label_opts=opts.LabelOpts(is_show=False),
                 )
+                .set_global_opts()
             )
     if config["chart_show_ama"]:
         # 计算ma线
@@ -1001,20 +974,16 @@ def render_charts(
             slow_N=int(ama_ags[2]),
         )
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(xaxis_data=klines_xaxis)
-                .add_yaxis(
-                    series_name="AMA",
-                    is_symbol_show=False,
-                    y_axis=ama,
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=2, color="rgb(255,128,255)"
-                    ),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .set_global_opts()
+            Line()
+            .add_xaxis(xaxis_data=klines_xaxis)
+            .add_yaxis(
+                series_name="AMA",
+                is_symbol_show=False,
+                y_axis=ama,
+                linestyle_opts=opts.LineStyleOpts(width=2, color="rgb(255,128,255)"),
+                label_opts=opts.LabelOpts(is_show=False),
             )
+            .set_global_opts()
         )
     if config["chart_show_atr_stop_loss"]:
         # 计算 atr stop loss
@@ -1036,173 +1005,157 @@ def render_charts(
         up_stop_loss_vals = src_high + (tr_vals * atr_multiplier)
         down_stop_loss_vals = src_low - (tr_vals * atr_multiplier)
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(xaxis_data=klines_xaxis)
-                .add_yaxis(
-                    series_name="Atr Stop Loss",
-                    is_symbol_show=False,
-                    y_axis=up_stop_loss_vals,
-                    linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(255,82,82)"),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .add_yaxis(
-                    series_name="Atr Stop Loss",
-                    is_symbol_show=False,
-                    y_axis=down_stop_loss_vals,
-                    linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(0,137,123)"),
-                    label_opts=opts.LabelOpts(is_show=False),
-                )
-                .set_global_opts()
+            Line()
+            .add_xaxis(xaxis_data=klines_xaxis)
+            .add_yaxis(
+                series_name="Atr Stop Loss",
+                is_symbol_show=False,
+                y_axis=up_stop_loss_vals,
+                linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(255,82,82)"),
+                label_opts=opts.LabelOpts(is_show=False),
             )
+            .add_yaxis(
+                series_name="Atr Stop Loss",
+                is_symbol_show=False,
+                y_axis=down_stop_loss_vals,
+                linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(0,137,123)"),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts()
         )
 
     # 画 笔中枢
     for zs in line_bi_zss:
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(zs[0])
-                .add_yaxis(
-                    "笔中枢",
-                    zs[1],
-                    symbol=None,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=zs[2],
-                        color=color_bi_zs,
-                        type_="solid" if zs[3] else "dashed",
-                    ),
-                    areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_bi_zs),
-                    tooltip_opts=opts.TooltipOpts(is_show=False),
-                )
+            Line()
+            .add_xaxis(zs[0])
+            .add_yaxis(
+                "笔中枢",
+                zs[1],
+                symbol=None,
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(
+                    width=zs[2],
+                    color=color_bi_zs,
+                    type_="solid" if zs[3] else "dashed",
+                ),
+                areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_bi_zs),
+                tooltip_opts=opts.TooltipOpts(is_show=False),
             )
         )
     # 画 线段 中枢
     for zs in line_xd_zss:
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(zs[0])
-                .add_yaxis(
-                    "线段中枢",
-                    zs[1],
-                    symbol=None,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=zs[2],
-                        color=color_xd_zs,
-                        type_="solid" if zs[3] else "dashed",
-                    ),
-                    areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_xd_zs),
-                    tooltip_opts=opts.TooltipOpts(is_show=False),
-                )
+            Line()
+            .add_xaxis(zs[0])
+            .add_yaxis(
+                "线段中枢",
+                zs[1],
+                symbol=None,
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(
+                    width=zs[2],
+                    color=color_xd_zs,
+                    type_="solid" if zs[3] else "dashed",
+                ),
+                areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_xd_zs),
+                tooltip_opts=opts.TooltipOpts(is_show=False),
             )
         )
     # 画 走势段 中枢
     for zs in line_zsd_zss:
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(zs[0])
-                .add_yaxis(
-                    "走势段中枢",
-                    zs[1],
-                    symbol=None,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=zs[2],
-                        color=color_zsd_zs,
-                        type_="solid" if zs[3] else "dashed",
-                    ),
-                    areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_zsd_zs),
-                    tooltip_opts=opts.TooltipOpts(is_show=False),
-                )
+            Line()
+            .add_xaxis(zs[0])
+            .add_yaxis(
+                "走势段中枢",
+                zs[1],
+                symbol=None,
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(
+                    width=zs[2],
+                    color=color_zsd_zs,
+                    type_="solid" if zs[3] else "dashed",
+                ),
+                areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_zsd_zs),
+                tooltip_opts=opts.TooltipOpts(is_show=False),
             )
         )
     # 画 趋势段 中枢
     for zs in line_qsd_zss:
         overlap_kline = overlap_kline.overlap(
-            (
-                Line()
-                .add_xaxis(zs[0])
-                .add_yaxis(
-                    "趋势段中枢",
-                    zs[1],
-                    symbol=None,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    linestyle_opts=opts.LineStyleOpts(
-                        width=zs[2],
-                        color=color_qsd_zs,
-                        type_="solid" if zs[3] else "dashed",
-                    ),
-                    areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_qsd_zs),
-                    tooltip_opts=opts.TooltipOpts(is_show=False),
-                )
+            Line()
+            .add_xaxis(zs[0])
+            .add_yaxis(
+                "趋势段中枢",
+                zs[1],
+                symbol=None,
+                label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(
+                    width=zs[2],
+                    color=color_qsd_zs,
+                    type_="solid" if zs[3] else "dashed",
+                ),
+                areastyle_opts=opts.AreaStyleOpts(opacity=0.2, color=color_qsd_zs),
+                tooltip_opts=opts.TooltipOpts(is_show=False),
             )
         )
 
     # 展示背驰
     overlap_kline = overlap_kline.overlap(
-        (
-            Scatter()
-            .add_xaxis(xaxis_data=scatter_bc["i"])
-            .add_yaxis(
-                series_name="背驰",
-                y_axis=scatter_bc["val"],
-                symbol_size=10,
-                symbol="circle",
-                itemstyle_opts=opts.ItemStyleOpts(color="rgba(223,148,100,0.7)"),
-                label_opts=opts.LabelOpts(is_show=False),
-                tooltip_opts=opts.TooltipOpts(
-                    textstyle_opts=opts.TextStyleOpts(font_size=12),
-                    formatter=JsCode("function (params) {return params.value[2];}"),
-                ),
-            )
+        Scatter()
+        .add_xaxis(xaxis_data=scatter_bc["i"])
+        .add_yaxis(
+            series_name="背驰",
+            y_axis=scatter_bc["val"],
+            symbol_size=10,
+            symbol="circle",
+            itemstyle_opts=opts.ItemStyleOpts(color="rgba(223,148,100,0.7)"),
+            label_opts=opts.LabelOpts(is_show=False),
+            tooltip_opts=opts.TooltipOpts(
+                textstyle_opts=opts.TextStyleOpts(font_size=12),
+                formatter=JsCode("function (params) {return params.value[2];}"),
+            ),
         )
     )
 
     # 画买卖点
     overlap_kline = overlap_kline.overlap(
-        (
-            Scatter()
-            .add_xaxis(xaxis_data=scatter_buy["i"])
-            .add_yaxis(
-                series_name="买卖点",
-                y_axis=scatter_buy["val"],
-                symbol_size=10,
-                symbol="arrow",
-                itemstyle_opts=opts.ItemStyleOpts(color="rgba(250,128,114,0.6)"),
-            )
-            .set_series_opts(
-                label_opts=opts.LabelOpts(
-                    color="rgb(255,200,44)",
-                    position="bottom",
-                    font_weight="bold",
-                    formatter=JsCode("function (params) {return params.value[2];}"),
-                )
+        Scatter()
+        .add_xaxis(xaxis_data=scatter_buy["i"])
+        .add_yaxis(
+            series_name="买卖点",
+            y_axis=scatter_buy["val"],
+            symbol_size=10,
+            symbol="arrow",
+            itemstyle_opts=opts.ItemStyleOpts(color="rgba(250,128,114,0.6)"),
+        )
+        .set_series_opts(
+            label_opts=opts.LabelOpts(
+                color="rgb(255,200,44)",
+                position="bottom",
+                font_weight="bold",
+                formatter=JsCode("function (params) {return params.value[2];}"),
             )
         )
     )
     overlap_kline = overlap_kline.overlap(
-        (
-            Scatter()
-            .add_xaxis(xaxis_data=scatter_sell["i"])
-            .add_yaxis(
-                series_name="买卖点",
-                y_axis=scatter_sell["val"],
-                symbol_size=10,
-                symbol="arrow",
-                symbol_rotate=180,
-                itemstyle_opts=opts.ItemStyleOpts(color="rgba(30,144,255,0.6)"),
-            )
-            .set_series_opts(
-                label_opts=opts.LabelOpts(
-                    color="rgb(255,200,44)",
-                    position="top",
-                    font_weight="bold",
-                    formatter=JsCode("function (params) {return params.value[2];}"),
-                )
+        Scatter()
+        .add_xaxis(xaxis_data=scatter_sell["i"])
+        .add_yaxis(
+            series_name="买卖点",
+            y_axis=scatter_sell["val"],
+            symbol_size=10,
+            symbol="arrow",
+            symbol_rotate=180,
+            itemstyle_opts=opts.ItemStyleOpts(color="rgba(30,144,255,0.6)"),
+        )
+        .set_series_opts(
+            label_opts=opts.LabelOpts(
+                color="rgb(255,200,44)",
+                position="top",
+                font_weight="bold",
+                formatter=JsCode("function (params) {return params.value[2];}"),
             )
         )
     )
@@ -1210,40 +1163,36 @@ def render_charts(
     # 画订单记录
     if orders and len(orders) > 0:
         overlap_kline = overlap_kline.overlap(
-            (
-                Scatter()
-                .add_xaxis(xaxis_data=scatter_buy_orders["i"])
-                .add_yaxis(
-                    series_name="订单",
-                    y_axis=scatter_buy_orders["val"],
-                    symbol_size=15,
-                    symbol="arrow",
-                    label_opts=opts.LabelOpts(is_show=False),
-                    itemstyle_opts=opts.ItemStyleOpts(color="rgba(255,215,0,1)"),
-                    tooltip_opts=opts.TooltipOpts(
-                        textstyle_opts=opts.TextStyleOpts(font_size=12),
-                        formatter=JsCode("function (params) {return params.value[2];}"),
-                    ),
-                )
+            Scatter()
+            .add_xaxis(xaxis_data=scatter_buy_orders["i"])
+            .add_yaxis(
+                series_name="订单",
+                y_axis=scatter_buy_orders["val"],
+                symbol_size=15,
+                symbol="arrow",
+                label_opts=opts.LabelOpts(is_show=False),
+                itemstyle_opts=opts.ItemStyleOpts(color="rgba(255,215,0,1)"),
+                tooltip_opts=opts.TooltipOpts(
+                    textstyle_opts=opts.TextStyleOpts(font_size=12),
+                    formatter=JsCode("function (params) {return params.value[2];}"),
+                ),
             )
         )
         overlap_kline = overlap_kline.overlap(
-            (
-                Scatter()
-                .add_xaxis(xaxis_data=scatter_sell_orders["i"])
-                .add_yaxis(
-                    series_name="订单",
-                    y_axis=scatter_sell_orders["val"],
-                    symbol_size=15,
-                    symbol="arrow",
-                    symbol_rotate=180,
-                    label_opts=opts.LabelOpts(is_show=False),
-                    itemstyle_opts=opts.ItemStyleOpts(color="rgba(127,255,212,1)"),
-                    tooltip_opts=opts.TooltipOpts(
-                        textstyle_opts=opts.TextStyleOpts(font_size=12),
-                        formatter=JsCode("function (params) {return params.value[2];}"),
-                    ),
-                )
+            Scatter()
+            .add_xaxis(xaxis_data=scatter_sell_orders["i"])
+            .add_yaxis(
+                series_name="订单",
+                y_axis=scatter_sell_orders["val"],
+                symbol_size=15,
+                symbol="arrow",
+                symbol_rotate=180,
+                label_opts=opts.LabelOpts(is_show=False),
+                itemstyle_opts=opts.ItemStyleOpts(color="rgba(127,255,212,1)"),
+                tooltip_opts=opts.TooltipOpts(
+                    textstyle_opts=opts.TextStyleOpts(font_size=12),
+                    formatter=JsCode("function (params) {return params.value[2];}"),
+                ),
             )
         )
 
@@ -1412,30 +1361,28 @@ def render_charts(
 
         for line in line_macd_lds:
             macd_bar_line = macd_bar_line.overlap(
-                (
-                    Line()
-                    .add_xaxis(xaxis_data=line["y"])
-                    .add_yaxis(
-                        series_name="力度",
-                        y_axis=line["x"],
-                        is_symbol_show=False,
-                        label_opts=opts.LabelOpts(is_show=False),
-                        itemstyle_opts=opts.ItemStyleOpts(
-                            color=line["color"], border_width=2
-                        ),
-                    )
-                    .set_global_opts(
-                        legend_opts=opts.LegendOpts(is_show=True),
-                        xaxis_opts=opts.AxisOpts(
-                            axislabel_opts=opts.LabelOpts(is_show=False),
-                        ),
-                        yaxis_opts=opts.AxisOpts(
-                            position="right",
-                            axislabel_opts=opts.LabelOpts(is_show=False),
-                            axisline_opts=opts.AxisLineOpts(is_show=False),
-                            axistick_opts=opts.AxisTickOpts(is_show=False),
-                        ),
-                    )
+                Line()
+                .add_xaxis(xaxis_data=line["y"])
+                .add_yaxis(
+                    series_name="力度",
+                    y_axis=line["x"],
+                    is_symbol_show=False,
+                    label_opts=opts.LabelOpts(is_show=False),
+                    itemstyle_opts=opts.ItemStyleOpts(
+                        color=line["color"], border_width=2
+                    ),
+                )
+                .set_global_opts(
+                    legend_opts=opts.LegendOpts(is_show=True),
+                    xaxis_opts=opts.AxisOpts(
+                        axislabel_opts=opts.LabelOpts(is_show=False),
+                    ),
+                    yaxis_opts=opts.AxisOpts(
+                        position="right",
+                        axislabel_opts=opts.LabelOpts(is_show=False),
+                        axisline_opts=opts.AxisLineOpts(is_show=False),
+                        axistick_opts=opts.AxisTickOpts(is_show=False),
+                    ),
                 )
             )
         # 文字显示
@@ -1641,13 +1588,13 @@ def render_charts(
     if config["to_file"] != "":
         return grid_chart.render(config["to_file"])
 
-    if "JPY_PARENT_PID" in os.environ.keys() or "VSCODE_CWD" in os.environ.keys():
+    if "JPY_PARENT_PID" in os.environ or "VSCODE_CWD" in os.environ:
         return grid_chart.render_notebook()
     else:
         return grid_chart.dump_options()
 
 
-def lines_to_charts(lines: List[LINE]):
+def lines_to_charts(lines: list[LINE]):
     """
     将线段转换成图表需要的数据对象
     返回 已完成线段 和 未完成 线段对象列表
@@ -1672,7 +1619,7 @@ def lines_to_charts(lines: List[LINE]):
     return line_dones, line_no_dones
 
 
-def zss_to_charts(zss: List[ZS]):
+def zss_to_charts(zss: list[ZS]):
     """
     将中枢对象整理成图表所需要的数据对象
     """

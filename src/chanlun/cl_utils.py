@@ -1,5 +1,4 @@
 import math
-from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -12,8 +11,11 @@ from chanlun.file_db import FileCacheDB
 
 
 def web_batch_get_cl_datas(
-    market: str, code: str, klines: Dict[str, pd.DataFrame], cl_config: dict = None
-) -> List[ICL]:
+    market: str,
+    code: str,
+    klines: dict[str, pd.DataFrame],
+    cl_config: dict | None = None,
+) -> list[ICL]:
     """
     WEB端批量计算并获取 缠论 数据
     内部使用文件缓存，只能进行增量更新，不可用来获取并计算历史k线数据
@@ -78,7 +80,7 @@ def cal_line_macd_infos(line: LINE, cd: ICL) -> MACD_INFOS:
     return infos
 
 
-def cal_macd_bis_is_bc(bis: List[BI], cd: ICL) -> Tuple[bool, bool]:
+def cal_macd_bis_is_bc(bis: list[BI], cd: ICL) -> tuple[bool, bool]:
     """
     给定一组笔列表，判断其 macd 是否出现背驰，柱子高度变小，黄白线也缩小
 
@@ -281,7 +283,7 @@ def cal_zs_macd_infos(zs: ZS, cd: ICL) -> MACD_INFOS:
 
 def query_cl_chart_config(
     market: str, code: str, suffix: str = ""
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """
     查询指定市场和标的下的缠论和画图配置
     """
@@ -402,7 +404,7 @@ def query_cl_chart_config(
 
 
 def set_cl_chart_config(
-    market: str, code: str, config: Dict[str, object], suffix: str = ""
+    market: str, code: str, config: dict[str, object], suffix: str = ""
 ) -> bool:
     """
     设置指定市场和标的下的缠论和画图配置
@@ -445,9 +447,7 @@ def del_cl_chart_config(market: str, code: str, suffix: str = "") -> bool:
     return True
 
 
-def kcharts_frequency_h_l_map(
-    market: str, frequency
-) -> Tuple[Union[None, str], Union[None, str]]:
+def kcharts_frequency_h_l_map(market: str, frequency) -> tuple[None | str, None | str]:
     """
     将原周期，转换为新的周期进行图表展示
     按照设置好的对应关系进行返回
@@ -637,8 +637,8 @@ def prices_jiaodu(prices):
 
 
 def cl_data_to_tv_chart(
-    cd: ICL, config: dict, to_frequency: str = None
-) -> Union[dict, None]:
+    cd: ICL, config: dict, to_frequency: str | None = None
+) -> dict | None:
     """
     将缠论数据，转换成 tv 画图的坐标数据
     """
@@ -836,10 +836,10 @@ def cl_data_to_tv_chart(
     for line_type, ls in lines.items():
         for l in ls:
             bcs = l.line_bcs("|")
-            if len(bcs) != 0 and l.end.k.date not in bc_infos.keys():
+            if len(bcs) != 0 and l.end.k.date not in bc_infos:
                 bc_infos[l.end.k.date] = {
                     "price": l.end.val,
-                    "bc_infos": {_type: [] for _type in line_type_map.keys()},
+                    "bc_infos": {_type: [] for _type in line_type_map},
                 }
             if config[f"chart_show_{line_type}_bc"] == "1":
                 for bc in bcs:
@@ -848,10 +848,10 @@ def cl_data_to_tv_chart(
                     )
 
             mmds = l.line_mmds("|")
-            if len(mmds) != 0 and l.end.k.date not in mmd_infos.keys():
+            if len(mmds) != 0 and l.end.k.date not in mmd_infos:
                 mmd_infos[l.end.k.date] = {
                     "price": l.end.val,
-                    "mmd_infos": {_type: [] for _type in line_type_map.keys()},
+                    "mmd_infos": {_type: [] for _type in line_type_map},
                 }
             if config[f"chart_show_{line_type}_mmd"] == "1":
                 for mmd in mmds:
@@ -932,9 +932,14 @@ def bi_td(bi: BI, cd: ICL):
     if len(next_ks) == 0:
         return False
     for _nk in next_ks:
-        if bi.type == "up" and _nk.c < _nk.o and _nk.c < bi.end.klines[-1].l:
-            return True
-        elif bi.type == "down" and _nk.c > _nk.o and _nk.c > bi.end.klines[-1].h:
+        if (
+            bi.type == "up"
+            and _nk.c < _nk.o
+            and _nk.c < bi.end.klines[-1].l
+            or bi.type == "down"
+            and _nk.c > _nk.o
+            and _nk.c > bi.end.klines[-1].h
+        ):
             return True
 
     return False
@@ -981,7 +986,7 @@ def last_done_bi(cd: ICL):
     return None
 
 
-def bi_qk_num(cd: ICL, bi: BI) -> Tuple[int, int]:
+def bi_qk_num(cd: ICL, bi: BI) -> tuple[int, int]:
     """
     获取笔的缺口数量（分别是向上跳空，向下跳空数量）
     """
@@ -996,51 +1001,6 @@ def bi_qk_num(cd: ICL, bi: BI) -> Tuple[int, int]:
         elif now_k.h < pre_k.l:
             down_qk_num += 1
     return up_qk_num, down_qk_num
-
-
-def klines_to_heikin_ashi_klines(ks: pd.DataFrame) -> pd.DataFrame:
-    """
-    将缠论数据的普通K线，转换成平均K线数据，返回格式 pd.DataFrame
-    """
-    # s_time = time.time()
-    cd_klines = ks.to_dict(orient="records")
-    # print(f"转换成列表数据格式耗时: {time.time() - s_time:.2f}s")
-
-    # s_time = time.time()
-    mean_klines: list = []
-    for i in range(len(cd_klines)):
-        if i == 0:
-            mean_klines.append(cd_klines[i])
-            continue
-        mk = mean_klines[i - 1]
-        nk = cd_klines[i]
-        # 开盘价 =（前一根烛台的开盘价+ 前一根烛台的收盘价）/2
-        # 收盘价 =（当前烛台的开盘价 + 最高价 + 最低价 + 收盘价）/4
-        # 最大值（或最高价）= 当前周期的最高价、当前周期的平均 K 线图开盘价或收盘价中的最大值。
-        # 最小值（或最低价）= 当前周期的最低价、当前周期的平均 K 线图开盘价或收盘价中的最小值
-        _open = (mk["open"] + mk["close"]) / 2
-        _close = (nk["open"] + nk["high"] + nk["low"] + nk["close"]) / 4
-        _high = max(nk["high"], _open, _close)
-        _low = min(nk["low"], _open, _close)
-        _volume = nk["volume"]
-        mean_klines.append(
-            {
-                "code": nk["code"],
-                "date": nk["date"],
-                "high": _high,
-                "open": _open,
-                "low": _low,
-                "close": _close,
-                "volume": _volume,
-            }
-        )
-    # print(f"转换成平均K线数据格式耗时: {time.time() - s_time:.2f}s")
-
-    # s_time = time.time()
-    df = pd.DataFrame(mean_klines)
-    # print(f"转换成 pd.DataFrame 数据格式耗时: {time.time() - s_time:.2f}s")
-
-    return df
 
 
 if __name__ == "__main__":
