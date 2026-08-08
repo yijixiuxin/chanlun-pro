@@ -3,7 +3,6 @@ import datetime
 import hashlib
 import json
 import time
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -11,8 +10,9 @@ from tqdm.auto import tqdm
 
 from chanlun import cl, fun
 from chanlun.backtesting.base import MarketDatas
-from chanlun.cl_interface import ICL
+from chanlun.cl_interface import ICL, Config
 from chanlun.exchange.exchange_db import ExchangeDB
+from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
 
 
 class BackTestKlines(MarketDatas):
@@ -25,7 +25,7 @@ class BackTestKlines(MarketDatas):
         market: str,
         start_date: str,
         end_date: str,
-        frequencys: List[str],
+        frequencys: list[str],
         cl_config=None,
     ):
         """
@@ -72,18 +72,18 @@ class BackTestKlines(MarketDatas):
         self.del_volume_zero = False  # 是否删除成交量为 0 的K线数据
 
         # 保存k线数据
-        self.all_klines: Dict[str, pd.DataFrame] = {}
+        self.all_klines: dict[str, pd.DataFrame] = {}
 
         # 每个周期缓存的k线数据，避免多次请求重复计算
-        self.cache_klines: Dict[str, Dict[str, pd.DataFrame]] = {}
+        self.cache_klines: dict[str, dict[str, pd.DataFrame]] = {}
 
         self.ex = ExchangeDB(self.market)
 
         # 用于循环的日期列表
-        self.loop_datetime_list: Dict[str, list] = {}
+        self.loop_datetime_list: dict[str, list] = {}
 
         # 进度条
-        self.bar: Union[tqdm, None] = None
+        self.bar: tqdm | None = None
 
         self.time_fmt = "%Y-%m-%d %H:%M:%S"
 
@@ -95,7 +95,7 @@ class BackTestKlines(MarketDatas):
             "query_db_klines": 0,
         }
 
-    def init(self, base_code: str, frequency: Union[str, list]):
+    def init(self, base_code: str, frequency: str | list):
         # 初始化，获取循环的日期列表
         self.base_code = base_code
         if frequency is None:
@@ -157,16 +157,16 @@ class BackTestKlines(MarketDatas):
             "volume": float(kline.iloc[-1]["volume"]),
         }
 
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
+    def get_cl_data(self, code, frequency, cl_config: dict | None = None) -> ICL:
         _time = time.time()
         try:
             # 根据回测配置，可自定义不同周期所使用的缠论配置项
             if cl_config is None:
-                if code in self.cl_config.keys():
+                if code in self.cl_config:
                     cl_config = self.cl_config[code]
-                elif frequency in self.cl_config.keys():
+                elif frequency in self.cl_config:
                     cl_config = self.cl_config[frequency]
-                elif "default" in self.cl_config.keys():
+                elif "default" in self.cl_config:
                     cl_config = self.cl_config["default"]
                 else:
                     cl_config = self.cl_config
@@ -177,13 +177,18 @@ class BackTestKlines(MarketDatas):
                 cl_config_key.encode(encoding="UTF-8")
             ).hexdigest()
 
-            key = "%s_%s_%s" % (code, frequency, cl_config_key)
-            if key in self.cache_cl_datas.keys():
+            key = f"{code}_{frequency}_{cl_config_key}"
+            if key in self.cache_cl_datas:
                 return self.cache_cl_datas[key]
 
-            if key not in self.cl_datas.keys():
+            if key not in self.cl_datas:
                 # 第一次进行计算
                 klines = self.klines(code, frequency)
+                if (
+                    cl_config.get("kline_type", "")
+                    == Config.KLINE_TYPE_HEIKIN_ASHI.value
+                ):
+                    klines = klines_to_heikin_ashi_klines(klines)
                 self.cl_datas[key] = cl.CL(code, frequency, cl_config).process_klines(
                     klines
                 )
@@ -200,6 +205,11 @@ class BackTestKlines(MarketDatas):
                     cd = self.cl_datas[key]
 
                 klines = self.klines(code, frequency)
+                if (
+                    cl_config.get("kline_type", "")
+                    == Config.KLINE_TYPE_HEIKIN_ASHI.value
+                ):
+                    klines = klines_to_heikin_ashi_klines(klines)
 
                 if len(klines) > 0:
                     if len(cd.get_klines()) == 0:
@@ -224,7 +234,7 @@ class BackTestKlines(MarketDatas):
                 != klines.iloc[-1]["date"]
             ):
                 raise RuntimeError(
-                    f'{code} 计算缠论数据异常，缠论数据最后时间与给定的K线最后时间不一致 【缠论:{self.cl_datas[key].get_src_klines()[-1].date}】 Kline: {klines.iloc[-1]["date"]}'
+                    f"{code} 计算缠论数据异常，缠论数据最后时间与给定的K线最后时间不一致 【缠论:{self.cl_datas[key].get_src_klines()[-1].date}】 Kline: {klines.iloc[-1]['date']}"
                 )
 
             return self.cache_cl_datas[key]
@@ -232,10 +242,7 @@ class BackTestKlines(MarketDatas):
             self._use_times["get_cl_data"] += time.time() - _time
 
     def klines(self, code, frequency) -> pd.DataFrame:
-        if (
-            code in self.cache_klines.keys()
-            and len(self.cache_klines[code][frequency]) > 0
-        ):
+        if code in self.cache_klines and len(self.cache_klines[code][frequency]) > 0:
             # 直接从缓存中读取
             return self.cache_klines[code][frequency]
 
@@ -244,8 +251,8 @@ class BackTestKlines(MarketDatas):
         if self.load_data_to_cache:
             # 使用缓存
             for _f in self.frequencys:
-                key = "%s-%s" % (code, _f)
-                if key not in self.all_klines.keys():
+                key = f"{code}_{_f}"
+                if key not in self.all_klines:
                     # 从数据库获取日期区间的所有行情
                     all_klines = self.ex.klines(
                         code,
@@ -261,7 +268,7 @@ class BackTestKlines(MarketDatas):
                     )
 
             for _f in self.frequencys:
-                key = "%s-%s" % (code, _f)
+                key = f"{code}_{_f}"
                 if self.market in [
                     "currency",
                     "futures",
@@ -311,7 +318,7 @@ class BackTestKlines(MarketDatas):
         self.cache_klines[code] = klines
         return klines[frequency]
 
-    def convert_klines(self, code: str, klines: Dict[str, pd.DataFrame]):
+    def convert_klines(self, code: str, klines: dict[str, pd.DataFrame]):
         """
         转换 kline，去除未来的 kline数据
         :return:
@@ -336,7 +343,7 @@ class BackTestKlines(MarketDatas):
                 )
 
         # 检测在数据列中，是否有大于最后一个时间的行
-        for _f, _k_pd in klines.items():
+        for _k_pd in klines.values():
             if len(_k_pd) > 0:
                 _last_dt = _k_pd.iloc[-1]["date"]
                 if len(_k_pd[_k_pd["date"] > _last_dt]) > 0:
@@ -442,21 +449,22 @@ class BackTestKlines(MarketDatas):
 
 
 if __name__ == "__main__":
-    from chanlun.cl_utils import klines_to_heikin_ashi_klines
-
     market = "a"
     start = "2015-01-01 00:00:00"
     end = "2024-05-01 00:00:00"
     code = "SH.000001"
-    frequencys = ["w", "d", "30m"]
-    cl_config = {}
+    frequencys = ["d", "60m"]
+    cl_config = {"kline_type": Config.KLINE_TYPE_HEIKIN_ASHI.value}
     bkt = BackTestKlines(market, start, end, frequencys, cl_config)
     bkt.init(code, frequencys[-1])
 
     s_time = time.time()
     while bkt.next():
-        k = bkt.klines(code, "d")
-        ks = klines_to_heikin_ashi_klines(k.iloc[-1000::])
+        # k = bkt.klines(code, "d")
+        # ks = klines_to_heikin_ashi_klines(k.iloc[-1000::])
+
+        cd = bkt.get_cl_data(code, "d")
+        print(len(cd.get_src_klines()))
 
         # print(
         #     f"{code} - {f} : kline last date : {k.iloc[-1]['date']} close: {k.iloc[-1]['close']}"

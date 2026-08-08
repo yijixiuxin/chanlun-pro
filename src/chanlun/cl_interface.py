@@ -1,14 +1,12 @@
-# -*- coding: utf-8 -*-
 import datetime
 import math
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Tuple, Union
-from scipy import stats
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 """
 CL_*** 配置项，可以在调用缠论计算时，通过传递 config 变量进行变更，如 config['CL_BI_FX_STRICT'] = True
@@ -22,6 +20,7 @@ class Config(Enum):
 
     # K 线类型
     KLINE_TYPE_DEFAULT = "kline_default"  # 默认K线
+    KLINE_TYPE_HEIKIN_ASHI = "kline_Heikin_Ashi"  # 平滑平均K线
     KLINE_TYPE_CHANLUN = "kline_chanlun"  # 包含处理后的缠论K线
     # K 线缺口定义 (个人定制，不清楚的使用默认 none 配置)
     KLINE_QK_NONE = "none"
@@ -125,7 +124,7 @@ class CLKline:
         o: float,
         c: float,
         a: float,
-        klines: List[Kline] = None,
+        klines: list[Kline] | None = None,
         index: int = 0,
         _n: int = 0,
         _q: bool = False,
@@ -139,7 +138,7 @@ class CLKline:
         self.o: float = o
         self.c: float = c
         self.a: float = a
-        self.klines: List[Kline] = klines  # 其中包含K线对象
+        self.klines: list[Kline] = klines  # 其中包含K线对象
         self.index: int = index
         self.n: int = _n  # 记录包含的K线数量
         self.q: bool = _q  # 是否有缺口
@@ -158,14 +157,14 @@ class FX:
         self,
         _type: str,
         k: CLKline,
-        klines: List[CLKline],
+        klines: list[CLKline],
         val: float,
         index: int = 0,
         done: bool = True,
     ):
         self.type: str = _type  # 分型类型 （ding 顶分型 di 底分型）
         self.k: CLKline = k
-        self.klines: List[CLKline] = klines
+        self.klines: list[CLKline] = klines
         self.val: float = val
         self.index: int = index
         self.done: bool = done  # 分型是否完成
@@ -248,7 +247,7 @@ class FX:
                 [_k.h for _ck in self.klines if _ck is not None for _k in _ck.klines]
             )
         else:
-            raise Exception(f"获取分型高点的区间类型错误 {qj_type}")
+            raise Exception(f"获取分型高点的区间类型错误 {qj_type}")  # noqa: TRY002
 
     def low(self, qj_type: str, qy_type: str) -> float:
         """
@@ -265,7 +264,7 @@ class FX:
                 [_k.l for _ck in self.klines if _ck is not None for _k in _ck.klines]
             )
         else:
-            raise Exception(f"获取分型低点的区间类型错误 {qj_type}")
+            raise Exception(f"获取分型低点的区间类型错误 {qj_type}")  # noqa: TRY002
 
     def fx_k_nums(self) -> int:
         # 分型内原始K线的数量
@@ -357,20 +356,18 @@ class ZS:
         zs_type: str,
         start: FX,
         end: FX = None,
-        zg: float = None,
-        zd: float = None,
-        gg: float = None,
-        dd: float = None,
-        _type: str = None,
+        zg: float | None = None,
+        zd: float | None = None,
+        gg: float | None = None,
+        dd: float | None = None,
+        _type: str | None = None,
         index: int = 0,
         line_num: int = 0,
         level: int = 0,
     ):
         self.zs_type: str = zs_type  # 标记中枢类型 bi 笔中枢 xd 线段中枢 zsd 走势段中枢
         self.start: FX = start
-        self.lines: List[Union[BI, XD, LINE]] = (
-            []
-        )  # 中枢，记录中枢的线（笔 or 线段）对象
+        self.lines: list[BI | XD | LINE] = []  # 中枢，记录中枢的线（笔 or 线段）对象
         self.end: FX = end
 
         self.zg: float = zg
@@ -402,7 +399,7 @@ class ZS:
             return 0
         return (zgzd / (self.gg - self.dd)) * 100
 
-    def r2(self, klines: List[Kline]) -> float:
+    def r2(self, klines: list[Kline]) -> float:
         """
         计算中枢的R2值
         R2表示价格趋近于中枢中线的程度，取值在 0-1
@@ -465,10 +462,10 @@ class ZS:
         y = np.array(zs_zigzag)
 
         # 使用线性回归计算 R²
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+        _slope, _intercept, r_value, _p_value, _std_err = stats.linregress(x, y)
         return round(r_value**2, 6)
 
-    def zs_mmds(self, zs_type="|") -> List[str]:
+    def zs_mmds(self, zs_type="|") -> list[str]:
         """
         获取中枢内线的所有买点列表
         """
@@ -477,7 +474,7 @@ class ZS:
             mmds += _l.line_mmds(zs_type)
         return mmds
 
-    def zs_up_bcs(self, zs_type="|") -> List[str]:
+    def zs_up_bcs(self, zs_type="|") -> list[str]:
         """
         获取中枢内，向上线段的背驰列表
         """
@@ -487,7 +484,7 @@ class ZS:
                 bcs += _l.line_bcs(zs_type)
         return bcs
 
-    def zs_down_bcs(self, zs_type="|") -> List[str]:
+    def zs_down_bcs(self, zs_type="|") -> list[str]:
         """
         获取中枢内，向上线段的背驰列表
         """
@@ -523,19 +520,17 @@ class BC:
     def __init__(
         self,
         _type: str,
-        zs: Union[ZS, None],
+        zs: ZS | None,
         compare_line: LINE,
-        compare_lines: List[LINE],
+        compare_lines: list[LINE],
         bc: bool,
     ):
-        self.type: str = (
-            _type  # 背驰类型 （bi 笔背驰 xd 线段背驰 zsd 走势段背驰 pz 盘整背驰 qs 趋势背驰）
-        )
-        self.zs: Union[ZS, None] = zs  # 背驰对应的中枢
+        self.type: str = _type  # 背驰类型 （bi 笔背驰 xd 线段背驰 zsd 走势段背驰 pz 盘整背驰 qs 趋势背驰）
+        self.zs: ZS | None = zs  # 背驰对应的中枢
         self.compare_line: LINE = (
             compare_line  # 比较的笔 or 线段， 在 笔背驰、线段背驰、盘整背驰有用
         )
-        self.compare_lines: List[LINE] = compare_lines  # 在趋势背驰的时候使用
+        self.compare_lines: list[LINE] = compare_lines  # 在趋势背驰的时候使用
         self.bc = bc  # 是否背驰
 
     def __str__(self):
@@ -551,18 +546,18 @@ class BI(LINE):
         self,
         start: FX,
         end: FX = None,
-        _type: str = None,
+        _type: str | None = None,
         index: int = 0,
-        default_zs_type: str = None,
+        default_zs_type: str | None = None,
     ):
         super().__init__(start, end, _type, index)
-        self.mmds: List[MMD] = []  # 买卖点
-        self.bcs: List[BC] = []  # 背驰信息
+        self.mmds: list[MMD] = []  # 买卖点
+        self.bcs: list[BC] = []  # 背驰信息
 
         self.default_zs_type: str = default_zs_type
         # 记录不同中枢下的背驰和买卖点
-        self.zs_type_mmds: Dict[str, List[MMD]] = {}
-        self.zs_type_bcs: Dict[str, List[BC]] = {}
+        self.zs_type_mmds: dict[str, list[MMD]] = {}
+        self.zs_type_bcs: dict[str, list[BC]] = {}
 
         # 记录是否是拆分笔
         self.is_split = ""
@@ -590,19 +585,19 @@ class BI(LINE):
         """
         return self.end.index - self.start.index
 
-    def get_mmds(self, zs_type: str = None) -> List[MMD]:
+    def get_mmds(self, zs_type: str | None = None) -> list[MMD]:
         # 返回买卖点，需要检查买点的中枢是否有效
         if zs_type is None:
             return [_m for _m in self.mmds if _m.zs.real]
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             return []
         return [_m for _m in self.zs_type_mmds[zs_type] if _m.zs.real]
 
-    def get_bcs(self, zs_type: str = None) -> List[BC]:
+    def get_bcs(self, zs_type: str | None = None) -> list[BC]:
         # 需要检查买点的中枢是否有效
         if zs_type is None:
             return [_b for _b in self.bcs if _b.bc and (_b.zs is None or _b.zs.real)]
-        if zs_type not in self.zs_type_bcs.keys():
+        if zs_type not in self.zs_type_bcs:
             return []
         return [
             _b
@@ -619,7 +614,7 @@ class BI(LINE):
         if zs_type == self.default_zs_type:
             self.mmds.append(mmd_obj)
 
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             self.zs_type_mmds[zs_type] = []
         self.zs_type_mmds[zs_type].append(mmd_obj)
         return True
@@ -627,9 +622,9 @@ class BI(LINE):
     def add_bc(
         self,
         _type: str,
-        zs: Union[ZS, None],
-        compare_line: Union[LINE, None],
-        compare_lines: List[LINE],
+        zs: ZS | None,
+        compare_line: LINE | None,
+        compare_lines: list[LINE],
         bc: bool,
         zs_type: str,
     ) -> bool:
@@ -639,13 +634,13 @@ class BI(LINE):
         bc_obj = BC(_type, zs, compare_line, compare_lines, bc)
         if zs_type == self.default_zs_type:
             self.bcs.append(bc_obj)
-        if zs_type not in self.zs_type_bcs.keys():
+        if zs_type not in self.zs_type_bcs:
             self.zs_type_bcs[zs_type] = []
         self.zs_type_bcs[zs_type].append(bc_obj)
 
         return True
 
-    def line_mmds(self, zs_type: Union[str, None] = None) -> list:
+    def line_mmds(self, zs_type: str | None = None) -> list:
         """
         返回当前线所有买卖点名称
 
@@ -658,20 +653,20 @@ class BI(LINE):
 
         if zs_type == "|":
             mmds = []
-            for zs_type in self.zs_type_mmds.keys():
-                mmds += self.line_mmds(zs_type)
+            for _zs_type in self.zs_type_mmds:
+                mmds += self.line_mmds(_zs_type)
             return list(set(mmds))
         if zs_type == "&":
             mmds = self.line_mmds()
-            for zs_type in self.zs_type_mmds.keys():
-                mmds = set(mmds) & set(self.line_mmds(zs_type))
+            for _zs_type in self.zs_type_mmds:
+                mmds = set(mmds) & set(self.line_mmds(_zs_type))
             return list(mmds)
 
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             return []
         return [m.name for m in self.zs_type_mmds[zs_type] if m.zs.real]
 
-    def line_bcs(self, zs_type: Union[str, None] = None) -> list:
+    def line_bcs(self, zs_type: str | None = None) -> list:
         """
         返回当前线所有的背驰类型
 
@@ -687,16 +682,16 @@ class BI(LINE):
 
         if zs_type == "|":
             bcs = []
-            for zs_type in self.zs_type_bcs.keys():
-                bcs += self.line_bcs(zs_type)
+            for _zs_type in self.zs_type_bcs:
+                bcs += self.line_bcs(_zs_type)
             return list(set(bcs))
         if zs_type == "&":
             bcs = self.line_bcs()
-            for zs_type in self.zs_type_bcs.keys():
-                bcs = set(bcs) & set(self.line_bcs(zs_type))
+            for _zs_type in self.zs_type_bcs:
+                bcs = set(bcs) & set(self.line_bcs(_zs_type))
             return list(bcs)
 
-        if zs_type not in self.zs_type_bcs.keys():
+        if zs_type not in self.zs_type_bcs:
             return []
         return [
             _bc.type
@@ -704,14 +699,14 @@ class BI(LINE):
             if _bc.bc and (_bc.zs is None or _bc.zs.real)
         ]
 
-    def mmd_exists(self, check_mmds: list, zs_type: Union[str, None] = None) -> bool:
+    def mmd_exists(self, check_mmds: list, zs_type: str | None = None) -> bool:
         """
         检查当前笔是否包含指定的买卖点的一个
         """
         mmds = self.line_mmds(zs_type)
         return len(set(check_mmds) & set(mmds)) > 0
 
-    def bc_exists(self, bc_types: list, zs_type: Union[str, None] = None) -> bool:
+    def bc_exists(self, bc_types: list, zs_type: str | None = None) -> bool:
         """
         检查是否有背驰的情况
         """
@@ -727,19 +722,17 @@ class TZXL:
     def __init__(
         self,
         bh_direction: str,
-        line: Union[LINE, None],
+        line: LINE | None,
         pre_line: LINE,
         line_bad: bool,
         done: bool,
     ):
-        self.bh_direction: str = (
-            bh_direction  # 特征序列包含的方向 up 向上包含，取高高，down 向下包含，取低低
-        )
-        self.line: Union[LINE, None] = line
+        self.bh_direction: str = bh_direction  # 特征序列包含的方向 up 向上包含，取高高，down 向下包含，取低低
+        self.line: LINE | None = line
         self.pre_line: LINE = pre_line
         self.line_bad: bool = line_bad
         self.is_up_line: bool = False
-        self.lines: List[LINE] = [line]
+        self.lines: list[LINE] = [line]
         self.done: bool = done
 
         self.max: float = 0
@@ -777,10 +770,10 @@ class XLFX:
     序列分型
     """
 
-    def __init__(self, _type: str, xl: TZXL, xls: List[TZXL], done: bool = True):
+    def __init__(self, _type: str, xl: TZXL, xls: list[TZXL], done: bool = True):
         self.type: str = _type
         self.xl: TZXL = xl
-        self.xls: List[TZXL] = xls
+        self.xls: list[TZXL] = xls
 
         self.qk = False  # 分型是否有缺口
         self.is_line_bad = False  # 是否是一笔破坏分型
@@ -817,21 +810,21 @@ class XD(LINE):
         end: FX,
         start_line: LINE,
         end_line: LINE = None,
-        _type: str = None,
+        _type: str | None = None,
         ding_fx: XLFX = None,
         di_fx: XLFX = None,
         index: int = 0,
-        default_zs_type: str = None,
+        default_zs_type: str | None = None,
     ):
         super().__init__(start, end, _type, index)
 
-        self.start_line: Union[LINE, BI, XD] = start_line  # 线段起始笔
-        self.end_line: Union[LINE, BI, XD] = end_line  # 线段结束笔
-        self.mmds: List[MMD] = []  # 买卖点
-        self.bcs: List[BC] = []  # 背驰信息
+        self.start_line: LINE | BI | XD = start_line  # 线段起始笔
+        self.end_line: LINE | BI | XD = end_line  # 线段结束笔
+        self.mmds: list[MMD] = []  # 买卖点
+        self.bcs: list[BC] = []  # 背驰信息
         self.ding_fx: XLFX = ding_fx
         self.di_fx: XLFX = di_fx
-        self.tzxls: List[TZXL] = []  # 特征序列列表
+        self.tzxls: list[TZXL] = []  # 特征序列列表
         self.done: bool = False  # 标记线段是否完成
 
         # 是否是拆分后的线段，如果是，这里会写明原因
@@ -839,13 +832,13 @@ class XD(LINE):
 
         self.default_zs_type: str = default_zs_type
         # 记录不同中枢下的背驰和买卖点
-        self.zs_type_mmds: Dict[str, List[MMD]] = {}
-        self.zs_type_bcs: Dict[str, List[BC]] = {}
+        self.zs_type_mmds: dict[str, list[MMD]] = {}
+        self.zs_type_bcs: dict[str, list[BC]] = {}
 
         self.default_zs_type: str = default_zs_type
         # 记录不同中枢下的背驰和买卖点
-        self.zs_type_mmds: Dict[str, List[MMD]] = {}
-        self.zs_type_bcs: Dict[str, List[BC]] = {}
+        self.zs_type_mmds: dict[str, list[MMD]] = {}
+        self.zs_type_bcs: dict[str, list[BC]] = {}
 
         self.not_del: bool = False  # 计算过程中，不允许删除重新计算
         self.not_yx: bool = False  # 计算过程中，不允许进行延续计算
@@ -871,19 +864,19 @@ class XD(LINE):
     def is_done(self) -> bool:
         return self.done
 
-    def get_mmds(self, zs_type: str = None) -> List[MMD]:
+    def get_mmds(self, zs_type: str | None = None) -> list[MMD]:
         # 需要检查买点的中枢是否有效
         if zs_type is None:
             return [_m for _m in self.mmds if _m.zs.real]
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             return []
         return [_m for _m in self.zs_type_mmds[zs_type] if _m.zs.real]
 
-    def get_bcs(self, zs_type: str = None) -> List[BC]:
+    def get_bcs(self, zs_type: str | None = None) -> list[BC]:
         # 需要检查买点的中枢是否有效
         if zs_type is None:
             return [bc for bc in self.bcs if bc.bc and (bc.zs is None or bc.zs.real)]
-        if zs_type not in self.zs_type_bcs.keys():
+        if zs_type not in self.zs_type_bcs:
             return []
         return [
             bc
@@ -899,7 +892,7 @@ class XD(LINE):
         mmd_obj.msg = msg
         if zs_type == self.default_zs_type:
             self.mmds.append(mmd_obj)
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             self.zs_type_mmds[zs_type] = []
         self.zs_type_mmds[zs_type].append(mmd_obj)
         return True
@@ -907,9 +900,9 @@ class XD(LINE):
     def add_bc(
         self,
         _type: str,
-        zs: Union[ZS, None],
+        zs: ZS | None,
         compare_line: LINE,
-        compare_lines: List[LINE],
+        compare_lines: list[LINE],
         bc: bool,
         zs_type: str,
     ) -> bool:
@@ -924,7 +917,7 @@ class XD(LINE):
         self.zs_type_bcs[zs_type].append(bc_obj)
         return True
 
-    def line_mmds(self, zs_type: Union[str, None] = None) -> list:
+    def line_mmds(self, zs_type: str | None = None) -> list:
         """
         返回当前线所有买卖点名称
 
@@ -937,20 +930,20 @@ class XD(LINE):
 
         if zs_type == "|":
             mmds = []
-            for zs_type in self.zs_type_mmds.keys():
-                mmds += self.line_mmds(zs_type)
+            for _zs_type in self.zs_type_mmds:
+                mmds += self.line_mmds(_zs_type)
             return list(set(mmds))
         if zs_type == "&":
             mmds = self.line_mmds()
-            for zs_type in self.zs_type_mmds.keys():
-                mmds = set(mmds) & set(self.line_mmds(zs_type))
+            for _zs_type in self.zs_type_mmds:
+                mmds = set(mmds) & set(self.line_mmds(_zs_type))
             return list(mmds)
 
-        if zs_type not in self.zs_type_mmds.keys():
+        if zs_type not in self.zs_type_mmds:
             return []
         return [m.name for m in self.zs_type_mmds[zs_type] if m.zs.real]
 
-    def line_bcs(self, zs_type: Union[str, None] = None) -> list:
+    def line_bcs(self, zs_type: str | None = None) -> list:
         """
         返回当前线所有的背驰类型
 
@@ -966,16 +959,16 @@ class XD(LINE):
 
         if zs_type == "|":
             bcs = []
-            for zs_type in self.zs_type_bcs.keys():
-                bcs += self.line_bcs(zs_type)
+            for _zs_type in self.zs_type_bcs:
+                bcs += self.line_bcs(_zs_type)
             return list(set(bcs))
         if zs_type == "&":
             bcs = self.line_bcs()
-            for zs_type in self.zs_type_bcs.keys():
-                bcs = set(bcs) & set(self.line_bcs(zs_type))
+            for _zs_type in self.zs_type_bcs:
+                bcs = set(bcs) & set(self.line_bcs(_zs_type))
             return list(bcs)
 
-        if zs_type not in self.zs_type_bcs.keys():
+        if zs_type not in self.zs_type_bcs:
             return []
         return [
             _bc.type
@@ -983,14 +976,14 @@ class XD(LINE):
             if _bc.bc and (_bc.zs is None or _bc.zs.real)
         ]
 
-    def mmd_exists(self, check_mmds: list, zs_type: Union[str, None] = None) -> bool:
+    def mmd_exists(self, check_mmds: list, zs_type: str | None = None) -> bool:
         """
         检查当前笔是否包含指定的买卖点的一个
         """
         mmds = self.line_mmds(zs_type)
         return len(set(check_mmds) & set(mmds)) > 0
 
-    def bc_exists(self, bc_types: list, zs_type: Union[str, None] = None) -> bool:
+    def bc_exists(self, bc_types: list, zs_type: str | None = None) -> bool:
         """
         检查是否有背驰的情况
         """
@@ -1003,12 +996,12 @@ class XD(LINE):
 
 @dataclass
 class LOW_LEVEL_QS:
-    zss: List[ZS]  # 低级别线构成的中枢列表
-    lines: List[Union[LINE, BI, XD]]  # 包含的低级别线
+    zss: list[ZS]  # 低级别线构成的中枢列表
+    lines: list[LINE | BI | XD]  # 包含的低级别线
     zs_num: int = 0
     line_num: int = 0
-    bc_line: Union[LINE, None] = None  # 背驰的线
-    last_line: Union[LINE, BI, XD, None] = None  # 最后一个线
+    bc_line: LINE | None = None  # 背驰的线
+    last_line: LINE | BI | XD | None = None  # 最后一个线
     qs: bool = False  # 是否形成趋势
     pz: bool = False  # 是否形成盘整
     line_bc: bool = False  # 是否形成（笔、线段）背驰
@@ -1035,7 +1028,7 @@ class MACD_INFOS:
 @dataclass
 class LINE_FORM_INFOS:
     # 组成形态的线列表
-    lines: List[Union[LINE, BI, XD]]
+    lines: list[LINE | BI | XD]
     # 方向
     direction: str
     # 线的数量
@@ -1043,7 +1036,7 @@ class LINE_FORM_INFOS:
     # 线的形态描述
     form_type: str
     # 线组成的中枢信息
-    zss: Union[None, List[ZS]] = None
+    zss: None | list[ZS] = None
     # 最后线是否背驰段
     is_bc_line: bool = False
     # 形态级别
@@ -1054,17 +1047,17 @@ class LINE_FORM_INFOS:
     infos: dict = None
 
     def __str__(self):
-        msg = f'{"向上" if self.direction == "up" else "向下"} {self.form_type} ({self.form_level}) {"进入背驰段" if self.is_bc_line else "无背驰"}'
+        msg = f"{'向上' if self.direction == 'up' else '向下'} {self.form_type} ({self.form_level}) {'进入背驰段' if self.is_bc_line else '无背驰'}"
         if self.infos is not None:
-            if "zs_pre_line_num" in self.infos.keys():
-                msg += f'  中枢前 {self.infos["zs_pre_line_num"]} 段 / '
-            if "zs_next_line_num" in self.infos.keys():
-                msg += f'  中枢后 {self.infos["zs_next_line_num"]} 段 / '
-            if "zs_pre_level" in self.infos.keys():
-                msg += f'  前中枢 {self.infos["zs_pre_level"]} 级别 / '
-            if "zs_next_level" in self.infos.keys():
-                msg += f'  后中枢 {self.infos["zs_next_level"]} 级别 / '
-        return msg.strip(" / ")
+            if "zs_pre_line_num" in self.infos:
+                msg += f"  中枢前 {self.infos['zs_pre_line_num']} 段 / "
+            if "zs_next_line_num" in self.infos:
+                msg += f"  中枢后 {self.infos['zs_next_line_num']} 段 / "
+            if "zs_pre_level" in self.infos:
+                msg += f"  前中枢 {self.infos['zs_pre_level']} 级别 / "
+            if "zs_next_level" in self.infos:
+                msg += f"  后中枢 {self.infos['zs_next_level']} 级别 / "
+        return msg.strip(" / ")  # noqa: B005
 
 
 @dataclass
@@ -1074,9 +1067,9 @@ class BW_LINE_QS_INFOS:
     """
 
     # 线段的组成
-    lines: List[Union[LINE, BI, XD]]
+    lines: list[LINE | BI | XD]
     # 中枢列表
-    zss: List[ZS]
+    zss: list[ZS]
     # 中枢类型拼接字符串
     zss_str = ""
     # 走势类型描述
@@ -1096,8 +1089,8 @@ class ICL(metaclass=ABCMeta):
         self,
         code: str,
         frequency: str,
-        config: Union[dict, None] = None,
-        start_datetime: datetime.datetime = None,
+        config: dict | None = None,
+        start_datetime: datetime.datetime | None = None,
     ):
         """
         缠论计算
@@ -1121,7 +1114,6 @@ class ICL(metaclass=ABCMeta):
 
         可增量多次调用，重复已计算的会自动跳过，最后一个 bar 会进行更新
         """
-        pass
 
     # @abstractmethod
     # def check_bi_inside_bc(self, bi: BI):
@@ -1134,137 +1126,119 @@ class ICL(metaclass=ABCMeta):
         """
         返回计算的标的代码
         """
-        pass
 
     @abstractmethod
     def get_frequency(self) -> str:
         """
         返回计算的周期参数
         """
-        pass
 
     def get_config(self) -> dict:
         """
         返回计算时使用的缠论配置项
         """
-        pass
 
     @abstractmethod
-    def get_src_klines(self) -> List[Kline]:
+    def get_src_klines(self) -> list[Kline]:
         """
         返回原始K线列表
         """
-        pass
 
     @abstractmethod
-    def get_klines(self) -> List[Kline]:
+    def get_klines(self) -> list[Kline]:
         """
         返回K线列表
         如果 kline_type == kline_default 则返回原始 K 线数据
         如果 kline_type == kline_chanlun 则返回缠论 K 线数据
         如需获取原始K线数据，使用 get_src_klines 方法
         """
-        pass
 
     @abstractmethod
-    def get_cl_klines(self) -> List[CLKline]:
+    def get_cl_klines(self) -> list[CLKline]:
         """
         返回合并后的缠论K线列表
         """
-        pass
 
     @abstractmethod
     def get_idx(self) -> dict:
         """
         返回计算的指标数据
         """
-        pass
 
     @abstractmethod
-    def get_fxs(self) -> List[FX]:
+    def get_fxs(self) -> list[FX]:
         """
         返回缠论分型列表
         """
-        pass
 
     @abstractmethod
-    def get_bis(self) -> List[BI]:
+    def get_bis(self) -> list[BI]:
         """
         返回计算缠论笔列表
         """
-        pass
 
     @abstractmethod
-    def get_xds(self) -> List[XD]:
+    def get_xds(self) -> list[XD]:
         """
         返回计算缠论线段列表
         """
-        pass
 
     @abstractmethod
-    def get_zsds(self) -> List[XD]:
+    def get_zsds(self) -> list[XD]:
         """
         返回计算缠论走势段列表
         """
-        pass
 
     @abstractmethod
-    def get_qsds(self) -> List[XD]:
+    def get_qsds(self) -> list[XD]:
         """
         返回计算缠论趋势段列表
         """
-        pass
 
     @abstractmethod
-    def get_bi_zss(self, zs_type: str = None) -> List[ZS]:
+    def get_bi_zss(self, zs_type: str | None = None) -> list[ZS]:
         """
         返回计算缠论笔中枢列表
         """
-        pass
 
     @abstractmethod
-    def get_xd_zss(self, zs_type: str = None) -> List[ZS]:
+    def get_xd_zss(self, zs_type: str | None = None) -> list[ZS]:
         """
         返回计算缠论线段中枢（走势中枢）
         """
-        pass
 
     @abstractmethod
-    def get_zsd_zss(self) -> List[ZS]:
+    def get_zsd_zss(self) -> list[ZS]:
         """
         返回走势段中枢
         """
-        pass
 
     @abstractmethod
-    def get_qsd_zss(self) -> List[ZS]:
+    def get_qsd_zss(self) -> list[ZS]:
         """
         返回趋势段中枢
         """
-        pass
 
     @abstractmethod
-    def get_last_bi_zs(self) -> Union[ZS, None]:
+    def get_last_bi_zs(self) -> ZS | None:
         """
         返回最后的笔中枢，根据最后几笔倒推出的笔中枢，和 self.get_bi_zss()[-1] 方式获取的中枢不一定一致
         """
-        pass
 
     @abstractmethod
-    def get_last_xd_zs(self) -> Union[ZS, None]:
+    def get_last_xd_zs(self) -> ZS | None:
         """
         返回最后的线段中枢，需要 CL_CAL_LAST_ZS 设置为 True 才会有中枢
         """
-        pass
 
     @abstractmethod
     def create_dn_zs(
         self,
         zs_type: str,
-        lines: List[LINE],
+        lines: list[LINE],
         max_line_num: int = 999,
         zs_include_last_line=True,
-    ) -> List[ZS]:
+    ) -> list[ZS]:
         """
         创建段内中枢
         @param zs_type: 中枢类型：bi 笔中枢 xd 线段中枢
@@ -1272,10 +1246,9 @@ class ICL(metaclass=ABCMeta):
         @param max_line_num: 中枢最大线段数量
         @param zs_include_last_line: 如果中枢最后一笔不是最高 or 最低，在中枢内部，中枢区间是否包含最后一笔，默认包含
         """
-        pass
 
     @abstractmethod
-    def beichi_pz(self, zs: ZS, now_line: LINE) -> Tuple[bool, Union[LINE, None]]:
+    def beichi_pz(self, zs: ZS, now_line: LINE) -> tuple[bool, LINE | None]:
         """
         判断中枢与指定线是否构成盘整背驰
         @param zs: 中枢
@@ -1284,8 +1257,8 @@ class ICL(metaclass=ABCMeta):
 
     @abstractmethod
     def beichi_qs(
-        self, lines: List[LINE], zss: List[ZS], now_line: LINE
-    ) -> Tuple[bool, List[LINE]]:
+        self, lines: list[LINE], zss: list[ZS], now_line: LINE
+    ) -> tuple[bool, list[LINE]]:
         """
         判断指定线与之前的中枢，是否形成了趋势背驰
 
@@ -1295,7 +1268,7 @@ class ICL(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> Tuple[str, None]:
+    def zss_is_qs(self, one_zs: ZS, two_zs: ZS) -> tuple[str, None]:
         """
         判断两个中枢是否形成趋势（根据设置的位置关系配置，来判断两个中枢是否有重叠）
         返回  up 是向上趋势， down 是向下趋势 ，None 则没有趋势
@@ -1310,9 +1283,8 @@ def query_macd_ld(cd: ICL, start_fx: FX, end_fx: FX):
     向下线段，比较 down_sum 绿柱子总和
     """
     if start_fx.index > end_fx.index:
-        raise Exception(
-            "%s - %s - %s 计算力度，开始分型不可以大于结束分型"
-            % (cd.get_code(), cd.get_frequency(), cd.get_klines()[-1].date)
+        raise Exception(  # noqa: TRY002
+            f"{cd.get_code()} - {cd.get_frequency()} - {cd.get_klines()[-1].date} 计算力度，开始分型不可以大于结束分型"
         )
 
     dea = np.array(
@@ -1369,20 +1341,17 @@ def compare_ld_beichi(one_ld: dict, two_ld: dict, line_direction: str):
         hist_key = "up_sum"
     elif line_direction == "down":
         hist_key = "down_sum"
-    if "macd" not in two_ld.keys() or "macd" not in one_ld.keys():
+    if "macd" not in two_ld or "macd" not in one_ld:
         return False
-    if two_ld["macd"]["hist"][hist_key] < one_ld["macd"]["hist"][hist_key]:
-        return True
-    else:
-        return False
+    return two_ld["macd"]["hist"][hist_key] < one_ld["macd"]["hist"][hist_key]
 
 
 def user_custom_mmd(
     cd: ICL,
-    line: Union[BI, XD],
-    lines: List[Union[BI, XD]],
+    line: BI | XD,
+    lines: list[BI | XD],
     zs_type: str,
-    zss: List[ZS],
+    zss: list[ZS],
 ):
     """
     用户可自定义买卖点

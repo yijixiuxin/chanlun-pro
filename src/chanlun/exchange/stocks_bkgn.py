@@ -2,7 +2,6 @@ import json
 import pathlib
 import time
 import webbrowser
-from typing import Dict, List, Union
 
 import akshare as ak
 from tqdm.auto import tqdm
@@ -15,7 +14,7 @@ from chanlun.config import get_data_path
 """
 
 
-class StocksBKGN(object):
+class StocksBKGN:
     def __init__(self):
 
         if config.TDX_PATH == "":
@@ -139,7 +138,7 @@ class StocksBKGN(object):
 
         tdx_hy_info = {}  # 只获取二级行业，并关联二级行业下的子行业
         with open(tdx_hy_file, "r", encoding="gbk") as fp:
-            for l_txt in fp.readlines():
+            for l_txt in fp:
                 l_txt = l_txt.strip()
                 if l_txt.startswith("X") and "|" in l_txt:
                     hy_code = l_txt.split("|")[0]
@@ -158,7 +157,7 @@ class StocksBKGN(object):
 
         # 读取股票的与行业的关系
         with open(tdx_stock_file, "r") as fp:
-            for l_txt in fp.readlines():
+            for l_txt in fp:
                 l_txt = l_txt.strip()
                 if "|" in l_txt:
                     _info = l_txt.split("|")
@@ -236,7 +235,7 @@ class StocksBKGN(object):
 
         return True
 
-    def file_bkgns(self) -> Dict[str, Union[Dict[str, list], List[str]]]:
+    def file_bkgns(self) -> dict[str, dict[str, list] | list[str]]:
         if self.cache_file_bk is None:
             if self.file_name.is_file():
                 with open(self.file_name, "r", encoding="utf-8") as fp:
@@ -277,7 +276,7 @@ class StocksBKGN(object):
                 code_gns.append(gn)
         return {"HY": code_hys, "GN": code_gns}
 
-    def get_codes_by_hy(self, hy_name) -> List[str]:
+    def get_codes_by_hy(self, hy_name) -> list[str]:
         """
         根据行业名称，获取其中的股票代码列表
         """

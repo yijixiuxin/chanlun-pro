@@ -5,20 +5,20 @@ import pickle
 import random
 import time
 from decimal import Decimal
-from typing import Union
 
 import pandas as pd
 import pytz
 
 from chanlun import cl, fun
 from chanlun.base import Market
-from chanlun.cl_interface import ICL
+from chanlun.cl_interface import ICL, Config
 from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.exchange import Exchange
+from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
 
 
-class FileCacheDB(object):
+class FileCacheDB:
     """
     文件数据对象
     """
@@ -107,7 +107,7 @@ class FileCacheDB(object):
 
     def get_tdx_klines(
         self, market: str, code: str, frequency: str
-    ) -> Union[None, pd.DataFrame]:
+    ) -> None | pd.DataFrame:
         """
         获取缓存在文件中的股票数据
         """
@@ -118,7 +118,7 @@ class FileCacheDB(object):
             return None
         try:
             _klines = pd.read_csv(file_pathname)
-        except Exception:
+        except Exception:  # noqa: BLE001
             file_pathname.unlink()
             return None
         if len(_klines) > 0:
@@ -150,14 +150,14 @@ class FileCacheDB(object):
         """
         删除15天前的k线数据，不活跃的，减少占用空间
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (  # noqa: DTZ005
             15 * 24 * 60 * 60
         )
         for filename in (self.klines_path / market).glob("*.csv"):
             try:
                 if filename.stat().st_mtime < del_lt_times:
                     filename.unlink()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         return True
 
@@ -173,7 +173,7 @@ class FileCacheDB(object):
         获取web缓存的的缠论数据对象
         """
         unique_md5_str = (
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'
+            f"{[f'{k}:{v}' for k, v in cl_config.items() if k in self.config_keys]}"
         )
         key = hashlib.md5(unique_md5_str.encode("UTF-8")).hexdigest()
 
@@ -183,6 +183,9 @@ class FileCacheDB(object):
             / f"{market}_{code.replace('/', '_').replace('.', '_')}_{frequency}_{key}.pkl"
         )
         cd: ICL = cl.CL(code, frequency, cl_config)
+        # 如果K线类型是平均K线，则对k线进行转换
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
+            klines = klines_to_heikin_ashi_klines(klines)
         try:
             if file_pathname.is_file():
                 # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
@@ -249,14 +252,14 @@ class FileCacheDB(object):
                         #     f"{market}--{code}--{frequency} {key} 计算后的缠论数据有丢失数据 [{len(_valid_cd_klines)} - {len(_valid_src_klines)}]，重新计算"
                         # )
                         cd = cl.CL(code, frequency, cl_config)
-        except Exception:
+        except Exception:  # noqa: BLE001
             if file_pathname.is_file():
                 # print(
                 #     f"获取 web 缓存的缠论数据对象异常 {market} {code} {frequency} - {e}，尝试删除缓存文件重新计算"
                 # )
                 try:
                     file_pathname.unlink()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
 
         cd.process_klines(klines)
@@ -264,7 +267,7 @@ class FileCacheDB(object):
         try:
             with open(file_pathname, "wb") as fp:
                 pickle.dump(cd, fp)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"写入缓存异常 {market} {code} {frequency} - {e}")
 
         # 加一个随机概率，去清理历史的缓存，避免太多占用空间
@@ -283,7 +286,7 @@ class FileCacheDB(object):
                     filename
                 ):
                     filename.unlink()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
         return True
 
@@ -291,7 +294,7 @@ class FileCacheDB(object):
         """
         清除时间超过15天的缓存数据
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (  # noqa: DTZ005
             15 * 24 * 60 * 60
         )
         for _market in Market:
@@ -300,7 +303,7 @@ class FileCacheDB(object):
                     if filename.stat().st_mtime < del_lt_times:
                         filename.unlink()
 
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
         return True
 
@@ -312,7 +315,7 @@ class FileCacheDB(object):
             for filename in (self.cl_data_path / _market.value).glob("*.pkl"):
                 try:
                     filename.unlink()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
         return True
 
@@ -326,13 +329,11 @@ class FileCacheDB(object):
         """
 
         key = hashlib.md5(
-            f'{[f"{k}:{v}" for k, v in cl_config.items() if k in self.config_keys]}'.encode(
-                "UTF-8"
-            )
+            f"{[f'{k}:{v}' for k, v in cl_config.items() if k in self.config_keys]}".encode()
         ).hexdigest()
         filename = (
             self.cl_data_path
-            / f'{market}_{code.replace("/", "_")}_{frequency}_{key}.pkl'
+            / f"{market}_{code.replace('/', '_')}_{frequency}_{key}.pkl"
         )
         cd: ICL
         if filename.is_file() is False:
