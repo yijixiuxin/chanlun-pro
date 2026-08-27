@@ -757,7 +757,7 @@ export interface AccountManagerColumnBase<TFormatterName extends StandardFormatt
 	 * When a `formatter` is defined, it processes only the specified values.
 	 * If an empty array is assigned to `dataFields`, the `formatter` will receive the entire data object.
 	 *
-	 * **Example**
+	 * @example
 	 *
 	 * - For a column with `dataFields` set as `['avgPrice', 'qty']`, the displayed value updates only when the `avgPrice` or `qty` values in the data object change.
 	 * - For a column with an empty `dataFields` array, the displayed value updates if any values in the data object change.
@@ -825,7 +825,7 @@ export interface AccountManagerInfo {
 	 * Otherwise the `formatText` function is used.
 	 * For optimal performance, it is recommended to only use `formatText` if you intend to display only string values.
 	 *
-	 * **Example**
+	 * @example
 	 * ```ts
 	 * {
 	 *     name: 'closeButton' as FormatterName, // Typecast to FormatterName. Use constant in real code
@@ -4610,7 +4610,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * The default interval for the chart.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * interval: '1D',
 	 * ```
@@ -4619,7 +4619,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * The default symbol for the chart.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * symbol: 'AAPL',
 	 * ```
@@ -4654,7 +4654,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * disabled_features: ["header_widget", "left_toolbar"],
 	 * ```
@@ -4685,7 +4685,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * enabled_features: ["move_logo_to_main_pane"],
 	 * ```
@@ -4930,7 +4930,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * Custom formatters for adjusting the display format of price, date, and time values.
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * ```javascript
 	 * custom_formatters: {
@@ -5013,7 +5013,7 @@ export interface ChartingLibraryWidgetOptions {
 	 * The keys of this object are the names of overridden properties.
 	 * The values of these keys are the new values of the properties.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * overrides: {
 	 *     "mainSeriesProperties.style": 2
@@ -5037,7 +5037,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * List of visible time frames that can be selected at the bottom of the chart. See [Time frame toolbar](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Time-Scale#time-frame-toolbar) for more information. Time frame is an object containing the following properties:
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * ```javascript
 	 * time_frames: [
@@ -5115,7 +5115,7 @@ export interface ChartingLibraryWidgetOptions {
 	 * * `backgroundColor`
 	 * * `foregroundColor`
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * ```javascript
 	 * loading_screen: { backgroundColor: "#000000" }
@@ -5125,7 +5125,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * An object that contains set/remove functions. Use it to save [user settings](https://www.tradingview.com/charting-library-docs/latest/saving_loading/user-settings) to your preferred storage, including the server-side one.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * settings_adapter: {
 	 *     initialSettings: {
@@ -5153,7 +5153,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * an array of custom compare symbols for the Compare window.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * compare_symbols: [
 	 *     { symbol: 'DAL', title: 'Delta Air Lines' },
@@ -5195,7 +5195,7 @@ export interface ChartingLibraryWidgetOptions {
 	 *
 	 * By default (if option is omitted) header will be in adaptive mode (fullsize if the window width allows and icons on smaller windows).
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * header_widget_buttons_mode: 'fullsize',
 	 * ```
@@ -5208,7 +5208,7 @@ export interface ChartingLibraryWidgetOptions {
 	/**
 	 * An additional optional field to add more bars on screen.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * time_scale: {
 	 *     min_bar_spacing: 10,
@@ -5625,7 +5625,7 @@ export interface ContextMenuOptions {
 	 * The library will call your function each time it wants to display a context menu and will provide a list of items to display.
 	 * This function should return an array of items to display.
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * ```js
 	 * context_menu: {
@@ -5908,22 +5908,29 @@ export interface CreateShapeOptionsBase<TOverrides extends object> {
 	 * Note that the value should be a **hex number**, not a string.
 	 */
 	icon?: number;
+	/**
+	 * Specify an emoji to render. Only emojis from the [Drawings list](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/Drawings-List#emojis) are supported.
+	 * Note that the value should be the emoji **character itself** (for example, `'🖐️'`), not its Unicode code point.
+	 * If the emoji is omitted, the drawing uses the default emoji.
+	 */
+	emoji?: string;
 }
 /**
- * Options for creating a study.
+ * Options for creating an indicator.
  */
 export interface CreateStudyOptions {
-	/** if it is `true` then the study limit dialog will be shown if the limit is exceeded. */
+	/** Whether to show the indicator limit dialog if the limit is exceeded. */
 	checkLimit?: boolean;
 	/**
-	 * Price scale
+	 * Price scale to attach the indicator to.
+	 * Refer to [Indicator placement](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicator-placement) for more information.
 	 */
 	priceScale?: StudyPriceScale;
-	/** Allow the currency to be changed */
+	/** Whether the currency can be changed. */
 	allowChangeCurrency?: boolean;
-	/** Allow the unit to be changed */
+	/** Whether the unit can be changed. */
 	allowChangeUnit?: boolean;
-	/** prevents adding of the action to the undo stack */
+	/** Whether to skip adding the action to the undo stack. */
 	disableUndo?: boolean;
 }
 /**
@@ -10272,6 +10279,13 @@ export interface IBrokerConnectionAdapterHost {
 	domPanelVisibility(): IWatchedValue<boolean> | null;
 	/** Returns whether the order panel is visible or not. */
 	orderPanelVisibility(): IWatchedValue<boolean> | null;
+	/**
+	 * Returns whether trading sources (order and position lines, execution marks) are visible on the chart, or `null` if trading is not available.
+	 *
+	 * Setting the value to `false` temporarily hides all trading sources on all charts. The value is not persisted between sessions.
+	 * It is the same value that is toggled by the *Hide positions and orders* option in the right toolbar.
+	 */
+	tradedSourcesVisibility(): IWatchedValue<boolean> | null;
 	/** Returns if orders can be sent to the broker without showing the order ticket. */
 	silentOrdersPlacement(): IWatchedValue<boolean>;
 	/**
@@ -10719,7 +10733,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a subscription object for new data being loaded for the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().onDataLoaded().subscribe(
 	 *     null,
@@ -10733,7 +10747,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a subscription object for the chart symbol changing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().onSymbolChanged().subscribe(null, () => console.log('The symbol is changed'));
 	 * ```
@@ -10746,7 +10760,7 @@ export interface IChartWidgetApi {
 	 * If `timeframe` is `undefined`, you can change a date range before data loading starts.
 	 * To do this, you can specify a time frame value or a certain date range.
 	 *
-	 * **Examples**
+	 * @example
 	 *
 	 * The following code sample specifies a time frame value:
 	 *
@@ -10776,7 +10790,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a subscription object for the chart's visible range changing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().onVisibleRangeChanged().subscribe(
 	 *     null,
@@ -10789,7 +10803,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a subscription object for the chart type changing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().onChartTypeChanged().subscribe(
 	 *     null,
@@ -10807,7 +10821,7 @@ export interface IChartWidgetApi {
 	 * Code that needs to run after the data is loaded should await the promise. Code that relied on the
 	 * previous synchronous boolean return value should be migrated to an explicit synchronous state check.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().dataReady().then(() => {
 	 *     // ...
@@ -10828,7 +10842,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a subscription object for the crosshair moving over the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().crossHairMoved().subscribe(
 	 *     null,
@@ -10847,7 +10861,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Allows you to display a certain time range on the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setVisibleRange(
 	 *     { from: 1420156800, to: 1451433600 },
@@ -10864,7 +10878,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Change the chart's symbol.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setSymbol('IBM');
 	 * ```
@@ -10879,7 +10893,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Change the chart's interval (resolution).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setResolution('2M');
 	 * ```
@@ -10894,7 +10908,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Change the chart's type.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setChartType(12); // Specifies the High-low type
 	 * ```
@@ -10909,7 +10923,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Change the chart's type.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setChartType(12); // Specifies the High-low type
 	 * ```
@@ -10923,7 +10937,7 @@ export interface IChartWidgetApi {
 	 * Force the chart to re-request data, for example if there are [internet connection issues](https://www.tradingview.com/charting-library-docs/latest/connecting_data/Datafeed-Issues#internet-connection-issues).
 	 * Before calling this function the {@link IChartWidgetApi.resetCache} method should be called.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().resetData();
 	 * ```
@@ -10934,7 +10948,7 @@ export interface IChartWidgetApi {
 	 * Execute an action by ID.
 	 * See [Chart methods](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Chart#execute-action-by-id) for more information.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * // Undoes the last applied action
 	 * widget.activeChart().executeActionById("undo");
@@ -10949,7 +10963,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the state of a checkable action.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * if (widget.activeChart().getCheckableActionState("drawingToolbarAction")) {
 	 *     // ...
@@ -10963,7 +10977,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Force the chart to re-request all bar marks and timescale marks.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().refreshMarks();
 	 * ```
@@ -10973,7 +10987,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Remove marks from the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().clearMarks();
 	 * ```
@@ -10984,7 +10998,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an array of IDs and name for all drawings on the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getAllShapes().forEach(({ name }) => console.log(name));
 	 * ```
@@ -10995,7 +11009,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an array of IDs and names for all studies on the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getAllStudies().forEach(({ name }) => console.log(name));
 	 * ```
@@ -11006,7 +11020,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the chart's price to bar ratio.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().getPriceToBarRatio());
 	 * ```
@@ -11017,7 +11031,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Set the chart's price to bar ratio.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setPriceToBarRatio(0.4567, { disableUndo: true });
 	 * ```
@@ -11029,7 +11043,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the locked/unlocked state of the chart's price to bar ratio.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().isPriceToBarRatioLocked());
 	 * ```
@@ -11039,7 +11053,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Lock or unlock the chart's price to bar ratio.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setPriceToBarRatioLocked(true, { disableUndo: false });
 	 * ```
@@ -11051,7 +11065,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an array of the heigh of all panes.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().getAllPanesHeight());
 	 * ```
@@ -11062,7 +11076,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Set the height for each pane in the order provided.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().setAllPanesHeight([250, 400, 200]));
 	 * ```
@@ -11073,7 +11087,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Maximize to its full size currently selected chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().maximizeChart();
 	 * ```
@@ -11088,7 +11102,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Restore to its initial size currently selected chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().restoreChart();
 	 * ```
@@ -11097,7 +11111,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an object with operations available for the specified set of entities.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().availableZOrderOperations([id]);
 	 * ```
@@ -11108,7 +11122,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Move the group to the bottom of the Z-order.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().sendToBack([id]);
 	 * ```
@@ -11119,7 +11133,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Move the sources to the top of the Z-order.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().bringToFront([id]);
 	 * ```
@@ -11130,7 +11144,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Move the sources one level up in the Z-order.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().bringForward([id]);
 	 * ```
@@ -11141,7 +11155,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Move the sources one level down in the Z-order.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().sendBackward([id]);
 	 * ```
@@ -11153,19 +11167,19 @@ export interface IChartWidgetApi {
 	 * Adds an indicator or a symbol for comparison to the chart.
 	 * For more information, refer to the [Indicators](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/) article.
 	 *
-	 * @param  {string} name - name of an indicator as shown in the `Indicators` widget
-	 * @param  {boolean} [forceOverlay] - forces the Charting Library to place the created indicator on the main pane
-	 * @param  {boolean} [lock] - whether a user will be able to remove/change/hide the indicator or not
-	 * @param  {Record<string} [inputs] - **From version v22**, it's an object containing named properties from the indicator properties dialog.
+	 * @param  {string} name - Name of an indicator as shown in the `Indicators` widget.
+	 * @param  {boolean} [forceOverlay] - Whether to place the indicator on the pane of its source instead of a new pane. Applies to non-price indicators only and does not affect the price scale. Refer to [Indicator placement](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicator-placement) for more information.
+	 * @param  {boolean} [lock] - Whether a user will be able to remove, change, or hide the indicator.
+	 * @param  {Record<string} [inputs] - An object containing named properties from the indicator properties dialog.
 	 * @param  {TOverrides} [overrides] - An object that contains [overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/indicator-overrides#customize-a-single-indicator) for a new indicator. Note that you should not specify the indicator name. Overrides for built-in indicators are listed in [`SingleIndicatorOverrides`](https://www.tradingview.com/charting-library-docs/latest/api/modules/Charting_Library#singleindicatoroverrides).
-	 * @param  {CreateStudyOptions} [options] - study creation options
-	 * @returns ID of the created study
+	 * @param  {CreateStudyOptions} [options] - Indicator creation options.
+	 * @returns ID of the created indicator.
 	 */
 	createStudy<TOverrides extends Partial<SingleIndicatorOverrides>>(name: string, forceOverlay?: boolean, lock?: boolean, inputs?: Record<string, StudyInputValue>, overrides?: TOverrides, options?: CreateStudyOptions): Promise<EntityId | null>;
 	/**
 	 * Get a study by ID.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getStudyById(id).setVisible(false);
 	 * ```
@@ -11177,7 +11191,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the main series.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getSeries().setVisible(false);
 	 * ```
@@ -11188,7 +11202,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Create a new single point drawing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().createShape({ time: 1514764800 }, { shape: 'vertical_line' });
 	 * ```
@@ -11203,7 +11217,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Create a new multi point drawing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const from = Date.now() / 1000 - 500 * 24 * 3600; // 500 days ago
 	 * const to = Date.now() / 1000;
@@ -11230,7 +11244,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Create a new anchored drawing. Anchored drawings maintain their position when the chart's visible range changes.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().createAnchoredShape({ x: 0.1, y: 0.9 }, { shape: 'anchored_text', text: 'Hello, charts!', overrides: { color: 'green' }});
 	 * ```
@@ -11244,7 +11258,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get a drawing by ID.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getShapeById(id).bringToFront();
 	 * ```
@@ -11258,7 +11272,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Remove an entity (e.g. drawing or study) from the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().removeEntity(id);
 	 * ```
@@ -11270,7 +11284,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Remove all drawings from the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().removeAllShapes();
 	 * ```
@@ -11280,7 +11294,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Remove all studies from the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().removeAllStudies();
 	 * ```
@@ -11290,7 +11304,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an API object for interacting with the selection.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().selection().clear();
 	 * ```
@@ -11300,7 +11314,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Show the properties dialog for a study or drawing.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const chart = widget.activeChart();
 	 * chart.showPropertiesDialog(chart.getAllShapes()[0].id);`
@@ -11312,7 +11326,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Save the current study template to a object.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const options = { saveSymbol: true, saveInterval: true };
 	 * const template = widget.activeChart().createStudyTemplate(options);
@@ -11325,7 +11339,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Apply a study template to the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().applyStudyTemplate(template);
 	 * ```
@@ -11339,7 +11353,7 @@ export interface IChartWidgetApi {
 	 *
 	 * Starting from version 29, this method is only available in [Trading Platform](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const orderLine = await widget.activeChart().createOrderLine();
 	 * orderLine
@@ -11368,7 +11382,7 @@ export interface IChartWidgetApi {
 	 *
 	 * Starting from version 29, this method is only available in [Trading Platform](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const positionLine = await widget.chart().createPositionLine();
 	 * positionLine
@@ -11402,7 +11416,7 @@ export interface IChartWidgetApi {
 	 *
 	 * Starting from version 29, this method is only available in [Trading Platform](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const executionLine = widget.activeChart().createExecutionShape();
 	 * executionLine
@@ -11421,7 +11435,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the name of the current symbol.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().symbol());
 	 * ```
@@ -11431,7 +11445,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an extended information object for the current symbol.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().symbolExt().name);
 	 * ```
@@ -11441,7 +11455,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the current resolution (interval).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().resolution());
 	 * ```
@@ -11451,7 +11465,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get the current visible time range.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.activeChart().getVisibleRange());
 	 * ```
@@ -11487,7 +11501,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an array of API objects for interacting with the chart panes.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().getPanes()[1].moveTo(0);
 	 * ```
@@ -11497,7 +11511,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Export the current data from the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * // Exports series' data only
 	 * widget.activeChart().exportData({ includeTime: false, includedStudies: [] });
@@ -11526,7 +11540,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Enable or disable [drag-to-export feature](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Chart#enable-drag-to-export-feature).
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * // Enable drag-to-export, disable default chart drag to scroll
 	 * widget.activeChart().setDragExportEnabled(true);
@@ -11548,7 +11562,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Check if the chart can be zoomed out using the {@link zoomOut} method.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * if(widget.activeChart().canZoomOut()) {
 	 *     widget.activeChart().zoomOut();
@@ -11569,7 +11583,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Enable or disable zooming of the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setZoomEnabled(false);
 	 * ```
@@ -11580,7 +11594,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Enable or disable scrolling of the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().setScrollEnabled(false);
 	 * ```
@@ -11592,7 +11606,7 @@ export interface IChartWidgetApi {
 	 * Get an API object for interacting with groups of drawings.
 	 * Refer to the [Drawings API](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/drawings-api#drawing-groups-api) article for more information.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().shapesGroupController().createGroupFromSelection();
 	 * ```
@@ -11612,7 +11626,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Apply overrides to a specific chart instance without reloading. See also {@link ChartingLibraryWidgetOptions.overrides}.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.chart(0).applyOverrides({"paneProperties.legendProperties.showLegend": false});
 	 * ```
@@ -11625,7 +11639,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Get an API object for interacting with the timescale.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * var time = widget.activeChart().getTimeScale().coordinateToTime(100);
 	 * ```
@@ -11635,7 +11649,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Check if bar selection mode is active or not.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * var isRequested = widget.activeChart().isSelectBarRequested();
 	 * ```
@@ -11646,7 +11660,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Switch the chart to bar selection mode.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().requestSelectBar()
 	 *     .then(function(time) {
@@ -11663,7 +11677,7 @@ export interface IChartWidgetApi {
 	/**
 	 * Cancel any active bar selection requests.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.activeChart().cancelSelectBar();
 	 * ```
@@ -11685,7 +11699,7 @@ export interface IChartWidgetApi {
 	 *
 	 * **Note:** This action will set this chart as active in a multi-chart layout.
 	 *
-	 * **Example**
+	 * @example
 	 * To apply the '1Y' timeframe:
 	 * ```js
 	 * tvWidget.setTimeFrame({
@@ -11925,7 +11939,7 @@ export interface IChartingLibraryWidget {
 	 * The widget will call the callback function each time the widget wants to display a context menu.
 	 * See also {@link ChartingLibraryWidgetOptions.context_menu}.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.chartReady().then(function() {
 	 *     widget.onContextMenu(function(unixtime, price) {
@@ -11956,7 +11970,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Create a button in the top toolbar. This should be called after {@link headerReady} has resolved.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.headerReady().then(function() {
 	 *     var button = widget.createButton();
@@ -11987,7 +12001,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Remove a button from the top toolbar. This should be called after {@link headerReady} has resolved.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.headerReady().then(function() {
 	 *     var button = widget.createButton();
@@ -12001,7 +12015,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Add a custom dropdown menu to the top toolbar.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.createDropdown(
 	 *     {
@@ -12129,9 +12143,23 @@ export interface IChartingLibraryWidget {
 	 */
 	addCustomCSSFile(url: string): void;
 	/**
+	 * Trading Platform only. Add a custom JavaScript module for the library to load inside its iframe. See also {@link TradingTerminalWidgetOptions.custom_js_urls}.
+	 *
+	 * The file is loaded as a `<script type="module">` element, so it can use `import` statements to load further files,
+	 * and register [custom elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * such as the `tv-custom-timescale-mark` and `tv-custom-bar-mark` elements used for
+	 * [custom mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips).
+	 *
+	 * **Security warning:** the module runs with full access to the page origin and is treated as trusted code.
+	 * Only load files that you control, and never construct the URL from user input.
+	 *
+	 * @param url A URL to the custom JavaScript file. Should be absolute, or relative to {@link ChartingLibraryWidgetOptions.library_path}.
+	 */
+	addCustomJSFile(url: string): void;
+	/**
 	 * Apply overrides to all charts currently in the widget without reloading. See also {@link ChartingLibraryWidgetOptions.overrides}.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.applyOverrides({"paneProperties.legendProperties.showLegend": false});
 	 * ```
@@ -12156,7 +12184,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Trading Platform only. Get a promise that resolves with an API object for interacting with the widgetbar (right sidebar) watchlist.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * const watchlistApi = await widget.watchList();
 	 * const activeListId = watchlistApi.getActiveListId();
@@ -12274,7 +12302,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Get the current theme of the chart.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * console.log(widget.getTheme());
 	 * ```
@@ -12323,7 +12351,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Only available in Trading Platform. Get a watched value that can be used to read/write/subscribe to the state of the symbol sync between charts.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * if (widget.symbolSync().value()) {
 	 *     // ...
@@ -12336,7 +12364,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Only available in Trading Platform. Get a watched value that can be used to read/write/subscribe to the state of the interval sync between charts.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.intervalSync().setValue(true);
 	 * ```
@@ -12347,7 +12375,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Only available in Trading Platform. Get a watched value that can be used to read/write/subscribe to the state of the crosshair sync between charts.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.crosshairSync().setValue(true);
 	 * ```
@@ -12358,7 +12386,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Only available in Trading Platform. Get a watched value that can be used to read/write/subscribe to the state of the time sync between charts.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.timeSync().setValue(true);
 	 * ```
@@ -12369,7 +12397,7 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Only available in Trading Platform. Get a watched value that can be used to read/write/subscribe to the state of the date range sync between charts.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * widget.dateRangeSync().setValue(true);
 	 * ```
@@ -12585,7 +12613,7 @@ export interface IContextMenuRenderer {
  * The 'set' methods return the same adapter so that you can
  * chain multiple set functions together.
  *
- * **Example**
+ * @example
  * ```js
  * const adapter = widget.customSymbolStatus().symbol('ABC');
  * adapter.setVisible(true).setColor('#336699').setTooltip('Custom Status')
@@ -12612,11 +12640,13 @@ export interface ICustomSymbolStatusAdapter {
 	 */
 	getIcon(): string | null;
 	/**
-	 * Set the icon for the status item. @default blank
+	 * Set the icon for the status item.
 	 * The icon should be provided as an svg markup. It is
 	 * recommended that the icon works well at small sizes.
 	 *
-	 * **Example**
+	 * @default blank
+	 *
+	 * @example
 	 * ```svg
 	 * <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
 	 *   <!-- Icon source: https://heroicons.com -->
@@ -12684,7 +12714,7 @@ export interface ICustomSymbolStatusAdapter {
  * The API is designed to specify sections for a certain symbol. To do this, you should pass `symbolId` to the `symbol` method.
  * Note that `symbolId` should match the ID of the resolved symbol that you can retrieve using the {@link IChartWidgetApi.symbol} method.
  *
- * **Example**
+ * @example
  * ```js
  * widget
  *  .customSymbolStatus()
@@ -13520,7 +13550,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the body font of the order line.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * orderLine.setPrice(170).setBodyFont("bold 12px Verdana")
 	 * ```
@@ -13535,7 +13565,7 @@ export interface IOrderLineAdapter {
 	/**
 	 * Set the quantity font of the order line.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * orderLine.setPrice(170).setQuantityFont("bold 12px Verdana")
 	 * ```
@@ -13695,7 +13725,7 @@ export interface IPineSeries {
 	 *
 	 * Note: The indices of a pine series is opposite.
 	 *
-	 * Example:
+	 * @example
 	 * - s.get(1) returns second last,
 	 * - s.get(2) - third last
 	 * - and so on
@@ -13930,7 +13960,7 @@ export interface IPositionLineAdapter {
 	/**
 	 * Set the body font of the position line.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * positionLine.setPrice(170).setBodyFont("bold 12px Verdana")
 	 * ```
@@ -13945,7 +13975,7 @@ export interface IPositionLineAdapter {
 	/**
 	 * Set the quantity font of the position line.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * positionLine.setPrice(170).setQuantityFont("bold 12px Verdana")
 	 * ```
@@ -14167,6 +14197,12 @@ export interface IProjectionStudyResult {
 	/** reversal amount is displayed in the legend */
 	reversalAmount?: number;
 	projectionTime?: number;
+	/**
+	 * Defer this projection until after the bars during the initial recalc (see `BarBuilderItem`).
+	 * Set by Heikin-Ashi: unlike the Japanese studies it also emits series bars, whose update would
+	 * otherwise clear `lastProjectionPrice` right after this set it.
+	 */
+	deferUntilBars?: boolean;
 }
 /**
  * Allows you to select entities ([drawings](https://www.tradingview.com/charting-library-docs/latest/ui_elements/drawings/),
@@ -14508,9 +14544,10 @@ export interface IStudyApi {
 	 */
 	paneIndex(): number;
 	/**
-	 * Change the price scale that the study is attached to.
+	 * Change the price scale that the indicator is attached to.
+	 * Refer to [Indicator placement](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicator-placement) for more information.
 	 *
-	 * @param newPriceScale Price scale identifier, or the ID of another study whose price scale the study should be moved to.
+	 * @param newPriceScale Price scale to attach the indicator to, or the ID of another indicator whose price scale should be used.
 	 */
 	changePriceScale(newPriceScale: StudyPriceScale | EntityId): void;
 	/**
@@ -14551,7 +14588,7 @@ export interface IStudyApi {
 	 *
 	 * @returns A subscription.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * studyApi.onDataLoaded().subscribe(
 	 *     null,
@@ -14566,7 +14603,7 @@ export interface IStudyApi {
 	 *
 	 * @returns A subscription.
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * studyApi.studyApi.onStudyError().subscribe(
 	 *     null,
@@ -14769,7 +14806,7 @@ export interface ITimezoneApi {
 	/**
 	 * To be notified when the timezone is changed
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * timezoneApi.onTimezoneChanged().subscribe(
 	 *     null,
@@ -15847,7 +15884,7 @@ export interface LibrarySymbolInfo {
 	 * - `fractional` is `true`.
 	 * - `variableMinTick` is skipped.
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * If `minmov = 1`, `pricescale = 128` and `minmove2 = 4`:
 	 *
@@ -16109,7 +16146,7 @@ export interface LibrarySymbolInfo {
 	 * The image/s should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/apple.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -16127,7 +16164,7 @@ export interface LibrarySymbolInfo {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/exchangeLogo.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -16478,6 +16515,18 @@ export interface Mark {
 	color: MarkConstColors | MarkCustomColor;
 	/** Text content for the mark */
 	text: string;
+	/**
+	 * Trading Platform only. Optional content for a custom tooltip rendered by your own `tv-custom-bar-mark`
+	 * [custom element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * instead of the default `text` tooltip. The value is an opaque payload — typically a JSON string —
+	 * that the library sets as the element's text content. It is never parsed as HTML by the library.
+	 *
+	 * Register the element by loading a module via the `custom_js_urls` widget constructor option
+	 * or the `addCustomJSFile` widget method. If the element is not registered,
+	 * the default `text` rendering is used instead.
+	 * See the [Customize mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips) guide for more information.
+	 */
+	customTooltip?: string;
 	/** Label for the mark */
 	label: string;
 	/** Text color for the mark */
@@ -16494,7 +16543,7 @@ export interface Mark {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/adobe.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -20327,7 +20376,7 @@ export interface SearchSymbolResultItem {
 	 * The image/s should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/symbolName.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -20345,7 +20394,7 @@ export interface SearchSymbolResultItem {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/exchangeLogo.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -27919,6 +27968,18 @@ export interface TimescaleMark {
 	label: string;
 	/** Tooltip content */
 	tooltip: string[];
+	/**
+	 * Trading Platform only. Optional content for a custom tooltip rendered by your own `tv-custom-timescale-mark`
+	 * [custom element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * instead of the default tooltip body. The value is an opaque payload — typically a JSON string —
+	 * that the library sets as the element's text content. It is never parsed as HTML by the library.
+	 *
+	 * Register the element by loading a module via the `custom_js_urls` widget constructor option
+	 * or the `addCustomJSFile` widget method. If the element is not registered,
+	 * the default `tooltip` rendering is used instead.
+	 * See the [Customize mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips) guide for more information.
+	 */
+	customTooltip?: string;
 	/** Shape of the timescale mark */
 	shape?: TimeScaleMarkShape;
 	/**
@@ -27927,7 +27988,7 @@ export interface TimescaleMark {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -28002,7 +28063,7 @@ export interface TradingDialogOptions {
 	/** Custom fields that are displayed in the Order Ticket.
 	 * Refer to the [Add custom fields](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/order-ticket#add-custom-fields) section for more information.
 	 *
-	 * **Example**
+	 * @example
 	 * ```javascript
 	 * customFields: [
 	 *     {
@@ -28059,7 +28120,7 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	/**
 	 * The array containing names of features that should be disabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * disabled_features: ["header_widget", "left_toolbar"],
 	 * ```
@@ -28068,7 +28129,7 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	/**
 	 * The array containing names of features that should be enabled by default. `Feature` means part of the functionality of the chart (part of the UI/UX). Supported features are listed in [Featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets).
 	 *
-	 * Example:
+	 * @example
 	 * ```javascript
 	 * enabled_features: ["move_logo_to_main_pane"],
 	 * ```
@@ -28078,6 +28139,21 @@ export interface TradingTerminalWidgetOptions extends Omit<ChartingLibraryWidget
 	 * See {@link ChartingLibraryWidgetOptions.favorites}
 	 */
 	favorites?: Favorites<TradingTerminalChartTypeFavorites>;
+	/**
+	 * Adds custom JavaScript modules to the chart. Each URL should be absolute, or relative to {@link ChartingLibraryWidgetOptions.library_path}.
+	 * The files are loaded inside the library iframe as `<script type="module">` elements before the chart is created,
+	 * so they can register [custom elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * that the library renders, such as the `tv-custom-timescale-mark` and `tv-custom-bar-mark` elements used for
+	 * [custom mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips).
+	 *
+	 * ```javascript
+	 * custom_js_urls: ['js/my-tooltip-component.js'],
+	 * ```
+	 *
+	 * **Security warning:** the modules run with full access to the page origin and are treated as trusted code.
+	 * Only load files that you control, and never construct these URLs from user input.
+	 */
+	custom_js_urls?: string[];
 	/**
 	 * @deprecated
 	 * Defines the [configuration flags](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/trading-features-configuration) for the Trading Platform.
@@ -29655,6 +29731,8 @@ export type ChartingLibraryFeatureset =
 "insert_indicator_dialog_shortcut" | 
 /** Display at most two characters in bar marks. The default behavior is to only display one character @default false */
 "two_character_bar_marks_labels" | 
+/** Reveals a bar mark tooltip only when the user clicks (or taps) the mark, instead of on hover. The tooltip then stays pinned open until the user clicks elsewhere, clicks the mark again, scrolls the chart, or changes the symbol @default false */
+"pin_bar_mark_tooltips_on_click" | 
 /** By default many chart layouts can be saved with the same name. If this feature is enabled then the library will prompt to confirm overwriting chart layouts with the same name when saving, renaming, or cloning ("Save as") @default false */
 "confirm_overwrite_if_chart_layout_with_name_exists" | 
 /** By default the chart will request a small (fixed) number of bars for the initial data request when the chart is first created. If this feature is enabled then the library will rather calculate the request size based on the amount of bars which will be visible on the chart @default false */
@@ -30341,13 +30419,15 @@ export type StudyPlotInformation = StudyArrowsPlotInfo | StudyCharsPlotInfo | St
 export type StudyPlotPreferences = StudyLinePlotPreferences | StudyShapesPlotPreferences | StudyCharsPlotPreferences | StudyArrowsPlotPreferences;
 export type StudyPlotValueFormat = StudyPlotValueInheritFormat | StudyPlotValuePrecisionFormat;
 /**
- * Price scale to display a study on.
+ * Price scale to display an indicator on.
  *
  * Possible values are:
- * * `new-left` - attach the study to a new left price scale
- * * `new-right` - attach the study to a new right price scale
- * * `no-scale` - do not attach the study to any price scale. The study will be added in 'No Scale' mode
- * * `as-series` - attach the study to the price scale where the main series is attached (it is only applicable the study is added to the pane with the main series)
+ * * `new-left` — attach the indicator to a new left price scale.
+ * * `new-right` — attach the indicator to a new right price scale.
+ * * `no-scale` — do not attach the indicator to any price scale. The indicator will be added in 'No Scale' mode.
+ * * `as-series` — attach the indicator to the price scale where the main series is attached. If the pane does not contain the main series, the indicator is attached to a new price scale instead.
+ *
+ * Refer to [Indicator placement](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicator-placement) for more information.
  */
 export type StudyPriceScale = "new-left" | "new-right" | "no-scale" | "as-series";
 export type StudyPriceSource = "open" | "high" | "low" | "close" | "hl2" | "hlc3" | "ohlc4" | "hlcc4";
@@ -30562,7 +30642,17 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
  *
  * @default false
  */
-"keep_selected_group_on_tool_creation";
+"keep_selected_group_on_tool_creation" | 
+/**
+ * Keeps the Buy/Sell buttons visible in the [Legend](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Legend) when the user
+ * switches to a resolution that the current symbol does not support. The symbol itself is still
+ * resolved and tradable in this case; only the requested interval is unavailable.
+ *
+ * If the featureset is disabled, the buttons are hidden when the chart cannot display data.
+ *
+ * @default false
+ */
+"show_buy_sell_buttons_on_unsupported_resolution";
 export type VisiblePlotsSet = "ohlcv" | "ohlc" | "c" | "hlc";
 export type WatchListSymbolListAddedCallback = (listId: string, symbols: string[]) => void;
 export type WatchListSymbolListChangedCallback = (listId: string) => void;

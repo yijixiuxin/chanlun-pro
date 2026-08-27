@@ -1,4 +1,3 @@
-# coding: utf-8
 # see https://github.com/rainx/pytdx/issues/38 IP寻优的简单办法
 # by yutianst
 
@@ -166,40 +165,40 @@ future_ip = [
 def ping(ip, port=7709, type_="stock"):
     api = TdxHq_API()
     apix = TdxExHq_API()
-    __time1 = datetime.datetime.now()
+    __time1 = datetime.datetime.now()  # noqa: DTZ005
     try:
         if type_ in ["stock"]:
             with api.connect(ip, port, time_out=0.7):
-                res = api.get_security_list(0, 1)
-                if res is not None:
-                    if len(res) > 800:
-                        print("GOOD RESPONSE {}".format(ip))
-                        return datetime.datetime.now() - __time1
+                klines = api.get_security_bars(9, 1, "600519", 0, 100)
+                if klines is not None:
+                    if len(klines) > 10:
+                        print(f"GOOD RESPONSE {ip}")
+                        return datetime.datetime.now() - __time1  # noqa: DTZ005
                     else:
-                        print("BAD RESPONSE {}".format(ip))
+                        print(f"BAD RESPONSE {ip}")
                         return datetime.timedelta(9, 9, 0)
 
                 else:
-                    print("BAD RESPONSE {}".format(ip))
+                    print(f"BAD RESPONSE {ip}")
                     return datetime.timedelta(9, 9, 0)
         elif type_ in ["future"]:
             with apix.connect(ip, port, time_out=0.7):
-                res = apix.get_instrument_count()
-                if res is not None:
-                    if res > 20000:
-                        print("GOOD RESPONSE {}".format(ip))
-                        return datetime.datetime.now() - __time1
+                klines = apix.get_instrument_bars(9, 74, "AAPL", 0, 100)
+                if klines is not None:
+                    if len(klines) > 10:
+                        print(f"GOOD RESPONSE {ip}")
+                        return datetime.datetime.now() - __time1  # noqa: DTZ005
                     else:
-                        print("️Bad FUTUREIP REPSONSE {}".format(ip))
+                        print(f"️Bad FUTUREIP REPSONSE {ip}")
                         return datetime.timedelta(9, 9, 0)
                 else:
-                    print("️Bad FUTUREIP REPSONSE {}".format(ip))
+                    print(f"️Bad FUTUREIP REPSONSE {ip}")
                     return datetime.timedelta(9, 9, 0)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if isinstance(e, TypeError):
             pass
         else:
-            print("BAD RESPONSE {}".format(ip))
+            print(f"BAD RESPONSE {ip}")
         return datetime.timedelta(9, 9, 0)
 
 
@@ -231,13 +230,13 @@ def select_best_ip(_type="stock"):
 
 
 if __name__ == "__main__":
-    # print(len(stock_ip))
-    # ip = select_best_ip("stock")
-    # print(ip)
+    print(len(stock_ip))
+    ip = select_best_ip("stock")
+    print(ip)
 
-    # print(len(future_ip))
-    # ip = select_best_ip("future")
-    # print(ip)
+    print(len(future_ip))
+    ip = select_best_ip("future")
+    print(ip)
 
     # 测试a股所有ip
     for ip in stock_ip:

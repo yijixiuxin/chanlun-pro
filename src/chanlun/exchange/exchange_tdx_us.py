@@ -34,7 +34,7 @@ class ExchangeTDXUS(Exchange):
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
                 # print(f"最优服务器：{self.connect_info}")
-        except Exception:
+        except Exception:  # noqa: BLE001
             print(traceback.format_exc())
             print("通达信 美股行情接口初始化失败，美股行情不可用")
 
@@ -119,8 +119,8 @@ class ExchangeTDXUS(Exchange):
         self,
         code: str,
         frequency: str,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         args=None,
     ) -> pd.DataFrame | None:
         """
@@ -128,12 +128,12 @@ class ExchangeTDXUS(Exchange):
         """
         if args is None:
             args = {}
-        if "pages" not in args.keys():
+        if "pages" not in args:
             args["pages"] = 5
         else:
             args["pages"] = int(args["pages"])
 
-        if "fq_type" not in args.keys():
+        if "fq_type" not in args:
             args["fq_type"] = "qfq"
 
         frequency_map = {
@@ -229,7 +229,7 @@ class ExchangeTDXUS(Exchange):
 
         except TdxConnectionError:
             self.reset_tdx_ip()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"获取行情异常 {code} - {frequency} Exception ：{e!s}")
             traceback.print_exc()
 
@@ -311,11 +311,10 @@ class ExchangeTDXUS(Exchange):
         weekday = now.weekday()
         hour = now.hour
         minute = now.minute
-        if weekday in [0, 1, 2, 3, 4] and (
-            (10 <= hour < 16) or (hour == 9 and minute >= 30)
-        ):
-            return True
-        return False
+        return bool(
+            weekday in [0, 1, 2, 3, 4]
+            and (10 <= hour < 16 or hour == 9 and minute >= 30)
+        )
 
     def klines_qfq(self, code: str, klines: pd.DataFrame):
         try:
@@ -323,7 +322,7 @@ class ExchangeTDXUS(Exchange):
             if xdxr_path.is_dir() is False:
                 xdxr_path.mkdir()
             xdxr_file = xdxr_path / f"us_qfq_factor_{code}.csv"
-            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")  # noqa: DTZ005
             if (
                 xdxr_file.is_file() is False
                 or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d")
@@ -359,30 +358,30 @@ class ExchangeTDXUS(Exchange):
             df["low"] = df["low"] * df["qfq_factor"]
             df["close"] = df["close"] * df["qfq_factor"]
             return df[["code", "date", "open", "high", "low", "close", "volume"]]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"计算 {code} 复权数据异常：{e}")
             return klines
 
     def balance(self):
-        raise Exception("交易所不支持")
+        raise Exception("交易所不支持")  # noqa: TRY002
 
     def positions(self, code: str = ""):
-        raise Exception("交易所不支持")
+        raise Exception("交易所不支持")  # noqa: TRY002
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        raise Exception("交易所不支持")
+        raise Exception("交易所不支持")  # noqa: TRY002
 
     def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
+        raise Exception("交易所不支持")  # noqa: TRY002
 
     def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
+        raise Exception("交易所不支持")  # noqa: TRY002
 
 
 if __name__ == "__main__":
     ex = ExchangeTDXUS()
-    # stocks = ex.all_stocks()
-    # print(len(stocks))
+    stocks = ex.all_stocks()
+    print(len(stocks))
     # not_stocks = []
     # for s in stocks:
     #     if "做多" in s["name"]:
@@ -410,8 +409,8 @@ if __name__ == "__main__":
     #
     # klines = ex.klines(ex.default_code(), "d")
     # print(klines)
-    klines = ex.klines("TSLA", "w")
-    print(klines.tail(20))
+    # klines = ex.klines("TSLA", "w")
+    # print(klines.tail(20))
 
     # ticks = ex.ticks([ex.default_code()])
     # print(ticks)

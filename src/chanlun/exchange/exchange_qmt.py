@@ -1,5 +1,5 @@
 import datetime
-from typing import Dict, List, Union
+import time
 
 import pandas as pd
 import pytz
@@ -89,6 +89,7 @@ class ExchangeQMT(Exchange):
 
         ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
         tick_codes = list(ticks.keys())
+        print(len(tick_codes))
 
         all_stocks = []
         for _c in tick_codes:
@@ -126,7 +127,7 @@ class ExchangeQMT(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         frequency_map = {
             "y": "1d",
             "m": "1d",
@@ -261,7 +262,7 @@ class ExchangeQMT(Exchange):
 
         return klines_df
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         获取股票名称
         """
@@ -273,7 +274,7 @@ class ExchangeQMT(Exchange):
             "precision": fun.reverse_decimal_to_power_of_ten(stock_detail["PriceTick"]),
         }
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         """
         获取 tick 信息
         """
@@ -296,7 +297,7 @@ class ExchangeQMT(Exchange):
 
         return ticks
 
-    def all_ticks(self) -> Dict[str, Tick]:
+    def all_ticks(self) -> dict[str, Tick]:
         ticks = {}
         all_stocks = self.all_stocks()
         all_codes = [_s["code"] for _s in all_stocks]
@@ -335,7 +336,7 @@ class ExchangeQMT(Exchange):
         return df
 
     def subscribe_all_ticks(
-        self, callback, market_list: List[str] = ["SH", "SZ", "BJ"]
+        self, callback, market_list: list[str] = ["SH", "SZ", "BJ"]
     ):
         all_stocks = self.all_stocks()
         all_codes = [_s["code"] for _s in all_stocks]
@@ -351,7 +352,7 @@ class ExchangeQMT(Exchange):
         xtdata.subscribe_whole_quote(market_list, on_tick)
         xtdata.run()
 
-    def subscribe_stocks_quotes(self, codes: List[str], callback):
+    def subscribe_stocks_quotes(self, codes: list[str], callback):
         """
         订阅股票行情
         """
@@ -404,7 +405,10 @@ class ExchangeQMT(Exchange):
 if __name__ == "__main__":
     ex = ExchangeQMT()
 
-    # stocks = ex.all_stocks()
+    s_time = time.time()
+    stocks = ex.all_stocks()
+    print(len(stocks))
+    print("耗时：", time.time() - s_time)
     # stock_maps = {}
     # for _s in stocks:
     #     stock_maps[_s["code"][0:5]] = _s
@@ -412,9 +416,9 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    klines = ex.klines("SH.510300", "d", start_date="2000-01-01")
+    # klines = ex.klines("SH.510300", "d", start_date="2000-01-01")
 
-    print(klines)
+    # print(klines)
 
     # stock = ex.stock_info("SH.000001")
     # print(stock)

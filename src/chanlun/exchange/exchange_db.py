@@ -1,5 +1,4 @@
 import datetime
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -49,9 +48,10 @@ class ExchangeDB(Exchange):
             return "CO.GC00W"
         elif self.market == Market.US.value:
             return "AAPL"
-        elif self.market == Market.CURRENCY.value:
-            return "BTC/USDT"
-        elif self.market == Market.CURRENCY_SPOT.value:
+        elif (
+            self.market == Market.CURRENCY.value
+            or self.market == Market.CURRENCY_SPOT.value
+        ):
             return "BTC/USDT"
         return ""
 
@@ -81,19 +81,10 @@ class ExchangeDB(Exchange):
                 "15m": "15m",
                 "5m": "5m",
             }
-        elif self.market == Market.FUTURES.value:
-            return {
-                "w": "W",
-                "d": "D",
-                "120m": "2H",
-                "60m": "1H",
-                "30m": "30m",
-                "15m": "15m",
-                "10m": "10m",
-                "5m": "5m",
-                "1m": "1m",
-            }
-        elif self.market == Market.NY_FUTURES.value:
+        elif (
+            self.market == Market.FUTURES.value
+            or self.market == Market.NY_FUTURES.value
+        ):
             return {
                 "w": "W",
                 "d": "D",
@@ -115,21 +106,10 @@ class ExchangeDB(Exchange):
                 "15m": "15m",
                 "5m": "5m",
             }
-        elif self.market == Market.CURRENCY.value:
-            return {
-                "w": "Week",
-                "d": "Day",
-                "4h": "4H",
-                "60m": "1H",
-                "30m": "30m",
-                "15m": "15m",
-                "10m": "5m",
-                "5m": "5m",
-                "3m": "3m",
-                "2m": "2m",
-                "1m": "1m",
-            }
-        elif self.market == Market.CURRENCY_SPOT.value:
+        elif (
+            self.market == Market.CURRENCY.value
+            or self.market == Market.CURRENCY_SPOT.value
+        ):
             return {
                 "w": "Week",
                 "d": "Day",
@@ -145,7 +125,7 @@ class ExchangeDB(Exchange):
             }
         return {"d": "D", "30m": "30m"}
 
-    def query_last_datetime(self, code, frequency) -> Union[None, str]:
+    def query_last_datetime(self, code, frequency) -> None | str:
         """
         查询交易对儿最后更新时间
         :param frequency:
@@ -170,15 +150,12 @@ class ExchangeDB(Exchange):
         删除一条记录
         """
         db.klines_delete(self.market, code, frequency, _datetime)
-        return
 
     def del_klines_by_code(self, code):
         db.klines_delete(self.market, code)
-        return
 
     def del_klines_by_code_freq(self, code, freq):
         db.klines_delete(self.market, code, frequency=freq)
-        return
 
     def klines(
         self,
@@ -187,7 +164,7 @@ class ExchangeDB(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         if args is None:
             args = {}
 
@@ -280,7 +257,7 @@ class ExchangeDB(Exchange):
     def now_trading(self):
         pass
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         ticks = {}
         for _code in codes:
             klines = self.klines(_code, "d", args={"limit": 1})
@@ -299,7 +276,7 @@ class ExchangeDB(Exchange):
             )
         return ticks
 
-    def stock_info(self, code: str) -> Dict:
+    def stock_info(self, code: str) -> dict:
         return {
             "code": code,
             "name": code,

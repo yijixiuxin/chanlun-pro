@@ -2,11 +2,10 @@ import datetime
 import json
 import uuid
 from enum import Enum
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
+from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from chanlun import fun, rd
 from chanlun.exchange.exchange import Exchange, Tick, convert_us_kline_frequency
@@ -34,7 +33,7 @@ class ExchangeIB(Exchange):
 
     @staticmethod
     def uid():
-        return f"{ib_res_hkey}_{str(uuid.uuid4())}"
+        return f"{ib_res_hkey}_{uuid.uuid4()!s}"
 
     def default_code(self) -> str:
         return "AAPL"
@@ -103,7 +102,7 @@ class ExchangeIB(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         if args is None:
             args = {}
 
@@ -175,7 +174,7 @@ class ExchangeIB(Exchange):
             return dt.replace(hour=9, minute=30)
         return dt
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         ticks = {}
         args = {"key": self.uid(), "codes": codes}
         rd.Robj().lpush(CmdEnum.TICKS.value, json.dumps(args))
@@ -200,7 +199,7 @@ class ExchangeIB(Exchange):
             )
         return ticks
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         if f"stock_info_{code}" in self.cache.keys():
             return self.cache[f"stock_info_{code}"]
 
@@ -299,7 +298,7 @@ if __name__ == "__main__":
     # order = ex.order('MSFT', 'buy', 1)
     # print(order)
 
-    stock_info = ex.stock_info('META')
+    stock_info = ex.stock_info("META")
     print(stock_info)
 
     # res = ex.ib.reqSmartComponents('NASDAQ')
