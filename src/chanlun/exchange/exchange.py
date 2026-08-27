@@ -1,7 +1,6 @@
 import datetime
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -65,7 +64,7 @@ class Exchange(ABC):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         获取 Kline 线
         :param code:
@@ -77,7 +76,7 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         """
         获取股票列表的 Tick 信息
         :param codes:
@@ -85,7 +84,7 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         获取股票的基本信息
         :param code:
@@ -162,7 +161,7 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
     }
     code = klines["code"].iloc[0]
 
-    if to_f in period_maps.keys():
+    if to_f in period_maps:
         klines.insert(0, column="date_index", value=klines["date"])
         klines.set_index("date_index", inplace=True)
         period_type = period_maps[to_f]
@@ -227,7 +226,7 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
             "15:00:00": ["13:00:00+08:00", "15:00:00+08:00"],
         },
     }
-    if to_f not in freq_config_maps.keys():
+    if to_f not in freq_config_maps:
         raise Exception(f"不支持的转换周期：{to_f}")
 
     klines["new_dt"] = pd.NaT
@@ -301,8 +300,10 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
             klines["date"].dt.time < pd.to_datetime("08:00:00").time()
         )
         klines = klines.assign(
-            trade_day=lambda x: pd.to_datetime(x["date"].dt.date)
-            - pd.to_timedelta((x["date"].dt.hour < 8).astype(int), unit="D")
+            trade_day=lambda x: (
+                pd.to_datetime(x["date"].dt.date)
+                - pd.to_timedelta((x["date"].dt.hour < 8).astype(int), unit="D")
+            )
         )
         grouped = klines[mask].groupby("trade_day")
         period_klines = pd.DataFrame(
@@ -385,7 +386,7 @@ def convert_futures_kline_frequency(
     }
     code = klines.iloc[0]["code"]
 
-    if to_f in period_maps.keys():
+    if to_f in period_maps:
         klines.insert(0, column="date_index", value=klines["date"])
         klines.set_index("date_index", inplace=True)
         period_type = period_maps[to_f]
@@ -570,7 +571,7 @@ def convert_tdx_futures_kline_frequency(
     }
     code = klines.iloc[0]["code"]
 
-    if to_f in period_maps.keys():
+    if to_f in period_maps:
         if to_f in ["d", "w"]:
             # 如果是日线，在 21 点之后的，算下一天的
             klines["date"] = klines["date"].apply(
@@ -706,7 +707,7 @@ def convert_tdx_futures_kline_frequency(
             "15:15:00": ["15:01:00", "15:15:00"],
         }
 
-    if to_f not in freq_config_maps.keys():
+    if to_f not in freq_config_maps:
         raise Exception(f"不支持的转换周期：{to_f}")
 
     klines["new_dt"] = pd.Series(dtype="datetime64[ns, Asia/Shanghai]")

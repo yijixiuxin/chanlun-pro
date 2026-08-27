@@ -571,7 +571,7 @@ export interface LibrarySymbolInfo {
 	 * - `fractional` is `true`.
 	 * - `variableMinTick` is skipped.
 	 *
-	 * Example:
+	 * @example
 	 *
 	 * If `minmov = 1`, `pricescale = 128` and `minmove2 = 4`:
 	 *
@@ -833,7 +833,7 @@ export interface LibrarySymbolInfo {
 	 * The image/s should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/apple.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -851,7 +851,7 @@ export interface LibrarySymbolInfo {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/exchangeLogo.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -879,6 +879,18 @@ export interface Mark {
 	color: MarkConstColors | MarkCustomColor;
 	/** Text content for the mark */
 	text: string;
+	/**
+	 * Trading Platform only. Optional content for a custom tooltip rendered by your own `tv-custom-bar-mark`
+	 * [custom element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * instead of the default `text` tooltip. The value is an opaque payload — typically a JSON string —
+	 * that the library sets as the element's text content. It is never parsed as HTML by the library.
+	 *
+	 * Register the element by loading a module via the `custom_js_urls` widget constructor option
+	 * or the `addCustomJSFile` widget method. If the element is not registered,
+	 * the default `text` rendering is used instead.
+	 * See the [Customize mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips) guide for more information.
+	 */
+	customTooltip?: string;
 	/** Label for the mark */
 	label: string;
 	/** Text color for the mark */
@@ -895,7 +907,7 @@ export interface Mark {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/adobe.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -1006,7 +1018,7 @@ export interface SearchSymbolResultItem {
 	 * The image/s should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/symbolName.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -1024,7 +1036,7 @@ export interface SearchSymbolResultItem {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively. Simple SVG images are recommended.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://yourserver.com/exchangeLogo.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`
@@ -1100,6 +1112,18 @@ export interface TimescaleMark {
 	label: string;
 	/** Tooltip content */
 	tooltip: string[];
+	/**
+	 * Trading Platform only. Optional content for a custom tooltip rendered by your own `tv-custom-timescale-mark`
+	 * [custom element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+	 * instead of the default tooltip body. The value is an opaque payload — typically a JSON string —
+	 * that the library sets as the element's text content. It is never parsed as HTML by the library.
+	 *
+	 * Register the element by loading a module via the `custom_js_urls` widget constructor option
+	 * or the `addCustomJSFile` widget method. If the element is not registered,
+	 * the default `tooltip` rendering is used instead.
+	 * See the [Customize mark tooltips](https://www.tradingview.com/charting-library-docs/latest/tutorials/how-to-guides/customize-mark-tooltips) guide for more information.
+	 */
+	customTooltip?: string;
 	/** Shape of the timescale mark */
 	shape?: TimeScaleMarkShape;
 	/**
@@ -1108,7 +1132,7 @@ export interface TimescaleMark {
 	 * The image should ideally be square in dimension. You can use any image type which
 	 * the browser supports natively.
 	 *
-	 * Examples:
+	 * @example
 	 * - `https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg`
 	 * - `/images/myImage.png`
 	 * - `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3...`

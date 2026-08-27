@@ -1,5 +1,4 @@
 import datetime
-from typing import Dict, List, Union
 
 import baostock as bs
 import pandas as pd
@@ -85,7 +84,7 @@ class ExchangeBaostock(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         获取 Kline 线
         :param code:
@@ -206,7 +205,7 @@ class ExchangeBaostock(Exchange):
             return dt.replace(hour=15, minute=0)
         return dt
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         """
         获取股票列表的 Tick 信息
         :param codes:
@@ -214,7 +213,7 @@ class ExchangeBaostock(Exchange):
         """
         raise Exception("交易所不支持 tick 获取")
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         获取股票的基本信息
         :param code:

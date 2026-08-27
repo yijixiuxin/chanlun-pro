@@ -1,7 +1,6 @@
 import copy
 import datetime
 import time
-from typing import Dict, List, Tuple
 
 from chanlun import fun
 from chanlun.backtesting import futures_contracts
@@ -47,7 +46,7 @@ class BackTestTrader(Trader):
             self.can_short = False
         if self.market == "us":
             self.can_close_today = True
-            self.can_short = False
+            self.can_short = True
         if self.market == "hk":
             self.can_close_today = True
             self.can_short = False
@@ -94,14 +93,14 @@ class BackTestTrader(Trader):
         self.datas: MarketDatas = None
 
         # 当前持仓信息
-        self.positions: Dict[str, POSITION] = {}
-        self.positions_history: Dict[str, List[POSITION]] = {}
+        self.positions: dict[str, POSITION] = {}
+        self.positions_history: dict[str, list[POSITION]] = {}
         # 持仓资金历史
-        self.positions_balance_history: Dict[str, Dict[str, float]] = {}
+        self.positions_balance_history: dict[str, dict[str, float]] = {}
         # 持仓盈亏记录
         self.hold_profit_history = {}
         # 资产历史
-        self.balance_history: Dict[str, float] = {}
+        self.balance_history: dict[str, float] = {}
 
         # 代码订单信息
         self.orders = {}
@@ -185,7 +184,7 @@ class BackTestTrader(Trader):
         self.begin_run_dt: datetime.datetime = None
 
         # 缓冲区的执行操作，用于在特定时间点批量进行开盘检测后，对要执行的开盘信号再次进行过滤筛选
-        self.buffer_opts: List[Operation] = []
+        self.buffer_opts: list[Operation] = []
 
     def add_times(self, key, ts):
         if key not in self.use_times.keys():
@@ -302,15 +301,15 @@ class BackTestTrader(Trader):
 
         # 按照买卖操作的类型，返回对应的 close_uid
         opt_type = "buy" if "buy" in mmd else "sell"
-        if isinstance(allow_close_uids, dict) and opt_type in allow_close_uids.keys():
+        if isinstance(allow_close_uids, dict) and opt_type in allow_close_uids:
             return allow_close_uids[mmd]
 
         # 按照买卖点的类型，返回对应的 close_uid
-        if isinstance(allow_close_uids, dict) and mmd in allow_close_uids.keys():
+        if isinstance(allow_close_uids, dict) and mmd in allow_close_uids:
             return allow_close_uids[mmd]
 
         # 按照代码分别设置的
-        if isinstance(allow_close_uids, dict) and code in allow_close_uids.keys():
+        if isinstance(allow_close_uids, dict) and code in allow_close_uids:
             return self.get_opt_close_uids(code, mmd, allow_close_uids[code])
         return ["clear"]
 
@@ -324,7 +323,7 @@ class BackTestTrader(Trader):
             return True
 
         # 优先检查持仓情况
-        for _open_uid, pos in self.positions.items():
+        for pos in self.positions.values():
             if pos.code != code or pos.amount == 0:
                 continue
             _time = time.time()
@@ -435,7 +434,7 @@ class BackTestTrader(Trader):
                 code_balance = -(pos.amount * code_price["close"])
                 if self.market == "futures":
                     code_balance = pos.balance - pos.release_balance
-            if pos.code not in position_balance.keys():
+            if pos.code not in position_balance:
                 position_balance[pos.code] = 0
             position_balance[pos.code] += code_balance
         position_balance["Cash"] = self.balance
@@ -447,7 +446,7 @@ class BackTestTrader(Trader):
 
         return None
 
-    def position_record(self, pos: POSITION) -> Tuple[float, float]:
+    def position_record(self, pos: POSITION) -> tuple[float, float]:
         """
         持仓记录更新
         :param pos:
@@ -540,7 +539,7 @@ class BackTestTrader(Trader):
         )
         return codes
 
-    def hold_positions(self) -> List[POSITION]:
+    def hold_positions(self) -> list[POSITION]:
         """
         返回所有持仓记录
         """
@@ -702,9 +701,9 @@ class BackTestTrader(Trader):
         if self.market == "futures":
             contract_config = self.futures_contracts[code]
             fee_rate = contract_config["fee_rate_open"]
-            if "close" in other_info.keys() and other_info["close"]:
+            if other_info.get("close"):
                 fee_rate = contract_config["fee_rate_close"]
-            if "close_today" in other_info.keys() and other_info["close_today"]:
+            if other_info.get("close_today"):
                 fee_rate = contract_config["fee_rate_close_today"]
             # 如果 < 1 , 按照成交金额的百分比收取， > 1 按照手数收取
             if fee_rate == 0:
@@ -733,7 +732,7 @@ class BackTestTrader(Trader):
                 + (balance * zg_fee_rate)
                 + max((balance * self.fee_rate), 5)
             )
-            if "sell" in other_info.keys() and other_info["sell"]:
+            if other_info.get("sell"):
                 # 卖出有印花税
                 fee += balance * yh_fee_rate
 
@@ -744,7 +743,6 @@ class BackTestTrader(Trader):
         self.log_history.append(msg)
         if self.log:
             self.log(msg)
-        return
 
     # 执行操作
     def execute(self, code, opt: Operation, pos: POSITION = None):
@@ -965,11 +963,7 @@ class BackTestTrader(Trader):
                 ]:
                     return False
                 # 修正错误的平仓比例
-                opt.pos_rate = (
-                    pos.now_pos_rate
-                    if pos.now_pos_rate < opt.pos_rate
-                    else opt.pos_rate
-                )
+                opt.pos_rate = min(opt.pos_rate, pos.now_pos_rate)
 
                 if (
                     self.can_close_today is False
@@ -1089,7 +1083,7 @@ class BackTestTrader(Trader):
                             self.balance += pos.balance + profit
 
                         # 将持仓添加到历史持仓
-                        if pos.code not in self.positions_history.keys():
+                        if pos.code not in self.positions_history:
                             self.positions_history[pos.code] = []
                         self.positions_history[pos.code].append(copy.deepcopy(pos))
                         # 记录总计手续费
@@ -1100,18 +1094,14 @@ class BackTestTrader(Trader):
             # 买点，卖出，平仓做多
             if "buy" in opt_mmd and opt.opt == "sell":
                 # 唯一key判断
-                if opt.key in pos.close_keys.keys():
+                if opt.key in pos.close_keys:
                     return False
                 if opt.close_uid != "clear" and opt.close_uid in [
                     _or["close_uid"] for _or in pos.close_records
                 ]:
                     return False
                 # 修正错误的平仓比例
-                opt.pos_rate = (
-                    pos.now_pos_rate
-                    if pos.now_pos_rate < opt.pos_rate
-                    else opt.pos_rate
-                )
+                opt.pos_rate = min(opt.pos_rate, pos.now_pos_rate)
 
                 if (
                     self.can_close_today is False
@@ -1268,7 +1258,7 @@ class BackTestTrader(Trader):
         self,
         market: str,
         mark_label: str,
-        close_uid: List[str] = None,
+        close_uid: list[str] = None,
         start_dt: datetime = None,
     ):
         # 先删除所有的订单
