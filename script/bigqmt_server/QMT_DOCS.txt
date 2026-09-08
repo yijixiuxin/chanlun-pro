@@ -1,0 +1,901 @@
+ContextInfo
+释义:
+python与底层连接,策略模型全局对象,可以用于存储自定义的全局变量
+
+init  初始函数
+释义:
+初始化函数,只在整个策略开始时调用运行到一次,PY策略必须有该函数.
+参数:
+ContextInfo：策略模型全局对象
+示例：
+def init(ContextInfo):
+    ContextInfo.initProfit = 0
+
+
+handlebar   行情事件函数
+释义:
+行情事件函数,每根K线运行一次；实时行情获取状态下,先每根历史K线运行一次,再在每个TICK数据来后驱动运行一次,PY策略必须有该函数.
+参数:
+ContextInfo：策略模型全局对象
+示例：
+def handlebar(ContextInfo):
+    #输出当前运行到的K线的位置
+    print( ContextInfo.barpos)
+
+
+run_time(funcName,period,startTime)
+释义：
+设置定时器
+参数：
+funcName:回调函数名
+period:重复调用的时间间隔,'5nSecond'表示每5秒运行1次回调函数,'5nDay'表示每5天运行一次回调函数,'500nMilliSecond'表示每500毫秒运行1次回调函数
+startTime:表示定时器第一次启动的时间,如果要定时器立刻启动,可以设置历史的时间
+回调函数参数:
+ContextInfo：策略模型全局对象
+示例：
+import time
+def init(ContextInfo):
+    ContextInfo.run_time("myHandlebar","5nSecond","2019-10-14 13:20:00")
+def myHandlebar(ContextInfo):
+    print('hello world')
+def handlebar(ContextInfo):
+    pass
+#此例为自2019-10-14 13:20:00后每5s运行一次myHandlebar
+
+
+stop
+释义:
+PY策略模型关闭停止前运行到的函数,复杂策略模型，如中间有起线程可通过在该函数内实现停止线程操作。PY策略可不用该函数.
+参数:
+ContextInfo：策略模型全局对象
+示例：
+def stop(ContextInfo):
+    print( 'strategy is stop !')
+
+
+ContextInfo.get_tick_timetag
+释义：
+获取当前主图品种最新分笔对应的时间的时间戳
+用法：
+ContextInfo.get_tick_timetag()
+返回：
+number
+示例：
+def handlebar(ContextInfo):
+    print( ContextInfo.get_tick_timetag())
+
+
+schedule_run(func:Callable,time_point:Union[dt.datetime,str],repeat_times:int=0,interval:dt.timedelta=None,name:str='')
+释义：
+添加定时任务
+参数：
+func:
+回调函数，到达定时器预定时间时触发调用，参数为ContextInfo类型，无需返回值，定义示例def on_timer(C:ContextInfo):
+time_point:
+表示预定的第一次触发时间，如果设置定时器时已经过了预定时间，会立即执行func以及后续逻辑；当使用str类型时，格式为'yyyymmddHHMMSS'如'20231231235959'，需要满足转换dt.datetime.strptime('20231231235959','%Y%m%d%H%M%S')
+repeat_times:
+表示在预定时间触发后按interval间隔再触发多少次，interval为None时不生效；默认为0，即不重复执行；为-1时表示一直持续执行，直至其他调用取消任务
+interval:表示预定时间触发后的后续重复执行的时间间隔，为datetime.timedelta实例，例如dt.timedelta(seconds=3)#间隔3秒
+name:定时器任务组名，可用于定时器分组
+返回值seq:表示本次调用后生成的定时任务号，可用于取消本次定时任务，全局唯一不重复
+示例：
+import datetime as dt
+def on_timer(C:ContextInfo):
+    print('hello world')
+def init(ContextInfo):
+    tid=ContextInfo.schedule_run(on_timer,'20231231235959',-1,dt.timedelta(minutes=1),'my_timer')
+def handlebar(ContextInfo):
+    pass
+#此例为自2023-12-31 23:59:59后每60s运行一次on_timer
+
+
+get_full_tick  获取分笔数据
+释义：
+获取最新分笔数据
+用法：
+ContextInfo.get_full_tick(stock_code=[])
+参数：
+stock_code:默认参数,合约代码列表,如['600000.SH','600036.SH']不指定时为当前主图合约
+返回：
+根据stock_code返回一个dict，该字典的key值是股票代码，其值仍然是一个dict，在该dict中存放股票代码对应的最新的数据。该字典数据key值有：
+lastPrice:最新价
+amount:成交额
+volume:成交量(手)
+pvolume:成交量(股)
+openInt:持仓量
+stockStatus:股票状态
+lastSettlementPrice:前结算价
+open:开盘价
+high:最高价
+low:最低价
+settlementPrice:今结算价
+lastClose:昨收价
+askPrice:列表,卖价五档
+bidPrice:列表,买价五档
+askVol:列表,卖量五档
+bidVol:列表,买量五档
+timetag:时间戳
+示例：
+def handlebar(ContextInfo):
+   if not ContextInfo.is_last_bar():
+    return
+   Result=ContextInfo.get_full_tick(['600000.SH','000001.SZ'])
+
+
+
+get_instrumentdetail  获取合约详细信息
+释义：
+根据代码获取合约详细信息
+用法：
+ContextInfo.get_instrumentdetail(stockcode)
+参数：
+string：股票代码,如'600000.SH'
+返回：
+根据stockcode返回一个dict。该字典数据key值有：
+ExchangeID:合约市场代码
+InstrumentID:合约代码
+InstrumentName:合约名称
+ProductID:合约的品种ID(期货)
+ProductName:合约的品种名称(期货)
+CreateDate:上市日期(期货)
+OpenDate:IPO日期(股票)
+ExpireDate:退市日或者到期日
+PreClose:前收盘价格
+SettlementPrice:前结算价格
+UpStopPrice:当日涨停价
+DownStopPrice:当日跌停价
+FloatVolume:流通股本
+TotalVolume:总股本
+LongMarginRatio:多头保证金率
+ShortMarginRatio:空头保证金率
+PriceTick:最小变价单位
+VolumeMultiple:合约乘数(对期货以外的品种，默认是1)
+MainContract:主力合约标记
+LastVolume:昨日持仓量
+InstrumentStatus:合约停牌状态
+IsTrading:合约是否可交易
+IsRecent:是否是近月合约
+示例：
+def handlebar(ContextInfo):
+    print( ContextInfo.get_instrumentdetail('600000.SH'))
+
+
+ 
+释义:
+下载指定合约代码指定周期对应时间范围的行情数据
+用法：
+download_history_data(stockcode,period,startTime,endTime)
+#提供同功能的函数down_history_data，以兼容旧版本的函数名
+down_history_data(stockcode,period,startTime,endTime)
+参数：
+stockcode：string，形式如'stkcode.market',如'600000.SH'；
+period：string,K线周期类型,'tick':分笔线,'1d':日线,'1m':分钟线,'5m':5分钟线
+startTime,endTime：string,起止时间，"20200101"或"20200101093000",可以为空
+示例：
+download_history_data("600000.SH","1d","","")
+
+
+get_market_data
+释义：
+获取历史行情数据
+用法：
+ContextInfo.get_market_data_ex(fields,stock_code=[],start_time='',end_time='',skip_paused=True,period='1d',dividend_type='none',count=-1)
+参数：
+fields:字段列表，list，里面可放字段：'open':开 'high':高 'low':低 'close':收 'volume':成交量 'amount':成交额 'settle':结算价 'quoter':分笔数据,该字段与别的字段互斥不能放在同一个list中
+stock_code:默认参数,合约代码列表,合约格式[code.market,code.market,...,code.market],如['600000.SH','600036.SH'],不指定时为当前图合约
+start_time:默认参数,开始时间,为空时取最早交易bar,格式'20171209'或'20171209010101'
+end_time:默认参数,结束时间,为空时取最后交易bar
+skip_paused：默认参数,停牌数据延续前值
+False,停牌数据nan
+period:默认参数,k线类型,'tick':分笔线（只用于获取'quoter'字段数据）,'realtime':实时线,'1d':日线,'md':多日线,’1m’:分钟线,'3m':三分钟线,'5m':5分钟线,'15m':15分钟线,'30m':30分钟线,'mm':多分钟线,'1h':小时线,'mh':多小时线,'1w':周线,'1mon':月线,'1q':季线,'1hy':半年线,'1y':年线
+dividend_type:默认参数,除复权,'none':不复权,'front':向前复权,'back':向后复权,'front_ratio':等比向前复权,'back_ratio':等比向后复权
+count：默认参数,大于等于0时,效果与get_history_data保持一致,且能实现取多字段,无需设置股票池,若指定了start_time,end_time,则对[start_time,end_time](包含前后边界)的区间内的数据取最后不多于conut条
+注：当start_time,end_time同时为空时取当前bar,相等时为时间1
+特别的,默认参数需带上参数名方可生效,调用方式与python别无二致
+
+返回：
+函数根据fields字段列表，stock_code合约代码列表，start_time，end_time时间范围，count的设定的不同返回不同的数据类型
+Count>=0(等同于时间n)
+(1)合约代码列表为1-时间范围为1-字段列表为1返回： number
+(2)合约代码列表为1-时间范围为1返回： pandas.Series index=字段
+(3)合约代码列表为1-时间范围为n返回： pandas.DataFrame index=时间,columns=字段
+(4)合约代码列表为n-时间范围为1返回： pandas.DataFrame index=代码,columns=字段
+(5)合约代码列表为n-时间范围为n返回： pandas.Panel items=代码,major_axis=时间,minor_axis=字段
+
+当fields是['quoter'],period='tick'时函数获取分笔数据，返回一个dict
+该字典数据key值有：
+lastPrice:最新价
+amount:成交额
+volume:成交量
+pvolume:前成交量
+openInt:持仓量
+stockStatus:股票状态
+lastSettlementPrice:前结算价
+open:开盘价
+high:最高价
+low:最低价
+settlementPrice:今结算价
+lastClose:收盘价
+askPrice:列表,卖价五档
+bidPrice:列表,买价五档
+askVol:列表,卖量五档
+bidVol:列表,买量五档
+
+注：
+时间区间：两边闭区间
+
+示例：
+def handlebar(ContextInfo):
+    Result=ContextInfo.get_market_data(['open','high','low','close'],stock_code=['600000.SH'],start_time='20170101',end_time='20170102',skip_paused=True,period='1d',dividend_type='none')
+
+
+
+get_market_data_ex
+释义：
+第二版获取行情数据函数，在之前的基础上简化了内部流程
+用法：
+ContextInfo.get_market_data_ex(fields=[],stock_code=[],period='follow',start_time='',end_time='',count=-1,
+dividend_type='follow',fill_data=True,subscribe=True)
+
+参数：
+fields：list，字段列表，对不同周期的数据取值范围不同
+默认为空list，代表所有字段
+-----
+stock_code：list，合约代码列表
+period：str，周期，默认为'follow'，为当前主图周期
+可选范围：
+'tick'：分笔数据
+'1m'、'5m'、'15m'等分钟周期
+'1d'：日线数据
+'l2quote'：Level2行情快照
+'l2quoteaux'：Level2行情快照补充
+'l2order'：Level2逐笔委托
+'l2transaction'：Level2逐笔成交
+'l2transactioncount'：Level2大单统计
+'l2orderqueue'：Level2委买委卖队列
+-----
+start_time：开始时间，为空视为最早
+end_time：结束时间，为空视为最新
+count：数据最大个数，-1视为不做个数限制
+时间格式为'20201231'或'20201231093000'
+-----
+dividend_type：复权方式，默认为'follow'，为当前主图复权方式
+可选范围：
+'none'：不复权
+'front':前复权
+'back':后复权
+'front_ratio':等比前复权
+'back_ratio':等比后复权
+-----
+fill_data：停牌填充方式，默认为True（暂不可用）
+-----
+subscribe：订阅数据开关，默认为True
+设置为False时不做数据订阅，只读取本地已有数据
+
+返回：
+{code1: data1, code2: data2, ...}
+code：str，合约代码
+data：pd.DataFrame，数据集，index为字符串格式的时间序列，columns为数据字段
+
+示例：
+data = ContextInfo.get_market_data_ex(
+    ['open', 'high', 'low', 'close'], ['000300.SH'], period='1d'
+    , start_time='', end_time='', count=-1
+    , dividend_type='follow', fill_data=True
+    , subscribe = True
+)
+
+
+get_divid_factors
+释义：
+获取除权除息日及对应的权息
+用法：
+ContextInfo.get_divid_factors(stockcode,date)
+参数：
+stockcode:股票代码,包含股票名和市场名,如'600000.SH'
+date:除权除息日，如'20180713'可以不写
+返回：
+返回值：dict，key:时间戳，value:list[每股红利,每股送转,每股转赠,配股,配股价,是否股改,复权系数]
+输入除权除息日非法时候返回空dict，合法时返回输入日期的对应的dict，不输入时返回查询股票的所有除权除息日及对应dict
+示例：
+def handlebar(ContextInfo):
+    result=ContextInfo.get_divid_factors('600000.SH','20180713')
+
+
+
+subscribe_quote
+释义：
+订阅行情数据
+支持订阅level-2特色指标快照，该项接口需要额外开通level-2增强版权限
+用法：
+ContextInfo.subscribe_quote(stock_code,period='follow',dividend_type='follow',result_type='',callback=None)
+
+参数：
+stock_code：str，合约代码
+period：str，周期，默认为'follow'，为当前主图周期
+可选范围：
+'tick'：分笔数据
+'1m'、'5m'、'15m'等分钟周期
+'1d'：日线数据
+'l2quote'：Level2行情快照
+'l2quoteaux'：Level2行情快照补充
+'l2order'：Level2逐笔委托
+'l2transaction'：Level2逐笔成交
+'l2transactioncount'：Level2大单统计
+'l2orderqueue'：Level2委买委卖队列
+-----
+dividend_type：复权方式，默认为'follow'，为当前主图复权方式
+可选范围：
+'none'：不复权
+'front':前复权
+'back':后复权
+'front_ratio':等比前复权
+'back_ratio':等比后复权
+-----
+result_type：返回数据格式
+可选范围：
+'DataFrame'或''（默认）：
+返回{code:data}，data为pd.DataFrame数据集，index为字符串格式的时间序列，columns为数据字段
+'dict'：
+返回{code:{k1:v1,k2:v2,...}}，k为数据字段名，v为字段值
+'list'：
+返回{code:{k1:[v1],k2:[v2],...}}，k为数据字段名，v为字段值
+-----
+callback：数据推送回调
+示例：
+def on_quote(datas):
+    print(datas)
+
+datas：{code:data}
+code：合约代码
+data：参考result_type字段说明
+-----
+
+返回：
+int，订阅号，可用unsubscribe_quote做反订阅
+
+示例：
+def on_quote(datas):
+    print(datas)
+ContextInfo.subscribe_quote('000300.SH', '1d', 'follow', '', on_quote)
+
+
+
+subscribe_whole_quote
+释义：
+订阅全推数据
+全推数据只有分笔周期，每次增量推送数据有变化的品种
+用法：
+ContextInfo.subscribe_whole_quote(code_list,callback=None)
+
+参数：
+code_list：list([str,str,...])，市场代码列表，如['SH','SZ']，或品种列表，如['600000.SH','000001.SZ']
+-----
+callback：数据推送回调
+示例：
+def on_quote(datas):
+    print(datas)
+
+datas：{code:data}
+code：合约代码
+data：dict，{field:value}，field为数据各字段名，value为字段值
+-----
+
+返回：
+int，订阅号，可用unsubscribe_quote做反订阅
+
+示例：
+def on_quote(datas):
+    print(datas)
+ContextInfo.subscribe_whole_quote(['SH', 'SZ'], on_quote)
+
+
+is_typed_stock
+释义：
+判定给定股票是否属于某个类别
+用法：
+is_typed_stock(stocktypenum,market,stockcode)
+参数：
+stocktypenum：number,类别标号,如股票类别标号为100003,ETF标号100004,指数标号100005
+返回：
+number：1为True; 0为False
+示例：
+def handlebar(ContextInfo):
+    print( is_typed_stock(100003,'SH','600000'))
+
+
+get_trade_detail_data
+释义：
+取交易明细数据函数，strategyName 必须要是 qmt 才能取到值
+用法：
+get_trade_detail_data(accountID,strAccountType,strDatatype,strategyName)或不区分策略get_trade_detail_data(accountID,strAccountType,strDatatype);
+参数：
+accountID：string,账号；
+strAccountType：string,账号类型,有"FUTURE","STOCK","CREDIT","HUGANGTONG","SHENGANGTONG","STOCK_OPTION","SWAP"；
+strDatatype：string,交易明细数据类型,有：持仓"POSITION"、委托"ORDER"、成交"DEAL"、账号"ACCOUNT"、任务"TASK"；
+strategyName：string,策略名,对应passorder下单函数中的参数strategyName的值，只对委托"ORDER"、成交"DEAL"起作用；
+返回：list,list中放的是PythonObj,通过dir(pythonobj)可返回某个对象的属性列表
+  注：有五种交易相关信息，包括：持仓"POSITION"、委托"ORDER"、成交"DEAL"、账号"ACCOUNT"、任务"TASk"
+示例：
+def handlebar(ContextInfo):
+    obj_list = get_trade_detail_data('6000000248','stock','position','qmt')
+    for obj in obj_list:
+        print( obj.m_strInstrumentID)
+        print( dir(obj))#查看有哪些属性字段
+
+
+get_value_by_order_id(orderId,accountID,strAccountType,strDatatype)
+释义：
+根据委托Id取委托或成交信息
+用法：
+get_value_by_order_id(orderId,accountID,strAccountType,strDatatype)
+参数：
+orderId,string,委托号；
+accountID,string,资金账号；
+strAccountType,string,账号类型,有"FUTURE","STOCK","CREDIT","HUGANGTONG","SHENGANGTONG","STOCK_OPTION","SWAP"；
+strDatatype,string,数据类型,委托"ORDER"、成交"DEAL",只有这两个
+返回：pythonObj
+示例：
+def init(ContextInfo):
+    ContextInfo.accid = '6000000248'	
+def handlebar(ContextInfo):
+    orderid = get_last_order_id(ContextInfo.accid,'stock','order')
+    print( orderid)
+    obj = get_value_by_order_id(orderid,ContextInfo.accid,'stock','order')
+    print( obj.m_strInstrumentID)
+
+
+can_cancel_order
+释义：
+查询委托是否可撤销
+说明：
+can_cancel_order(orderId,accountID,strAccountType);
+参数：
+rderId,string,委托号；
+accountID,string,资金账号；
+strAccountType,string,账号类型,有"FUTURE","STOCK","CREDIT","HUGANGTONG","SHENGANGTONG","STOCK_OPTION","SWAP"；
+返回：bool,是否可撤，True或False
+示例：
+def init(ContextInfo):
+    ContextInfo.accid = '6000000248'	
+def handlebar(ContextInfo):
+    orderid = get_last_order_id(ContextInfo.accid,'stock','order')
+    print( orderid)
+    can_cancel = can_cancel_order(orderid,ContextInfo.accid,'stock')
+    print( '是否可撤:',can_cancel)
+
+
+cancel
+释义：
+取消委托
+用法：
+cancel(orderId,accountId,accountType,ContextInfo)
+参数：
+orderId,string,委托号；
+accountID,string,资金账号,双中心账号可以通过："accountID@市场ID("SH","SZ")"来指定,例如："accountID@SH"；
+strAccountType,string,账号类型,有"FUTURE","STOCK","CREDIT","HUGANGTONG","SHENGANGTONG","STOCK_OPTION","SWAP"；
+ContextInfo,pythonobj
+返回：bool,是否发出了取消委托信号
+示例：
+（1）下单前,根据get_trade_detail_data函数返回账号的信息,判定资金是否充足,账号是否在登录状态,统计持仓情况等等；
+（2）满足一定的模型条件,用passorder下单
+（3）下单后,时刻根据get_last_order_id函数获取委托和成交的最新Id,注意如果委托生成了,就有了委托号.（这个Id需要自己保存做一个全局控制）
+（4）用该委托号根据get_value_by_order_id函数查看委托的状态,各种情况等.
+当一个委托的状态变成"已成”后,那么对应的成交deal信息就有一条成交数据.
+用该委托号可查看成交情况.
+注：委托列表和成交列表中的委托号是一样的,都是这个m_strOrderSysID属性值；
+可用get_last_order_id获取最新的order的委托号,然后根据这个委托号获取deal的信息,当获取成功后,也说明这笔交易是成了.可再根据position持仓信息再进一步验证.
+（5）根据委托号获取委托信息,根据委托状态,或模型设定.用cancel取消委托.
+示例1：
+def init(ContextInfo):
+    ContextInfo.accid = '6000000248'	
+def handlebar(ContextInfo):
+    orderid = get_last_order_id(ContextInfo.accid,'stock','order')
+    print( cancel(orderid,ContextInfo.accid,'stock',ContextInfo))
+
+
+passorder
+用法:
+passorder(opType,orderType,accountid,orderCode,prType,modelprice,volume[,strategyName,quickTrade,userOrderId],ContextInfo)
+使用说明:
+(1)opType
+OPTYPE参数内容说明
+期货六键:
+0|开多
+1|平昨多
+2|平今多
+3|开空
+4|平昨空
+5|平今空
+期货四键:
+6|平多,优先平今
+7|平多,优先平昨
+8|平空,优先平今
+9|平空,优先平昨
+期货两键:
+10|卖出,如有多仓,优先平仓,优先平今,如有余量,再开空
+11|卖出,如有多仓,优先平仓,优先平昨,如有余量,再开空
+12|买入,如有空仓,优先平仓,优先平今,如有余量,再开多
+13|买入,如有空仓,优先平仓,优先平昨,如有余量,再开多
+14|买入,不优先平仓
+15|卖出,不优先平仓
+股票买卖:
+23|股票买入，或沪港通、深港通股票买入
+24|股票卖出，或沪港通、深港通股票卖出
+融资融券:
+27|融资买入
+28|融券卖出
+29|买券还券
+30|直接还券
+31|卖券还款
+32|直接还款
+33|担保品买入
+34|担保品卖出
+37|担保品划入
+38|担保品划出
+组合交易:
+25|组合买入，或沪港通、深港通的组合买入
+26|组合卖出，或沪港通、深港通的组合卖出
+27|融资买入
+28|融券卖出
+29|买券还券
+31|卖券还款
+33|担保品买入
+34|担保品卖出
+35|普通账号一键买卖
+36|信用账号一键买卖
+40|期货组合开多
+43|期货组合开空
+46|期货组合平多,优先平今
+47|期货组合平多,优先平昨
+48|期货组合平空,优先平今
+49|期货组合平空,优先平昨
+期权交易:
+50|买入开仓
+51|卖出平仓
+52|卖出开仓
+53|买入平仓
+54|备兑开仓
+55|备兑平仓
+56|认购行权
+57|认沽行权
+58|证券锁定
+59|证券解锁
+ETF交易:
+60|申购
+61|赎回
+专项两融:
+70|专项融资买入
+71|专项融券卖出
+72|专项买券还券
+73|专项直接还券
+74|专项卖券还款
+75|专项直接还款
+可转债:
+80|普通账户转股
+81|普通账户回售
+82|信用账户转股
+83|信用账户回售
+
+(2)orderType参数内容说明
+
+注：期货不支持1102和1202
+注：对所有账号组的操作相当于对账号组里的每个账号做一样的操作,如
+passorder(23,1202,'testS','000001.SZ',5,-1,50000,ContextInfo);意思就是对账号组testS里的所有账号都以最新价开仓买入50000元市值的000001.SZ平安银行.
+passorder(60,1101,"test",'510050.SH',5,-1,1,ContextInfo)意思就是账号test申购1个单位(900000股)的华夏上证50ETF(只申购不买入成分股)
+
+1101:单股、单账号、普通、股/手方式下单(ETF申赎只能用此参数)
+1102:单股、单账号、普通、金额（元）方式下单（只支持股票）
+1113:单股、单账号、总资产、比例[0~1]方式下单
+1123:单股、单账号、可用、比例[0~1]方式下单
+
+1201:单股、账号组（无权重）、普通、股/手方式下单
+1202:单股、账号组（无权重）、普通、金额（元）方式下单（只支持股票）
+1213:单股、账号组（无权重）、总资产、比例[0~1]方式下单
+1223:单股、账号组（无权重）、可用、比例[0~1]方式下单
+
+2101:组合、单账号、普通、按组合股票数量（篮子中股票设定的数量）方式下单>对应volume的单位为篮子的份
+2102:组合、单账号、普通、按组合股票权重（篮子中股票设定的权重）方式下单>对应volume的单位为元
+2103:组合、单账号、普通、按账号可用方式下单>(底层篮子股票怎么分配？答：按可用资金比例后按篮子中股票权重分配,如用户没填权重则按相等权重分配)只对股票篮子支持
+
+2201:组合、账号组（无权重）、普通、按组合股票数量方式下单
+2202:组合、账号组（无权重）、普通、按组合股票权重方式下单
+2203:组合、账号组（无权重）、普通、按账号可用方式下单只对股票篮子支持
+
+(3)组合套利交易接口特殊设置(accountID、orderType特殊设置)
+passorder(opType,orderType,accountID,orderCode,prType,hedgeRatio,volume,ContextInfo)
+accountID=’stockAccountID,futureAccountID’
+orderCode=’basketName,futureName’
+hedgeRatio:套利比例（0~2之间值,相当于%0至200%套利）
+volume:份数\资金\比例
+
+orderType(特殊设置)：
+2331:组合、套利、合约价值自动套利、按组合股票数量方式下单
+2332:组合、套利、按合约价值自动套利、按组合股票权重方式下单
+2333:组合、套利、按合约价值自动套利、按账号可用方式下单
+
+(4)accountID参数内容说明
+passorder(opType,orderType,accountID,orderCode,prType,price,volume,ContextInfo)
+accountID（账号ID）：
+下单的账号ID（可多个）或账号组名或套利组名（一个篮子一个套利账号,如accountID=’股票账户名,期货账号’）
+需要传股东号（secuAccount）时用'#'拼接，即'accountID#secuAccount'
+
+(5)orderCode参数内容说明
+passorder(opType,orderType,accountID,orderCode,prType,price,volume,ContextInfo)
+orderCode（下单代码）：
+有两种如果是单股或单期货、港股,则该参数填合约代码；如果是组合交易,则该参数填篮子名称.如果是组合套利,则填一个篮子名和一个期货合约名（如orderCode=’篮子名,期货合约名’）.
+
+(6)prType参数内容说明
+passorder(opType,orderType,accountID,orderCode,prType,price,volume,ContextInfo)
+prType(下单选价类型):（特别的对于套利：这个prType只对篮子起作用,期货的采用默认的方式）
+-1:无效(只对于algo_passorder起作用)
+0:卖5价
+1:卖4价
+2:卖3价
+3:卖2价
+4:卖1价
+5:最新价
+6:买1价
+7:买2价(组合不支持)
+8:买3价(组合不支持)
+9:买4价(组合不支持)
+10:买5价(组合不支持)
+11:（指定价）模型价（只对单股情况支持,对组合交易不支持）
+12:涨跌停价
+13:挂单价
+14:对手价
+18:市价最优价[郑商所][期货]
+19:市价即成剩撤[大商所][期货]
+20:市价全额成交或撤[大商所][期货]
+21:市价最优一档即成剩撤[中金所][期货]
+22:市价最优五档即成剩撤[中金所][期货]
+23:市价最优一档即成剩转[中金所][期货]
+24:市价最优五档即成剩转[中金所][期货]
+26:限价即时全部成交否则撤单[上交所|深交所][期权]
+27:市价即成剩撤[上交所][期权]
+28:市价即全成否则撤[上交所][期权]
+29:市价剩转限价[上交所][期权]
+42:最优五档即时成交剩余撤销申报[上交所][北交所][股票]
+43:最优五档即时成交剩转限价申报[上交所][北交所][股票]
+44:对手方最优价格委托[上交所[股票]][深交所[股票][期权]][北交所[股票]]
+45:本方最优价格委托[上交所[股票]][深交所[股票][期权]][北交所[股票]]
+46:即时成交剩余撤销委托[深交所][股票][期权]
+47:最优五档即时成交剩余撤销委托[深交所][股票][期权]
+48:全额成交或撤销委托[深交所][股票][期权]
+49:盘后定价
+
+(7)price参数内容说明
+passorder(opType,orderType,accountID,orderCode,prType,price,volume,ContextInfo)
+price(下单价格)：
+单股：prType是模型价时price有效；其它情况无效
+组合：是组合套利时,price作套利比例有效；其它情况无效
+
+(8)volume参数内容说明
+passorder(opType,orderType,accountID,orderCode,prType,price,volume,ContextInfo)
+根据orderType值最后一位确定volume的单位：
+（单股时）1股/手,2金额（元）,3比例(%)
+（组合时）1按组合股票数量(份),2按组合股票权重(元),3按账号可用(%)
+volume（下单数量（股/手/元/%））
+
+(9)strategyName参数内容说明
+strategyName:string,用户自设策略名，可缺省不写，用来区分order委托和deal成交来自不同的策略
+根据该策略名，get_trade_detail_data，get_last_order_id函数可以获取相应策略名对应的委托或持仓结果
+注：strategyName只对同账号本地客户端有效，即strategyName只对当前客户端下的单进行策略区分，且该策略区分只能当前客户端使用
+
+(10)quickTrade参数内容说明
+quickTrade:int,是否立马触发下单，0 否，1 是
+注：passorder是对最后一根K线完全走完后生成的模型信号在下一根K线的第一个tick数据来时触发下单交易；
+采用quickTrade参数设置为1时，非历史bar上执行时（ContextInfo.is_last_bar()为True），只要策略模型中调用到就触发下单交易。
+quickTrade参数设置为2时，不判断bar状态，只要策略模型中调用到就触发下单交易，历史bar上也能触发下单，请谨慎使用。
+
+(11)userOrderId参数内容说明
+userOrderId:string,用户自设委托ID，可缺省不写，写的时候必须把起前面的strategyName和quickTrade参数也填写。对应order委托对象和deal成交对象中的m_strRemark属性，
+通过get_trade_detail_data函数或委托主推函数order_callback和成交主推函数deal_callback可拿到这两个对象信息
+
+
+order_shares
+说明:
+指定股数的买/卖单,最常见的落单方式之一.如有需要落单类型当做一个参量传入,如果忽略掉落单类型,那么默认以最新价下单.
+用法:
+order_shares(stockcode,shares[,style,price],ContextInfo[,accId])
+参数:
+accId账号（string）
+stockcode代码（string,如”000002.SZ”）
+shares股数（int）
+style选价类型（string）,默认为最新价'LATEST'
+price价格（double）
+style下单选价类型：LATEST最新,FIX指定,HANG挂单,COMPETE对手,MARKET涨跌停价,SALE5,SALE4,SALE3,SALE2,SALE1卖5-1,BUY1,BUY2,BUY3,BUY4,BUY5买1-5
+示例：
+def handlebar(ContextInfo):
+    order_shares('000002.SZ',100,ContextInfo,'600000248')#按最新价下100股买入
+    order_shares('000002.SZ',-100,'COMPETE',ContextInfo,'600000248')#用对手价下100股卖出
+    order_shares('000002.SZ',-200,'fix',37.5,ContextInfo,'600000248')#用指定价37.5下200股卖出
+
+get_last_order_id
+释义：
+获取最新的委托或成交的委托Id
+说明：
+get_last_order_id(accountID,strAccountType,strDatatype);
+或者get_last_order_id(accountID,strAccountType,strDatatype,strategyName);
+参数：
+accountID,string,资金账号；
+strAccountType,string,账号类型,有"FUTURE","STOCK","CREDIT","HUGANGTONG","SHENGANGTONG","STOCK_OPTION","SWAP"；
+strDatatype,string,数据类型,委托"ORDER"、成交"DEAL"只有这两个；
+strategyName,string,策略名,对应passorder下单函数中的参数strategyName的值
+返回：
+String,委托号,如果没找到返回"-1".
+示例：
+def init(ContextInfo):
+    ContextInfo.accid = '6000000248'	
+def handlebar(ContextInfo):
+    orderid = get_last_order_id(ContextInfo.accid,'stock','order')
+    print( orderid)
+    obj = get_value_by_order_id(orderid,ContextInfo.accid,'stock','order')
+    print( obj.m_strInstrumentID)
+
+
+QMT 返回结构体大致字段意思
+
+
+取某资金帐号对应的持仓
+用法：holdings(Account);表示获取帐号Account的持仓
+例如：统计某个账号所有品种做多方向的持仓
+xxx := holdings('037055');
+loh := 0;
+for x in xxx do begin
+    if x.direction = 48 then
+        loh := loh+x.volume;
+end
+longhold:loh;
+xxx为一个positiondetail结构体,含有如下项：
+exchangeid证券市场,交易所代码
+exchangename市场名字
+productid品种代码
+productname品种名称
+instrumentid证券代码,合约代码
+instrumentname证券名称,合约名称
+hedgeflag投保
+direction买卖
+opendate成交日期
+tradeid最初开仓位的成交
+volume持仓量当前拥股
+openprice开仓价
+tradingday交易日
+margin使用的保证金历史的直接用ctp的,新的自己用成本价*存量*系数算股票不需要
+opencost开仓成本等于股票的成本价*第一次建仓的量,后续减持不影响,不算手续费股票不需要
+settlementprice/结算价对于股票的当前价
+closevolume平仓量等于股票已经卖掉的股票不需要
+closeamount平仓额等于股票每次卖出的量*卖出价*合约乘数（股票为1）的累加股票不需要
+dloatprofit浮动盈亏当前量*（当前价-开仓价）*合约乘数（股票为1）
+closeprofit平仓盈亏平仓额-开仓价*平仓量*合约乘数（股票为1）股票不需要
+marketvalue市值合约价值
+positioncost持仓成本股票不需要
+positionprofit持仓盈亏股票不需要
+lastsettlementprice最新结算价股票不需要
+instrumentvalue合约价值股票不需要
+istoday是否今仓
+xttag迅投标签
+stockholder股东账号
+frozenvolume期货不用这个字段,冻结数量
+canusevolume期货不用这个字段,股票的可用数量
+onroadvolume期货不用这个字段,股票的在途数量
+yesterdayvolume期货不用这个字段,股票的股份余额
+lastprice结算价对于股票的当前价
+avgopenprice开仓均价，股票不需要
+profitrate持仓盈亏比例
+futuretradetype成交类型
+expiredate到期日,逆回购用
+comtradeid套利成交Id
+legid组合Id
+totalcost自定义累计成本股票信用用到
+singlecost自定义单股成本股票信用用到
+coveredvolume用于个股期权
+sideflag用于个股期权,标记'0'-权利,'1'-义务,'2'-'备兑'
+referencerate汇率,目前用于港股通
+structfundvol分级基金可用（可分拆或可合并）
+redemptionvolume分级基金可赎回量
+prenablevolume申赎可用量（记录当日申购赎回的股票或基金数量）
+realusedmargin实时占用保证金，用于期权
+royalty权利金
+stocklastprice标的证券最新价，用于期权
+staticholdmargin静态持仓占用保证金，用于期权
+optcombusedvolume期权组合占用数量
+enableexercisevolume用于个股期权
+straccountkey账号key，唯一区别不同账号的key
+
+
+
+取某资金账号对应的委托信息
+用法：orderings(AccountID,[strategyName]);
+例1：统计某账号买入的所有的当天委托量
+xxx := orderings('037055');
+loo := 0;
+for x in xxx do begin
+    if x.direction = 48 then
+        loo := loo + x.volumetotaloriginal;
+end
+longorder:loo
+xxx为一个orderdetail结构体,含有如下项：
+exchangeid证券市场,交易所代码
+exchangename市场名字
+productid品种代码
+productname品种名称
+instrumentid证券代码,合约代码
+instrumentname证券名称,合约名称
+sessionid
+frontid前端id
+orderref下单引用等于股票的内部委托号
+orderpricetype类型,例如涨跌停价、指定价、买1-买5价、卖1-卖5价
+direction期货多空股票买卖
+offsetflag期货开平,股票买卖其实就是开平
+hedgeflag投保
+limitprice限价单的限价,就是报价
+volumetotaloriginal最初委托量
+ordersubmitstatus提交状态
+ordersysid委托号
+orderstatus委托状态
+volumetraded已成交量
+volumetotal当前总委托量股票不需要总委托量
+errorid
+errormsg状态信息
+taskid
+frozenmargin冻结保证金
+frozencommission冻结手续费
+insertdate日期
+inserttime时间
+xttag迅投标签
+tradeprice成交均价
+cancelamount已撤数量
+optname展示委托属性的中文
+tradeamount成交额期货=均价*量*合约乘数
+entrusttype委托类别
+cancelinfo废单原因
+undercode标的证券
+covereflag备兑标记'0'-非备兑,'1'-备兑
+orderpricermb委托价格人民币用于港股通
+tradeamountrmb成交金额人民币用于港股通
+referencerate参考汇率用于港股通
+
+返回资金账号的成交信息
+用法：deals(AccountID,[strategyName]);
+例如：返回某账号当天buy的成交量
+xxx := deals('037055');
+dea := 0;
+for x in xxx do begin
+    if x.direction = 48 then
+        dea := dea + x.volume;
+end
+longdeal:dea
+xxx为一个dealdetail结构体,含有如下项：
+exchangeid证券市场,交易所代码
+exchangename市场名字
+productid品种代码
+productname品种名称
+instrumentid证券代码,合约代码
+instrumentname证券名称,合约名称
+tradeid成交编号
+orderref下单引用等于股票的内部委托号
+ordersysid委托号
+direction买卖股票不需要
+offsetflag开平股票的买卖
+hedgeflag投保股票不需要
+price成交均价
+volume成交量期货单位手股票做到股
+tradedate成交日期
+tradetime成交时间
+comssion手续费
+tradeamount成交额期货=均价*量*合约乘数
+taskid
+xttag迅投标签
+orderpricetype类型,例如涨跌停价、指定价、买1-买5价、卖1-卖5价
+optname展示委托属性的中文
+entrusttype委托类别
+futuretradetype成交类型
+realoffsetflag实际开平,主要是区分平今和平昨
+coveredflag备兑标记'0'-非备兑,'1'-备兑
+closetodayvolume平今量,不显示
+orderpricermb委托价格人民币用于港股通
+pricermb目前用于港股通
+tradeamountrmb目前用于港股通
+referencerate汇率,目前用于港股通
+xttrade是否是迅投交易

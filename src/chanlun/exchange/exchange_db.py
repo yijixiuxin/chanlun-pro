@@ -299,17 +299,17 @@ class ExchangeDB(Exchange):
 
 
 if __name__ == "__main__":
-    ex = ExchangeDB(Market.CURRENCY_SPOT.value)
+    ex = ExchangeDB(Market.A.value)
     # ticks = ex.ticks(['SHSE.000001'])
     # print(ticks)
 
     # ex.del_klines_by_code_freq("BTC/USDT", "4h")
 
     klines = ex.klines(
-        "BTC/USDT",
-        "4h",
+        "SH.000852",
+        "d",
         # start_date="2023-12-01 00:00:00",
-        args={"limit": 10000},
+        # args={"limit": 10000},
     )
     print(len(klines))
     print(klines.head(5))

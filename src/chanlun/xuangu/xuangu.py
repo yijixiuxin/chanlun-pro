@@ -1,5 +1,4 @@
 import itertools
-from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -246,7 +245,7 @@ def xg_multiple_low_level_12mmd(code: str, mk_datas: MarketDatas, opt_type: list
 
     # 获取高级别底分型后的低级别笔
     start_datetime = high_bi.end.klines[0].date
-    low_bis: List[BI] = []
+    low_bis: list[BI] = []
     for _bi in low_data_1.get_bis():
         if _bi.end.k.date > start_datetime:
             low_bis.append(_bi)
@@ -740,7 +739,7 @@ def xg_single_week_k_overlap(code: str, mk_datas: MarketDatas, opt_type: list = 
 
 def xg_single_xd_next_zz(
     code: str, mk_datas: MarketDatas, opt_type: list = []
-) -> Union[None, dict]:
+) -> None | dict:
     """
     单周期，查找线段结束转折要转折的的标的
     要求：
@@ -784,7 +783,7 @@ def xg_single_xd_next_zz(
 
 def xg_single_xd_zs_nei_3mmds(
     code: str, mk_datas: MarketDatas, opt_type: list = []
-) -> Union[None, dict]:
+) -> None | dict:
     """
     单周期，查找线段中枢内的三类买卖点
     要求：
@@ -842,7 +841,7 @@ def xg_single_xd_zs_nei_3mmds(
 
 def xg_single_tupo_zs(
     code: str, mk_datas: MarketDatas, opt_type: list = []
-) -> Union[None, dict]:
+) -> None | dict:
     """
     单周期，查找进入中枢的笔的笔，是下跌线段的结束位置
     """
@@ -906,7 +905,7 @@ def xg_single_tupo_zs(
 
 def xg_single_xd23mmd_bi3mmd(
     code: str, mk_datas: MarketDatas, opt_type: list = []
-) -> Union[None, dict]:
+) -> None | dict:
     """
     单周期，线段2/3类买卖点（包括类买卖点）后笔出现3买卖点
     """

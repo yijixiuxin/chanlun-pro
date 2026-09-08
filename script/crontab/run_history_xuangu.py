@@ -1,25 +1,21 @@
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import get_context
-import pathlib
 import pickle
 import traceback
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 
-import numpy as np
 import talib
+from tqdm.auto import tqdm
 
-from chanlun import fun
+from chanlun import cl, fun
 from chanlun.backtesting.backtest_klines import BackTestKlines
 from chanlun.backtesting.base import Strategy
 from chanlun.cl_interface import BI, ICL
 from chanlun.cl_utils import (
     query_cl_chart_config,
-    up_cross,
 )
+from chanlun.config import get_data_path
 from chanlun.db import db
 from chanlun.zixuan import ZiXuan
-from chanlun.config import get_data_path
-from tqdm.auto import tqdm
-from chanlun import cl
 
 """
 进行历史选股，测试选股条件是否符合自己预期
@@ -29,8 +25,7 @@ from chanlun import cl
 """
 
 
-class HistoryXuangu(object):
-
+class HistoryXuangu:
     def __init__(self):
         # 选股市场
         self.market = "a"
@@ -260,7 +255,7 @@ class HistoryXuangu(object):
                     f"{code} - {cd.get_src_klines()[-1].date} 符合选股 笔结束 {bi_end_success} 笔后涨幅超过zd {up_zd_success}"
                 )
 
-            except Exception as e:
+            except Exception:
                 print(f"{code} 选股异常")
                 print(traceback.format_exc())
 
@@ -272,7 +267,6 @@ class HistoryXuangu(object):
 
 
 if __name__ == "__main__":
-
     from chanlun.exchange.exchange_tdx import ExchangeTDX
 
     # 要执行历史选股的股票列表

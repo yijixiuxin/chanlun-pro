@@ -3,7 +3,6 @@
 import copy
 import datetime
 import time
-from typing import Dict, List
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -29,7 +28,6 @@ bt.save()
 
 
 class SignalToTrade(BackTestTrader):
-
     def __init__(
         self,
         name,
@@ -48,11 +46,11 @@ class SignalToTrade(BackTestTrader):
         self.trade_max_pos: int = None
         self.trade_start_date: str = None
         self.trade_end_date: str = None
-        self.trade_mmds: List[str] = None
-        self.trade_pos_querys: Dict[str, List[str]] = None
-        self.close_uids: List[str] = ["clear"]
+        self.trade_mmds: list[str] = None
+        self.trade_pos_querys: dict[str, list[str]] = None
+        self.close_uids: list[str] = ["clear"]
 
-        self.allow_codes: List[str] = None  # 允许交易的代码
+        self.allow_codes: list[str] = None  # 允许交易的代码
 
         self.real_trade_full_sort = "default"  # default 默认，按照信号的顺序执行；zf 按照已有信号到目前的涨幅排序执行
 
@@ -62,11 +60,11 @@ class SignalToTrade(BackTestTrader):
         self.end_date: str = None
 
         # 根据信号中的价格赋值
-        self.code_price: Dict[str, float] = {}
+        self.code_price: dict[str, float] = {}
         self.now_datetime: datetime.datetime = None
 
         # 缓存K线
-        self.cache_klines: Dict[str, pd.DataFrame] = {}
+        self.cache_klines: dict[str, pd.DataFrame] = {}
 
         self.market: str = None
         self.ex: ExchangeDB = None
@@ -74,12 +72,12 @@ class SignalToTrade(BackTestTrader):
 
     def get_price(self, code):
         try:
-            if code not in self.cache_klines.keys():
+            if code not in self.cache_klines:
                 s_time = time.time()
                 self.cache_klines[code] = self.ex.klines(
                     code,
                     self.frequencys[-1],
-                    start_date=self.start_date,
+                    # start_date=self.start_date,
                     end_date=self.end_date,
                     args={"limit": 9999999},
                 )
@@ -110,9 +108,9 @@ class SignalToTrade(BackTestTrader):
                 "high": float(kline.iloc[-1]["high"]),
                 "low": float(kline.iloc[-1]["low"]),
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(code, self.now_datetime, e)
-            raise Exception(f"{code} - {self.now_datetime} 没有价格")
+            raise Exception(f"{code} - {self.now_datetime} 没有价格")  # noqa: TRY002
 
     def get_now_datetime(self):
         return self.now_datetime
@@ -159,10 +157,10 @@ class SignalToTrade(BackTestTrader):
 
         # 获取所有的历史持仓
         info_keys = []
-        for _, _poss in BT.trader.positions_history.items():
+        for _poss in BT.trader.positions_history.values():
             for _p in _poss:
                 info_keys += list(_p.info.keys())
-        info_keys = list(sorted(list(set(info_keys))))
+        info_keys = sorted(set(info_keys))
 
         pos_df = BT.positions(add_columns=info_keys, close_uids=self.close_uids)
         pos_df["_win"] = pos_df["profit_rate"].apply(lambda r: 1 if r > 0 else 0)
@@ -172,7 +170,7 @@ class SignalToTrade(BackTestTrader):
             pos_df = pos_df.query("code in @self.allow_codes")
 
         if self.trade_pos_querys is not None:
-            for _mmd, _qs in self.trade_pos_querys.items():
+            for _qs in self.trade_pos_querys.values():
                 for _q in _qs:
                     pos_df = pos_df.query(_q)
 
@@ -193,7 +191,7 @@ class SignalToTrade(BackTestTrader):
             trade_pos_codes = self.position_codes()
 
             # 查询当前要平仓的仓位
-            close_pos_operations: List[Dict] = []
+            close_pos_operations: list[dict] = []
             if len(trade_pos_codes) > 0:
                 s_time = time.time()
                 for _code, _poss in BT.trader.positions_history.items():
@@ -215,7 +213,7 @@ class SignalToTrade(BackTestTrader):
 
             # 查询当前要开仓的仓位
             s_time = time.time()
-            open_pos_operations: List[Dict] = []
+            open_pos_operations: list[dict] = []
             for _code, _poss in BT.trader.positions_history.items():
                 for _p in _poss:
                     for _o_r in _p.open_records:
