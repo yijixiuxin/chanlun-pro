@@ -1,0 +1,34 @@
+### 消息推送支持图片
+
+---
+
+### 默认安装后，推送的消息是不支持K线图片的，需要按照以下教程操作后，才可以支持
+
+支持图片示例
+
+![示例](img/send_msg_demo.png)
+
+
+> pyecharts 渲染图片文档 ：https://pyecharts.org/#/zh-cn/render_images
+>
+> 项目中使用的是 pyecharts + playwright 渲染图片的扩展
+>
+> 图片上传用的飞书的图片上传，需要开通 获取与上传图片或文件资源（im:resource） 权限
+
+> https://open.feishu.cn/document/server-docs/im-v1/image/create?appId=cli_a503a353effd100b
+
+![飞书图片上传权限](img/feishu-upload-img.png)
+
+### 1. pip 安装相关依赖
+
+    pip install pytest-playwright
+
+### 2. 安装所需的浏览器
+
+> 官方文档：https://playwright.dev/python/docs/intro
+
+    playwright install
+
+    执行 src\chanlun\monitor.py 脚本进行测试图片生成和消息发送功能
+
+#### 3. 如上，程序可以正常渲染图片并上传到飞书，即可在推送消息中增加图片
