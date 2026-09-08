@@ -227,20 +227,82 @@ def run_tasks(client_id: int):
         return hold_positions
 
     def orders(code, type, amount):
+        """
+        使用市价单下单。先获取当前持仓，计算目标仓位，再下市价单；
+        持续检查持仓，达到目标仓位即视为交易成功返回；否则取消原订单重新下单，
+        直到达到目标仓位。
+        """
         contract = get_contract_by_code(code)
-        if type == "buy":
-            req_order = ib_insync.MarketOrder("BUY", amount)
-        else:
-            req_order = ib_insync.MarketOrder("SELL", amount)
+        ib = get_ib()
 
-        trade = get_ib().placeOrder(contract, req_order)
-        while True:
-            get_ib().sleep(1)
-            if trade.isDone():
+        pos_tol = 1e-6
+        max_attempts = 20
+        order_timeout = 10
+        wait_position = 5
+
+        def _current_position():
+            _p = positions(code)
+            return 0.0 if _p is None else float(_p["position"])
+
+        def _reached(_pos, _tgt):
+            return abs(_pos - _tgt) <= pos_tol
+
+        # 先获取当前持仓，计算出目标仓位
+        tgt_position = _current_position()
+        if type == "buy":
+            tgt_position += amount
+        else:
+            tgt_position -= amount
+
+        filled_qty = 0.0
+        filled_price = 0.0
+
+        for _attempt in range(max_attempts):
+            # 已达到目标仓位
+            if _reached(_current_position(), tgt_position):
                 break
+
+            # 剩余需要成交的数量与方向
+            remain = tgt_position - _current_position()
+            action = "BUY" if remain > 0 else "SELL"
+            req_order = ib_insync.MarketOrder(action, abs(remain))
+            trade = ib.placeOrder(contract, req_order)
+
+            # 持续检查持仓，直到订单完成、达到目标仓位或超时
+            t_start = time.time()
+            while (
+                not trade.isDone()
+                and not _reached(_current_position(), tgt_position)
+                and time.time() - t_start < order_timeout
+            ):
+                ib.sleep(1)
+
+            # 超时未完成则撤单，等待其结束
+            if not trade.isDone():
+                ib.cancelOrder(trade.order)
+                while not trade.isDone():
+                    ib.sleep(1)
+
+            # 记录本次订单的成交情况
+            _filled = trade.orderStatus.filled
+            filled_qty += _filled
+            filled_price += trade.orderStatus.avgFillPrice * _filled
+
+            # 订单未全部成交，撤单并重新下单补足剩余数量
+            if abs(remain) - _filled > pos_tol:
+                continue
+
+            # 订单已全部成交，等待持仓更新到目标仓位后结束
+            for _w in range(wait_position):
+                ib.sleep(1)
+                if _reached(_current_position(), tgt_position):
+                    break
+            break
+
+        avg_price = filled_price / filled_qty if filled_qty else 0.0
         return {
-            "price": trade.orderStatus.avgFillPrice,
-            "amount": trade.orderStatus.filled,
+            "price": avg_price,
+            "amount": filled_qty,
         }
 
     def get_contract_by_code(code: str):

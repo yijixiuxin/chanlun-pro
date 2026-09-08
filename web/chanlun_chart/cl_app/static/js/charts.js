@@ -189,7 +189,7 @@ class ChartManager {
       auto_save_delay: 5,
       study_count_limit: 100,
       disabled_features: ["go_to_date"],
-      enabled_features: ["study_templates", "seconds_resolution"],
+      enabled_features: ["study_templates", "seconds_resolution", "two_character_bar_marks_labels"],
       saved_data_meta_info: {
         uid: 1,
         name: "default",

@@ -1,11 +1,9 @@
-from typing import Dict, List
-
 from chanlun.base import Market
 from chanlun.db import db
 from chanlun.exchange import get_exchange
 
 
-class ZiXuan(object):
+class ZiXuan:
     """
     自选池功能
     """
@@ -55,7 +53,7 @@ class ZiXuan(object):
             for zx_name in self.zx_names
         ]
 
-    def zx_stocks(self, zx_group) -> List[Dict[str, str]]:
+    def zx_stocks(self, zx_group) -> list[dict[str, str]]:
         """
         根据自选名称，获取其中的 代码列表
         """

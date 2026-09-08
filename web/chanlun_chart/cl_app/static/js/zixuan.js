@@ -224,6 +224,8 @@ var ZiXuan = (function () {
           ];
           if (Utils.get_market() === "a") {
             menu_data.splice(3, 0, { title: "操盘必读", id: "dfcf" });
+            menu_data.splice(4, 0, { title: "相关资讯", id: "news" });
+            menu_data.splice(5, 0, { title: "股吧", id: "guba" });
           }
           dropdown.render({
             trigger: "contextmenu",
@@ -301,6 +303,20 @@ var ZiXuan = (function () {
                 window.open(
                   "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=" +
                     data.code.replace(".", "")
+                );
+              } else if (menuData["id"] === "news") {
+                window.open(
+                  "https://so.eastmoney.com/news/s?keyword=(" +
+                    data.code.split(".")[1] +
+                    ")(" +
+                    data.name +
+                    ")"
+                );
+              } else if (menuData["id"] === "guba") {
+                window.open(
+                  "https://guba.eastmoney.com/list," +
+                    data.code.split(".")[1] +
+                    ".html"
                 );
               }
             },

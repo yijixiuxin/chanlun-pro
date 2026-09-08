@@ -2,6 +2,11 @@
 
 ---
 
+### 2026-09-08
+
+* 新增“大QMT” Redis 桥接方式，支持行情与交易，直接通过 src\chanlun\exchange\exchange_qmt.py 调用操作；
+* 升级TV图表版本
+
 ### 2026-08-08
 
 * 新增“平滑平均K线”的缠论选项，选择后将原始K线转换成平均K线后，再计算缠论数据
@@ -344,7 +349,7 @@ ALTER TABLE `cl_alert_task`
 ### 2023-03-09
 
 * 缠论计算更新
-    * 新增笔内K线重叠拆分的配置，具体请参看 [缠论配置说明](缠论配置项说明.md)
+    * 新增笔内K线重叠拆分的配置，具体请参看 [缠论配置说明](chanlun-config-reference.md)
     * 线段拆分逻辑优化
     * 分型包含是否成笔配置，只在 13 跟K线内部进行判断，多余 13 跟K线，则不进行包含判断
     * 其他BUG修复
@@ -401,7 +406,7 @@ ALTER TABLE `cl_alert_task`
     * 线段拆分优化
     * 段内中枢bug修复
 * 沪深A股行业概念板块信息接口替换，修改为 同花顺 接口（需要手动更新）[文档](FAQ.md)
-* 任务监控，消息推送结构，可支持生成行情图片快照，需要按照文档配置后方可 [文档](消息推送支持图片.md)
+* 任务监控，消息推送结构，可支持生成行情图片快照，需要按照文档配置后方可 [文档](push-with-images.md)
 * 自选列表，增加显示当日涨跌比例的显示（沪深A股建议用 富途牛牛 的接口，速度很快，否则会比较慢）
 * 消息推送，如果是沪深A股，则会增加股票的 行业、概念 信息
 * 天勤期货行情数据（kline、tick）获取方式优化（Beta）
@@ -473,7 +478,7 @@ ALTER TABLE `cl_alert_task`
     * 笔对象 `BI` 中的 `td` 属性去除，使用 `cl_utils.py` 中的 `bi_td()` 方法进行判断
     * 特殊线段的处理（中枢九段、段内不同向中枢）
     * 删除线段、走势段标准化的配置
-    * 买卖点的重新梳理 [详情](缠论买卖点和背驰规则.md)
+    * 买卖点的重新梳理 [详情](chanlun-buy-sell-rules.md)
     * 可自定义实现自己的买卖点规则，参考 `cl_interface.py` 中的 `user_custom_mmd()` 方法
     * 中枢计算规则修改，修复个别情况下中枢范围计算错误
 
@@ -528,7 +533,7 @@ ALTER TABLE `cl_alert_task`
     * 回测中，触发止损后，止损价格由原来的最新价格，修改为设置的止损价
     * Operation 策略指令对象中，增加 pos_rate，key 参数，可指定开仓 or 平仓的比例，通过 key 值可避免多次重复执行
     * Strategy 策略类中增加更多的指标计算方法
-    * 新增 StrategyFuturesXDZS() 策略，期货基于线段的中枢震荡策略，[详情](基于线段的中枢震荡策略.md)
+    * 新增 StrategyFuturesXDZS() 策略，期货基于线段的中枢震荡策略，[详情](zs-swing-strategy.md)
 * 数字货币 exchange_binance.py 返回更多K线数量（最大10000，需要数据库中有足够的数据，建议每天执行同步行情脚本）、
 * kcharts.py 画图，去除力度小于 5 的分型展示，减少画图数据，减少数据传输数量，提高些许图标响应速度（也许吧）
 * kcharts.py 画图，多中枢下，一笔/段 中，同类型的买卖点背驰，只显示一个，避免重复信息过多
@@ -562,9 +567,9 @@ ALTER TABLE `cl_alert_task`
     * `res = BT.run_optimization(setting, max_workers=None, next_frequency='d', evaluate='profit_rate', load_data_to_cache=False)`
 * 策略基类中 `Strategy`，增加 `judge_macd_back_zero` 方法，判断中枢是否有回拉零轴
 * 增加 `KlinesGenerator` K线生成（分钟），目前只支持分钟级别的生成，其他小时、日线需要判断不同市场的交易时间，比较麻烦，不做呢
-    * 示例参考：[合成自定义K线数据（分钟）](合成自定义K线数据（分钟）.md)
+    * 示例参考：[合成自定义K线数据（分钟）](custom-kline-minute.md)
 * 缠论计算，可同时计算多个中枢及相对应的买卖点背驰信息
-    * 示例参考：[多中枢类型相同买卖点策略](多中枢类型相同买卖点策略.md)
+    * 示例参考：[多中枢类型相同买卖点策略](multi-zs-signal-strategy.md)
 * `cl_utils.py` 增加获取笔内缺口数量的方法 `bi_qk_num(cd: ICL, bi: BI)`
 * 页面操作，增加图表订单管理，可在图表中增加指定的订单信息，并统一了下订单保存和读取的方法
 * 增加选股方法示例：
@@ -742,9 +747,9 @@ ALTER TABLE `cl_alert_task`
 * 沪深行情获取不在使用富途（tick、板块信息和交易时间 数据还是需要富途才可正常获取）
 * 沪深行情页面去掉根据时间获取的功能
 * WEB图表增加简单画图功能，成交量与光标展示优化（感谢 @阿仔哥 提交的代码）
-* **回测代码整理，相关文档 docs/缠论回测与交易指南.md**
-* **实盘交易脚本整理，包括 沪深、港股、数字货币、期货市场；参看 docs/缠论回测与交易指南.md**
-* **增加VNPY回测与实盘交易支持，文档参看 docs/vnpy使用指南.md**
+* **回测代码整理，相关文档 docs/chanlun-backtest-trading-guide.md**
+* **实盘交易脚本整理，包括 沪深、港股、数字货币、期货市场；参看 docs/chanlun-backtest-trading-guide.md**
+* **增加VNPY回测与实盘交易支持，文档参看 docs/vnpy-guide.md**
 
 ### 2022-04-05
 

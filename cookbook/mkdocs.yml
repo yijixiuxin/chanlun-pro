@@ -17,38 +17,39 @@ plugins:
   - search
 
 nav:
-  - 功能: 功能.md
-  - 售价与联系方式: 售价与联系方式.md
-  - 项目展示: 项目展示.md
+  - 功能: features.md
+  - 售价与联系方式: pricing-and-contact.md
+  - 项目展示: project-showcase.md
   - 更新日志: UPDATE.md
   - FAQ: FAQ.md
   - 安装:
-      - 第三方账号依赖: 第三方账号依赖.md
-      - 服务依赖: 服务依赖.md
-      - Windows 安装文档: Windows安装文档.md
-      - Ubuntu 安装文档: Ubuntu安装文档.md
-      - Mac 安装文档: Mac安装文档.md
-      - 配置文件说明: 配置文件说明.md
-      - 授权方式: 授权方式.md
-      - Web页面功能: Web页面功能.md
-      - JupyterLab 安装与使用: JupyterLab安装与使用.md
-      - 消息推送支持图片: 消息推送支持图片.md
-  - 缠论配置项说明: 缠论配置项说明.md
-  - 缠论买卖点和背驰规则: 缠论买卖点和背驰规则.md
-  - 缠论数据对象与方法: 缠论数据对象与方法.md
-  - 支持的交易市场: 支持的交易市场.md
-  - 历史行情下载: 历史行情下载.md
+      - 第三方账号依赖: third-party-account-deps.md
+      - 服务依赖: service-dependencies.md
+      - Windows 安装文档: windows-installation.md
+      - Ubuntu 安装文档: ubuntu-installation.md
+      - Mac 安装文档: mac-installation.md
+      - 配置文件说明: config-file-explained.md
+      - 授权方式: licensing.md
+      - Web页面功能: web-page-features.md
+      - JupyterLab 安装与使用: jupyterlab-guide.md
+      - 消息推送支持图片: push-with-images.md
+      - 大QMT桥接使用: qmt-bridge.md
+  - 缠论配置项说明: chanlun-config-reference.md
+  - 缠论买卖点和背驰规则: chanlun-buy-sell-rules.md
+  - 缠论数据对象与方法: chanlun-data-objects-methods.md
+  - 支持的交易市场: supported-markets.md
+  - 历史行情下载: historical-data-download.md
   - 策略回测与实盘:
-      - 选股策略: 选股策略.md
-      - 策略编写与运行: 策略编写与运行.md
-      - 策略缠论参数优化: 策略缠论参数优化.md
-      - 实盘: 实盘.md
-      - VNPY使用指南: vnpy使用指南.md
-      - 掘金量化使用: 掘金量化使用文档.md
+      - 选股策略: stock-selection-strategy.md
+      - 策略编写与运行: strategy-authoring-and-running.md
+      - 策略缠论参数优化: strategy-chanlun-optimization.md
+      - 实盘: live-trading.md
+      - VNPY使用指南: vnpy-guide.md
+      - 掘金量化使用: goldminer-guide.md
   - 策略示例:
-      - 基于线段的中枢震荡策略: 基于线段的中枢震荡策略.md
-      - 多中枢类型相同买卖点策略: 多中枢类型相同买卖点策略.md
-      - 合成自定义K线数据（分钟）: 合成自定义K线数据（分钟）.md
+      - 基于线段的中枢震荡策略: zs-swing-strategy.md
+      - 多中枢类型相同买卖点策略: multi-zs-signal-strategy.md
+      - 合成自定义K线数据（分钟）: custom-kline-minute.md
 
 theme:
   name: readthedocs

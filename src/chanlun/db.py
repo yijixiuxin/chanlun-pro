@@ -2,7 +2,6 @@ import datetime
 import json
 import time
 import warnings
-from typing import List, Union
 
 import numpy as np
 import pandas as pd
@@ -229,7 +228,7 @@ class TableByAIPrediction(Base):
 
 
 @fun.singleton
-class DB(object):
+class DB:
     global Base
 
     def __init__(self) -> None:
@@ -238,7 +237,7 @@ class DB(object):
             if db_path.is_dir() is False:
                 db_path.mkdir(parents=True)
             self.engine = create_engine(
-                f"sqlite:///{str(db_path / f'{config.DB_DATABASE}.sqlite')}",
+                f"sqlite:///{db_path / f'{config.DB_DATABASE}.sqlite'!s}",
                 echo=False,
                 poolclass=QueuePool,
                 pool_size=10,
@@ -279,13 +278,12 @@ class DB(object):
             table_name = f"{market}_klines_{stock_code[:7]}"
         elif market == Market.US.value:
             table_name = f"{market}_klines_{stock_code[0]}"
-        elif market == Market.FX.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY_SPOT.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.FUTURES.value:
+        elif (
+            market == Market.FX.value
+            or market == Market.CURRENCY.value
+            or market == Market.CURRENCY_SPOT.value
+            or market == Market.FUTURES.value
+        ):
             table_name = f"{market}_klines_{stock_code}"
         else:
             raise Exception(f"市场错误：{market}")
@@ -330,7 +328,7 @@ class DB(object):
         end_date: datetime.datetime = None,
         limit: int = 5000,
         order: str = "desc",
-    ) -> List:
+    ) -> list:
         """
         获取k线数据
         :param market:
@@ -494,7 +492,7 @@ class DB(object):
 
         return True
 
-    def zx_get_groups(self, market: str) -> List[TableByZxGroup]:
+    def zx_get_groups(self, market: str) -> list[TableByZxGroup]:
         """
         获取自选分组
         """
@@ -532,7 +530,7 @@ class DB(object):
 
         return True
 
-    def zx_get_group_stocks(self, market: str, zx_group: str) -> List[TableByZixuan]:
+    def zx_get_group_stocks(self, market: str, zx_group: str) -> list[TableByZixuan]:
         """
         获取自选组下的股票列表
         """
@@ -679,7 +677,7 @@ class DB(object):
 
         return True
 
-    def zx_query_group_by_code(self, market: str, stock_code: str) -> List[str]:
+    def zx_query_group_by_code(self, market: str, stock_code: str) -> list[str]:
         with self.Session() as session:
             # 查询 market 下 stock_code 的所有去重的 zx_group 记录
             return [
@@ -702,7 +700,7 @@ class DB(object):
         order_price: float,
         order_amount: float,
         order_memo: str,
-        order_time: Union[str, datetime.datetime],
+        order_time: str | datetime.datetime,
     ):
         with self.Session() as session:
             # 保存订单
@@ -721,7 +719,7 @@ class DB(object):
 
         return True
 
-    def order_query_by_code(self, market: str, stock_code: str) -> List[TableByOrder]:
+    def order_query_by_code(self, market: str, stock_code: str) -> list[TableByOrder]:
         with self.Session() as session:
             # 查询 market 下 stock_code 的所有订单
             orders = (
@@ -808,7 +806,7 @@ class DB(object):
 
         return True
 
-    def task_query(self, market: str = None, id: int = None) -> List[TableByAlertTask]:
+    def task_query(self, market: str = None, id: int = None) -> list[TableByAlertTask]:
         with self.Session() as session:
             # 查询任务
             query = session.query(TableByAlertTask)
@@ -952,7 +950,7 @@ class DB(object):
 
     def alert_record_query(
         self, market: str, task_name: str = None
-    ) -> List[TableByAlertRecord]:
+    ) -> list[TableByAlertRecord]:
         """
         查询预警记录
         :param market:
@@ -1021,7 +1019,7 @@ class DB(object):
 
     def marks_query(
         self, market: str, stock_code: str, start_date: int = None
-    ) -> List[TableByTVMarks]:
+    ) -> list[TableByTVMarks]:
         """
         查询图表标记
         :param market:
@@ -1091,7 +1089,7 @@ class DB(object):
 
     def marks_query_by_price(
         self, market: str, stock_code: str, start_date: int = None
-    ) -> List[TableByTVMarksPrice]:
+    ) -> list[TableByTVMarksPrice]:
         """
         查询图表标记
         :param market:
@@ -1112,7 +1110,7 @@ class DB(object):
             session.query(TableByTVMarksPrice).filter(
                 TableByTVMarks.market == market,
                 TableByTVMarksPrice.mark_label == mark_label,
-            ).delete()
+            ).delete(synchronize_session=False)
             session.commit()
 
         return True
@@ -1395,17 +1393,18 @@ if __name__ == "__main__":
     #     )
 
     # 添加图表标记
-    db.marks_add_by_price(
-        "a",
-        "SH.000001",
-        "上证指数",
-        "30m",
-        fun.str_to_timeint("2026-05-22 14:30:00"),
-        "A",
-        "测试标记2",
-        "green",
-        "red",
-    )
+    # db.marks_add_by_price(
+    #     "a",
+    #     "SH.000001",
+    #     "上证指数",
+    #     "30m",
+    #     fun.str_to_timeint("2026-05-22 14:30:00"),
+    #     "A",
+    #     "测试标记2",
+    #     "green",
+    #     "red",
+    # )
+    db.marks_del_by_price("a", "B")
 
     # 缓存
     # db.cache_set("test", "12312312312312", int(time.time()) + 5)

@@ -33,6 +33,9 @@ class BackTestTrader(Trader):
         :param fee_rate: 手续费比例
         """
 
+        if mode not in ["signal", "trade", "real", "online"]:
+            raise RuntimeError("mode 参数错误")
+
         # 策略基本信息
         self.name = name
         self.mode = mode

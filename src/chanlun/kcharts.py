@@ -88,6 +88,7 @@ def render_charts(
         "chart_show_ama": True,
         "chart_show_boll": False,
         "chart_show_gmma": False,
+        "chart_show_donchian": False,
         "chart_show_futu": "macd",
         "chart_show_ld": "xd",
         "chart_show_atr_stop_loss": False,
@@ -97,6 +98,7 @@ def render_charts(
         "chart_idx_gmma_period": "3,5,8,10,12,15,30,35,40,45,50,60",
         "chart_idx_vol_ma_period": "5,60",
         "chart_idx_boll_period": 20,
+        "chart_idx_donchian_period": 20,
         "chart_idx_rsi_period": 14,
         "chart_idx_atr_period": 14,
         "chart_idx_atr_multiplier": 1.5,
@@ -1019,6 +1021,62 @@ def render_charts(
                 is_symbol_show=False,
                 y_axis=down_stop_loss_vals,
                 linestyle_opts=opts.LineStyleOpts(width=1, color="rgb(0,137,123)"),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .set_global_opts()
+        )
+    if config["chart_show_donchian"]:
+        # 计算唐奇安通道
+        donchian_period = config["chart_idx_donchian_period"]
+        high_arr = np.array(klines["high"].tolist())
+        low_arr = np.array(klines["low"].tolist())
+        
+        # 确保周期不超过数据长度
+        actual_period = min(donchian_period, len(high_arr))
+        
+        # 计算上轨：过去N周期最高价
+        donchian_upper = np.full_like(high_arr, np.nan)
+        # 计算下轨：过去N周期最低价
+        donchian_lower = np.full_like(low_arr, np.nan)
+        # 计算中轨：(上轨+下轨)/2
+        donchian_middle = np.full_like(high_arr, np.nan)
+        
+        for i in range(actual_period - 1, len(high_arr)):
+            start_idx = i - actual_period + 1
+            if start_idx >= 0:
+                donchian_upper[i] = np.max(high_arr[start_idx:i+1])
+                donchian_lower[i] = np.min(low_arr[start_idx:i+1])
+                donchian_middle[i] = (donchian_upper[i] + donchian_lower[i]) / 2
+        
+        # 画唐奇安通道
+        overlap_kline = overlap_kline.overlap(
+            Line()
+            .add_xaxis(xaxis_data=klines_xaxis)
+            .add_yaxis(
+                series_name="Donchian Upper",
+                is_symbol_show=False,
+                y_axis=donchian_upper,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="solid", color="#FF6D00"
+                ),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .add_yaxis(
+                series_name="Donchian Middle",
+                is_symbol_show=False,
+                y_axis=donchian_middle,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="solid", color="#FFFFFF"
+                ),
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            .add_yaxis(
+                series_name="Donchian Lower",
+                is_symbol_show=False,
+                y_axis=donchian_lower,
+                linestyle_opts=opts.LineStyleOpts(
+                    width=1, type_="solid", color="#FF6D00"
+                ),
                 label_opts=opts.LabelOpts(is_show=False),
             )
             .set_global_opts()

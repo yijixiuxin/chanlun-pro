@@ -1,11 +1,13 @@
-from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
-from tqdm.auto import tqdm
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+
+from tqdm.auto import tqdm
+
+from chanlun.cl_utils import query_cl_chart_config, web_batch_get_cl_datas
 from chanlun.exchange.exchange_tdx import ExchangeTDX
 
 ex = ExchangeTDX()
-cache_freqs = ["d", "30m"]
+cache_freqs = ["d"]
 
 
 def process_cache_code_cd(code):
@@ -14,12 +16,11 @@ def process_cache_code_cd(code):
         try:
             klines = ex.klines(code, f)
             web_batch_get_cl_datas("a", code, {f: klines}, cl_config)
-        except Exception as e:
+        except Exception:
             print(f"Error : {code} {f}")
 
 
 if __name__ == "__main__":
-
     # 5个进程同时处理
     with ProcessPoolExecutor(
         max_workers=5, mp_context=get_context("spawn")
