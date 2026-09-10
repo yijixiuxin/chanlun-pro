@@ -2,11 +2,10 @@ import copy
 import datetime
 import traceback
 import warnings
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
-from pytdx.errors import TdxConnectionError
+from pytdx.errors import TdxConnectionError, TdxFunctionCallError
 from pytdx.hq import TdxHq_API
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
@@ -108,7 +107,7 @@ class ExchangeTDX(Exchange):
                         _type = self.for_sz(code) if market == 0 else self.for_sh(code)
                         if _type in ["bond_cn", "undefined", "stockB_cn"]:
                             continue
-                        code = f"{sse}.{str(code)}"
+                        code = f"{sse}.{code!s}"
                         if code in __codes:
                             continue
                         __codes.append(code)
@@ -185,7 +184,7 @@ class ExchangeTDX(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         通达信，不支持按照时间查找
         """
@@ -319,8 +318,11 @@ class ExchangeTDX(Exchange):
         except TdxConnectionError:
             print("连接失败，重新选择最优服务器")
             self.reset_tdx_ip()
-        except Exception as e:
-            print(f"获取行情异常 {code} Exception ：{str(e)}")
+        except TdxFunctionCallError:
+            print("函数调用失败")
+            self.reset_tdx_ip()
+        except Exception as e:  # noqa: BLE001
+            print(f"获取行情异常 {code} Exception ：{e!s}")
             print(traceback.format_exc())
         finally:
             pass
@@ -343,7 +345,7 @@ class ExchangeTDX(Exchange):
             days_to_mon = 6
         return date - datetime.timedelta(days=days_to_mon)
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         获取股票名称
         """
@@ -353,7 +355,7 @@ class ExchangeTDX(Exchange):
             return None
         return stock[0]
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         ticks = {}
         if len(codes) == 0:
             return ticks
@@ -758,7 +760,6 @@ class ExchangeTDX(Exchange):
 
 
 if __name__ == "__main__":
-
     ex = ExchangeTDX()
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
