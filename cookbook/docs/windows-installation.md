@@ -16,7 +16,7 @@
  
 ---
 
-> Python 版本支持 3.8、3.9、3.10、3.11 ，不然运行会报 RuntimeError 错误  
+> Python 版本支持 3.11 3.12 3.13 3.14 ，不然运行会报 RuntimeError 错误  
 
 > ### pytdx 必须使用项目目录 package 下提供的包进行安装
 > ### 如果提示 “Tushare内置的pytdx版本和最新的pytdx 版本不同...” 无需理睬，等待即可

@@ -10,8 +10,8 @@ def get_exchange(market: Market) -> Exchange:
     """
     获取市场的交易所对象，根据config配置中设置的进行获取
     """
-    global g_exchange_obj
-    if market.value in g_exchange_obj.keys():
+    global g_exchange_obj  # noqa: PLW0602
+    if market.value in g_exchange_obj:
         return g_exchange_obj[market.value]
 
     if market == Market.A:
@@ -41,7 +41,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeTDXQuant(Market.A)
         else:
-            raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
+            raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")  # noqa: TRY002
 
     elif market == Market.HK:
         # 港股 交易所
@@ -62,7 +62,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeTDXQuant(Market.HK)
         else:
-            raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
+            raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")  # noqa: TRY002
 
     elif market == Market.FUTURES:
         # 期货 交易所
@@ -83,7 +83,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeTDXQuant(Market.FUTURES)
         else:
-            raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")
+            raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")  # noqa: TRY002
     elif market == Market.NY_FUTURES:
         # 美股期货 交易所
         if config.EXCHANGE_NY_FUTURES == "tdx_ny_futures":
@@ -105,7 +105,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
         else:
-            raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
+            raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")  # noqa: TRY002
 
     elif market == Market.CURRENCY:
         # 数字货币 交易所
@@ -118,7 +118,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeDB(Market.CURRENCY.value)
         else:
-            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY}")
+            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY}")  # noqa: TRY002
     elif market == Market.CURRENCY_SPOT:
         # 数字货币 交易所
         if config.EXCHANGE_CURRENCY_SPOT == "binance_spot":
@@ -130,7 +130,7 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeDB(Market.CURRENCY_SPOT.value)
         else:
-            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY_SPOT}")
+            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY_SPOT}")  # noqa: TRY002
     elif market == Market.US:
         # 美股 交易所
         if config.EXCHANGE_US == "alpaca":
@@ -158,6 +158,6 @@ def get_exchange(market: Market) -> Exchange:
 
             g_exchange_obj[market.value] = ExchangeTDXQuant(Market.US)
         else:
-            raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")
+            raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")  # noqa: TRY002
 
     return g_exchange_obj[market.value]

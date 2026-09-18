@@ -1,5 +1,4 @@
 import datetime
-from typing import Dict, List, Union
 
 import ccxt
 import pandas as pd
@@ -75,7 +74,7 @@ class ExchangeBinance(Exchange):
         """
         return True
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """
         数字货币全部返回 code 值
         """
@@ -119,7 +118,7 @@ class ExchangeBinance(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         返回 k 线数据
         优先从数据库中获取，在进行 api 请求，合并数据，并更新数据库，之后返回k线行情
@@ -165,7 +164,7 @@ class ExchangeBinance(Exchange):
         frequency: str,
         start_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         增量 API 接口请求行情数据
 
@@ -203,7 +202,7 @@ class ExchangeBinance(Exchange):
             "2m": "1m",
             "1m": "1m",
         }
-        if frequency not in frequency_map.keys():
+        if frequency not in frequency_map:
             raise Exception(f"不支持的周期: {frequency}")
 
         # 转换时间戳
@@ -304,7 +303,7 @@ class ExchangeBinance(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         api 接口请求行情数据
         """
@@ -328,7 +327,7 @@ class ExchangeBinance(Exchange):
             "2m": "1m",
             "1m": "1m",
         }
-        if frequency not in frequency_map.keys():
+        if frequency not in frequency_map:
             raise Exception(f"不支持的周期: {frequency}")
 
         if start_date is not None:
@@ -376,7 +375,7 @@ class ExchangeBinance(Exchange):
             kline_pd = convert_currency_kline_frequency(kline_pd, frequency)
         return kline_pd
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         res_ticks = {}
         _ts = self.exchange.fetch_tickers(codes)
         for _s, _t in _ts.items():

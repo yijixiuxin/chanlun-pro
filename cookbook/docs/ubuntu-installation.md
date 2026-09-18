@@ -2,7 +2,7 @@
 
 ---
 
-> Python 版本支持 3.9、3.10、3.11 ，不然运行会报 RuntimeError 错误
+> Python 版本支持 3.11 3.12 3.13 3.14 ，不然运行会报 RuntimeError 错误
 > 前置条件
 > 已经安装 git、MySQL、Redis
 

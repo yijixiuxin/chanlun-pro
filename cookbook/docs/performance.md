@@ -5,7 +5,7 @@
 > 测试平台信息：
 >
 > 操作系统：Windows   
-> Python 3.10   
+> Python 3.11   
 > CPU：i9 12900k   
  
 

@@ -370,39 +370,32 @@ class FileCacheDB:
 fdb = FileCacheDB()
 
 if __name__ == "__main__":
-    from chanlun.cl_utils import query_cl_chart_config
-    from chanlun.exchange.exchange_binance import ExchangeBinance
+    import time
 
-    # market = 'a'
-    # code = 'SHSE.000001'
-    # frequency = '5m'
-    # cl_config = query_cl_chart_config(market, code)
-    # ex = ExchangeDB(market)
+    from chanlun.cl_utils import query_cl_chart_config
+    from chanlun.exchange.exchange_tdx import ExchangeTDX
+
+    market = "a"
+    code = "SH.000001"
+    frequency = "5m"
+    cl_config = query_cl_chart_config(market, code)
+    ex = ExchangeTDX()
 
     fdb = FileCacheDB()
     # cd = fdb.get_low_to_high_cl_data(ex, market, code, frequency, cl_config)
     # print(len(cd.get_klines()))
     # print(cd)
 
-    ex = ExchangeBinance()
-    market = "currency"
-    code = "APT/USDT"
-    freq = "d"
-    cl_config = query_cl_chart_config(market, code)
-    klines = ex.klines(code, freq)
+    klines = ex.klines(code, frequency)
 
-    cd = fdb.get_web_cl_data(market, code, freq, cl_config, klines)
-    print(cd)
-    cl_config = query_cl_chart_config(market, code)
-    cd = fdb.get_web_cl_data(market, code, freq, cl_config, klines)
-    print(cd)
-
-
-#     currency--APT/USDT--d 726a8925bda1d6fb6ac6fbe5b146fd5a index: 541 date: 2024-04-12 08:00:00+08:00 h: 12.223 l: 8.422 o: 11.862 c:9.775 a:42964252.4 code                       APT/USDT
-# date      2024-04-12 08:00:00+08:00
-# open                         11.862
-# high                         12.223
-# low                           8.422
-# close                         9.775
-# volume                   42964300.0
-# Name: 541, dtype: object
+    s_time = time.time()
+    cd = fdb.get_web_cl_data(market, code, frequency, cl_config, klines)
+    print(
+        cd,
+        len(cd.get_klines()),
+        len(cd.get_bis()),
+        len(cd.get_xds()),
+        len(cd.get_bi_zss()),
+        len(cd.get_xd_zss()),
+    )
+    print("用时：", time.time() - s_time)
