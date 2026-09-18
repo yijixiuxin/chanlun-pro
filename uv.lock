@@ -359,8 +359,8 @@ dependencies = [
     { name = "ta-lib", version = "0.8.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
     { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-macosx_13_0_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
     { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-macosx_14_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
-    { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-win_amd64.whl" }, marker = "platform_machine == 'amd64' and sys_platform == 'win32'" },
     { name = "ta-lib", version = "0.8.0", source = { path = "package/ta_lib-0.8.0-cp311-cp311-win_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'win32'" },
     { name = "tenacity" },
@@ -411,8 +411,8 @@ requires-dist = [
     { name = "ta-lib", marker = "(platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (platform_machine != 'amd64' and platform_machine != 'arm64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')" },
     { name = "ta-lib", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", path = "package/ta_lib-0.8.0-cp311-cp311-macosx_14_0_arm64.whl" },
     { name = "ta-lib", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", path = "package/ta_lib-0.8.0-cp311-cp311-macosx_13_0_x86_64.whl" },
-    { name = "ta-lib", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_aarch64.whl" },
-    { name = "ta-lib", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_x86_64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" },
+    { name = "ta-lib", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" },
     { name = "ta-lib", marker = "platform_machine == 'amd64' and sys_platform == 'win32'", path = "package/ta_lib-0.8.0-cp311-cp311-win_amd64.whl" },
     { name = "ta-lib", marker = "platform_machine == 'arm64' and sys_platform == 'win32'", path = "package/ta_lib-0.8.0-cp311-cp311-win_arm64.whl" },
     { name = "tenacity", specifier = ">=9.1.2" },
@@ -2238,7 +2238,7 @@ requires-dist = [{ name = "numpy" }]
 [[package]]
 name = "ta-lib"
 version = "0.8.0"
-source = { path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_aarch64.whl" }
+source = { path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" }
 resolution-markers = [
     "platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
@@ -2246,7 +2246,7 @@ dependencies = [
     { name = "numpy", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { filename = "ta_lib-0.8.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:0e3c0b1fcc33f558182cbd4ab183ac1e5d4096fd37be2f9ead684eb805360760" },
+    { filename = "ta_lib-0.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f83fd213631a315200baa27f85fbcf9072512fdbfdc8e3c9e7303a4322bd21d9" },
 ]
 
 [package.metadata]
@@ -2255,7 +2255,7 @@ requires-dist = [{ name = "numpy" }]
 [[package]]
 name = "ta-lib"
 version = "0.8.0"
-source = { path = "package/ta_lib-0.8.0-cp311-cp311-musllinux_1_2_x86_64.whl" }
+source = { path = "package/ta_lib-0.8.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" }
 resolution-markers = [
     "platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
@@ -2263,7 +2263,7 @@ dependencies = [
     { name = "numpy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { filename = "ta_lib-0.8.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:c6094fa06edd00ab5da64029d5f27fcdb128cb3b73ab0237ee9014ac3961c25d" },
+    { filename = "ta_lib-0.8.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:cc037c58ca966ad36071c01cb6362042cb5532fb66380b048f645d540906233a" },
 ]
 
 [package.metadata]
