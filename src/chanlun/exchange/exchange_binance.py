@@ -1,4 +1,5 @@
 import datetime
+import traceback
 
 import ccxt
 import pandas as pd
@@ -153,7 +154,7 @@ class ExchangeBinance(Exchange):
             return klines[-10000::]
         except Exception as e:
             print(f"{code} - {frequency} Error : {e}")
-            # print(traceback.format_exc())
+            print(traceback.format_exc())
             # exit()
 
         return None

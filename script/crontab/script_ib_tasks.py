@@ -38,7 +38,7 @@ def run_tasks(client_id: int):
                 clientId=client_id,
                 account=config.IB_ACCOUNT,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.error(f"get ib connect error : {e}")
             time.sleep(10)
             return get_ib()
@@ -67,7 +67,7 @@ def run_tasks(client_id: int):
             if history_klines is not None and len(history_klines) >= 100:
                 # 如果有之前保存的历史行情，则进行比较与增量更新
                 diff_days = (
-                    datetime.datetime.now() - history_klines.iloc[-1]["date"]
+                    datetime.datetime.now() - history_klines.iloc[-1]["date"]  # noqa: DTZ005
                 ).days + 30
                 new_durationStr = f"{diff_days} D"
 
@@ -408,7 +408,7 @@ def run_tasks(client_id: int):
             log.info(
                 f"{client_id} Task CMD {cmd} [ {info} ] run times : {time.time() - s_time}"
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.error(f"{client_id} Task CMD {cmd} args {args} ERROR {e}")
             log.error(traceback.format_exc())
 
@@ -437,10 +437,10 @@ if __name__ == "__main__":
     # run_tasks(11)
 
     # 启动 5 个客户端接收
-    start_client_num = 5
+    start_client_num = 2
     with ProcessPoolExecutor(
         start_client_num, mp_context=get_context("spawn")
     ) as executor:
-        executor.map(run_tasks, [21, 22, 23, 24, 25])
+        executor.map(run_tasks, [21, 22])
 
     # run_tasks(0)
