@@ -143,7 +143,7 @@ class ExchangeQMT(Exchange):
         }
         frequency_count = {
             "m": 18000,
-            "w": 8000,
+            "w": 8000 * 2,
             "d": 8000,
             "60m": 8000 * 12,
             "30m": 8000 * 6,
@@ -178,6 +178,9 @@ class ExchangeQMT(Exchange):
 
         # 通过大QMT桥接获取历史/实时行情（服务端每次都会先 download_history_data）
         s_time = time.time()
+        # print(
+        #     f"获取 {code} {frequency} K 线，起始时间：{start_time}，请求数量：{req_counts}"
+        # )
         payload = self.bridge.history_data(
             stock_code=qmt_code,
             period=frequency_map[frequency],
@@ -206,6 +209,8 @@ class ExchangeQMT(Exchange):
             ["open", "high", "low", "close", "volume"]
         ].astype(float)
         klines_df = klines_df.sort_values("date")
+        # 过滤价格为0的数据
+        klines_df = klines_df[klines_df["close"] != 0.0]
 
         # 如果日线，小时设置为15点
         if frequency == "d":
@@ -638,11 +643,12 @@ if __name__ == "__main__":
     #     print(_t, _s)
     # print(len(stocks))
 
-    # klines = ex.klines(
-    #     "SH.600519",
-    #     "30m",
-    # )
-    # print(klines)
+    klines = ex.klines(
+        "SH.000001",
+        "30m",
+    )
+    # klines = klines[klines["open"] > 0]
+    print(klines)
 
     # 2026-02-04 日期的 volume 累加
     # klines["ddd"] = klines["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
