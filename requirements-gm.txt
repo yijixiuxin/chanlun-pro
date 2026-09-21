@@ -1,0 +1,45 @@
+# 掘金量化(gm) 独立环境依赖清单
+#
+# 用途：只服务于 script\crontab\reboot_sync_gm_a_klines.py 与 script\crontab\reboot_sync_gm_futures_klines.py
+#
+# 创建方式（在项目根目录执行）：
+#   uv venv .venv-gm --python 3.11
+#   uv pip install --python .venv-gm/Scripts/python.exe -r requirements-gm.txt
+#
+# 为什么必须独立环境：
+#   gm 官方元数据强制  protobuf<4.0 / pandas<2.0 / numpy<2.0 / tzdata<=2023.3
+#   （python_version <= 3.11），而主项目 .venv 需要 protobuf 7.x + numpy 2.x + pandas 2.x，
+#   两者无法共存，因此 gm 相关任务单独使用 .venv-gm/Scripts/python.exe 解释器。
+#
+# 本文件已验证可用的解析结果（2026-09-21）：
+#   python 3.11.11 / gm 3.0.186 / protobuf 3.20.3 / pandas 1.5.3 / numpy 1.26.4
+#   tzdata 2023.3 / akshare 1.18.21 / scipy 1.17.1 / sqlalchemy 2.0.54 / pymysql 1.2.3
+#   pytdx 1.72.post2(本地 wheel) / ta-lib 0.8.0(本地 wheel) / tqdm 4.70.1
+
+# ---- 掘金 SDK ----
+# 必须 >=3.0.115：3.0.114 只带 c_sdk.cp36-win_amd64.pyd，在 Python 3.11 下无法被加载，
+# 会报 ModuleNotFoundError: No module named 'gm.csdk.c_sdk'（即本次拆环境的原因）
+gm==3.0.186
+
+# ---- gm 的硬性版本约束（不可放宽，放宽即与主环境冲突）----
+protobuf<4.0,>=3.12.2
+pandas<2.0
+numpy<2.0
+tzdata<=2023.3
+
+# ---- 两个同步脚本自身 / 经 chanlun 间接依赖的库 ----
+akshare
+scipy
+bottleneck
+pyarrow
+sqlalchemy>=2.0
+pymysql
+tenacity
+tqdm
+pytz
+tzlocal
+requests
+
+# ---- 本地 wheel（与主项目保持一致）----
+package/pytdx-1.72r2-py3-none-any.whl
+package/ta_lib-0.8.0-cp311-cp311-win_amd64.whl

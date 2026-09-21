@@ -6,13 +6,12 @@
 
 ### Chanlun-PRO Windows 启动器 下载与教程
 
-#### 建议下载项目，用双击 bat 文件进行安装
-
 > 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
 > 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
-> 网盘下载：    
->     链接: https://pan.quark.cn/s/ce72ecadf5a6     
+> 下载地址：    
+>     链接: https://gitee.com/wang-student/chanlun-pro/releases/download/chanlun-launcher/chanlun-launcher.zip     
  
+ ![启动器使用说明](img/launcher.png)
  
 ---
 
