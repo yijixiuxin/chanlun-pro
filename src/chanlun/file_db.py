@@ -13,7 +13,6 @@ from chanlun import cl, fun
 from chanlun.base import Market
 from chanlun.cl_interface import ICL, Config
 from chanlun.config import get_data_path
-from chanlun.db import db
 from chanlun.exchange import Exchange
 from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
 
@@ -99,11 +98,7 @@ class FileCacheDB:
         ]
 
         # 缠论的更新时间，如果与当前保存不一致，需要清空缓存的计算结果，重新计算
-        self.cl_update_date = "2025-06-15"
-        cache_cl_update_date = db.cache_get("__cl_update_date")
-        if cache_cl_update_date != self.cl_update_date:
-            db.cache_set("__cl_update_date", self.cl_update_date)
-            self.clear_all_cl_data()
+        self.cl_update_date = "2026-09-23"
 
     def get_tdx_klines(
         self, market: str, code: str, frequency: str
@@ -175,6 +170,7 @@ class FileCacheDB:
         unique_md5_str = (
             f"{[f'{k}:{v}' for k, v in cl_config.items() if k in self.config_keys]}"
         )
+        unique_md5_str += f"cl_update_date:{self.cl_update_date}"
         key = hashlib.md5(unique_md5_str.encode("UTF-8")).hexdigest()
 
         file_pathname = (
