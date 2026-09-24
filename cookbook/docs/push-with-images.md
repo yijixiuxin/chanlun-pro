@@ -19,15 +19,15 @@
 
 ![飞书图片上传权限](img/feishu-upload-img.png)
 
-### 1. pip 安装相关依赖
 
-    pip install pytest-playwright
-
-### 2. 安装所需的浏览器
+### 安装所需的浏览器
 
 > 官方文档：https://playwright.dev/python/docs/intro
 
-    playwright install
+
+    uv run playwright install
+    # 或
+    .\script\bin\uv.exe run playwright install
 
     执行 src\chanlun\monitor.py 脚本进行测试图片生成和消息发送功能
 

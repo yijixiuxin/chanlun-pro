@@ -2,6 +2,12 @@
 
 ---
 
+### 2026-09-24
+
+* 优化核心缠论计算速度
+* 新增 `src\chanlun\tools\trade_date.py` A股交易日历小工具方法
+* 完善并修改相关文档
+
 ### 2026-09-08
 
 * 新增“大QMT” Redis 桥接方式，支持行情与交易，直接通过 src\chanlun\exchange\exchange_qmt.py 调用操作；

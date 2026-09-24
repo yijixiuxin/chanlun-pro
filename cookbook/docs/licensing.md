@@ -13,8 +13,11 @@
 
 
 ## 方法二，手动在cmd中执行以下命令：
-        pip install pyarmor
-        python -m pyarmor.cli.hdinfo
+
+        # 在chanlun-pro项目目录右键，选择“在终端中打开”，并执行以下命令
+
+        .\script\bin\uv.exe run python -m pyarmor.cli.hdinfo
+        
         # 将输出内容发送给作者，获取授权文件
 
         #输出示例：

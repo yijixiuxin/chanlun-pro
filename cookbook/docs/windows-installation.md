@@ -7,7 +7,6 @@
 ### Chanlun-PRO Windows 启动器 下载与教程
 
 > 启动器针对于不会 Python 与部署的小伙伴，鼠标点点即可进行使用。    
-> 视频：https://www.bilibili.com/video/BV1tbsheQEWs    
 > 下载地址：    
 >     链接: https://gitee.com/wang-student/chanlun-pro/releases/download/chanlun-launcher/chanlun-launcher.zip     
  
@@ -18,13 +17,12 @@
 > Python 版本支持 3.11 3.12 3.13 3.14 ，不然运行会报 RuntimeError 错误  
 
 > ### pytdx 必须使用项目目录 package 下提供的包进行安装
-> ### 如果提示 “Tushare内置的pytdx版本和最新的pytdx 版本不同...” 无需理睬，等待即可
 
 
 ## 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
 
 
-### 1. 通过 GitHub Desktop 克隆项目到本地 或者 直接打包下载到本地 
+### 1. 通过 Git 克隆项目到本地 或者 直接打包下载到本地 
 
 > 两个地址项目是同步的，国内的可选 Gitee 国外的可选 GitHub （请帮忙给一个 Star）
 
@@ -32,6 +30,9 @@
       https://github.com/yijixiuxin/chanlun-pro
       # Gitee 地址
       https://gitee.com/wang-student/chanlun-pro
+      # AtomGit 地址
+      https://atomgit.com/zixisecai/chanlun-pro
+
 
 ### 2. 在 `chanlun-pro` 目录，双击 `windows_install.bat` 文件进行安装
 
@@ -53,7 +54,7 @@
 ### 以下是手动安装的命令
 
 
-### 设置 PYTHONPATH 环境变量
+### 设置 PYTHONPATH 环境变量 （开发环境需要，如果只是运行 Web 服务则无需这步）
 
          # 我的电脑 -> 右键菜单选“属性” -> 高级系统设置 -> 高级 -> 环境变量 -> 系统变量 -> 新建
          # 系统变量信息，project_path 需要替换成项目所在目录
@@ -74,7 +75,7 @@ UV 和 Conda 任选一个自己喜欢的就行
       # 进入 chanlun-pro 目录，创建虚拟环境，安装依赖包
       cd \你的项目代码路径\chanlun-pro
       
-      uv venv --python=3.11 .venv
+      # 同步环境依赖
       uv sync
 
       # 运行 Web 服务
@@ -90,7 +91,7 @@ UV 和 Conda 任选一个自己喜欢的就行
       # PIP 安装项目依赖包
       pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
       pip3 install package/pytdx-1.72r2-py3-none-any.whl
-      pip3 install package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl
+      pip3 install package/ta_lib-0.8.0-cp311-cp311-win_amd64.whl
       pip3 install -r requirements.txt
 
       # 运行 Web 服务

@@ -35,9 +35,10 @@ uv run web/chanlun_chart/app.py
 
 #### 1. 克隆项目到本地
 
-        git clone https://github.com/yijixiuxin/chanlun-pro.git
         # gitee 国内地址
-        # git clone https://gitee.com/wang-student/chanlun-pro.git
+        git clone https://gitee.com/wang-student/chanlun-pro.git
+        # Github 国外地址
+        git clone https://github.com/yijixiuxin/chanlun-pro.git
         cd chanlun-pro
 
 ### 2. pip 安装项目依赖包

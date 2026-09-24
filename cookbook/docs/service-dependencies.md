@@ -126,6 +126,8 @@ https://docs.astral.sh/uv/getting-started/installation/
 
 ### QMT 行情与交易（**非必需**）
 
+       ** MiniQMT 已经停用，建议使用大QMT桥接的方式进行实现
+
        介绍：http://dict.thinktrader.net/nativeApi/start_now.html
 
        使用前提：下载 xtquant，解压后， 并放入 chanlun-pro/src 目录下，并打开 QMT交易端（极简模式）
