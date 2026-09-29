@@ -10,6 +10,8 @@
 
 [Github 地址](https://github.com/yijixiuxin/chanlun-pro)
 
+[AtomGit 地址](https://atomgit.com/yijixiuxin/chanlun-pro)
+
 [Gitee 地址](https://gitee.com/wang-student/chanlun-pro)
 
 [在线文档](https://chanlun-pro.readthedocs.io/)
