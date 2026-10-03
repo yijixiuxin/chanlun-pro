@@ -2,6 +2,27 @@
 
 ---
 
+## License and scope / 许可范围
+
+Copyright (c) 2022-2026 Wang Xu. All rights reserved except as expressly stated below.
+
+The Apache License 2.0 (see [LICENSE](LICENSE)) applies to this repository **except** for the
+following, which are NOT licensed under it and for which all rights are reserved:
+
+- `src/chanlun/core/**` — the proprietary Chan Theory engine, distributed only as
+  platform-specific encrypted modules;
+- `src/pyarmor_runtime_*/**` — the PyArmor runtime and protection loader;
+- `licenses/**` and any licence-key material.
+
+These components are not source-available. Running them requires a separately granted,
+machine-bound licence key. No permission is granted to decrypt, reverse-engineer, reimplement,
+extract or redistribute them, in whole or in part.
+
+> 上述 `src/chanlun/core/**` 与 `src/pyarmor_runtime_*/**` 为专有组件，**不在** Apache-2.0
+> 授权范围内，需单独获取与本机绑定的授权文件方可运行。
+
+---
+
 [![Documentation Status](https://readthedocs.org/projects/chanlun-pro/badge/?version=latest)](https://chanlun-pro.readthedocs.io/zh_CN/latest/?badge=latest)
 
 基于缠论的市场行情分析工具

@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
-    license="MIT",
+    license="Apache-2.0",
     url="https://github.com/yijixiuxin/chanlun",
     project_urls={
         "Bug Tracker": "https://github.com/yijixiuxin/chanlun/issues",
@@ -25,7 +25,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Topic :: Office/Business :: Financial",
         "Topic :: Office/Business :: Financial :: Investment",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",

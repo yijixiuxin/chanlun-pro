@@ -4,6 +4,8 @@ version = "1.0.0"
 description = "chanlun pro"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     "akshare>=1.16.98",
     "alpaca-py>=0.40.1",
