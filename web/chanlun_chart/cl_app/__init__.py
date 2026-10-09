@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import secrets
 import time
 import traceback
 
@@ -49,6 +50,52 @@ from .alert_tasks import AlertTasks
 from .backtest_routes import register_backtest_routes
 from .other_tasks import OtherTasks
 from .xuangu_tasks import XuanguTasks
+
+# 已知的不安全密钥，禁止使用（含历史版本硬编码的密钥）
+_INSECURE_SECRET_KEYS = {"cl_pro_secret_key"}
+# 手动配置密钥时的最小长度要求（自动生成的密钥为 64 位十六进制字符串）
+_SECRET_KEY_MIN_LENGTH = 32
+# 未配置密钥时，自动生成的密钥保存到数据目录下的该文件
+_SECRET_KEY_FILENAME = "secret_key"
+
+
+def load_secret_key():
+    """
+    获取 Flask 会话签名密钥
+
+    优先级：环境变量 CL_SECRET_KEY > config.SECRET_KEY > 自动生成
+    手动配置的密钥必须为至少 32 位的高熵随机字符串，否则抛出异常终止启动
+    未配置时自动生成随机密钥并持久化到数据目录，避免重启后登录状态全部失效
+    """
+    secret_key = os.environ.get("CL_SECRET_KEY") or getattr(config, "SECRET_KEY", "")
+    secret_key = secret_key.strip() if isinstance(secret_key, str) else ""
+
+    if secret_key:
+        if (
+            secret_key in _INSECURE_SECRET_KEYS
+            or len(secret_key) < _SECRET_KEY_MIN_LENGTH
+        ):
+            raise RuntimeError(
+                "配置的 SECRET_KEY 不安全，请使用至少 32 位的高熵随机字符串，可通过 "
+                'python -c "import secrets; print(secrets.token_hex(32))" 生成，'
+                "或将其留空由程序自动生成"
+            )
+        return secret_key
+
+    # 未配置密钥，生成随机密钥并持久化，保证重启后会话仍然有效
+    key_path = get_data_path() / _SECRET_KEY_FILENAME
+    if key_path.is_file():
+        secret_key = key_path.read_text(encoding="utf-8").strip()
+        if secret_key:
+            return secret_key
+
+    secret_key = secrets.token_hex(32)
+    key_path.write_text(secret_key, encoding="utf-8")
+    try:
+        key_path.chmod(0o600)
+    except OSError:
+        pass
+    return secret_key
 
 
 def create_app(test_config=None):
@@ -211,18 +258,23 @@ def create_app(test_config=None):
     )  # 过滤静态资源请求日志
 
     # 添加登录验证
-    app.secret_key = "cl_pro_secret_key"
+    app.secret_key = load_secret_key()
     login_manager = LoginManager()  # 实例化登录管理对象
     login_manager.init_app(app)  # 初始化应用
     login_manager.login_view = "login_opt"  # 设置用户登录视图函数 endpoint
 
     class LoginUser(UserMixin):
+        USER_ID = "cl_pro"
+
         def __init__(self) -> None:
             super().__init__()
-            self.id = "cl_pro"
+            self.id = self.USER_ID
 
     @login_manager.user_loader
     def load_user(user_id):
+        # 只接受应用内唯一的用户 id，避免任意 user_id 的会话被当作已登录用户
+        if user_id != LoginUser.USER_ID:
+            return None
         return LoginUser()
 
     @app.route("/login", methods=["GET", "POST"])

@@ -7,8 +7,14 @@ import pathlib
 # WEB服务访问IP地址，本机部署设置为 127.0.0.1；局域网或外网部署，设置为该机器的IP地址，或者设置 0.0.0.0 则可使用机器所有IP地址进行访问。
 WEB_HOST = '0.0.0.0'
 
-# WEB 登录密码，为空则无需进行登录
+# WEB 登录密码，为空则无需进行登录；如果 WEB_HOST 设置为 0.0.0.0 或外网地址，请务必设置密码
 LOGIN_PWD = ''
+
+# Flask 会话 Cookie 的签名密钥，留空则首次启动时自动生成随机密钥，并保存到数据目录（DATA_PATH 下的 secret_key 文件）
+# 也可以通过环境变量 CL_SECRET_KEY 设置；手动设置时必须为至少 32 位的高熵随机字符串，
+# 不能使用 'cl_pro_secret_key' 等公开的示例值，否则启动会直接报错退出
+# 生成方式：python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY = ''
 
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
 DATA_PATH = ".chanlun_pro"
