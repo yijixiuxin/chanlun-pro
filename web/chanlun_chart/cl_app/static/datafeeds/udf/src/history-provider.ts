@@ -42,6 +42,7 @@ interface HistoryFullDataResponse extends UdfOkResponse {
   zsd_zss: LineSegment[];
   bcs: TextPoint[];
   mmds: TextPoint[];
+  price: number; // 最新价格
   update: boolean;
   chart_color?: Map<string, string>;
 }
@@ -71,6 +72,7 @@ interface Point {
 // 定义带线型的线段接口
 interface LineSegment {
   linestyle: string;
+  zs_type?: string; // 类型
   points: Point[];
 }
 
@@ -92,6 +94,7 @@ export interface GetBarsResult {
   zsd_zss: LineSegment[];
   bcs: TextPoint[];
   mmds: TextPoint[];
+  price: number; // 最新价格
   chart_color?: Map<string, string>;
 }
 
@@ -327,6 +330,7 @@ export class HistoryProvider {
           zsd_zss: (response as HistoryFullDataResponse).zsd_zss,
           bcs: (response as HistoryFullDataResponse).bcs,
           mmds: (response as HistoryFullDataResponse).mmds,
+          price: (response as HistoryFullDataResponse).price,
           chart_color: (response as HistoryFullDataResponse).chart_color,
         });
       } else {
@@ -450,6 +454,7 @@ export class HistoryProvider {
           obj_res.mmds,
           (response as HistoryFullDataResponse).mmds
         );
+        obj_res.price = (response as HistoryFullDataResponse).price;
         obj_res.chart_color = (response as HistoryFullDataResponse).chart_color;
         this.bars_result.set(res_key, obj_res);
       }
@@ -467,6 +472,7 @@ export class HistoryProvider {
       zsd_zss: (response as HistoryFullDataResponse).zsd_zss,
       bcs: (response as HistoryFullDataResponse).bcs,
       mmds: (response as HistoryFullDataResponse).mmds,
+      price: (response as HistoryFullDataResponse).price,
       chart_color: (response as HistoryFullDataResponse).chart_color,
     };
 

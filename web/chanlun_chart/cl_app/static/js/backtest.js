@@ -538,27 +538,51 @@ const BacktestApp = {
     return this.objCharts[chartKey];
   },
 
-  // 清除已画的图形：clearType='last' 只删除 time 最大的元素，否则全删
+  // 清除已画的图形：clearType='last' 先按 zs_type 聚合，再各自删除 time 最大的元素，否则全删
   clearDrawChanlun(chartKey, clearType) {
     const chart = chartKey === "small" ? this.chartSmall : this.chartHigh;
     if (!chart || !this.objCharts[chartKey]) return;
 
     const container = this.objCharts[chartKey];
 
+    // 获取元素的 zs_type（只有中枢对象带该字段，其他图形返回空字符串）
+    const getZsType = item => {
+      try {
+        return JSON.parse(item.key)?.zs_type || "";
+      } catch (e) {
+        return "";
+      }
+    };
+
     if (clearType === "last") {
       BT_CONFIG.CHART_TYPES.forEach(chartType => {
         const items = container[chartType] || [];
         if (items.length === 0) return;
-        const maxTime = Math.max(...items.map(item => item.time));
-        for (let i = items.length - 1; i >= 0; i--) {
-          if (items[i].time === maxTime) {
-            items[i].id.then(_id => chart.removeEntity(_id));
-          }
-        }
+
+        // 按 zs_type 聚合，避免多种类型的中枢混在一起排序
+        const groups = {};
+        items.forEach(item => {
+          const zsType = getZsType(item);
+          if (!groups[zsType]) groups[zsType] = [];
+          groups[zsType].push(item);
+        });
+
+        // 每组分别删除 time 最大的元素
+        const removed = new Set();
+        Object.values(groups).forEach(groupItems => {
+          const maxTime = Math.max(...groupItems.map(item => item.time));
+          groupItems.forEach(item => {
+            if (item.time === maxTime) {
+              item.id.then(_id => chart.removeEntity(_id));
+              removed.add(item);
+            }
+          });
+        });
+
         // 原地过滤保留非最新元素
         const kept = [];
         for (let i = 0; i < items.length; i++) {
-          if (items[i].time !== maxTime) kept.push(items[i]);
+          if (!removed.has(items[i])) kept.push(items[i]);
         }
         container[chartType] = kept;
       });

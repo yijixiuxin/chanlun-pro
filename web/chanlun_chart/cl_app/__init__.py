@@ -662,6 +662,7 @@ def create_app(test_config=None):
             "zsd_zss": _zsd_zss,
             "bcs": _bcs,
             "mmds": _mmds,
+            "price": klines.iloc[-1]["close"] if len(klines) > 0 else 0,
             "update": (
                 False if firstDataRequest == "true" else True
             ),  # 是否是后续更新数据

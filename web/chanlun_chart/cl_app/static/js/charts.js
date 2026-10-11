@@ -410,8 +410,16 @@ class ChartManager {
 
   // 清除已绘制的图表
   clear_draw_chanlun(clear_type) {
-    // 如果  clear_type == 'last' ，则按照 time 从低到高排序，删除 time 值最大的一个对象
+    // 如果  clear_type == 'last' ，则先按 zs_type 聚合，再各自按 time 从低到高排序，删除每组 time 值最大的对象
     console.log("清除已绘制的图表 : " + clear_type);
+    // 获取元素的 zs_type（只有中枢对象带该字段，其他图形返回空字符串）
+    const getZsType = (item) => {
+      try {
+        return JSON.parse(item.key)?.zs_type || "";
+      } catch (e) {
+        return "";
+      }
+    };
     if (clear_type == "last") {
       for (const symbolKey in this.obj_charts) {
         CHART_CONFIG.CHART_TYPES.forEach((chartType) => {
@@ -419,18 +427,29 @@ class ChartManager {
           if (chartItems.length == 0) {
             return;
           }
-          const maxTime = Math.max(
-            ...chartItems.map((item) => item.time)
-          );
-          for (const _i in chartItems) {
-            const item = chartItems[_i];
-            if (item.time == maxTime) {
-              item.id.then((_id) => this.chart.removeEntity(_id));
-              console.log("remove ", symbolKey, chartType, item);
+          // 按 zs_type 聚合，避免多种类型的中枢混在一起排序
+          const groups = {};
+          chartItems.forEach((item) => {
+            const zsType = getZsType(item);
+            if (!groups[zsType]) {
+              groups[zsType] = [];
             }
-          }
+            groups[zsType].push(item);
+          });
+          // 每组分别删除 time 值最大的对象
+          const removedItems = new Set();
+          Object.values(groups).forEach((groupItems) => {
+            const maxTime = Math.max(...groupItems.map((item) => item.time));
+            groupItems.forEach((item) => {
+              if (item.time == maxTime) {
+                item.id.then((_id) => this.chart.removeEntity(_id));
+                console.log("remove ", symbolKey, chartType, item);
+                removedItems.add(item);
+              }
+            });
+          });
           this.obj_charts[symbolKey][chartType] = chartItems.filter(
-            (item) => item.time != maxTime
+            (item) => !removedItems.has(item)
           );
         });
       }
@@ -467,6 +486,8 @@ class ChartManager {
     const visibleRange = this.chart.getVisibleRange();
     const from = visibleRange?.from || 0;
     const symbolKey = `${symbolInterval.symbol}_${symbolInterval.interval}`;
+
+    console.log("获取图表数据", symbolKey, barsResult, from);
 
     return { symbolKey, barsResult, from };
   }

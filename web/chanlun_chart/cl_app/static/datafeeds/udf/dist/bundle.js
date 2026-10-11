@@ -221,6 +221,7 @@
                         zsd_zss: response.zsd_zss,
                         bcs: response.bcs,
                         mmds: response.mmds,
+                        price: response.price,
                         chart_color: response.chart_color,
                     });
                 }
@@ -304,6 +305,7 @@
                     obj_res.zsd_zss = updateLineSegments(obj_res.zsd_zss, response.zsd_zss);
                     obj_res.bcs = updateTextPoints(obj_res.bcs, response.bcs);
                     obj_res.mmds = updateTextPoints(obj_res.mmds, response.mmds);
+                    obj_res.price = response.price;
                     obj_res.chart_color = response.chart_color;
                     this.bars_result.set(res_key, obj_res);
                 }
@@ -320,6 +322,7 @@
                 zsd_zss: response.zsd_zss,
                 bcs: response.bcs,
                 mmds: response.mmds,
+                price: response.price,
                 chart_color: response.chart_color,
             };
             return result;

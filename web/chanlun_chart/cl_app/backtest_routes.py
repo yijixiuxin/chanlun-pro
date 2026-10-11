@@ -6,9 +6,11 @@ from flask_login import login_required
 
 from chanlun import cl, fun
 from chanlun.base import Market
+from chanlun.cl_interface import ICL, Config
 from chanlun.cl_utils import cl_data_to_tv_chart, query_cl_chart_config
 from chanlun.exchange import get_exchange
 from chanlun.exchange.exchange import convert_stock_kline_frequency
+from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
 
 # 回测回放 session 存储
 _replay_sessions: dict = {}
@@ -38,9 +40,9 @@ def register_backtest_routes(app):
             return {"s": "no_data"}
 
         if resolution == "1D":
-            cd = rs["cl_small"]
+            cd: ICL = rs["cl_small"]
         else:
-            cd = rs["cl_high"]
+            cd: ICL = rs["cl_high"]
 
         cl_chart_data = cl_data_to_tv_chart(cd, rs["cl_config"])
         if cl_chart_data is None:
@@ -62,6 +64,7 @@ def register_backtest_routes(app):
             "xd_zss": cl_chart_data["xd_zss"],
             "zsd_zss": cl_chart_data["zsd_zss"],
             "bcs": cl_chart_data["bcs"],
+            "price": cd.get_src_klines()[-1].c,
             "mmds": cl_chart_data["mmds"],
         }
 
@@ -89,21 +92,28 @@ def register_backtest_routes(app):
         else:
             return {"ok": False, "msg": "无法找到满足条件的股票，请重试"}
 
-        # 从倒数 500 根开始回放
-        start_pos = len(klines) - 500
+        # 从 800 根之后到倒数 500 根之间随机选取开始位置，避免每次回放时间固定
+        start_pos = random.randint(800, len(klines) - 500)
 
         cl_config = query_cl_chart_config("a", stock["code"])
 
+        cal_klines = klines.copy()
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
+            cal_klines = klines_to_heikin_ashi_klines(cal_klines)
+
         # 初始计算小级别（日线）
         cd_small = cl.CL(stock["code"], small_freq, cl_config)
-        cd_small.process_klines(klines.iloc[: start_pos + 1])
+        cd_small.process_klines(cal_klines.iloc[: start_pos + 1])
 
         # 初始计算大级别（周线）
         high_klines = convert_stock_kline_frequency(
             klines.iloc[: start_pos + 1].copy(), high_freq
         )
+        cal_high_klines = high_klines.copy()
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
+            cal_high_klines = klines_to_heikin_ashi_klines(cal_high_klines)
         cd_high = cl.CL(stock["code"], high_freq, cl_config)
-        cd_high.process_klines(high_klines)
+        cd_high.process_klines(cal_high_klines)
 
         # 生成 session
         session_id = str(uuid.uuid4())
@@ -156,13 +166,19 @@ def register_backtest_routes(app):
             return {"ok": False, "msg": "回放已结束", "finished": True}
 
         # 增量更新小级别 CL
-        rs["cl_small"].process_klines(klines.iloc[: pos + 1])
+        cal_klines = klines.copy()
+        if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
+            cal_klines = klines_to_heikin_ashi_klines(cal_klines)
+        rs["cl_small"].process_klines(cal_klines.iloc[: pos + 1])
 
         # 增量更新大级别 CL
         high_klines = convert_stock_kline_frequency(
             klines.iloc[: pos + 1].copy(), rs["high_freq"]
         )
-        rs["cl_high"].process_klines(high_klines)
+        cal_high_klines = high_klines.copy()
+        if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
+            cal_high_klines = klines_to_heikin_ashi_klines(cal_high_klines)
+        rs["cl_high"].process_klines(cal_high_klines)
 
         # 生成 TV 数据
         cl_small_data = cl_data_to_tv_chart(rs["cl_small"], rs["cl_config"])

@@ -765,6 +765,7 @@ def cl_data_to_tv_chart(
                                 "price": zs.zd,
                             },
                         ],
+                        "zs_type": zs_type,
                         "linestyle": "0" if zs.done else "1",
                     }
                 )
@@ -785,6 +786,7 @@ def cl_data_to_tv_chart(
                                 "price": zs.zd,
                             },
                         ],
+                        "zs_type": zs_type,
                         "linestyle": "0" if zs.done else "1",
                     }
                 )
@@ -798,6 +800,7 @@ def cl_data_to_tv_chart(
                         {"time": fun.datetime_to_int(zs.start.k.date), "price": zs.zg},
                         {"time": fun.datetime_to_int(zs.end.k.date), "price": zs.zd},
                     ],
+                    "zs_type": "default",
                     "linestyle": "0" if zs.done else "1",
                 }
             )
