@@ -4534,6 +4534,68 @@ export interface ChartPropertiesOverrides {
 	 * Trading Platform only
 	 */
 	/**
+	 * Pre-market session highlight color.
+	 * Only applies to symbols that declare a pre-market subsession. See the [Extended Sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) guide for more info.
+	 *
+	 * @default "#FF9800"
+	 */
+	"backgrounds.preMarket.color": string;
+	/**
+	 * Pre-market session highlight transparency, a number between 0 (opaque) and 100 (fully transparent).
+	 *
+	 * @default 92
+	 */
+	"backgrounds.preMarket.transparency": number;
+	/**
+	 * Pre-market session highlight visibility.
+	 *
+	 * @default true
+	 */
+	"backgrounds.preMarket.visible": boolean;
+	/**
+	 * Post-market session highlight color.
+	 * Only applies to symbols that declare a post-market subsession. See the [Extended Sessions](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) guide for more info.
+	 *
+	 * @default "#2962FF"
+	 */
+	"backgrounds.postMarket.color": string;
+	/**
+	 * Post-market session highlight transparency, a number between 0 (opaque) and 100 (fully transparent).
+	 *
+	 * @default 92
+	 */
+	"backgrounds.postMarket.transparency": number;
+	/**
+	 * Post-market session highlight visibility.
+	 *
+	 * @default true
+	 */
+	"backgrounds.postMarket.visible": boolean;
+	/**
+	 * Session breaks line color.
+	 *
+	 * @default "#4985e7"
+	 */
+	"vertlines.sessBreaks.color": string;
+	/**
+	 * Session breaks line style.
+	 *
+	 * @default LineStyle.Dashed
+	 */
+	"vertlines.sessBreaks.style": OverrideLineStyle;
+	/**
+	 * Session breaks line width.
+	 *
+	 * @default 1
+	 */
+	"vertlines.sessBreaks.width": number;
+	/**
+	 * Session breaks line visibility.
+	 *
+	 * @default false
+	 */
+	"vertlines.sessBreaks.visible": boolean;
+	/**
 	 * Size of the volume panel.
 	 * Only works when `volume_force_overlay` featureset is disabled.
 	 *
@@ -5013,6 +5075,9 @@ export interface ChartingLibraryWidgetOptions {
 	 * The keys of this object are the names of overridden properties.
 	 * The values of these keys are the new values of the properties.
 	 *
+	 * Chart property names are listed in {@link ChartPropertiesOverrides},
+	 * drawing property names in {@link DrawingOverrides}.
+	 *
 	 * @example
 	 * ```javascript
 	 * overrides: {
@@ -5022,7 +5087,7 @@ export interface ChartingLibraryWidgetOptions {
 	 * This code will change the default series style to "line".
 	 * All customizable properties are listed in [separate article](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/Overrides).
 	 */
-	overrides?: Partial<WidgetOverrides>;
+	overrides?: Partial<ChartOverrides>;
 	/**
 	 * This URL is used to send a POST request with binary chart snapshots when a user clicks the [snapshot](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Snapshots) button.
 	 * This POST request contains `multipart/form-data` with the field `preparedImage` that represents binary data of the snapshot image in `image/png` format.
@@ -6027,6 +6092,11 @@ export interface CrossHairMovedEventSourceValue {
 	 * The value formatted as a string. Matches the value shown in the data window.
 	 */
 	value: string;
+	/**
+	 * The color of the value. Matches the color shown in the data window.
+	 * `undefined` if the value has no color associated with it.
+	 */
+	color?: string;
 }
 /**
  * Override properties for the crossline drawing tool.
@@ -7186,6 +7256,31 @@ export interface EntityInfo {
 	id: EntityId;
 	/** Name of entity */
 	name: string;
+}
+/**
+ * Series and indicator values returned by {@link IChartWidgetApi.getEntityValues}.
+ */
+export interface EntityValuesResult {
+	/**
+	 * `true` if the values were read at the current crosshair position.
+	 *
+	 * `false` if the crosshair is not over the chart. In that case the values fall back to the latest
+	 * bar of every source, matching what the data window and the legend display. Note that the bar the
+	 * fallback resolves to can differ between sources, because indicator plot offsets are taken into account.
+	 */
+	atCrosshairPosition: boolean;
+	/**
+	 * The time coordinate the values were read at, represented with a UNIX timestamp in UTC.
+	 *
+	 * `null` when {@link atCrosshairPosition} is `false`, because the fallback bar is resolved separately
+	 * for every source, and when the time cannot be resolved yet.
+	 */
+	time: number | null;
+	/**
+	 * Series and indicator values. The object keys are indicator or series IDs.
+	 * The ID for the main series will always be the string `'_seriesId'`.
+	 */
+	values: Record<EntityId, CrossHairMovedEventSource>;
 }
 /**
  * Overrides for the 'Envelopes' indicator.
@@ -10853,6 +10948,26 @@ export interface IChartWidgetApi {
 	 */
 	crossHairMoved(): ISubscription<(params: CrossHairMovedEventParams) => void>;
 	/**
+	 * Get the series and indicator values currently shown in the data window, without waiting for the
+	 * crosshair to move.
+	 * Use this method when the chart data has changed but the crosshair has not moved, for example when the
+	 * crosshair stays over the last bar and that bar receives realtime updates.
+	 *
+	 * While the crosshair is over the chart, {@link EntityValuesResult.values} matches the
+	 * {@link CrossHairMovedEventParams.entityValues} property of the {@link crossHairMoved} event.
+	 * When the crosshair is not over the chart, the values fall back to the latest bar of every source,
+	 * as the data window itself does. Check {@link EntityValuesResult.atCrosshairPosition} to tell the
+	 * two cases apart.
+	 *
+	 * @example
+	 * ```javascript
+	 * const { values, atCrosshairPosition } = widget.activeChart().getEntityValues();
+	 * console.log(values['_seriesId'].values, atCrosshairPosition);
+	 * ```
+	 * @returns The series and indicator values shown in the data window, and the position they were read at.
+	 */
+	getEntityValues(): EntityValuesResult;
+	/**
 	 * Get a subscription object for the ID of the study or series hovered by the crosshair.
 	 *
 	 * @returns A subscription object for the ID of the study or series hovered by the crosshair. Subscribers will be called with `null` if there is no study or series hovered.
@@ -12242,7 +12357,7 @@ export interface IChartingLibraryWidget {
 	 */
 	chartsCount(): number;
 	/**
-	 * This method deletes non-visible charts from a multiple-chart layout.
+	 * This method deletes non-visible charts from a [multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout).
 	 *
 	 * When a user transitions from a layout with a larger number of charts
 	 * to one with fewer charts, the unused chart APIs still exist behind the scenes.
@@ -12262,13 +12377,15 @@ export interface IChartingLibraryWidget {
 	/**
 	 * Get the current chart layout type.
 	 *
-	 * @returns A string representation of the current layout type. E.g. `'2h'` for two charts split vertically.
+	 * @returns A string representation of the current layout type, for example, `'2h'` for two charts side by side.
+	 * Refer to [Multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout#layout-reference) for a diagram of every layout type.
 	 */
 	layout(): LayoutType;
 	/**
 	 * Set the current chart layout type.
 	 *
-	 * @params layout A string representation of the new layout type. E.g. `'2h'` for two charts split vertically.
+	 * @param layout A string representation of the new layout type, for example, `'2h'` for two charts side by side.
+	 * Refer to [Multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout#layout-reference) for a diagram of every layout type.
 	 */
 	setLayout(layout: LayoutType): void;
 	/**
@@ -12278,14 +12395,14 @@ export interface IChartingLibraryWidget {
 	 */
 	layoutName(): string;
 	/**
-	 * Resets the sizes of all charts within a multiple-chart layout back to their initial default values.
+	 * Resets the sizes of all charts within a [multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout) back to their initial default values.
 	 * This action redistributes the space equally among all charts to ensure consistency in layout design.
 	 *
 	 * @param disableUndo When set to true, the reset action is not added to the undo stack. Hence, the user cannot undo the reset operation.
 	 */
 	resetLayoutSizes(disableUndo?: boolean): void;
 	/**
-	 * Set the sizes of charts within a multiple-chart layout.
+	 * Set the sizes of charts within a [multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout).
 	 *
 	 * @param sizes An object of sizes to set for the charts.
 	 * @param disableUndo When set to `true`, the set action is not added to the undo stack. Hence, a user cannot undo the size changes.
@@ -13058,6 +13175,27 @@ export interface IExecutionLineAdapter {
 	 */
 	setTextColor(value: string): this;
 	/**
+	 * Get the visibility of the execution line, as set with `setVisible`.
+	 * Note that this is not whether the execution line is currently drawn: the
+	 * `tradingProperties.showExecutions` chart property and the chart's current symbol
+	 * also have to allow it.
+	 */
+	getVisible(): boolean;
+	/**
+	 * Show or hide the execution line, including its price axis label.
+	 * A hidden execution line keeps its state and callbacks, so it can be shown
+	 * again without being re-created.
+	 * Hiding or showing the execution line also emits a `drawing_event` for its ID.
+	 *
+	 * Note that the `tradingProperties.showExecutions` chart property hides every
+	 * execution line at once; this flag applies to a single execution line and both have to
+	 * allow the execution line for it to be displayed.
+	 *
+	 * @default true
+	 * @param value The new visibility, where `true` shows the execution line.
+	 */
+	setVisible(value: boolean): this;
+	/**
 	 * Get the arrow color of the execution line.
 	 */
 	getArrowColor(): string;
@@ -13496,6 +13634,27 @@ export interface IOrderLineAdapter {
 	 */
 	setCancellable(value: boolean): this;
 	/**
+	 * Get the visibility of the order line, as set with `setVisible`.
+	 * Note that this is not whether the order line is currently drawn: the
+	 * `tradingProperties.showOrders` chart property and the chart's current symbol
+	 * also have to allow it.
+	 */
+	getVisible(): boolean;
+	/**
+	 * Show or hide the order line, including its price axis label.
+	 * A hidden order line keeps its state and callbacks, so it can be shown
+	 * again without being re-created.
+	 * Hiding or showing the order line also emits a `drawing_event` for its ID.
+	 *
+	 * Note that the `tradingProperties.showOrders` chart property hides every
+	 * order line at once; this flag applies to a single order line and both have to
+	 * allow the order line for it to be displayed.
+	 *
+	 * @default true
+	 * @param value The new visibility, where `true` shows the order line.
+	 */
+	setVisible(value: boolean): this;
+	/**
 	 * Get the extend left flag value of the order line.
 	 */
 	getExtendLeft(): boolean;
@@ -13879,6 +14038,27 @@ export interface IPositionLineAdapter {
 	 */
 	setProtectTooltip(value: string): this;
 	/**
+	 * Get the visibility of the position line, as set with `setVisible`.
+	 * Note that this is not whether the position line is currently drawn: the
+	 * `tradingProperties.showPositions` chart property and the chart's current symbol
+	 * also have to allow it.
+	 */
+	getVisible(): boolean;
+	/**
+	 * Show or hide the position line, including its price axis label.
+	 * A hidden position line keeps its state and callbacks, so it can be shown
+	 * again without being re-created.
+	 * Hiding or showing the position line also emits a `drawing_event` for its ID.
+	 *
+	 * Note that the `tradingProperties.showPositions` chart property hides every
+	 * position line at once; this flag applies to a single position line and both have to
+	 * allow the position line for it to be displayed.
+	 *
+	 * @default true
+	 * @param value The new visibility, where `true` shows the position line.
+	 */
+	setVisible(value: boolean): this;
+	/**
 	 * Get the close tooltip of the position line.
 	 */
 	getCloseTooltip(): string;
@@ -14182,6 +14362,31 @@ export interface IPriceScaleApi {
 	 * @param  {string|null} unit - unit supported by your backend (for example 'weight', 'energy'). A null value will reset the unit to default.
 	 */
 	setUnit(unit: string | null): void;
+	/**
+	 * Converts a vertical coordinate to the price it points at.
+	 *
+	 * The coordinate is measured in pixels from the top of the pane the price scale belongs to.
+	 * The conversion follows the current state of the price scale, so the same coordinate maps to
+	 * different prices after the scale is zoomed, inverted, or switched to another
+	 * {@link PriceScaleMode}.
+	 *
+	 * Returns `null` when the price scale has no data to convert against — for example before the
+	 * first bars arrive.
+	 *
+	 * Note that the value is only correct for the frame in which it was requested. The chart is not
+	 * redrawn when you call this method, and any overlay you position from the result is not part of
+	 * the chart's own rendering, so it will lag behind while the user scrolls or scales the chart.
+	 *
+	 * @param coordinate - vertical coordinate in pixels, measured from the top of the pane
+	 */
+	coordinateToPrice(coordinate: number): number | null;
+	/**
+	 * Converts a price to the vertical coordinate at which it is displayed.
+	 * This is the inverse of {@link IPriceScaleApi.coordinateToPrice} and carries the same caveats.
+	 *
+	 * @param price - price to convert
+	 */
+	priceToCoordinate(price: number): number | null;
 }
 export interface IProjectionStudyResult {
 	/** array of projection bars */
@@ -16036,11 +16241,10 @@ export interface LibrarySymbolInfo {
 	 */
 	monthly_multipliers?: string[];
 	/**
-	 * The boolean value showing whether the library should generate empty bars in the session when there is no data from the data feed for this particular time.
+	 * Whether the library should generate empty bars when the datafeed provides no data for a certain period within the trading session.
+	 * For example, if the session is `0900-1600`, the data has a gap between `11:00` and `12:00`, and `has_empty_bars` is `true`, the library fills this gap with bars.
 	 *
-	 * I.e., if your session is `0900-1600` and your data has gaps between `11:00` and `12:00` and your `has_empty_bars` is `true`, then the Library will fill the gaps with bars for this time.
-	 *
-	 * Flag `has_empty_bars` = `true` cannot be used if featureset `disable_resolution_rebuild` is enabled.
+	 * Note that `has_empty_bars` cannot be used if the [`disable_resolution_rebuild`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#disable_resolution_rebuild) featureset is enabled.
 	 * @default false
 	 */
 	has_empty_bars?: boolean;
@@ -29654,6 +29858,11 @@ export type ChartActionId = "addPlusButton" | "chartProperties" | "compareOrAdd"
  */
 export type ChartDescriptorFunction = (context: ChartDescriptionContext) => Promise<string | null>;
 /**
+ * Properties that can be overridden via the {@link ChartingLibraryWidgetOptions.overrides} option:
+ * chart and drawing properties ({@link WidgetOverrides}) along with chart pane properties ({@link ChartPropertiesOverrides}).
+ */
+export type ChartOverrides = WidgetOverrides & ChartPropertiesOverrides;
+/**
  * Chart type names for use within the `favorites` Widget Constructor option. This type is for Advanced Charts, if you are looking for the Trading Platform type then please see {@link TradingTerminalChartTypeFavorites}.
  *
  * See {@link Favorites} for the Widget Constructor option where you can define these favorites, and {@link ChartingLibraryWidgetOptions.favorites} for the Widget Constructor option.
@@ -29918,8 +30127,13 @@ export type ChartingLibraryFeatureset =
  */
 "lock_visible_time_range_when_adjusting_percentage_right_margin" | 
 /**
- * Alternative loading mode for the library, which can be used to support
- * older browsers and a few non-standard browsers.
+ * Loads the library iframe from `about:blank` and builds its content with `document.write`,
+ * instead of the default `blob:` URL. Use it in environments that cannot load a `blob:` iframe
+ * source, such as wallet browsers and other in-app webviews with non-standard iframe handling,
+ * or under a Content Security Policy that forbids `blob:`.
+ *
+ * Using `document.write` is slower than the default `blob:` path, so enable this featureset only in
+ * environments that need it.
  * @default false
  */
 "iframe_loading_compatibility_mode" | 
@@ -29999,9 +30213,13 @@ export type ChartingLibraryFeatureset =
  */
 "disable_pulse_animation" | 
 /**
- * Enables an alternative loading mode for the library, which can be used when the iframe content must be served from the same origin.
+ * Loads the library iframe from `library_path + 'sameorigin.html'`, so the iframe document has a
+ * real same-origin URL instead of a `blob:` one. Like `iframe_loading_compatibility_mode`, it builds
+ * the iframe content with `document.write`. Requires `sameorigin.html` to be served from
+ * {@link ChartingLibraryWidgetOptions.library_path}.
  *
- * Loads the initial library iframe content from `library_path + 'sameorigin.html`.
+ * To supply a Content Security Policy nonce, set `window.__tvCspNonce` in `sameorigin.html`;
+ * see {@link ChartingLibraryWidgetOptions.nonce}.
  * @default false
  */
 "iframe_loading_same_origin" | 
@@ -30285,6 +30503,14 @@ export type LineStudyPlotStyleName = "line" | "histogram" | "cross" | "area" | "
 export type LineToolsAndGroupsLoadRequestType = "allLineTools" | "lineToolsWithoutSymbol" | "studiesLineTools" | "mainSeriesLineTools";
 export type MarkConstColors = "red" | "green" | "blue" | "yellow";
 export type MarkupText = (string | HyperlinkInfo)[];
+/**
+ * A layout that displays several charts at once. Available in Trading Platform only.
+ *
+ * The identifier encodes how the space is divided: `'3h'` places three charts in one row, `'3v'` in one column,
+ * `'2-3'` puts two charts in the top row and three in the bottom one, `'6'` builds a two-row grid.
+ * Refer to [Multiple-chart layout](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/multiple-chart-layout#layout-reference)
+ * for a diagram of every layout type and the chart index that each position corresponds to.
+ */
 export type MultipleChartsLayoutType = "2h" | "2v" | "3h" | "3v" | "3s" | "3r" | "2-1" | "1-2" | "4" | "4v" | "4h" | "4s" | "4s-l" | "1-3" | "3-1" | "2-2-l" | "2-2-r" | "2-2" | "1-4" | "5h" | "5v" | "5s" | "5s-l" | "2-3" | "3-2" | "4-1" | "2-3-l" | "2-3-r" | "6" | "6h" | "6v" | "6c" | "2-4" | "4-2" | "4-3" | "7h" | "7s" | "8" | "8c" | "8h" | "8v";
 export type NoticeDialogParams = Omit<DialogParams<() => void>, "callback">;
 export type ObservableCallback<T> = (value: T) => void;

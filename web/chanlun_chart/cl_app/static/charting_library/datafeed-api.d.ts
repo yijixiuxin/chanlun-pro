@@ -723,11 +723,10 @@ export interface LibrarySymbolInfo {
 	 */
 	monthly_multipliers?: string[];
 	/**
-	 * The boolean value showing whether the library should generate empty bars in the session when there is no data from the data feed for this particular time.
+	 * Whether the library should generate empty bars when the datafeed provides no data for a certain period within the trading session.
+	 * For example, if the session is `0900-1600`, the data has a gap between `11:00` and `12:00`, and `has_empty_bars` is `true`, the library fills this gap with bars.
 	 *
-	 * I.e., if your session is `0900-1600` and your data has gaps between `11:00` and `12:00` and your `has_empty_bars` is `true`, then the Library will fill the gaps with bars for this time.
-	 *
-	 * Flag `has_empty_bars` = `true` cannot be used if featureset `disable_resolution_rebuild` is enabled.
+	 * Note that `has_empty_bars` cannot be used if the [`disable_resolution_rebuild`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#disable_resolution_rebuild) featureset is enabled.
 	 * @default false
 	 */
 	has_empty_bars?: boolean;
