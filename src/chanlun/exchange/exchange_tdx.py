@@ -515,7 +515,7 @@ class ExchangeTDX(Exchange):
             return "stock_cn"
         elif str(code)[:3] in ["000", "880", "999"]:
             return "index_cn"
-        elif str(code)[:2] in ["51", "58"]:
+        elif str(code)[:2] in ["51", "52", "53", "55", "56", "58"]:
             return "etf_cn"
         # 110×××120×××企业债券；
         # 129×××100×××可转换债券；
@@ -764,6 +764,8 @@ if __name__ == "__main__":
     # all_stocks = ex.all_stocks()
     # print(len(all_stocks))
 
+    # etf_codes = [_s["code"] for _s in all_stocks if _s["type"] == "etf_cn"]
+
     # klines = ex.klines("SZ.000001", "5m")
     # print(klines.head(5))
     # print(klines.tail(10))
@@ -772,15 +774,29 @@ if __name__ == "__main__":
     # print("use time : ", time.time() - s_time)
     # 207735
     #
-    klines = ex.klines("SH.600519", "d")
+    klines = ex.klines("SH.561330", "1m")
     print(klines.tail(20))
 
     # stock = ex.stock_info("SH.512800")
     # print(stock)
 
-    # ticks = ex.ticks(["SH.000001", "BJ.837592"])
-    # for _c, _t in ticks.items():
-    #     print(_c, _t)
+    # error_codes = []
+    # for _c in tqdm(etf_codes):
+    #     try:
+    #         ticks = ex.ticks([_c])
+    #         if ticks is None or len(ticks) == 0:
+    #             print(f"获取行情失败 {_c}")
+    #             error_codes.append(_c)
+    #     except Exception as e:
+    #         print(f"获取行情失败 {_c} Exception ：{e!s}")
+    #         error_codes.append(_c)
+
+    # ticks = ex.ticks(etf_codes)
+
+    # print("etf codes count : ", len(etf_codes))
+    # print("ticks count : ", len(ticks))
+    # print("error codes count : ", len(error_codes))
+    # print("error codes : ", error_codes)
 
     # 获取复权相关信息
     # code = "SZ.002165"
