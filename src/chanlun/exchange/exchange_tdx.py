@@ -364,8 +364,6 @@ class ExchangeTDX(Exchange):
         for _c in codes:
             _m, _c, _t = self.to_tdx_code(_c)
             if _m is not None:
-                if _m == 2:
-                    continue
                 query_stocks.append((_m, _c))
                 stock_types[_c] = _t
         client = TdxHq_API(raise_exception=True, auto_retry=True)
