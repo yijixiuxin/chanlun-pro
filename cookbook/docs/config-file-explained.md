@@ -44,7 +44,7 @@ Redis 配置项，默认即可，不使用则留空，不用管
 ## EXCHANGE_*** 交易所设置
 
 WEB页面图表，各个市场使用的交易所行情服务配置
-> A股市场支持：tdx / baostock / qmt / db
+> A股市场支持：tdx / baostock / db
 > 港股市场支持：tdx_hk / futu / db
 > 期货市场支持：tq / tdx_futures / db
 > 纽约期货市场支持：tdx_ny_futures / db

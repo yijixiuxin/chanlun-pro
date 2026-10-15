@@ -2,6 +2,12 @@
 
 ---
 
+# QMT 桥接的方式已经被禁，无法正常获取行情与交易
+
+# 交易可使用 `src\chanlun\trader\qmt_gui.py` 模拟点击的方式实现
+
+---
+
 本项目支持通过 Redis Pub/Sub 与「大QMT」客户端通信，获取沪深行情并执行交易，替代原先 miniQMT 的 `xtdata` 服务。
 
 桥接分为两部分：

@@ -12,6 +12,11 @@ from chanlun.tools.qmt_bridge_client import get_client
 """
 QMT 沪深行情（大QMT桥接模式）
 
+QMT 内部禁用网络、文件等功能，已经无法正常使用，弃用！！！
+QMT 内部禁用网络、文件等功能，已经无法正常使用，弃用！！！
+QMT 内部禁用网络、文件等功能，已经无法正常使用，弃用！！！
+
+
 通过 bigqmt_server 目录下的桥接服务（运行在大QMT内置 Python 中）获取行情，
 替代原先 miniQMT 的 xtdata 服务。大QMT侧使用原生代码格式（600519.SH），
 本项目统一转换为通达信格式（SH.600519）。
@@ -22,6 +27,7 @@ QMT 沪深行情（大QMT桥接模式）
 """
 
 
+@DeprecationWarning
 class ExchangeQMT(Exchange):
     g_all_stocks = []  # noqa: RUF012
 
@@ -168,7 +174,7 @@ class ExchangeQMT(Exchange):
             bars_per_day = {"1m": 240, "5m": 48, "1d": 1}.get(period, 240)
             days_back = req_counts // bars_per_day + 30  # +30 天缓冲（周末/节假日）
             start_date = (
-                datetime.datetime.now() - datetime.timedelta(days=days_back)  # noqa: DTZ005
+                datetime.datetime.now() - datetime.timedelta(days=days_back)
             ).strftime("%Y%m%d")
         else:
             req_counts = -1
@@ -338,7 +344,7 @@ class ExchangeQMT(Exchange):
         返回当前是否是交易时间
         周一至周五，09:30-11:30 13:00-15:00
         """
-        now_dt = datetime.datetime.now()  # noqa: DTZ005
+        now_dt = datetime.datetime.now()
         if now_dt.weekday() in [5, 6]:  # 周六日不交易
             return False
         hour = now_dt.hour
