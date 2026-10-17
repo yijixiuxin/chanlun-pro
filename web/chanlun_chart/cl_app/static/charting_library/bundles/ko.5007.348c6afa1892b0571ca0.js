@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5007],{12173(e){e.exports={en:["Cancel Order"],ko:["주문 취소"]}},24235(e){e.exports={en:["Modify Order"],ko:["오더 고치기"]}}}]);

@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[4622],{22415(a){a.exports={en:["Remove drawings"],id_ID:["Hapus Gambar"]}},81944(a){a.exports={en:["Remove drawings and indicators"],id_ID:["Hapus gambar dan indikator"]}},29045(a){a.exports={en:["Remove indicators"],id_ID:["Hapus Indikator"]}}}]);

@@ -12,22 +12,6 @@ export declare const enum SearchInitiationPoint {
 	IndicatorInputs = "indicatorInputs"
 }
 /**
- * This is the generic type useful for declaring a nominal type,
- * which does not structurally matches with the base type and
- * the other types declared over the same base type
- *
- * Usage:
- * @example
- * type Index = Nominal<number, 'Index'>;
- * // let i: Index = 42; // this fails to compile
- * let i: Index = 42 as Index; // OK
- * @example
- * type TagName = Nominal<string, 'TagName'>;
- */
-export declare type Nominal<T, Name extends string> = T & { /* eslint-disable-next-line jsdoc/require-jsdoc */
-	[Symbol.species]: Name;
-};
-/**
  * Bar data point
  */
 export interface Bar {
@@ -35,6 +19,8 @@ export interface Bar {
 	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
 	 * `time` for daily, weekly, and monthly bars is expected to be a trading day (not session start day) at 00:00 UTC.
 	 * The library adjusts time according to `session` from {@link LibrarySymbolInfo}.
+	 *
+	 * {@link HistoryMetadata.nextTime} is also in milliseconds, while most other time values in the Datafeed API, such as {@link PeriodParams.from}, are in seconds.
 	 */
 	time: number;
 	/** Opening price */
@@ -218,7 +204,7 @@ export interface DatafeedQuoteValues {
 	original_name?: string;
 	/** Pre-/post-market price. This value is required to display the [pre-/post-market price line](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions#enable-the-price-line) on the chart and information on the extended session in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rtc?: number;
-	/** Pre-/post-market price update time. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	/** Pre-/post-market price update time as a Unix timestamp in seconds. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rtc_time?: number;
 	/** Pre-/post-market price change. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rch?: number;
@@ -250,11 +236,15 @@ export interface HistoryMetadata {
 	 */
 	noData?: boolean;
 	/**
-	 * The time of the next available bar in history. The time value should be represented with a Unix timestamp in milliseconds.
+	 * The time of the next available bar in history. The time value should be represented with a Unix timestamp in milliseconds, the same as {@link Bar.time}.
+	 * For example, if the closest bar before the requested range has `time: 1428001140000`, pass `nextTime: 1428001140000`.
 	 *
 	 * You can pass the `nextTime` value to the library if there is no data in the time range that the library requests.
 	 * Therefore, you notify the library about available data before the requested range and ensure that the next data request is for the right range.
 	 * For more information, refer to the [How nextTime works](https://www.tradingview.com/charting-library-docs/latest/connecting_data/UDF#how-nexttime-works) section.
+	 *
+	 * Note that the UDF protocol sends `nextTime` in seconds, and the UDF adapter converts it to milliseconds.
+	 * For backward compatibility, the library also accepts `nextTime` in seconds and logs a warning to the console.
 	 */
 	nextTime?: number | null;
 }
@@ -268,8 +258,8 @@ export interface IDatafeedChartApi {
 	 * **Remark:** This function will be called only if you confirmed that your back-end is supporting marks ({@link DatafeedConfiguration.supports_marks}).
 	 *
 	 * @param symbolInfo A SymbolInfo object
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * @param from Unix timestamp in seconds (leftmost visible bar)
+	 * @param to Unix timestamp in seconds (rightmost visible bar)
 	 * @param onDataCallback Callback function containing an array of marks
 	 * @param resolution Resolution of the symbol
 	 */
@@ -281,8 +271,8 @@ export interface IDatafeedChartApi {
 	 * **Remark:** This function will be called only if you confirmed that your back-end is supporting marks ({@link DatafeedConfiguration.supports_timescale_marks}).
 	 *
 	 * @param symbolInfo A SymbolInfo object
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * @param from Unix timestamp in seconds (leftmost visible bar)
+	 * @param to Unix timestamp in seconds (rightmost visible bar)
 	 * @param onDataCallback Callback function containing an array of marks
 	 * @param resolution Resolution of the symbol
 	 */
@@ -290,7 +280,7 @@ export interface IDatafeedChartApi {
 	/**
 	 * This function is called if the `supports_time` configuration flag is `true` when the chart needs to know the server time.
 	 * The library expects a callback to be called once.
-	 * The time is provided without milliseconds. Example: `1445324591`.
+	 * The time is a Unix timestamp in seconds. Example: `1445324591`.
 	 *
 	 * `getServerTime` is used to display countdown on the price scale.
 	 * Note that the countdown can be displayed only for [intraday](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/configure-datafeed-resolutions#resolution-in-minutes-intraday) resolutions.
@@ -372,15 +362,28 @@ export interface IDatafeedChartApi {
 	 */
 	unsubscribeDepth?(subscriberUID: string): void;
 	/**
-	 * The library calls this function to get the resolution that will be used to calculate the Volume Profile Visible Range indicator.
+	 * The library calls this function to get a detailed resolution for the Volume Profile Visible Range,
+	 * Volume Profile Fixed Range, and [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile)
+	 * indicators. The `from` and `to` arguments describe the visible range, the selected fixed range, or the
+	 * range that the main series has loaded respectively.
 	 *
-	 * Usually you might want to implement this method to calculate the indicator more accurately.
-	 * The implementation really depends on how much data you can transfer to the library and the depth of data in your data feed.
-	 * **Remark:** If this function is not provided the library uses currentResolution.
+	 * Usually, you might want to implement this method to calculate these indicators more accurately.
+	 * The implementation depends on how much data you can transfer to the library and the depth of data in your datafeed.
 	 *
-	 * @param currentResolution Resolution of the symbol
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * The `currentResolution` argument is the resolution of the chart the indicator is calculated on. If you
+	 * return a different resolution, the library requests an additional series at that resolution. If you
+	 * return `currentResolution`, or do not implement this function at all, Visible Range and Fixed Range
+	 * build the profile from the chart's own bars and no additional request is made.
+	 *
+	 * Session Volume Profile selects the resolution differently. On time-based charts, it can choose a finer
+	 * resolution advertised by the symbol or datafeed, and a finer resolution returned by this function takes
+	 * precedence. On tick charts, it always uses `currentResolution` because finer tick bars cannot be mapped
+	 * completely to a displayed bar by timestamp. Refer to
+	 * [Detailed data](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile#detailed-data) for the full selection order.
+	 *
+	 * @param currentResolution Resolution of the chart the indicator is calculated on
+	 * @param from Unix timestamp in milliseconds at the start of the calculation range
+	 * @param to Unix timestamp in milliseconds at the end of the calculation range
 	 * @param symbolInfo A Symbol object
 	 * @returns A resolution
 	 */
@@ -767,7 +770,7 @@ export interface LibrarySymbolInfo {
 	 */
 	expired?: boolean;
 	/**
-	 * Unix timestamp of the expiration date. One must set this value when `expired` = `true`.
+	 * Unix timestamp in seconds of the expiration date. One must set this value when `expired` = `true`.
 	 * The library will request data for this symbol starting from that time point.
 	 */
 	expiration_date?: number;
@@ -932,11 +935,11 @@ export interface MarkCustomColor {
  */
 export interface PeriodParams {
 	/**
-	 * Unix timestamp (leftmost requested bar)
+	 * Unix timestamp in seconds (leftmost requested bar)
 	 */
 	from: number;
 	/**
-	 * Unix timestamp (rightmost requested bar - not inclusive)
+	 * Unix timestamp in seconds (rightmost requested bar - not inclusive)
 	 */
 	to: number;
 	/**
@@ -1161,6 +1164,22 @@ export type GetMarksCallback<T> = (marks: T[]) => void;
 export type HistoryCallback = (bars: Bar[], meta?: HistoryMetadata) => void;
 export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarket" | "24h" | "night";
 export type MarkConstColors = "red" | "green" | "blue" | "yellow";
+/**
+ * This is the generic type useful for declaring a nominal type,
+ * which does not structurally matches with the base type and
+ * the other types declared over the same base type
+ *
+ * Usage:
+ * @example
+ * type Index = Nominal<number, 'Index'>;
+ * // let i: Index = 42; // this fails to compile
+ * let i: Index = 42 as Index; // OK
+ * @example
+ * type TagName = Nominal<string, 'TagName'>;
+ */
+export type Nominal<T, Name extends string> = T & { /* eslint-disable-next-line jsdoc/require-jsdoc */
+	[Symbol.species]: Name;
+};
 export type OnReadyCallback = (configuration: DatafeedConfiguration) => void;
 export type QuoteData = QuoteOkData | QuoteErrorData;
 /**

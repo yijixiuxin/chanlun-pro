@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[5435],{1135(e){e.exports={en:["Close Position"],ru:["Закрыть позицию"]}},3506(e){e.exports={en:["Protect Position"],ru:["Защитить позицию"]}},98192(e){e.exports={en:["Reverse Position"],ru:["Перевернуть позицию"]}}}]);

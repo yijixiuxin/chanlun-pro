@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[2919],{72919(e){e.exports={en:["Keep reading"],ru:["Продолжить читать"]}}}]);

@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[4622],{22415(n){n.exports={en:["Remove drawings"],ms_MY:["Buang lukisan"]}},81944(n){n.exports={en:["Remove drawings and indicators"],ms_MY:["Buang lukisan dan penunjuk"]}},29045(n){n.exports={en:["Remove indicators"],ms_MY:["Buang penunjuk"]}}}]);

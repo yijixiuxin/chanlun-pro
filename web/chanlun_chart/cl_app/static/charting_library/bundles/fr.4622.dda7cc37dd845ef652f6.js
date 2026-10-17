@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[4622],{22415(e){e.exports={en:["Remove drawings"],fr:["Supprimer les dessins"]}},81944(e){e.exports={en:["Remove drawings and indicators"],fr:["Supprimer les dessins et les indicateurs"]}},29045(e){e.exports={en:["Remove indicators"],fr:["Supprimer les indicateurs"]}}}]);

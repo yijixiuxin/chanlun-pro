@@ -1,0 +1,1 @@
+(self.webpackChunktradingview=self.webpackChunktradingview||[]).push([[576,7820],{27820(e){e.exports={en:["Close"],vi:["Đóng"]}},25155(e){e.exports={en:["Learn more"],vi:["Tìm hiểu thêm"]}}}]);

@@ -12,6 +12,25 @@ declare enum ColorType {
 	Solid = "solid",
 	Gradient = "gradient"
 }
+declare enum DisconnectReason {
+	/**
+	 * [[DisconnectType.FailedRestoring]] alone cannot be trusted for this: integrations also use
+	 * it for a failed token renewal, exhausted reconnect attempts, a failed manual sign-in, and a
+	 * restore that found nothing saved.
+	 */
+	SessionRestoreFailed = 0,
+	/** REST brokers report this as [[DisconnectType.FailedRestoring]], the reaction the interface needs, not a failed restore. */
+	ConnectionLost = 1,
+	/** REST brokers report this as [[DisconnectType.LogOut]] because that is the reaction the interface needs; nobody logged out. */
+	TokenExpired = 2,
+	Inactivity = 3,
+	/**
+	 * Set unconditionally by the code path that carries out the user's request, regardless of
+	 * what [[DisconnectType]] it reports; nothing else sets it, so its presence is the only
+	 * signal analytics can trust for a deliberate disconnection.
+	 */
+	UserLogOut = 4
+}
 declare enum DisconnectType {
 	LogOut = 0,
 	FailedRestoring = 1,
@@ -281,6 +300,10 @@ export declare enum ChartStyle {
 	Stepline = 15,
 	HLCArea = 16,
 	VolCandle = 19,
+	/**
+	 * [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile). Available in Trading Platform only.
+	 */
+	SVP = 20,
 	HLCBars = 21
 }
 /**
@@ -520,6 +543,10 @@ export declare enum SeriesType {
 	Stepline = 15,
 	HLCArea = 16,
 	VolCandle = 19,
+	/**
+	 * [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile). Available in Trading Platform only.
+	 */
+	SVP = 20,
 	HLCBars = 21,
 	Renko = 4,
 	Kagi = 5,
@@ -642,22 +669,6 @@ export declare type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends (infer U)[] ? DeepPartial<U>[] : T[P] extends readonly (infer X)[] ? readonly DeepPartial<X>[] : DeepPartial<T[P]>;
 };
 /**
- * This is the generic type useful for declaring a nominal type,
- * which does not structurally matches with the base type and
- * the other types declared over the same base type
- *
- * Usage:
- * @example
- * type Index = Nominal<number, 'Index'>;
- * // let i: Index = 42; // this fails to compile
- * let i: Index = 42 as Index; // OK
- * @example
- * type TagName = Nominal<string, 'TagName'>;
- */
-export declare type Nominal<T, Name extends string> = T & { /* eslint-disable-next-line jsdoc/require-jsdoc */
-	[Symbol.species]: Name;
-};
-/**
  * Override properties for the ABCD pattern drawing tool.
  */
 export interface AbcdLineToolOverrides {
@@ -724,7 +735,7 @@ export interface AccessListItem {
 	grayed?: boolean;
 }
 /** Column properties for the [Account Manager](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/) pages. */
-export interface AccountManagerColumnBase<TFormatterName extends StandardFormatterName | FormatterName> {
+export interface AccountManagerColumnBase<TFormatterName extends StandardFormatterName | FormatterName, TPossibleFields extends string = string> {
 	/** Column title. It will be displayed in the table's header row. */
 	label: string;
 	/**
@@ -762,14 +773,14 @@ export interface AccountManagerColumnBase<TFormatterName extends StandardFormatt
 	 * - For a column with `dataFields` set as `['avgPrice', 'qty']`, the displayed value updates only when the `avgPrice` or `qty` values in the data object change.
 	 * - For a column with an empty `dataFields` array, the displayed value updates if any values in the data object change.
 	 */
-	dataFields: TFormatterName extends StandardFormatterName ? StandardFormattersDependenciesMapping[TFormatterName] : string[];
+	dataFields: TFormatterName extends StandardFormatterName ? StandardFormattersDependenciesMapping<TPossibleFields>[TFormatterName] : FieldRef<TPossibleFields>[];
 	/**
 	 * Data object key that is used for data sorting.
 	 *
 	 * If `sortProp` is not provided, the first element of the `dataFields` array will be used.
 	 * If the `dataFields` array is empty, the column sorting will be unavailable.
 	 */
-	sortProp?: string;
+	sortProp?: FieldRef;
 	/** When set to `true` will prevent column sorting. */
 	notSortable?: boolean;
 	/** Tooltip string for the column. */
@@ -859,7 +870,7 @@ export interface AccountManagerInfo {
 	 * This page is enabled by default and requires the {@link IBrokerTerminal.ordersHistory} method to be implemented.
 	 * To hide the page, set {@link BrokerConfigFlags.supportOrdersHistory} to `false`.
 	 */
-	historyColumns?: AccountManagerColumn[];
+	historyColumns?: OrderTableColumn[];
 	/** Optional sorting of the table on the [History](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/#history) page. */
 	historyColumnsSorting?: SortingParameters;
 	/**
@@ -1055,7 +1066,7 @@ export interface ActionState {
 	/**
 	 * Human-readable, non-unique ID of an action item. Similar to {@link label}, but language-agnostic.
 	 */
-	actionId: ActionId;
+	actionId: string;
 	/** Is active */
 	active: boolean;
 	/**
@@ -1809,6 +1820,8 @@ export interface Bar {
 	 * Amount of **milliseconds** since Unix epoch start in **UTC** timezone.
 	 * `time` for daily, weekly, and monthly bars is expected to be a trading day (not session start day) at 00:00 UTC.
 	 * The library adjusts time according to `session` from {@link LibrarySymbolInfo}.
+	 *
+	 * {@link HistoryMetadata.nextTime} is also in milliseconds, while most other time values in the Datafeed API, such as {@link PeriodParams.from}, are in seconds.
 	 */
 	time: number;
 	/** Opening price */
@@ -2069,9 +2082,7 @@ export interface BoolInputOptions extends CommonInputOptions {
 /**
  * An object that contains information about a bracket order.
  */
-export interface BracketOrder extends BracketOrderBase, CustomFields {
-}
-export interface BracketOrderBase extends PlacedOrderBase {
+export interface BracketOrder extends PlacedOrder {
 	/** If an order is a bracket, it should contain an ID of a parent order/position. */
 	parentId: string;
 	/** Type of the bracket's parent. */
@@ -3178,13 +3189,13 @@ export interface ChartPropertiesOverrides {
 	/**
 	 * A timezone ID. The default value depends on the locale.
 	 */
-	"timezone": TimezoneId;
+	timezone: TimezoneId;
 	/**
 	 * A price scale selection strategy. Determines where price scales should be placed: on the left, on the right, or spread evenly (auto).
 	 *
 	 * @default 'auto'
 	 */
-	"priceScaleSelectionStrategyName": "left" | "right" | "auto";
+	priceScaleSelectionStrategyName: "left" | "right" | "auto";
 	/**
 	 * Pane background type. In the dark theme, the default value is 'gradient'.
 	 *
@@ -3234,11 +3245,17 @@ export interface ChartPropertiesOverrides {
 	 */
 	"paneProperties.horzGridProperties.style": OverrideLineStyle;
 	/**
-	 * Pane grid line mode.
+	 * Vertical grid lines visibility.
 	 *
-	 * @default "both"
+	 * @default true
 	 */
-	"paneProperties.gridLinesMode": GridLinesMode;
+	"paneProperties.vertGridProperties.visible": boolean;
+	/**
+	 * Horizontal grid lines visibility.
+	 *
+	 * @default true
+	 */
+	"paneProperties.horzGridProperties.visible": boolean;
 	/**
 	 * Crosshair color.
 	 *
@@ -3413,6 +3430,18 @@ export interface ChartPropertiesOverrides {
 	 * @default 'rgba(41, 98, 255, 0.25)'
 	 */
 	"scalesProperties.axisHighlightColor": string;
+	/**
+	 * Sets the color used to highlight a price scale when hovering over its label.
+	 * The time scale has no hover highlight and is not affected.
+	 *
+	 * The color is applied as given.
+	 * Hex, `rgb()`, `rgba()`, and named colors are supported.
+	 * To keep the default highlight (which follows the current theme), set this property to an empty string `''`.
+	 * If an unsupported color value is provided, it will also fall back to the default highlight.
+	 *
+	 * @default ''
+	 */
+	"scalesProperties.axisHoverHighlightColor": string;
 	/**
 	 * Configures the background color of a label shown on an axis scale when a drawing is selected.
 	 *
@@ -4349,6 +4378,218 @@ export interface ChartPropertiesOverrides {
 	 */
 	"mainSeriesProperties.pnfStyle.downColorProjection": string;
 	/**
+	 * Session Volume Profile — whether the volume histogram is drawn.
+	 *
+	 * @default true
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.visible": boolean;
+	/**
+	 * Session Volume Profile — show the volume value label next to each histogram bar.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.showValues": boolean;
+	/**
+	 * Session Volume Profile — color of the volume value labels. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.valuesColor": string;
+	/**
+	 * Session Volume Profile — width of the widest histogram bar, as a percentage of the available width.
+	 *
+	 * @default 100
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.percentWidth": number;
+	/**
+	 * Session Volume Profile — the side the histogram grows from.
+	 *
+	 * @default "left_to_right"
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.placement": "left_to_right" | "right_to_left";
+	/**
+	 * Session Volume Profile — up (buy) volume histogram color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.volumeColorUp": string;
+	/**
+	 * Session Volume Profile — down (sell) volume histogram color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.volumeColorDown": string;
+	/**
+	 * Session Volume Profile — up (buy) volume color within the Value Area. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.valueAreaColorUp": string;
+	/**
+	 * Session Volume Profile — down (sell) volume color within the Value Area. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.valueAreaColorDown": string;
+	/**
+	 * Session Volume Profile — background color of the session box. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.volumeProfile.histogramBoxColor": string;
+	/**
+	 * Session Volume Profile — the sessions or session phases used to build profiles.
+	 *
+	 * @default "All"
+	 */
+	"mainSeriesProperties.svpStyle.inputs.profilesSessions": SessionVolumeStyleInputs["profilesSessions"];
+	/**
+	 * Session Volume Profile — custom session in `HHMM-HHMM` or `HHMM-HHMM:days` format.
+	 *
+	 * @default "0930-1600"
+	 */
+	"mainSeriesProperties.svpStyle.inputs.customSession": SessionVolumeStyleInputs["customSession"];
+	/**
+	 * Session Volume Profile — volume display mode.
+	 *
+	 * @default "Up/Down"
+	 */
+	"mainSeriesProperties.svpStyle.inputs.volume": SessionVolumeStyleInputs["volume"];
+	/**
+	 * Session Volume Profile — percentage of total volume included in the Value Area.
+	 *
+	 * @default 70
+	 */
+	"mainSeriesProperties.svpStyle.inputs.vaVolume": SessionVolumeStyleInputs["vaVolume"];
+	/**
+	 * Session Volume Profile — whether `rows` is a row count or a number of ticks per row.
+	 *
+	 * @default "Number Of Rows"
+	 */
+	"mainSeriesProperties.svpStyle.inputs.rowsLayout": SessionVolumeStyleInputs["rowsLayout"];
+	/**
+	 * Session Volume Profile — row count or ticks per row, depending on `rowsLayout`.
+	 *
+	 * @default 24
+	 */
+	"mainSeriesProperties.svpStyle.inputs.rows": SessionVolumeStyleInputs["rows"];
+	/**
+	 * Session Volume Profile — extend the Point of Control line to the right.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.inputs.extendPocRight": SessionVolumeStyleInputs["extendPocRight"];
+	/**
+	 * Session Volume Profile — extend the Value Area High line to the right.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.inputs.extendVAHRight": SessionVolumeStyleInputs["extendVAHRight"];
+	/**
+	 * Session Volume Profile — extend the Value Area Low line to the right.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.inputs.extendVALRight": SessionVolumeStyleInputs["extendVALRight"];
+	/**
+	 * Session Volume Profile — whether the Point of Control (POC) line is visible.
+	 *
+	 * @default true
+	 */
+	"mainSeriesProperties.svpStyle.poc.visible": boolean;
+	/**
+	 * Session Volume Profile — Point of Control (POC) line color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.poc.color": string;
+	/**
+	 * Session Volume Profile — Point of Control (POC) line style.
+	 *
+	 * @default LineStyle.Solid
+	 */
+	"mainSeriesProperties.svpStyle.poc.linestyle": OverrideLineStyle;
+	/**
+	 * Session Volume Profile — Point of Control (POC) line width.
+	 *
+	 * @default 2
+	 */
+	"mainSeriesProperties.svpStyle.poc.linewidth": number;
+	/**
+	 * Session Volume Profile — whether the Value Area High (VAH) line is visible.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.vah.visible": boolean;
+	/**
+	 * Session Volume Profile — Value Area High (VAH) line color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.vah.color": string;
+	/**
+	 * Session Volume Profile — Value Area High (VAH) line style.
+	 *
+	 * @default LineStyle.Dashed
+	 */
+	"mainSeriesProperties.svpStyle.vah.linestyle": OverrideLineStyle;
+	/**
+	 * Session Volume Profile — Value Area High (VAH) line width.
+	 *
+	 * @default 2
+	 */
+	"mainSeriesProperties.svpStyle.vah.linewidth": number;
+	/**
+	 * Session Volume Profile — whether the Value Area Low (VAL) line is visible.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.val.visible": boolean;
+	/**
+	 * Session Volume Profile — Value Area Low (VAL) line color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.val.color": string;
+	/**
+	 * Session Volume Profile — Value Area Low (VAL) line style.
+	 *
+	 * @default LineStyle.Dashed
+	 */
+	"mainSeriesProperties.svpStyle.val.linestyle": OverrideLineStyle;
+	/**
+	 * Session Volume Profile — Value Area Low (VAL) line width.
+	 *
+	 * @default 2
+	 */
+	"mainSeriesProperties.svpStyle.val.linewidth": number;
+	/**
+	 * Session Volume Profile — whether the Developing Point of Control line is visible.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.developingPoc.visible": boolean;
+	/**
+	 * Session Volume Profile — Developing Point of Control line color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.developingPoc.color": string;
+	/**
+	 * Session Volume Profile — Developing Point of Control line style.
+	 *
+	 * @default LineStyle.Solid
+	 */
+	"mainSeriesProperties.svpStyle.developingPoc.linestyle": OverrideLineStyle;
+	/**
+	 * Session Volume Profile — Developing Point of Control line width.
+	 *
+	 * @default 1
+	 */
+	"mainSeriesProperties.svpStyle.developingPoc.linewidth": number;
+	/**
+	 * Session Volume Profile — whether the Developing Value Area line is visible.
+	 *
+	 * @default false
+	 */
+	"mainSeriesProperties.svpStyle.developingVA.visible": boolean;
+	/**
+	 * Session Volume Profile — Developing Value Area line color. Default is theme-dependent.
+	 */
+	"mainSeriesProperties.svpStyle.developingVA.color": string;
+	/**
+	 * Session Volume Profile — Developing Value Area line style.
+	 *
+	 * @default LineStyle.Solid
+	 */
+	"mainSeriesProperties.svpStyle.developingVA.linestyle": OverrideLineStyle;
+	/**
+	 * Session Volume Profile — Developing Value Area line width.
+	 *
+	 * @default 1
+	 */
+	"mainSeriesProperties.svpStyle.developingVA.linewidth": number;
+	/**
 	 * Main series Baseline style baseline color.
 	 *
 	 * @default "#758696"
@@ -4601,7 +4842,7 @@ export interface ChartPropertiesOverrides {
 	 *
 	 * @default PaneSize.Large
 	 */
-	"volumePaneSize": PaneSize;
+	volumePaneSize: PaneSize;
 }
 /**
  * A chart template.
@@ -4868,6 +5109,18 @@ export interface ChartingLibraryWidgetOptions {
 	 * ```
 	 */
 	symbol_search_request_delay?: number;
+	/**
+	 * Settings of the volume profile indicators, including the
+	 * [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile) chart type and indicator.
+	 *
+	 * ```javascript
+	 * volume_profile: {
+	 * 	max_total_rows: 12000,
+	 * 	history_sessions: 40,
+	 * },
+	 * ```
+	 */
+	volume_profile?: VolumeProfileOptions;
 	/**
 	 * Sets the default time frame of the chart.
 	 *
@@ -5768,6 +6021,15 @@ export interface ContextMenuPosition {
 	marginY?: number;
 }
 /**
+ * Contract expiration date for an instrument.
+ */
+export interface ContractExpirationDate {
+	/** Expiration date as a UNIX timestamp in milliseconds */
+	dateOrDateTime: number;
+	/** Whether the value includes time */
+	hasTime: boolean;
+}
+/**
  * Overrides for the 'Coppock Curve' indicator.
  *
  * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
@@ -6193,13 +6455,6 @@ export interface CustomFieldMetaInfoBase {
 	/** Should the input field value be saved to settings */
 	saveToSettings?: boolean;
 }
-/**
- * Custom fields to be added to an object.
- */
-export interface CustomFields {
-	/** Custom field */
-	[key: string]: any;
-}
 /**  */
 export interface CustomFormatter {
 	/** Formats date and time */
@@ -6220,7 +6475,7 @@ export interface CustomFormatters {
 	timeFormatter?: CustomFormatter;
 	/**
 	 * Used to format the date displayed over the timescale when hovering over a chart.
-	 * Note that by declaring this formatter all the default ones defined in Chart settings/Scales/Date format
+	 * Note that by declaring this formatter all the default ones defined in the Settings/Scales/Date format
 	 * will display the exact same outcome as the formatter.
 	 */
 	dateFormatter?: CustomFormatter;
@@ -6232,17 +6487,17 @@ export interface CustomFormatters {
 	/** Used to format numeric price values on the [price scale](https://www.tradingview.com/charting-library-docs/latest/ui_elements/Price-Scale) and [Watchlist](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/Watch-List) (*Last* and *Chg* columns).  */
 	priceFormatterFactory?: SeriesFormatterFactory;
 	/**
-	 * Used to format the numbers displayed within a custom study.
+	 * Used to format the numbers displayed within a custom indicator.
 	 */
 	studyFormatterFactory?: CustomStudyFormatterFactory;
 }
 export interface CustomIndicator {
-	/** Your study name, it will be used internally by the library */
+	/** Your indicator name, it will be used internally by the library */
 	readonly name: string;
 	/**
-	 * The metainfo field is designed to contain the main info about the custom study.
+	 * The metainfo field is designed to contain the main info about the custom indicator.
 	 *
-	 * Refer to [Custom Studies Metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/) for more information.
+	 * Refer to [Custom indicator metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/) for more information.
 	 */
 	readonly metainfo: StudyMetaInfo;
 	/**
@@ -6597,7 +6852,7 @@ export interface DatafeedQuoteValues {
 	original_name?: string;
 	/** Pre-/post-market price. This value is required to display the [pre-/post-market price line](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions#enable-the-price-line) on the chart and information on the extended session in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rtc?: number;
-	/** Pre-/post-market price update time. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
+	/** Pre-/post-market price update time as a Unix timestamp in seconds. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rtc_time?: number;
 	/** Pre-/post-market price change. This value is required to display information on the [extended session](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/Extended-Sessions) in the [Details](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/#details) widget. */
 	rch?: number;
@@ -6844,6 +7099,11 @@ export interface DisconnectionInfo {
 	heading?: string;
 	additionalInfo?: string;
 	disconnectType?: DisconnectType;
+	/**
+	 * What actually ended the connection, where [[disconnectType]] does not say so honestly.
+	 * Read by analytics only; the interface keeps reacting to [[disconnectType]].
+	 */
+	reason?: DisconnectReason;
 }
 /**
  * Override properties for the disjoint angle drawing tool.
@@ -7012,7 +7272,6 @@ export interface DragStartParams {
 		shiftKey: boolean;
 	};
 }
-/** Item within a dropdown menu */
 export interface DropdownItem {
 	/** Title of the menu item */
 	title: string;
@@ -7357,7 +7616,9 @@ export interface Exchange {
  * Describes a single execution.
  * Execution is when a buy or sell order is completed for a financial instrument.
  */
-export interface Execution extends CustomFields {
+export interface Execution extends WithExtraData {
+	/** Execution ID */
+	id: string;
 	/** Symbol name */
 	symbol: string;
 	/** Execution price */
@@ -7558,6 +7819,17 @@ export interface ExtendedLineToolOverrides {
 	"linetoolextended.textcolor": string;
 	/** Default value: `bottom` */
 	"linetoolextended.vertLabelsAlign": string;
+}
+/**
+ * Custom fields that your Broker API implementation attaches to a trading entity.
+ *
+ * To show a custom field in an Account Manager column, reference it by its path in
+ * {@link AccountManagerColumnBase.dataFields}, for example `[['extra', 'riskLevel']]`.
+ * Refer to [Value formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters) for more information.
+ */
+export interface ExtraData {
+	/** A custom field. The key is the name you choose for it. */
+	[key: string]: any;
 }
 /**
  * Favorites which can be defined within the Widget Constructor options (see {@link ChartingLibraryWidgetOptions.favorites}).
@@ -10029,11 +10301,15 @@ export interface HistoryMetadata {
 	 */
 	noData?: boolean;
 	/**
-	 * The time of the next available bar in history. The time value should be represented with a Unix timestamp in milliseconds.
+	 * The time of the next available bar in history. The time value should be represented with a Unix timestamp in milliseconds, the same as {@link Bar.time}.
+	 * For example, if the closest bar before the requested range has `time: 1428001140000`, pass `nextTime: 1428001140000`.
 	 *
 	 * You can pass the `nextTime` value to the library if there is no data in the time range that the library requests.
 	 * Therefore, you notify the library about available data before the requested range and ensure that the next data request is for the right range.
 	 * For more information, refer to the [How nextTime works](https://www.tradingview.com/charting-library-docs/latest/connecting_data/UDF#how-nexttime-works) section.
+	 *
+	 * Note that the UDF protocol sends `nextTime` in seconds, and the UDF adapter converts it to milliseconds.
+	 * For backward compatibility, the library also accepts `nextTime` in seconds and logs a warning to the console.
 	 */
 	nextTime?: number | null;
 }
@@ -10381,7 +10657,10 @@ export interface IBrokerConnectionAdapterHost {
 	 * It is the same value that is toggled by the *Hide positions and orders* option in the right toolbar.
 	 */
 	tradedSourcesVisibility(): IWatchedValue<boolean> | null;
-	/** Returns if orders can be sent to the broker without showing the order ticket. */
+	/**
+	 * Returns a watched value indicating whether orders can be sent to the broker without showing the order ticket.
+	 * If the `always_require_order_confirmation` featureset is enabled, this value is always `false`, and attempting to modify this value has no effect.
+	 */
 	silentOrdersPlacement(): IWatchedValue<boolean>;
 	/**
 	 * Patch changes into the current broker configuration
@@ -11890,10 +12169,52 @@ export interface IChartingLibraryWidget {
 	 *
 	 * Note that the `shortCut` argument depends on the key types. Refer to the [Manage shortcuts](https://www.tradingview.com/charting-library-docs/latest/configuration/Shortcuts#manage-shortcuts) section for more information and examples.
 	 *
-	 * @param shortCut A number, a string, or an array of numbers and strings.
+	 * Non-modifier keys must be passed as numeric key codes. String key names, such as `"alt+q"`,
+	 * are not supported and throw an error. Only the modifier keys (`ctrl`, `shift`, `alt`, and `meta`/`cmd`/`command`)
+	 * can be passed as strings.
+	 *
+	 * @param shortCut A numeric key code, or an array of string modifiers and numeric key codes, e.g. `['ctrl', 'shift', 75]`.
 	 * @param callback A function that is called when the `shortCut` keys are pressed.
 	 */
-	onShortcut(shortCut: string | number | (string | number)[], callback: EmptyCallback): void;
+	onShortcut(shortCut: number | (string | number)[], callback: EmptyCallback): void;
+	/**
+	 * Enables or disables all keyboard shortcuts at once.
+	 * This includes the built&#8209;in shortcuts, the shortcuts specified using {@link onShortcut},
+	 * and typing to change a symbol or an interval.
+	 * Shortcuts are enabled by default.
+	 *
+	 * To disable only the built&#8209;in shortcuts and keep the ones specified using {@link onShortcut},
+	 * set {@link SetShortcutsEnabledOptions.keepCustom} to `true`.
+	 *
+	 * Note that this method does not affect typing in input fields or standard keyboard navigation of the UI.
+	 *
+	 * To disable some shortcuts from the start, without calling this method, use the featuresets:
+	 * - [`symbol_search_hot_key`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#symbol_search_hot_key) disables typing to change a symbol.
+	 * - [`show_interval_dialog_on_key_press`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#show_interval_dialog_on_key_press) disables typing to change an interval.
+	 * - [`insert_indicator_dialog_shortcut`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#insert_indicator_dialog_shortcut) disables the shortcut that opens the indicators dialog.
+	 * - [`save_shortcut`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#save_shortcut) disables the shortcut that saves the chart layout.
+	 *
+	 * @example
+	 * ```javascript
+	 * // Disable all shortcuts
+	 * await widget.setShortcutsEnabled(false);
+	 * // Disable the built-in shortcuts, but keep the ones added using `onShortcut`
+	 * await widget.setShortcutsEnabled(false, { keepCustom: true });
+	 * // Enable all shortcuts again
+	 * await widget.setShortcutsEnabled(true);
+	 * ```
+	 *
+	 * @param enabled Pass `false` to disable shortcuts, and `true` to enable them again.
+	 * @param options Additional options.
+	 * @returns A promise that is resolved when the library applies the setting.
+	 */
+	setShortcutsEnabled(enabled: boolean, options?: SetShortcutsEnabledOptions): Promise<void>;
+	/**
+	 * Returns `true` if the built&#8209;in keyboard shortcuts are enabled. See {@link setShortcutsEnabled}.
+	 *
+	 * @returns A promise that is resolved with the current state of the built&#8209;in shortcuts.
+	 */
+	areShortcutsEnabled(): Promise<boolean>;
 	/**
 	 * Subscribe to library events.
 	 *
@@ -12904,8 +13225,8 @@ export interface IDatafeedChartApi {
 	 * **Remark:** This function will be called only if you confirmed that your back-end is supporting marks ({@link DatafeedConfiguration.supports_marks}).
 	 *
 	 * @param symbolInfo A SymbolInfo object
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * @param from Unix timestamp in seconds (leftmost visible bar)
+	 * @param to Unix timestamp in seconds (rightmost visible bar)
 	 * @param onDataCallback Callback function containing an array of marks
 	 * @param resolution Resolution of the symbol
 	 */
@@ -12917,8 +13238,8 @@ export interface IDatafeedChartApi {
 	 * **Remark:** This function will be called only if you confirmed that your back-end is supporting marks ({@link DatafeedConfiguration.supports_timescale_marks}).
 	 *
 	 * @param symbolInfo A SymbolInfo object
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * @param from Unix timestamp in seconds (leftmost visible bar)
+	 * @param to Unix timestamp in seconds (rightmost visible bar)
 	 * @param onDataCallback Callback function containing an array of marks
 	 * @param resolution Resolution of the symbol
 	 */
@@ -12926,7 +13247,7 @@ export interface IDatafeedChartApi {
 	/**
 	 * This function is called if the `supports_time` configuration flag is `true` when the chart needs to know the server time.
 	 * The library expects a callback to be called once.
-	 * The time is provided without milliseconds. Example: `1445324591`.
+	 * The time is a Unix timestamp in seconds. Example: `1445324591`.
 	 *
 	 * `getServerTime` is used to display countdown on the price scale.
 	 * Note that the countdown can be displayed only for [intraday](https://www.tradingview.com/charting-library-docs/latest/connecting_data/time-and-sessions/configure-datafeed-resolutions#resolution-in-minutes-intraday) resolutions.
@@ -13008,15 +13329,28 @@ export interface IDatafeedChartApi {
 	 */
 	unsubscribeDepth?(subscriberUID: string): void;
 	/**
-	 * The library calls this function to get the resolution that will be used to calculate the Volume Profile Visible Range indicator.
+	 * The library calls this function to get a detailed resolution for the Volume Profile Visible Range,
+	 * Volume Profile Fixed Range, and [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile)
+	 * indicators. The `from` and `to` arguments describe the visible range, the selected fixed range, or the
+	 * range that the main series has loaded respectively.
 	 *
-	 * Usually you might want to implement this method to calculate the indicator more accurately.
-	 * The implementation really depends on how much data you can transfer to the library and the depth of data in your data feed.
-	 * **Remark:** If this function is not provided the library uses currentResolution.
+	 * Usually, you might want to implement this method to calculate these indicators more accurately.
+	 * The implementation depends on how much data you can transfer to the library and the depth of data in your datafeed.
 	 *
-	 * @param currentResolution Resolution of the symbol
-	 * @param from Unix timestamp (leftmost visible bar)
-	 * @param to Unix timestamp (rightmost visible bar)
+	 * The `currentResolution` argument is the resolution of the chart the indicator is calculated on. If you
+	 * return a different resolution, the library requests an additional series at that resolution. If you
+	 * return `currentResolution`, or do not implement this function at all, Visible Range and Fixed Range
+	 * build the profile from the chart's own bars and no additional request is made.
+	 *
+	 * Session Volume Profile selects the resolution differently. On time-based charts, it can choose a finer
+	 * resolution advertised by the symbol or datafeed, and a finer resolution returned by this function takes
+	 * precedence. On tick charts, it always uses `currentResolution` because finer tick bars cannot be mapped
+	 * completely to a displayed bar by timestamp. Refer to
+	 * [Detailed data](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile#detailed-data) for the full selection order.
+	 *
+	 * @param currentResolution Resolution of the chart the indicator is calculated on
+	 * @param from Unix timestamp in milliseconds at the start of the calculation range
+	 * @param to Unix timestamp in milliseconds at the end of the calculation range
 	 * @param symbolInfo A Symbol object
 	 * @returns A resolution
 	 */
@@ -14565,13 +14899,15 @@ export interface IShapesGroupControllerApi {
 	 */
 	removeGroup(groupId: ShapesGroupId): void;
 	/**
-	 * Get an array of all drawing groups.
+	 * Get an array of the top-level drawing groups. A group nested into another one is not returned here,
+	 * ask {@link IShapesGroupControllerApi.subgroups} of its parent for it.
 	 *
 	 * @returns An array of group IDs.
 	 */
 	groups(): readonly ShapesGroupId[];
 	/**
-	 * Get an array of IDs for each drawing in a group.
+	 * Get an array of IDs for each drawing that belongs to a group directly. A drawing of a nested group is
+	 * not returned here, walk the tree with {@link IShapesGroupControllerApi.subgroups}.
 	 *
 	 * @param groupId A group ID.
 	 * @returns An array of drawing IDs.
@@ -14585,12 +14921,22 @@ export interface IShapesGroupControllerApi {
 	 */
 	excludeShapeFromGroup(groupId: ShapesGroupId, shapeId: EntityId): void;
 	/**
-	 * Add a drawing to a group.
+	 * Add a drawing to a group. The drawing takes the synchronization mode of the group.
 	 *
 	 * @param groupId A group ID.
 	 * @param shapeId A drawing ID.
+	 * @throws If {@link IShapesGroupControllerApi.canAddShapeToGroup} is `false` for the pair.
 	 */
 	addShapeToGroup(groupId: ShapesGroupId, shapeId: EntityId): void;
+	/**
+	 * Check whether a drawing may join a group. A drawing of an indicator cannot be synchronized, so it
+	 * cannot join a group of synchronized drawings.
+	 *
+	 * @param groupId A group ID.
+	 * @param shapeId A drawing ID.
+	 * @returns Whether {@link IShapesGroupControllerApi.addShapeToGroup} would succeed.
+	 */
+	canAddShapeToGroup(groupId: ShapesGroupId, shapeId: EntityId): boolean;
 	/**
 	 * Get an object containing the available Z-order operations for a group.
 	 *
@@ -14679,12 +15025,12 @@ export interface IShapesGroupControllerApi {
 	 */
 	setGroupName(groupId: ShapesGroupId, name: string): void;
 	/**
-	 * Check if some drawings can be grouped.
+	 * Check if some drawings and groups of drawings can be grouped together.
 	 *
-	 * @param shapes An array of drawing IDs.
+	 * @param shapes An array of drawing IDs and/or group IDs.
 	 * @return `true` if the drawings can be grouped, `false` otherwise.
 	 */
-	canBeGroupped(shapes: readonly EntityId[]): boolean;
+	canBeGroupped(shapes: readonly (EntityId | ShapesGroupId)[]): boolean;
 }
 /**
  * API object for interacting with a study.
@@ -15351,7 +15697,7 @@ export interface IndicatorOptions {
 	format: "price" | "volume" | "percent";
 	precision: number;
 }
-export interface IndividualPosition extends IndividualPositionBase, CustomFields {
+export interface IndividualPosition extends IndividualPositionBase, WithExtraData {
 }
 /**
  * Describes an individual position.
@@ -15369,8 +15715,46 @@ export interface IndividualPositionBase {
 	side: Side;
 	/** Individual position price */
 	price: number;
+	/** Message describing the state of the individual position */
+	message?: OrderOrPositionMessage;
 	/** Determines whether individual position can be closed */
 	canBeClosed?: boolean;
+	/** Stop loss price. Available when Brackets are enabled */
+	stopLoss?: number;
+	/** Take profit price. Available when Brackets are enabled */
+	takeProfit?: number;
+	/** Guaranteed stop loss price. Available when Brackets are enabled */
+	guaranteedStop?: number;
+	/** Trailing stop Pips value. Available when Brackets are enabled */
+	trailingStopPips?: number;
+	/** Trailing stop price. Available when Brackets are enabled */
+	trailingStopPrice?: number;
+	/** Stop Loss type */
+	stopType?: StopType;
+	/** The weighted average price of the individual position */
+	avgPrice?: number;
+	/** Last update time (unix timestamp in milliseconds) */
+	updateTime?: number;
+	/** Last price provided by the broker */
+	lastPrice?: number;
+	/** Best bid price provided by the broker */
+	bidPrice?: number;
+	/** Best ask price provided by the broker */
+	askPrice?: number;
+	/** Unrealized profit/loss */
+	unrealizedPl?: number;
+	/** Unrealized profit/loss in percent */
+	unrealizedPlPercent?: number;
+	/** Unrealized profit/loss per quantity unit */
+	unrealizedPlQty?: number;
+	/** Market value of the position */
+	marketValue?: number;
+	/** Profit/loss of the individual position */
+	pl?: number;
+	/** Visible profit/loss of the individual position */
+	visiblePL?: number;
+	/** Instrument currency displayed in the Account Manager */
+	currency?: string;
 	/**
 	 * [Exit levels](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/trading-concepts/brackets#multiple-exit-levels) associated with the position.
 	 * Used when {@link BrokerConfigFlags.supportMultipleExitLevels} is enabled.
@@ -15810,14 +16194,14 @@ export interface LeastSquaresMovingAverageIndicatorOverrides {
 	"plot.color": string;
 	[key: string]: StudyOverrideValueType;
 }
-export interface LevelsFormatterProperties {
+export interface LevelsFormatterProperties<T extends string = string> {
 	base: [
-		priceProperty: string
+		priceProperty: FieldRef<T>
 	];
 	withLevels: [
-		priceProperty: string,
-		exitLevels: string,
-		qty: string
+		priceProperty: FieldRef<T>,
+		exitLevels: FieldRef<T>,
+		qty: FieldRef<T>
 	];
 }
 /**
@@ -15928,15 +16312,12 @@ export interface LibraryPineStudy<TPineStudyResult> {
 	 * @param  {<TextendsStudyInputValue>(index:number} inputs - The inputs callback is an array of input values, placed in order of inputs in Metainfo.
 	 */
 	main(ctx: IContext, inputs: <T extends StudyInputValue>(index: number) => T): TPineStudyResult | null;
-	// Indicator defined properties
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[key: string]: any;
 }
 export interface LibraryPineStudyConstructor<TPineStudyResult> {
 	/**
 	 * Custom Study constructor
 	 */
-	
 	new (): LibraryPineStudy<TPineStudyResult>;
 }
 export interface LibrarySubsessionInfo {
@@ -16285,7 +16666,7 @@ export interface LibrarySymbolInfo {
 	 */
 	expired?: boolean;
 	/**
-	 * Unix timestamp of the expiration date. One must set this value when `expired` = `true`.
+	 * Unix timestamp in seconds of the expiration date. One must set this value when `expired` = `true`.
 	 * The library will request data for this symbol starting from that time point.
 	 */
 	expiration_date?: number;
@@ -16478,6 +16859,8 @@ export interface LineToolsGroupState {
 	currencyId?: string | null;
 	/** The associated symbol's unit ID */
 	unitId?: string | null;
+	/** The ID of the parent group, when this group is nested inside another group. Omitted for top-level groups */
+	parentGroupId?: string;
 }
 /**
  * Overrides for the 'Linear Regression Curve' indicator.
@@ -17665,7 +18048,7 @@ export interface OrderTemplateBase {
 export interface OrderTicketSettings {
 	/** If true, the "Show Order Price in Ticks" setting is displayed. */
 	showRelativePriceControl: boolean;
-	/** If true, the "Show order confirmations" setting is displayed. */
+	/** If true, the "Show order confirmation" setting is displayed. */
 	showOrderPreview: boolean;
 }
 export interface OverlayIndicatorOverrides {
@@ -17872,11 +18255,11 @@ export interface PathLineToolOverrides {
  */
 export interface PeriodParams {
 	/**
-	 * Unix timestamp (leftmost requested bar)
+	 * Unix timestamp in seconds (leftmost requested bar)
 	 */
 	from: number;
 	/**
-	 * Unix timestamp (rightmost requested bar - not inclusive)
+	 * Unix timestamp in seconds (rightmost requested bar - not inclusive)
 	 */
 	to: number;
 	/**
@@ -19024,12 +19407,10 @@ export interface PlaceOrderResult {
 	/** Order id - this is mainly used for debugging purpose */
 	orderId?: string;
 }
-export interface PlacedOrder extends PlacedOrderBase, CustomFields {
-}
 /**
  * An object that contains information about a placed order.
  */
-export interface PlacedOrderBase {
+export interface PlacedOrder extends WithExtraData {
 	/** Order ID */
 	id: string;
 	/** Symbol name */
@@ -19048,6 +19429,8 @@ export interface PlacedOrderBase {
 	guaranteedStop?: number;
 	/** Trailing stop Pips value (double). Available when Brackets are enabled */
 	trailingStopPips?: number;
+	/** Trailing stop price (double). Available when Brackets are enabled */
+	trailingStopPrice?: number;
 	/** Stop Loss type. It should be set to 1 (StopType.TrailingStop) for trailing stop orders. */
 	stopType?: StopType;
 	/** Take profit price (double). Available when Brackets are enabled */
@@ -19135,7 +19518,7 @@ export interface PolylineLineToolOverrides {
 	/** Default value: `80` */
 	"linetoolpolyline.transparency": number;
 }
-export interface Position extends PositionBase, CustomFields {
+export interface Position extends PositionBase, WithExtraData {
 }
 /**
  * Describes a single position.
@@ -19160,6 +19543,36 @@ export interface PositionBase {
 	avgPrice: number;
 	/** Last update time (unix timestamp in milliseconds) */
 	updateTime?: number;
+	/** Last price provided by the broker */
+	lastPrice?: number;
+	/** Best bid price provided by the broker */
+	bidPrice?: number;
+	/** Best ask price provided by the broker */
+	askPrice?: number;
+	/** Unrealized profit/loss */
+	unrealizedPl?: number;
+	/** Unrealized profit/loss in percent */
+	unrealizedPlPercent?: number;
+	/** Unrealized profit/loss per quantity unit */
+	unrealizedPlQty?: number;
+	/** Market value of the position */
+	marketValue?: number;
+	/** Stop loss price. Available when Brackets are enabled */
+	stopLoss?: number;
+	/** Take profit price. Available when Brackets are enabled */
+	takeProfit?: number;
+	/** Guaranteed stop loss price. Available when Brackets are enabled */
+	guaranteedStop?: number;
+	/** Trailing stop Pips value. Available when Brackets are enabled */
+	trailingStopPips?: number;
+	/** Trailing stop price. Available when Brackets are enabled */
+	trailingStopPrice?: number;
+	/** Stop Loss type */
+	stopType?: StopType;
+	/** Instrument currency displayed in the Account Manager */
+	currency?: string;
+	/** Contract expiration date, for futures instruments */
+	contractExpirationDate?: ContractExpirationDate;
 	/** Message describing the state of the position */
 	message?: OrderOrPositionMessage;
 	/**
@@ -19667,19 +20080,19 @@ export interface RatioIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 export interface RawStudyMetaInfo extends RawStudyMetaInfoBase {
-	/** Identifier for Study */
+	/** Identifier for the indicator. */
 	readonly id: RawStudyMetaInfoId;
 }
 export interface RawStudyMetaInfoBase {
 	/**
-	 * Description of the study. It will be displayed in the Indicators window and will be used as a name argument when calling the createStudy method
+	 * Description of the indicator. It will be displayed in the _Indicators_ window and will be used as a name argument when calling the `createStudy` method.
 	 */
 	readonly description: string;
-	/** Short description of the study. Will be displayed on the chart */
+	/** Short description of the indicator. Will be displayed on the chart. */
 	readonly shortDescription: string;
-	/** Name for the study */
+	/** Name for the indicator. */
 	readonly name?: string;
-	/** Metainfo version of the study. The current version is 53, and the default one is 0. */
+	/** Metainfo version of the indicator. The current version is 53, and the default one is 0. */
 	readonly _metainfoVersion?: number;
 	/** Use {@link format} instead.
 	 * @deprecated
@@ -19692,17 +20105,31 @@ export interface RawStudyMetaInfoBase {
 	 * For more information about `format`, refer to the [Metainfo](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/) article.
 	 */
 	readonly format: StudyPlotValueFormat;
-	/** Whether the study should appear on the main series pane */
+	/** Whether the indicator should appear on the main series pane. */
 	readonly is_price_study?: boolean;
-	/** should be `true` in Custom Study */
+	/** Should be `true` for a custom indicator. */
 	readonly isCustomIndicator?: boolean;
-	/** Whether the study price scale should be the same as the main series one. */
+	/** Whether the indicator price scale should be the same as the main series one. */
 	readonly linkedToSeries?: boolean;
-	/** Price scale to use for the study */
+	/** Price scale to use for the indicator. */
 	readonly priceScale?: StudyTargetPriceScale;
-	/** Whether the study should appear in Indicators list. */
+	/**
+	 * Margins of the indicator price scale when the indicator is displayed on the pane that contains the main series.
+	 * An indicator that declares this property is placed on that pane without a visible price scale of its own,
+	 * exactly like the built-in Volume indicator, whether it is added from the _Indicators_ dialog
+	 * or created with the `forceOverlay` parameter of `createStudy` set to `true`.
+	 *
+	 * Use this property to scale down an indicator that would otherwise occupy the whole pane height.
+	 * The built-in Volume indicator uses `{ top: 0.75, bottom: 0 }` when it is displayed on the main series pane.
+	 *
+	 * The property is ignored when the indicator is displayed in its own pane or on a visible price scale.
+	 * Values that are negative or that add up to 1 or more are rejected: the library logs a warning
+	 * and the indicator occupies the whole pane height.
+	 */
+	readonly overlayScaleMargins?: StudyOverlayScaleMargins;
+	/** Whether the indicator should appear in Indicators list. */
 	readonly is_hidden_study?: boolean;
-	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults) */
+	/** An object containing settings that are applied when the user clicks 'Apply Defaults'. See dedicated article: [Custom indicators defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults). */
 	readonly defaults: Readonly<Partial<StudyDefaults>>;
 	/** Bands */
 	readonly bands?: readonly Readonly<StudyBandInfo>[];
@@ -19716,22 +20143,22 @@ export interface RawStudyMetaInfoBase {
 	 * definitions of palettes that are used in plots and defaults. Palettes allows you use different styles (not only colors) for each line point.
 	 *
 	 * This object contains palette names as keys, and palette info as values: `[palette.name]: { colors, valToIndex, addDefaultColor }`, where
-	 * - `colors`* - an object `{ [color_id]: { name: 'name' }}`, where name is a string that will appear on Style tab of study properties dialog.
+	 * - `colors`* - an object `{ [color_id]: { name: 'name' }}`, where name is a string that will appear on Style tab of indicator properties dialog.
 	 * - `valToIndex` - an object, the mapping between the values that are returned by the script and palette colors.
 	 * - `addDefaultColor` - boolean, if true the defaults are used for colorer type plot, when its value is null or undefined.
 	 */
 	readonly palettes?: MappedObject<Readonly<StudyPalettesInfo>>;
-	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots) */
+	/** Array with indicator plots info. See dedicated article: [Custom indicators plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots). */
 	readonly plots?: readonly Readonly<StudyPlotInfo>[];
 	/** an object with plot id as keys and style info as values. */
 	readonly styles?: MappedObject<Readonly<StudyStylesInfo>>;
-	/** array with study plots info. See dedicated article: [Custom Studies OHLC Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-OHLC-Plots) */
+	/** Array with indicator plots info. See dedicated article: [Custom indicators OHLC plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-OHLC-Plots). */
 	readonly ohlcPlots?: MappedObject<Readonly<StudyOhlcStylesInfo>>;
 	/** Financial Period */
 	readonly financialPeriod?: FinancialPeriodOrAggregated;
-	/** Key for grouping studies */
+	/** Key for grouping indicators. */
 	readonly groupingKey?: string;
-	/** Define should be study on series level or not */
+	/** Whether this should be an indicator at the series level or not. */
 	readonly behind_chart?: boolean;
 }
 /**
@@ -20221,6 +20648,67 @@ export interface SMIErgodicIndicatorOscillatorIndicatorOverrides {
 	"oscillator.color": string;
 	[key: string]: StudyOverrideValueType;
 }
+/**
+ * Style and input preferences for the Session Volume Profile (SVP) chart type and indicator. These map to the
+ * `mainSeriesProperties.svpStyle.*` chart overrides.
+ */
+export interface SVPStylePreferences {
+	/**
+	 * Indicator inputs: sessions, volume mode, rows layout, value-area volume, and the extend-right flags.
+	 *
+	 * The custom-session window is read in the chart's display timezone. To choose a different one, use the
+	 * standalone Session Volume Profile indicator.
+	 */
+	inputs: SessionVolumeStyleInputs;
+	/** Volume histogram appearance — colors, placement, width, and the optional per-bar value labels. */
+	volumeProfile: {
+		/** Whether the volume histogram is drawn. */
+		visible: boolean;
+		/** Color of the per-bar volume value labels. */
+		valuesColor: string;
+		/** Whether the per-bar volume value labels are shown. */
+		showValues: boolean;
+		/** Up (buy) volume color. */
+		volumeColorUp: string;
+		/** Down (sell) volume color. */
+		volumeColorDown: string;
+		/** Up (buy) volume color within the Value Area. */
+		valueAreaColorUp: string;
+		/** Down (sell) volume color within the Value Area. */
+		valueAreaColorDown: string;
+		/** Background color of the session box. */
+		histogramBoxColor: string;
+		/** The side the histogram grows from. */
+		placement: HHistDirection;
+		/** Width of the widest bar as a percentage (1–100) of the available width. */
+		percentWidth: number;
+	};
+	/** Value Area High line style and visibility. */
+	vah: LineStylePreferencesWithoutGradient & {
+		/** Whether the Value Area High line is drawn. */
+		visible: boolean;
+	};
+	/** Value Area Low line style and visibility. */
+	val: LineStylePreferencesWithoutGradient & {
+		/** Whether the Value Area Low line is drawn. */
+		visible: boolean;
+	};
+	/** Point of Control line style and visibility. */
+	poc: LineStylePreferencesWithoutGradient & {
+		/** Whether the Point of Control line is drawn. */
+		visible: boolean;
+	};
+	/** Developing Point of Control line style and visibility. */
+	developingPoc: LineStylePreferencesWithoutGradient & {
+		/** Whether the developing Point of Control line is drawn. */
+		visible: boolean;
+	};
+	/** Developing Value Area line style and visibility. */
+	developingVA: LineStylePreferencesWithoutGradient & {
+		/** Whether the developing Value Area lines are drawn. */
+		visible: boolean;
+	};
+}
 export interface SaveChartError extends Error {
 	readonly info: SaveChartErrorInfo;
 	readonly status: number | undefined;
@@ -20660,6 +21148,87 @@ export interface SeriesPreferencesMap {
 	[ChartStyle.HLCBars]: HLCBarsStylePreferences;
 	/** Volume Candle Style Preferences */
 	[ChartStyle.VolCandle]: CandleStylePreferences;
+	/** [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile) Style Preferences. Available in Trading Platform only. */
+	[ChartStyle.SVP]: SVPStylePreferences;
+}
+/**
+ * Overrides for the 'Session Volume Profile' indicator.
+ *
+ * Use these properties to customize indicator via {@link IChartWidgetApi.createStudy} and {@link IStudyApi.applyOverrides}.
+ */
+export interface SessionVolumeProfileIndicatorOverrides {
+	/** Default value: `#f44336` */
+	"developing poc.color": string;
+	/** Default value: `0` */
+	"developing poc.linestyle": number;
+	/** Default value: `1` */
+	"developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"developing poc.transparency": number;
+	/** Default value: `0` */
+	"developing poc.display": number;
+	/** Default value: `#2962ff` */
+	"developing va high.color": string;
+	/** Default value: `0` */
+	"developing va high.linestyle": number;
+	/** Default value: `1` */
+	"developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va high.transparency": number;
+	/** Default value: `0` */
+	"developing va high.display": number;
+	/** Default value: `#2962ff` */
+	"developing va low.color": string;
+	/** Default value: `0` */
+	"developing va low.linestyle": number;
+	/** Default value: `1` */
+	"developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"developing va low.transparency": number;
+	/** Default value: `0` */
+	"developing va low.display": number;
+	[key: string]: StudyOverrideValueType;
+}
+/** Session Volume Profile inputs that the chart style exposes. */
+export interface SessionVolumeStyleInputs {
+	/**
+	 * The user-defined session window used when {@link profilesSessions} is `Custom`, in `HHMM-HHMM`
+	 * or `HHMM-HHMM:days` form (for example `0930-1600`). Ignored for every other value of
+	 * {@link profilesSessions}.
+	 */
+	customSession: string;
+	/** Extend the Point of Control line to the right of its session. */
+	extendPocRight: boolean;
+	/** Extend the Value Area High line to the right of its session. */
+	extendVAHRight: boolean;
+	/** Extend the Value Area Low line to the right of its session. */
+	extendVALRight: boolean;
+	/**
+	 * Which session, or session phase, each profile covers. One of `All`,
+	 * `Each (pre-market, market, post-market)`, `Pre-market only`, `Market only`,
+	 * `Post-market only`, `Custom`.
+	 */
+	profilesSessions: "All" | "Each (pre-market, market, post-market)" | "Pre-market only" | "Market only" | "Post-market only" | "Custom";
+	/** Share of the profile's total volume that forms the Value Area, in percent. */
+	vaVolume: number;
+	/** Which volume the histogram splits into rows: up/down, total, or the delta. */
+	volume: "Up/Down" | "Total" | "Delta";
+	/** How the row count is derived: `Number Of Rows` or `Ticks Per Row`. */
+	rowsLayout: "Number Of Rows" | "Ticks Per Row";
+	/** Row count, or ticks per row, depending on {@link rowsLayout}. */
+	rows: number;
 }
 /**
  * Overrides for the 'Sessions' indicator.
@@ -20681,6 +21250,20 @@ export interface SetResolutionOptions {
 	 * A boolean flag. Allows to disable making the current chart active in the layout.
 	 */
 	doNotActivateChart?: boolean;
+}
+/**
+ * Options for {@link IChartingLibraryWidget.setShortcutsEnabled}.
+ */
+export interface SetShortcutsEnabledOptions {
+	/**
+	 * Pass `true` to keep custom shortcuts working when you disable the shortcuts.
+	 * Custom shortcuts are those you add with {@link IChartingLibraryWidget.onShortcut}.
+	 * Only the built&#8209;in shortcuts are disabled in this case.
+	 * The option has no effect when you enable the shortcuts.
+	 *
+	 * @default false
+	 */
+	keepCustom?: boolean;
 }
 /**
  * Options for setting a chart's symbol.
@@ -20825,7 +21408,7 @@ export interface SolidFillOptions extends CommonFillOptions {
 }
 export interface SortingParameters {
 	/** `property` of the data object that will be used for sorting */
-	property: string;
+	property: FieldRef;
 	/** Ascending sorting order (default `true`) - If it is `false`, then initial sorting will be in descending order */
 	asc?: boolean;
 }
@@ -20983,94 +21566,92 @@ export interface StandardErrorIndicatorOverrides {
  * The interface that describes the mapping of values in the {@link AccountManagerColumnBase.formatter} and {@link AccountManagerColumnBase.dataFields} properties of the Account Manager columns.
  * Refer to the [Value formatters](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/account-manager/value-formatters) section for more information.
  */
-/* eslint-disable jsdoc/require-jsdoc */
-export interface StandardFormattersDependenciesMapping {
-	[StandardFormatterName.Default]: string[];
-	[StandardFormatterName.Symbol]: SymbolFormatterProperties[keyof SymbolFormatterProperties];
+export interface StandardFormattersDependenciesMapping<T extends string = string> {
+	[StandardFormatterName.Default]: FieldRef<T>[];
+	[StandardFormatterName.Symbol]: SymbolFormatterProperties<T>[keyof SymbolFormatterProperties];
 	[StandardFormatterName.Side]: [
-		sideProperty: string
+		sideProperty: FieldRef<T>
 	];
 	[StandardFormatterName.PositionSide]: [
-		sideProperty: string
+		sideProperty: FieldRef<T>
 	];
-	[StandardFormatterName.Text]: string[];
+	[StandardFormatterName.Text]: FieldRef<T>[];
 	[StandardFormatterName.Type]: [
-		orderTypeProperty: string,
-		parentIdProperty: string,
-		stopTypeProperty: string
+		orderTypeProperty: FieldRef<T>,
+		parentIdProperty: FieldRef<T>,
+		stopTypeProperty: FieldRef<T>
 	];
 	[StandardFormatterName.FormatPrice]: [
-		priceProperty: string
+		priceProperty: FieldRef<T>
 	];
 	[StandardFormatterName.FormatPriceForexSup]: [
-		priceProperty: string
+		priceProperty: FieldRef<T>
 	];
-	[StandardFormatterName.FormatExitLevels]: LevelsFormatterProperties[keyof LevelsFormatterProperties];
+	[StandardFormatterName.FormatExitLevels]: LevelsFormatterProperties<T>[keyof LevelsFormatterProperties];
 	[StandardFormatterName.FormatPriceInCurrency]: [
-		priceProperty: string,
-		currencyProperty: string
+		priceProperty: FieldRef<T>,
+		currencyProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Status]: [
-		statusProperty: string
+		statusProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Date]: [
-		dateProperty: string
+		dateProperty: FieldRef<T>
 	];
 	[StandardFormatterName.LocalDate]: [
-		dateProperty: string
+		dateProperty: FieldRef<T>
 	];
 	[StandardFormatterName.DateOrDateTime]: [
-		dateProperty: string
+		dateProperty: FieldRef<T>
 	];
 	[StandardFormatterName.LocalDateOrDateTime]: [
-		dateProperty: string
+		dateProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Fixed]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.FixedInCurrency]: [
-		valueProperty: string,
-		currencyProperty: string
+		valueProperty: FieldRef<T>,
+		currencyProperty: FieldRef<T>
 	];
 	[StandardFormatterName.VariablePrecision]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Pips]: [
-		pipsProperty: string
+		pipsProperty: FieldRef<T>
 	];
 	[StandardFormatterName.IntegerSeparated]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.FormatQuantity]: [
-		qtyProperty: string
+		qtyProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Profit]: [
-		profitProperty: string
+		profitProperty: FieldRef<T>
 	];
 	[StandardFormatterName.ProfitInInstrumentCurrency]: [
-		profitProperty: string,
-		currencyProperty: string
+		profitProperty: FieldRef<T>,
+		currencyProperty: FieldRef<T>
 	];
 	[StandardFormatterName.ProfitInInstrumentCurrencyFloored]: [
-		profitProperty: string,
-		currencyProperty: string
+		profitProperty: FieldRef<T>,
+		currencyProperty: FieldRef<T>
 	];
 	[StandardFormatterName.ProfitInPercent]: [
-		plPercent: string
+		plPercent: FieldRef<T>
 	];
 	[StandardFormatterName.Percentage]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.ColoredPercentage]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.MarginPercent]: [
-		valueProperty: string
+		valueProperty: FieldRef<T>
 	];
 	[StandardFormatterName.Empty]: [
 	];
 }
-/* eslint-enable jsdoc/require-jsdoc */
 /**
  * Position defined by an OHLC price on a bar at a specified time.
  */
@@ -21215,14 +21796,14 @@ export interface StringInputOptions<TOptions extends readonly string[]> extends 
 	options: TOptions;
 }
 /**
- * A description of a study arrows plot.
+ * A description of an indicator arrows plot.
  */
 export interface StudyArrowsPlotInfo extends StudyPlotBaseInfo {
 	/** @inheritDoc */
 	readonly type: StudyPlotType.Arrows;
 }
 /**
- * Study arrow plot style preferences.
+ * Indicator arrow plot style preferences.
  */
 export interface StudyArrowsPlotPreferences extends StudyPlotBasePreferences {
 	/**
@@ -21262,7 +21843,7 @@ export interface StudyBandDefaultStyle extends Omit<StudyBandStyle, "color"> {
 	color: string | null;
 }
 /**
- * A description of a study band.
+ * A description of an indicator band.
  */
 export interface StudyBandInfo {
 	/**
@@ -21276,7 +21857,7 @@ export interface StudyBandInfo {
 	 */
 	readonly name: string;
 	/**
-	 * Band style inputs visibility flag. Used to hide the band from the style tab of study properties dialogs.
+	 * Band style inputs visibility flag. Used to hide the band from the style tab of indicator properties dialogs.
 	 */
 	readonly isHidden?: boolean;
 	/**
@@ -21290,7 +21871,7 @@ export interface StudyBandInfo {
 export interface StudyBandPreferences extends StudyBandStyle, StudyBandInfo {
 }
 /**
- * Study band style preferences.
+ * Indicator band style preferences.
  */
 export interface StudyBandStyle {
 	/**
@@ -21375,7 +21956,7 @@ export interface StudyCharsPlotDefaultPreferences extends Omit<StudyCharsPlotPre
 	textColor: string | null;
 }
 /**
- * A description of a study characters plot.
+ * A description of an indicator characters plot.
  */
 export interface StudyCharsPlotInfo extends StudyPlotBaseInfo {
 	/** @inheritDoc */
@@ -21405,14 +21986,14 @@ export interface StudyColorerPlotInfo extends StudyPalettedPlotInfo, StudyTarget
 	readonly type: StudyPlotType.Colorer;
 }
 /**
- * A description of a study data offset plot.
+ * A description of an indicator data offset plot.
  */
 export interface StudyDataOffsetPlotInfo extends StudyTargetedPlotInfo {
 	/** @inheritDoc */
 	readonly type: StudyPlotType.DataOffset;
 }
 /**
- * A description of a study data plot.
+ * A description of an indicator data plot.
  */
 export interface StudyDataPlotInfo extends StudyTargetedPlotInfo {
 	/** @inheritDoc */
@@ -21427,17 +22008,17 @@ export interface StudyDefaults {
 	bands: readonly Required<StudyBandDefaultStyle>[];
 	/** Defaults for the filled area styles */
 	filledAreasStyle: MappedObject<StudyFilledAreaStyle>;
-	/** Defaults for the study inputs */
+	/** Defaults for the indicator inputs */
 	inputs: StudyInputsSimple;
-	/** Defaults for the study palette styles */
+	/** Defaults for the indicator palette styles */
 	palettes: MappedObject<StudyPaletteStyle>;
-	/** Default for the study precision */
+	/** Default for the indicator precision */
 	precision: number | string;
-	/** Defaults for the study styles */
+	/** Defaults for the indicator styles */
 	styles: MappedObject<StudyPlotDefaultPreferences>;
 	/** Defaults for the OHLC plots */
 	ohlcPlots: MappedObject<StudyOhlcPlotDefaultPreferences>;
-	/** Defaults for the study graphics */
+	/** Defaults for the indicator graphics */
 	graphics: StudyGraphicsDefaults;
 }
 /**
@@ -21470,7 +22051,7 @@ export interface StudyFieldDescriptor {
 	plotTitle: string;
 }
 /**
- * Study filled area gradient styles.
+ * Indicator filled area gradient styles.
  */
 export interface StudyFilledAreaGradientColorStyle extends StudyFilledAreaStyleBase {
 	/** Gradient fill type */
@@ -21497,27 +22078,27 @@ export interface StudyFilledAreaGradientColorStyle extends StudyFilledAreaStyleB
 	bottomValue?: number;
 }
 /**
- * A description of a study filled area.
+ * A description of an indicator filled area.
  */
 export interface StudyFilledAreaInfo {
 	/**
-	 * Study ID.
+	 * Indicator ID.
 	 */
 	readonly id: string;
 	/**
-	 * Study band ID.
+	 * Indicator band ID.
 	 *
 	 * @see StudyBandInfo
 	 */
 	readonly objAId: string;
 	/**
-	 * Study band ID.
+	 * Indicator band ID.
 	 *
 	 * @see StudyBandInfo
 	 */
 	readonly objBId: string;
 	/**
-	 * Title that will appear in the styles tab of the study settings dialog.
+	 * Title that will appear in the styles tab of the indicator settings dialog.
 	 */
 	readonly title: string;
 	/**
@@ -21533,7 +22114,7 @@ export interface StudyFilledAreaInfo {
 	 */
 	readonly zorder?: number;
 	/**
-	 * Filled area's style inputs visibility flag. Used to hide the band from the style tab of study properties dialogs.
+	 * Filled area's style inputs visibility flag. Used to hide the band from the style tab of indicator properties dialogs.
 	 */
 	readonly isHidden?: boolean;
 	/**
@@ -21568,7 +22149,7 @@ export interface StudyFilledAreaInfo {
 	readonly fillToIntersection?: boolean;
 }
 /**
- * Study solid color filled area style preferences.
+ * Indicator solid color filled area style preferences.
  */
 export interface StudyFilledAreaSolidColorStyle extends StudyFilledAreaStyleBase {
 	/** Solid Fill type */
@@ -21581,7 +22162,7 @@ export interface StudyFilledAreaSolidColorStyle extends StudyFilledAreaStyleBase
 	color: string;
 }
 /**
- * Base study filled area style preferences.
+ * Base indicator filled area style preferences.
  */
 export interface StudyFilledAreaStyleBase {
 	/**
@@ -21677,14 +22258,14 @@ export interface StudyLinePlotDefaultPreferences extends Omit<StudyLinePlotPrefe
 	color: string | null;
 }
 /**
- * A description of a study line plot.
+ * A description of an indicator line plot.
  */
 export interface StudyLinePlotInfo extends StudyPlotBaseInfo {
 	/** @inheritDoc */
 	readonly type: StudyPlotType.Line;
 }
 /**
- * Study line plot style preferences.
+ * Indicator line plot style preferences.
  */
 export interface StudyLinePlotPreferences extends StudyPlotBasePreferences {
 	/**
@@ -21796,6 +22377,16 @@ export interface StudyOrDrawingAddedToChartEventParams {
 	 * Id of the added study or drawing.
 	 */
 	value: string;
+}
+/**
+ * Margins of the indicator price scale, expressed as a fraction of the pane height.
+ * The sum of `top` and `bottom` should be less than 1.
+ */
+export interface StudyOverlayScaleMargins {
+	/** Empty space above the indicator plots. `0.75` leaves the bottom quarter of the pane for the indicator. */
+	readonly top: number;
+	/** Empty space below the indicator plots. `0` makes the plots sit on the bottom edge of the pane. */
+	readonly bottom: number;
 }
 /**
  * Indicator overrides.
@@ -25560,6 +26151,114 @@ export interface StudyOverrides {
 	 * - Max: `2000`
 	 */
 	"smi ergodic indicator/oscillator.siglen": number;
+	/** Default value: `#f44336` */
+	"session volume profile.developing poc.color": string;
+	/** Default value: `0` */
+	"session volume profile.developing poc.linestyle": number;
+	/** Default value: `1` */
+	"session volume profile.developing poc.linewidth": number;
+	/** Default value: `step_line` */
+	"session volume profile.developing poc.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"session volume profile.developing poc.trackprice": boolean;
+	/** Default value: `0` */
+	"session volume profile.developing poc.transparency": number;
+	/** Default value: `0` */
+	"session volume profile.developing poc.display": number;
+	/** Default value: `#2962ff` */
+	"session volume profile.developing va high.color": string;
+	/** Default value: `0` */
+	"session volume profile.developing va high.linestyle": number;
+	/** Default value: `1` */
+	"session volume profile.developing va high.linewidth": number;
+	/** Default value: `step_line` */
+	"session volume profile.developing va high.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"session volume profile.developing va high.trackprice": boolean;
+	/** Default value: `0` */
+	"session volume profile.developing va high.transparency": number;
+	/** Default value: `0` */
+	"session volume profile.developing va high.display": number;
+	/** Default value: `#2962ff` */
+	"session volume profile.developing va low.color": string;
+	/** Default value: `0` */
+	"session volume profile.developing va low.linestyle": number;
+	/** Default value: `1` */
+	"session volume profile.developing va low.linewidth": number;
+	/** Default value: `step_line` */
+	"session volume profile.developing va low.plottype": LineStudyPlotStyleName;
+	/** Default value: `false` */
+	"session volume profile.developing va low.trackprice": boolean;
+	/** Default value: `0` */
+	"session volume profile.developing va low.transparency": number;
+	/** Default value: `0` */
+	"session volume profile.developing va low.display": number;
+	/**
+	 * - Default value: `Number Of Rows`
+	 * - Input type: `text`
+	 * - Options: `["Number Of Rows","Ticks Per Row"]`
+	 */
+	"session volume profile.rows layout": string;
+	/**
+	 * - Default value: `24`
+	 * - Input type: `integer`
+	 * - Max: `1000000`
+	 * - Min: `1`
+	 */
+	"session volume profile.row size": number;
+	/**
+	 * - Default value: `Up/Down`
+	 * - Input type: `text`
+	 * - Options: `["Up/Down","Total","Delta"]`
+	 */
+	"session volume profile.volume": string;
+	/**
+	 * - Default value: `All`
+	 * - Input type: `text`
+	 * - Options: `["All","Each (pre-market, market, post-market)","Pre-market only","Market only","Post-market only","Custom"]`
+	 * - Tooltip: `"Determines the sessions used to build the profile: \"All\" builds one profile per day. \"Each\" builds one profile per session. \"Custom\" builds one profile for the selected period. The other choices build a profile only for that session."`
+	 */
+	"session volume profile.sessions": string;
+	/**
+	 * - Default value: `0930-1600`
+	 * - Input type: `session`
+	 */
+	"session volume profile.custom session": string;
+	/**
+	 * - Default value: `Exchange`
+	 * - Input type: `text`
+	 * - Options: `["Exchange","Etc/UTC","Africa/Cairo","Africa/Casablanca","Africa/Johannesburg","Africa/Lagos","Africa/Nairobi","Africa/Tunis","America/Anchorage","America/Argentina/Buenos Aires","America/Bogota","America/Caracas","America/Chicago","America/El Salvador","America/Halifax","America/Juneau","America/Lima","America/Los Angeles","America/Mexico City","America/New York","America/Phoenix","America/Santiago","America/Sao Paulo","America/Toronto","America/Vancouver","US/Mountain","Asia/Almaty","Asia/Ashkhabad","Asia/Bahrain","Asia/Bangkok","Asia/Chongqing","Asia/Colombo","Asia/Dhaka","Asia/Dubai","Asia/Ho_Chi Minh","Asia/Hong Kong","Asia/Jakarta","Asia/Jerusalem","Asia/Karachi","Asia/Kabul","Asia/Kathmandu","Asia/Kolkata","Asia/Kuala Lumpur","Asia/Kuwait","Asia/Manila","Asia/Muscat","Asia/Nicosia","Asia/Qatar","Asia/Riyadh","Asia/Seoul","Asia/Shanghai","Asia/Singapore","Asia/Taipei","Asia/Tehran","Asia/Tokyo","Asia/Yangon","Atlantic/Azores","Atlantic/Reykjavik","Australia/Adelaide","Australia/Brisbane","Australia/Perth","Australia/Sydney","Europe/Amsterdam","Europe/Athens","Europe/Belgrade","Europe/Berlin","Europe/Bratislava","Europe/Brussels","Europe/Bucharest","Europe/Budapest","Europe/Copenhagen","Europe/Dublin","Europe/Helsinki","Europe/Istanbul","Europe/Lisbon","Europe/Ljubljana","Europe/London","Europe/Luxembourg","Europe/Madrid","Europe/Malta","Europe/Moscow","Europe/Oslo","Europe/Paris","Europe/Prague","Europe/Riga","Europe/Rome","Europe/Sofia","Europe/Stockholm","Europe/Tallinn","Europe/Vienna","Europe/Vilnius","Europe/Warsaw","Europe/Zagreb","Europe/Zurich","Pacific/Auckland","Pacific/Chatham","Pacific/Fakaofo","Pacific/Honolulu","Pacific/Norfolk"]`
+	 * - Tooltip: ``"If the `Sessions` input is set to `Custom`, this input modifies starting and ending times of each profile. The session is specified the `hhmm-hhmm` format and adjusted to the chosen time zone."``
+	 */
+	"session volume profile.customsessiontz": string;
+	/**
+	 * - Default value: `70`
+	 * - Input type: `integer`
+	 * - Max: `100`
+	 * - Min: `0`
+	 */
+	"session volume profile.value area volume": number;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 */
+	"session volume profile.extend poc right": boolean;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 */
+	"session volume profile.extend vah right": boolean;
+	/**
+	 * - Default value: `false`
+	 * - Input type: `bool`
+	 */
+	"session volume profile.extend val right": boolean;
+	/**
+	 * - Default value: `true`
+	 * - Input type: `bool`
+	 * - IsHidden: `true`
+	 */
+	"session volume profile.subscriberealtime": boolean;
 	/** Default value: `15` */
 	"smoothed moving average.plot.display": number;
 	/** Default value: `0` */
@@ -26886,7 +27585,7 @@ export interface StudyOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
- * Study palette color.
+ * Indicator palette color.
  */
 export interface StudyPaletteColor {
 	/**
@@ -26908,7 +27607,7 @@ export interface StudyPaletteColor {
 export interface StudyPaletteColorPreferences extends StudyPaletteColor, StudyPaletteInfo {
 }
 /**
- * A description of a study palette.
+ * A description of an indicator palette.
  */
 export interface StudyPaletteInfo {
 	/**
@@ -26926,7 +27625,7 @@ export interface StudyPalettePreferences {
 	colors: Record<string, StudyPaletteColorPreferences>;
 }
 /**
- * Study palette style.
+ * Indicator palette style.
  */
 export interface StudyPaletteStyle {
 	/**
@@ -26935,7 +27634,7 @@ export interface StudyPaletteStyle {
 	colors: MappedObject<StudyPaletteColor> | StudyPaletteColor[];
 }
 /**
- * A description of a study plot with a palette.
+ * A description of an indicator plot with a palette.
  */
 export interface StudyPalettedPlotInfo extends StudyPlotBaseInfo {
 	/**
@@ -26944,7 +27643,7 @@ export interface StudyPalettedPlotInfo extends StudyPlotBaseInfo {
 	readonly palette: string;
 }
 /**
- * A description of a study color palettes.
+ * A description of indicator color palettes.
  */
 export interface StudyPalettesInfo {
 	/**
@@ -26952,7 +27651,7 @@ export interface StudyPalettesInfo {
 	 */
 	readonly colors: MappedObject<StudyPaletteInfo> | StudyPaletteInfo[];
 	/**
-	 * Mapping from values returned by the study to palette color index.
+	 * Mapping from values returned by the indicator to palette color index.
 	 */
 	readonly valToIndex?: MappedObject<number>;
 	/**
@@ -26961,7 +27660,7 @@ export interface StudyPalettesInfo {
 	readonly addDefaultColor?: boolean;
 }
 /**
- * Base type for all study plot descriptions.
+ * Base type for all indicator plot descriptions.
  */
 export interface StudyPlotBaseInfo {
 	/**
@@ -26974,7 +27673,7 @@ export interface StudyPlotBaseInfo {
 	readonly type: string;
 }
 /**
- * Base type for all study plot style preferences.
+ * Base type for all indicator plot style preferences.
  */
 export interface StudyPlotBasePreferences {
 	/**
@@ -27064,14 +27763,14 @@ export interface StudyShapesPlotDefaultPreferences extends Omit<StudyShapesPlotP
 	textColor: string | null;
 }
 /**
- * A description of a study shapes plot.
+ * A description of an indicator shapes plot.
  */
 export interface StudyShapesPlotInfo extends StudyPlotBaseInfo {
 	/** @inheritDoc */
 	readonly type: StudyPlotType.Shapes;
 }
 /**
- * Study shape plot style preferences.
+ * Indicator shape plot style preferences.
  */
 export interface StudyShapesPlotPreferences extends StudyPlotBasePreferences {
 	/**
@@ -27211,7 +27910,7 @@ export interface StudyStyleValues {
 	};
 }
 /**
- * Study styles description.
+ * Indicator styles description.
  */
 export interface StudyStylesInfo {
 	/**
@@ -27223,11 +27922,11 @@ export interface StudyStylesInfo {
 	 */
 	readonly joinPoints?: boolean;
 	/**
-	 * Title used in the study dialog styles tab.
+	 * Title used in the indicator dialog styles tab.
 	 */
 	readonly title: string;
 	/**
-	 * If `true` then the styles tab will be hidden in the study dialog.
+	 * If `true` then the styles tab will be hidden in the indicator dialog.
 	 */
 	readonly isHidden?: boolean;
 	/**
@@ -27276,7 +27975,7 @@ export interface StudySymbolInputInfo extends StudyInputBaseInfo {
 	readonly optional?: boolean;
 }
 /**
- * A description of a study plot with a target.
+ * A description of an indicator plot with a target.
  */
 export interface StudyTargetedPlotInfo extends StudyPlotBaseInfo {
 	/**
@@ -27715,15 +28414,15 @@ export interface SuperTrendIndicatorOverrides {
 }
 export interface SymbolExt extends LibrarySymbolInfo {
 }
-export interface SymbolFormatterProperties {
+export interface SymbolFormatterProperties<T extends string = string> {
 	base: [
-		brokerSymbolProperty: string,
-		symbolProperty: string
+		symbolDisplayNameProperty: FieldRef<T>,
+		symbolProperty: FieldRef<T>
 	];
 	withMessage: [
-		brokerSymbolProperty: string,
-		symbolProperty: string,
-		messageProperty: string
+		symbolDisplayNameProperty: FieldRef<T>,
+		symbolProperty: FieldRef<T>,
+		messageProperty: FieldRef<T>
 	];
 }
 export interface SymbolInfoPriceSource {
@@ -29481,6 +30180,43 @@ export interface VolumeProfileFixedRangeIndicatorOverrides {
 	"developing va low.display": number;
 	[key: string]: StudyOverrideValueType;
 }
+export interface VolumeProfileOptions {
+	/**
+	 * Maximum number of histogram rows a volume profile indicator keeps in total, across all of the profiles
+	 * it has drawn. It applies to every volume profile indicator — [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile), Volume Profile
+	 * Fixed Range, and Volume Profile Visible Range. For a multi-profile indicator, once new profiles
+	 * would push the total past this limit, the oldest profiles are dropped, which is what bounds how far
+	 * back it draws. A single-profile indicator whose one histogram would exceed the limit reports an error
+	 * instead.
+	 *
+	 * Raising this number lets profiles cover more history at the cost of memory and of time spent serializing and
+	 * laying out the extra rows, so increase it gradually and measure. Values below `100` are ignored.
+	 *
+	 * @default 6000
+	 */
+	max_total_rows?: number;
+	/**
+	 * How many trading sessions of history [Session Volume Profile](https://www.tradingview.com/charting-library-docs/latest/trading_terminal/session-volume-profile)
+	 * should cover. Only Session Volume Profile reads this; the fixed and visible range indicators define
+	 * their own range.
+	 *
+	 * By default the indicator draws only over the range the chart itself has loaded, so profiles stop where the
+	 * chart's history stops. Setting this adds an initial minimum-history request intended to cover that many
+	 * sessions, extending the chart's own history to fit them. It is a prefetch hint, not a cap on the most
+	 * recent sessions; normal chart scroll-back remains available.
+	 *
+	 * Requires the [`studies_extend_time_scale`](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets#studies_extend_time_scale)
+	 * featureset; without it the option has no effect. Because the
+	 * time scale is shared, extending it affects every source on the chart, not only this indicator. Values below
+	 * `1` are ignored and anything above `500` is clamped. As best-effort protection against amplified initial
+	 * requests, this option contributes at most 200,000 bars to the minimum `countBack` of each affected main or
+	 * detailed series. This does not cap the total bars fetched or cached: the history processor may request
+	 * more bars to span from the first loaded bar to the current time. Therefore high-frequency data may cover
+	 * fewer than the requested sessions. Tick resolutions always use the 200,000-bar contribution because a
+	 * session duration cannot predict how many ticks it contains.
+	 */
+	history_sessions?: number;
+}
 /**
  * Overrides for the 'Volume Profile Visible Range' indicator.
  *
@@ -29790,6 +30526,14 @@ export interface WilliamsRIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 /**
+ * Implemented by the trading entities that accept custom fields: {@link PlacedOrder},
+ * {@link Position}, {@link IndividualPosition}, and {@link Execution}.
+ */
+export interface WithExtraData {
+	/** Your own custom fields for this entity. Omit the property if there are none. */
+	extra?: ExtraData;
+}
+/**
  * Configures worker-thread usage for chart calculations and processing.
  */
 export interface WorkersConfiguration {
@@ -29827,8 +30571,8 @@ export interface ZigZagIndicatorOverrides {
 	[key: string]: StudyOverrideValueType;
 }
 export type AccountId = Nominal<string, "AccountID">;
-export type AccountManagerColumn = {
-	[K in StandardFormatterName | FormatterName]: AccountManagerColumnBase<K>;
+export type AccountManagerColumn<TPossibleFields extends string = string> = {
+	[TFormatterName in StandardFormatterName | FormatterName]: AccountManagerColumnBase<TFormatterName, TPossibleFields>;
 }[StandardFormatterName | FormatterName];
 /**
  * Describes a single action to put it into a dropdown or a context menu.
@@ -29932,7 +30676,7 @@ export type ChartingLibraryFeatureset =
 "cropped_tick_marks" | 
 /** Applies symbol display mode (ticker/description) to overlay/compare studies in the status line @default false */
 "study_overlay_compare_legend_option" | 
-/** Applies symbol display mode (ticker/description) to indicator inputs in the status line @default false */
+/** Applies the symbol display mode selected in `mainSeriesProperties.statusViewStyle.symbolTextSource` to overlay/compare indicators in the status line @default false */
 "study_symbol_ticker_description" | 
 /** Displays Symbol Name Label when comparing Symbols @default true */
 "auto_enable_symbol_labels" | 
@@ -30076,7 +30820,7 @@ export type ChartingLibraryFeatureset =
 "pricescale_currency" | 
 /** Displays the unit in which the instrument is traded on the price axes @default false */
 "pricescale_unit" | 
-/** Displays Date Format selector in Chart Settings @default true */
+/** Displays Date Format selector in _Settings_ @default true */
 "scales_date_format" | 
 /** Displays popup hints about possible mouse/shortcuts/UI actions @default true */
 "popup_hints" | 
@@ -30112,7 +30856,7 @@ export type ChartingLibraryFeatureset =
 "hide_image_invalid_symbol" | 
 /** Show/Hide the exchange label from the displayed label @default false */
 "hide_object_tree_and_price_scale_exchange_label" | 
-/** Displays Time Format selector in Chart Settings @default true */
+/** Displays Time Format selector in _Settings_ @default true */
 "scales_time_hours_format" | 
 /** Show a literal "n/a" for not available values instead of "∅" @default false */
 "use_na_string_for_not_available_values" | 
@@ -30238,8 +30982,8 @@ export type ChartingLibraryFeatureset =
  *
  * With this feature enabled, users can visually identify periods of market inactivity within intraday sessions on the chart.
  *
- * **Behaviour**
- * - **Chart Settings Dialog:** When this featureset is enabled (`true`), a checkbox appears in the chart settings dialog, allowing users to toggle the visibility of inactivity gaps on or off.
+ * **Behavior**
+ * - **Settings:** When this featureset is enabled (`true`), a checkbox appears in the settings dialog, allowing users to toggle the visibility of inactivity gaps on or off.
  * - **Widget API Integration:** The featureset also exposes the `inactivityGaps` watched value through the Widget API. This allows programmatic control over inactivity gap behavior, enabling or disabling it via API calls.
  * @default false
  */
@@ -30316,7 +31060,7 @@ export type ContextMenuRendererFactory = (items: readonly IActionVariant[], para
 export type CreateButtonOptions = CreateHTMLButtonOptions | CreateTradingViewStyledButtonOptions;
 export type CustomStudyFormatter = Omit<INumberFormatter, "parse">;
 /**
- * Factory function that can be implemented to create custom study formatters.
+ * Factory function that can be implemented to create custom indicator formatters.
  */
 export type CustomStudyFormatterFactory = (format: CustomStudyFormatterFormat, symbolInfo: LibrarySymbolInfo | null, precision: string | undefined) => CustomStudyFormatter | null;
 /**
@@ -30326,7 +31070,7 @@ export type CustomTableFormatElementFunction<T extends TableFormatterInputValues
 /**
  * Identifier for a custom timezone (string).
  */
-export type CustomTimezoneId = Nominal<"CustomTimezoneId", string>;
+export type CustomTimezoneId = Nominal<string, "CustomTimezoneId">;
 export type CustomTimezones = "Africa/Cairo" | "Africa/Casablanca" | "Africa/Johannesburg" | "Africa/Lagos" | "Africa/Nairobi" | "Africa/Tunis" | "America/Anchorage" | "America/Argentina/Buenos_Aires" | "America/Bogota" | "America/Caracas" | "America/Chicago" | "America/El_Salvador" | "America/Halifax" | "America/Juneau" | "America/Lima" | "America/Los_Angeles" | "America/Mexico_City" | "America/New_York" | "America/Phoenix" | "America/Santiago" | "America/Sao_Paulo" | "America/Toronto" | "America/Vancouver" | "Asia/Almaty" | "Asia/Ashkhabad" | "Asia/Bahrain" | "Asia/Bangkok" | "Asia/Chongqing" | "Asia/Colombo" | "Asia/Dhaka" | "Asia/Dubai" | "Asia/Ho_Chi_Minh" | "Asia/Hong_Kong" | "Asia/Jakarta" | "Asia/Jerusalem" | "Asia/Kabul" | "Asia/Karachi" | "Asia/Kathmandu" | "Asia/Kolkata" | "Asia/Kuala_Lumpur" | "Asia/Kuwait" | "Asia/Manila" | "Asia/Muscat" | "Asia/Nicosia" | "Asia/Qatar" | "Asia/Riyadh" | "Asia/Seoul" | "Asia/Shanghai" | "Asia/Singapore" | "Asia/Taipei" | "Asia/Tehran" | "Asia/Tokyo" | "Asia/Yangon" | "Atlantic/Azores" | "Atlantic/Reykjavik" | "Australia/Adelaide" | "Australia/Brisbane" | "Australia/Perth" | "Australia/Sydney" | "Europe/Amsterdam" | "Europe/Athens" | "Europe/Belgrade" | "Europe/Berlin" | "Europe/Bratislava" | "Europe/Brussels" | "Europe/Bucharest" | "Europe/Budapest" | "Europe/Copenhagen" | "Europe/Dublin" | "Europe/Helsinki" | "Europe/Istanbul" | "Europe/Lisbon" | "Europe/Ljubljana" | "Europe/London" | "Europe/Luxembourg" | "Europe/Madrid" | "Europe/Malta" | "Europe/Moscow" | "Europe/Oslo" | "Europe/Paris" | "Europe/Prague" | "Europe/Riga" | "Europe/Rome" | "Europe/Sofia" | "Europe/Stockholm" | "Europe/Tallinn" | "Europe/Vienna" | "Europe/Vilnius" | "Europe/Warsaw" | "Europe/Zagreb" | "Europe/Zurich" | "Pacific/Auckland" | "Pacific/Chatham" | "Pacific/Fakaofo" | "Pacific/Honolulu" | "Pacific/Norfolk" | "US/Mountain";
 /**
  * Custom translation function
@@ -30404,6 +31148,10 @@ export type EntityId = Nominal<string, "EntityId">;
  * Description of each field of exported data from the chart
  */
 export type FieldDescriptor = TimeFieldDescriptor | UserTimeFieldDescriptor | SeriesFieldDescriptor | StudyFieldDescriptor;
+export type FieldRef<T extends string = string> = T | [
+	T,
+	...string[]
+];
 export type FillOptions = SolidFillOptions | GradientFillOptions;
 export type FinancialPeriod = "FY" | "FQ" | "FH" | "TTM" | "NFY" | "NFQ" | "NFH" | "N4FQ" | "N4FY" | "N4FH" | "NTM";
 export type FinancialPeriodOrAggregated = FinancialPeriod | "AGG" | "NOAGG";
@@ -30420,7 +31168,6 @@ export type GetNewsFunction = (symbol: string, callback: (response: GetNewsRespo
  * sign in their name (e.g "Etc/GMT-14" is 14 hours ahead of GMT).
  */
 export type GmtTimezoneId = `Etc/GMT${"+" | "-"}${number}${`:${number}` | ""}`;
-export type GridLinesMode = "both" | "vert" | "horz" | "none";
 export type GroupLockState = "Locked" | "Unlocked" | "Partial";
 export type GroupVisibilityState = "Visible" | "Invisible" | "Partial";
 /**
@@ -30485,6 +31232,7 @@ export type ISeriesStudyResult = [
  */
 export type InputFieldValidator = (value: any) => InputFieldValidatorResult;
 export type InputFieldValidatorResult = PositiveBaseInputFieldValidatorResult | NegativeBaseInputFieldValidatorResult;
+// Persian "fa", Czech "cs", Dutch "nl_NL", Greek "el", Hungarian "hu_HU", and Romanian "ro" are no longer supported
 export type LanguageCode = "ar" | "zh" | "ca_ES" | "en" | "fr" | "de" | "he_IL" | "id_ID" | "it" | "ja" | "ko" | "pl" | "pt" | "ru" | "es" | "sv" | "th" | "tr" | "vi" | "ms_MY" | "zh_TW";
 export type LayoutSizes = Record<LayoutType, LayoutSizesState>;
 export type LayoutSizesState = SubLayoutSizesState[];
@@ -30495,6 +31243,7 @@ export type LibrarySessionId = "regular" | "extended" | "premarket" | "postmarke
  * Plot Style. Used for `plottype` properties within [Indicator overrides](https://www.tradingview.com/charting-library-docs/latest/customization/overrides/indicator-overrides).
  */
 export type LineStudyPlotStyleName = "line" | "histogram" | "cross" | "area" | "columns" | "circles" | "line_with_breaks" | "area_with_breaks" | "step_line" | "step_line_with_breaks" | "step_line_with_diamonds";
+export type LineStylePreferencesWithoutGradient = Omit<LineStylePreferences, "colorType" | "gradientStartColor" | "gradientEndColor">;
 /**
  * The type of data being requested from the {@link IExternalSaveLoadAdapter.loadLineToolsAndGroups} method.
  *
@@ -30512,10 +31261,26 @@ export type MarkupText = (string | HyperlinkInfo)[];
  * for a diagram of every layout type and the chart index that each position corresponds to.
  */
 export type MultipleChartsLayoutType = "2h" | "2v" | "3h" | "3v" | "3s" | "3r" | "2-1" | "1-2" | "4" | "4v" | "4h" | "4s" | "4s-l" | "1-3" | "3-1" | "2-2-l" | "2-2-r" | "2-2" | "1-4" | "5h" | "5v" | "5s" | "5s-l" | "2-3" | "3-2" | "4-1" | "2-3-l" | "2-3-r" | "6" | "6h" | "6v" | "6c" | "2-4" | "4-2" | "4-3" | "7h" | "7s" | "8" | "8c" | "8h" | "8v";
+/**
+ * This is the generic type useful for declaring a nominal type,
+ * which does not structurally matches with the base type and
+ * the other types declared over the same base type
+ *
+ * Usage:
+ * @example
+ * type Index = Nominal<number, 'Index'>;
+ * // let i: Index = 42; // this fails to compile
+ * let i: Index = 42 as Index; // OK
+ * @example
+ * type TagName = Nominal<string, 'TagName'>;
+ */
+export type Nominal<T, Name extends string> = T & { /* eslint-disable-next-line jsdoc/require-jsdoc */
+	[Symbol.species]: Name;
+};
 export type NoticeDialogParams = Omit<DialogParams<() => void>, "callback">;
 export type ObservableCallback<T> = (value: T) => void;
 export type OmitActionId<T extends {
-	actionId: ActionId;
+	actionId: string;
 }> = Omit<T, "actionId">;
 export type OnActionExecuteHandler = (action: IAction) => void;
 export type OnActionUpdateHandler = (action: IAction) => void;
@@ -30523,7 +31288,7 @@ export type OnReadyCallback = (configuration: DatafeedConfiguration) => void;
 export type Order = PlacedOrder | BracketOrder;
 export type OrderLineLengthUnit = "pixel" | "percentage";
 export type OrderPreviewMessage = string | MarkupText;
-export type OrderTableColumn = AccountManagerColumn & {
+export type OrderTableColumn = AccountManagerColumn<keyof (PlacedOrder & BracketOrder)> & {
 	/**
 	 * An optional numeric array of order statuses that is applied to order columns only. If it is available then the column will be displayed in the specified tabs of the status filter only.
 	 *
@@ -30539,7 +31304,7 @@ export type OrderTableColumn = AccountManagerColumn & {
 	supportedStatusFilters?: OrderStatusFilter[];
 };
 export type OverlayIndicatorOverridesAll = OverlayIndicatorOverridesBar | OverlayIndicatorOverridesCandle | OverlayIndicatorOverridesLine | OverlayIndicatorOverridesArea | OverlayIndicatorOverridesHollowCandle | OverlayIndicatorOverridesBaseline | OverlayIndicatorOverridesHiLo | OverlayIndicatorOverridesColumn | OverlayIndicatorOverridesHLCArea | OverlayIndicatorOverridesLineWithMarkers | OverlayIndicatorOverridesStepline;
-export type OverlayIndicatorStyleExclusions = ChartStyle.Renko | ChartStyle.Kagi | ChartStyle.PnF | ChartStyle.LineBreak | ChartStyle.HeikinAshi | ChartStyle.VolCandle;
+export type OverlayIndicatorStyleExclusions = ChartStyle.Renko | ChartStyle.Kagi | ChartStyle.PnF | ChartStyle.LineBreak | ChartStyle.HeikinAshi | ChartStyle.VolCandle | ChartStyle.SVP;
 export type PageName = "watchlist_details_news" | "data_window" | "object_tree";
 /**
  * Plot shape ID.
@@ -30560,9 +31325,9 @@ export type QuotesCallback = (data: QuoteData[]) => void;
 export type QuotesErrorCallback = (reason: string) => void;
 export type RawStudyMetaInfoId = Nominal<string, "RawStudyMetaInfoId">;
 export type RawStudyMetaInformation = Omit<RawStudyMetaInfo, "defaults" | "plots"> & {
-	/** array with study plots info. See dedicated article: [Custom Studies Plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots) */
+	/** Array with indicator plots info. See dedicated article: [Custom indicators plots](https://www.tradingview.com/charting-library-docs/latest/custom_studies/Custom-Studies-Plots). */
 	readonly plots?: readonly Readonly<StudyPlotInformation>[];
-	/** an object containing settings that are applied when user clicks 'Apply Defaults'. See dedicated article: [Custom Studies Defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults) */
+	/** An object containing settings that are applied when the user clicks 'Apply Defaults'. See dedicated article: [Custom indicators defaults](https://www.tradingview.com/charting-library-docs/latest/custom_studies/metainfo/Custom-Studies-Defaults). */
 	readonly defaults?: Readonly<DeepPartial<StudyDefaults>>;
 };
 /**
@@ -30615,7 +31380,7 @@ export type SetVisibleTimeRange = Omit<VisibleTimeRange, "to"> & Partial<Pick<Vi
 export type ShapePoint = StickedPoint | PricedPoint | TimePoint;
 export type ShapesGroupId = Nominal<string, "ShapesGroupId">;
 export type SingleChartLayoutType = "s";
-export type SingleIndicatorOverrides = FiftyTwoWeekHighLowIndicatorOverrides | AcceleratorOscillatorIndicatorOverrides | AccumulationDistributionIndicatorOverrides | AccumulativeSwingIndexIndicatorOverrides | AdvanceDeclineIndicatorOverrides | AnchoredVWAPIndicatorOverrides | ArnaudLegouxMovingAverageIndicatorOverrides | AroonIndicatorOverrides | AverageDirectionalIndexIndicatorOverrides | AveragePriceIndicatorOverrides | AverageTrueRangeIndicatorOverrides | AwesomeOscillatorIndicatorOverrides | BalanceofPowerIndicatorOverrides | BollingerBandsIndicatorOverrides | BollingerBandsBIndicatorOverrides | BollingerBandsWidthIndicatorOverrides | ChaikinMoneyFlowIndicatorOverrides | ChaikinOscillatorIndicatorOverrides | ChaikinVolatilityIndicatorOverrides | ChandeKrollStopIndicatorOverrides | ChandeMomentumOscillatorIndicatorOverrides | ChopZoneIndicatorOverrides | ChoppinessIndexIndicatorOverrides | CommodityChannelIndexIndicatorOverrides | CompareIndicatorOverrides | ConnorsRSIIndicatorOverrides | CoppockCurveIndicatorOverrides | CorrelationLogIndicatorOverrides | CorrelationCoefficientIndicatorOverrides | DetrendedPriceOscillatorIndicatorOverrides | DirectionalMovementIndicatorOverrides | DonchianChannelsIndicatorOverrides | DoubleEMAIndicatorOverrides | EMACrossIndicatorOverrides | EaseOfMovementIndicatorOverrides | EldersForceIndexIndicatorOverrides | EnvelopesIndicatorOverrides | FisherTransformIndicatorOverrides | FixedRangeIndicatorOverrides | GuppyMultipleMovingAverageIndicatorOverrides | HistoricalVolatilityIndicatorOverrides | HullMovingAverageIndicatorOverrides | IchimokuCloudIndicatorOverrides | KeltnerChannelsIndicatorOverrides | KlingerOscillatorIndicatorOverrides | KnowSureThingIndicatorOverrides | LeastSquaresMovingAverageIndicatorOverrides | LinearRegressionCurveIndicatorOverrides | LinearRegressionSlopeIndicatorOverrides | MACrossIndicatorOverrides | MAwithEMACrossIndicatorOverrides | MACDIndicatorOverrides | MajorityRuleIndicatorOverrides | MassIndexIndicatorOverrides | McGinleyDynamicIndicatorOverrides | MedianPriceIndicatorOverrides | MomentumIndicatorOverrides | MoneyFlowIndexIndicatorOverrides | MovingAverageIndicatorOverrides | MovingAverageAdaptiveIndicatorOverrides | MovingAverageChannelIndicatorOverrides | MovingAverageDoubleIndicatorOverrides | MovingAverageExponentialIndicatorOverrides | MovingAverageHammingIndicatorOverrides | MovingAverageMultipleIndicatorOverrides | MovingAverageTripleIndicatorOverrides | MovingAverageWeightedIndicatorOverrides | NetVolumeIndicatorOverrides | OnBalanceVolumeIndicatorOverrides | OverlayIndicatorOverrides | ParabolicSARIndicatorOverrides | PivotPointsStandardIndicatorOverrides | PriceChannelIndicatorOverrides | PriceOscillatorIndicatorOverrides | PriceVolumeTrendIndicatorOverrides | RankCorrelationIndexIndicatorOverrides | RateOfChangeIndicatorOverrides | RatioIndicatorOverrides | RegressionTrendIndicatorOverrides | RelativeStrengthIndexIndicatorOverrides | RelativeVigorIndexIndicatorOverrides | RelativeVolatilityIndexIndicatorOverrides | SMIErgodicIndicatorOscillatorIndicatorOverrides | SessionsIndicatorOverrides | SmoothedMovingAverageIndicatorOverrides | SpreadIndicatorOverrides | StandardDeviationIndicatorOverrides | StandardErrorIndicatorOverrides | StandardErrorBandsIndicatorOverrides | StochasticIndicatorOverrides | StochasticRSIIndicatorOverrides | SuperTrendIndicatorOverrides | TRIXIndicatorOverrides | TrendStrengthIndexIndicatorOverrides | TripleEMAIndicatorOverrides | TrueStrengthIndexIndicatorOverrides | TypicalPriceIndicatorOverrides | UltimateOscillatorIndicatorOverrides | VWAPIndicatorOverrides | VWMAIndicatorOverrides | VolatilityClosetoCloseIndicatorOverrides | VolatilityIndexIndicatorOverrides | VolatilityOHLCIndicatorOverrides | VolatilityZeroTrendClosetoCloseIndicatorOverrides | VolumeIndicatorOverrides | VolumeOscillatorIndicatorOverrides | VolumeProfileFixedRangeIndicatorOverrides | VolumeProfileVisibleRangeIndicatorOverrides | VortexIndicatorIndicatorOverrides | WilliamsRIndicatorOverrides | WilliamsAlligatorIndicatorOverrides | WilliamsFractalIndicatorOverrides | ZigZagIndicatorOverrides | OverlayIndicatorOverridesAll;
+export type SingleIndicatorOverrides = FiftyTwoWeekHighLowIndicatorOverrides | AcceleratorOscillatorIndicatorOverrides | AccumulationDistributionIndicatorOverrides | AccumulativeSwingIndexIndicatorOverrides | AdvanceDeclineIndicatorOverrides | AnchoredVWAPIndicatorOverrides | ArnaudLegouxMovingAverageIndicatorOverrides | AroonIndicatorOverrides | AverageDirectionalIndexIndicatorOverrides | AveragePriceIndicatorOverrides | AverageTrueRangeIndicatorOverrides | AwesomeOscillatorIndicatorOverrides | BalanceofPowerIndicatorOverrides | BollingerBandsIndicatorOverrides | BollingerBandsBIndicatorOverrides | BollingerBandsWidthIndicatorOverrides | ChaikinMoneyFlowIndicatorOverrides | ChaikinOscillatorIndicatorOverrides | ChaikinVolatilityIndicatorOverrides | ChandeKrollStopIndicatorOverrides | ChandeMomentumOscillatorIndicatorOverrides | ChopZoneIndicatorOverrides | ChoppinessIndexIndicatorOverrides | CommodityChannelIndexIndicatorOverrides | CompareIndicatorOverrides | ConnorsRSIIndicatorOverrides | CoppockCurveIndicatorOverrides | CorrelationLogIndicatorOverrides | CorrelationCoefficientIndicatorOverrides | DetrendedPriceOscillatorIndicatorOverrides | DirectionalMovementIndicatorOverrides | DonchianChannelsIndicatorOverrides | DoubleEMAIndicatorOverrides | EMACrossIndicatorOverrides | EaseOfMovementIndicatorOverrides | EldersForceIndexIndicatorOverrides | EnvelopesIndicatorOverrides | FisherTransformIndicatorOverrides | FixedRangeIndicatorOverrides | GuppyMultipleMovingAverageIndicatorOverrides | HistoricalVolatilityIndicatorOverrides | HullMovingAverageIndicatorOverrides | IchimokuCloudIndicatorOverrides | KeltnerChannelsIndicatorOverrides | KlingerOscillatorIndicatorOverrides | KnowSureThingIndicatorOverrides | LeastSquaresMovingAverageIndicatorOverrides | LinearRegressionCurveIndicatorOverrides | LinearRegressionSlopeIndicatorOverrides | MACrossIndicatorOverrides | MAwithEMACrossIndicatorOverrides | MACDIndicatorOverrides | MajorityRuleIndicatorOverrides | MassIndexIndicatorOverrides | McGinleyDynamicIndicatorOverrides | MedianPriceIndicatorOverrides | MomentumIndicatorOverrides | MoneyFlowIndexIndicatorOverrides | MovingAverageIndicatorOverrides | MovingAverageAdaptiveIndicatorOverrides | MovingAverageChannelIndicatorOverrides | MovingAverageDoubleIndicatorOverrides | MovingAverageExponentialIndicatorOverrides | MovingAverageHammingIndicatorOverrides | MovingAverageMultipleIndicatorOverrides | MovingAverageTripleIndicatorOverrides | MovingAverageWeightedIndicatorOverrides | NetVolumeIndicatorOverrides | OnBalanceVolumeIndicatorOverrides | OverlayIndicatorOverrides | ParabolicSARIndicatorOverrides | PivotPointsStandardIndicatorOverrides | PriceChannelIndicatorOverrides | PriceOscillatorIndicatorOverrides | PriceVolumeTrendIndicatorOverrides | RankCorrelationIndexIndicatorOverrides | RateOfChangeIndicatorOverrides | RatioIndicatorOverrides | RegressionTrendIndicatorOverrides | RelativeStrengthIndexIndicatorOverrides | RelativeVigorIndexIndicatorOverrides | RelativeVolatilityIndexIndicatorOverrides | SMIErgodicIndicatorOscillatorIndicatorOverrides | SessionVolumeProfileIndicatorOverrides | SessionsIndicatorOverrides | SmoothedMovingAverageIndicatorOverrides | SpreadIndicatorOverrides | StandardDeviationIndicatorOverrides | StandardErrorIndicatorOverrides | StandardErrorBandsIndicatorOverrides | StochasticIndicatorOverrides | StochasticRSIIndicatorOverrides | SuperTrendIndicatorOverrides | TRIXIndicatorOverrides | TrendStrengthIndexIndicatorOverrides | TripleEMAIndicatorOverrides | TrueStrengthIndexIndicatorOverrides | TypicalPriceIndicatorOverrides | UltimateOscillatorIndicatorOverrides | VWAPIndicatorOverrides | VWMAIndicatorOverrides | VolatilityClosetoCloseIndicatorOverrides | VolatilityIndexIndicatorOverrides | VolatilityOHLCIndicatorOverrides | VolatilityZeroTrendClosetoCloseIndicatorOverrides | VolumeIndicatorOverrides | VolumeOscillatorIndicatorOverrides | VolumeProfileFixedRangeIndicatorOverrides | VolumeProfileVisibleRangeIndicatorOverrides | VortexIndicatorIndicatorOverrides | WilliamsRIndicatorOverrides | WilliamsAlligatorIndicatorOverrides | WilliamsFractalIndicatorOverrides | ZigZagIndicatorOverrides | OverlayIndicatorOverridesAll;
 /** An event related to a study. */
 export type StudyEventType = "create" | "remove" | "price_scale_changed" | "paste_study";
 export type StudyFilledAreaStyle = StudyFilledAreaSolidColorStyle | StudyFilledAreaGradientColorStyle;
@@ -30623,11 +31388,11 @@ export type StudyInputId = Nominal<string, "StudyInputId">;
 export type StudyInputInfo = StudyBooleanInputInfo | StudyTextInputInfo | StudySymbolInputInfo | StudyResolutionInputInfo | StudySessionInputInfo | StudySourceInputInfo | StudyNumericInputInfo | StudyPriceInputInfo | StudyColorInputInfo | StudyTimeInputInfo | StudyBarTimeInputInfo | StudyTextareaInputInfo;
 export type StudyInputInfoList = readonly Readonly<StudyInputInfo>[];
 /**
- * The value of a study input.
+ * The value of an indicator input.
  */
 export type StudyInputValue = string | number | boolean;
 export type StudyMetaInfo = DeepWriteable<RawStudyMetaInformation> & {
-	/** Identifier for the Study */
+	/** Identifier for the indicator */
 	id: string;
 };
 export type StudyOhlcPlotPreferences = StudyOhlcPlotBarsStylePreferences | StudyOhlcPlotCandlesStylePreferences;
@@ -30636,11 +31401,11 @@ export type StudyPlotDefaultPreferences = StudyLinePlotDefaultPreferences | Stud
 export type StudyPlotDisplayMode = Nominal<number, "StudyPlotDisplayTarget"> | StudyPlotDisplayTarget;
 export type StudyPlotInfo = StudyPlotInformation;
 /**
- * A description of a study plot.
+ * A description of an indicator plot.
  */
 export type StudyPlotInformation = StudyArrowsPlotInfo | StudyCharsPlotInfo | StudyColorerPlotInfo | StudyRgbaColorerPlotInfo | StudyDataPlotInfo | StudyDataOffsetPlotInfo | StudyLinePlotInfo | StudyOhlcPlotInfo | StudyShapesPlotInfo | StudyBarColorerPlotInfo | StudyBgColorerPlotInfo | StudyTextColorerPlotInfo | StudyOhlcColorerPlotInfo | StudyCandleWickColorerPlotInfo | StudyCandleBorderColorerPlotInfo | StudyUpColorerPlotInfo | StudyDownColorerPlotInfo;
 /**
- * Study plot style preferences.
+ * Indicator plot style preferences.
  */
 export type StudyPlotPreferences = StudyLinePlotPreferences | StudyShapesPlotPreferences | StudyCharsPlotPreferences | StudyArrowsPlotPreferences;
 export type StudyPlotValueFormat = StudyPlotValueInheritFormat | StudyPlotValuePrecisionFormat;
@@ -30656,7 +31421,7 @@ export type StudyPlotValueFormat = StudyPlotValueInheritFormat | StudyPlotValueP
  * Refer to [Indicator placement](https://www.tradingview.com/charting-library-docs/latest/ui_elements/indicators/indicator-placement) for more information.
  */
 export type StudyPriceScale = "new-left" | "new-right" | "no-scale" | "as-series";
-export type StudyPriceSource = "open" | "high" | "low" | "close" | "hl2" | "hlc3" | "ohlc4" | "hlcc4";
+export type StudyPriceSource = "open" | "high" | "low" | "close" | "volume" | "hl2" | "hlc3" | "ohlc4" | "hlcc4";
 export type StudyPrimitiveResult = (number | StudyResultValueWithOffset)[];
 export type StudyScript = (ctx: ScriptContext) => void;
 export type SubscribeBarsCallback = (bar: Bar) => void;
@@ -30759,6 +31524,8 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
 "show_trading_notifications_history" | 
 /** If a bracket order is modified, the terminal passes its parent order to `modifyOrder`. The featureset disables this behavior @default false */
 "always_pass_called_order_to_modify" | 
+/** Disables instant (one-click) order placement: the One-click trading setting is hidden and cannot be turned on, including through saved settings or `silentOrdersPlacement()`. Applies at load time @default false */
+"always_require_order_confirmation" | 
 /** Enables Drawing Templates on Drawing toolbar. If disabled users will still be able to apply the default settings for their selection. @default true */
 "drawing_templates" | 
 /** Shows the Account Manager Widget @default true */
@@ -30787,11 +31554,13 @@ export type TradingTerminalFeatureset = ChartingLibraryFeatureset |
 "watchlist_import_export" | 
 /** Enables DOM widget visibility @default false */
 "dom_widget" | 
+/** Shows bid, ask, and total volumes in the DOM widget in full, without the K, M, B, and T suffixes @default false */
+"dom_raw_volume_values" | 
 /** Keeps object tree widget in the right toolbar. If the right toolbar is not enabled this feature will have no effect. @default false */
 "keep_object_tree_widget_in_right_toolbar" | 
 /** Show only the last price and change values in the main series legend @default false */
 "show_last_price_and_change_only_in_series_legend" | 
-/** Adds the _Last day change values_ option to the _Chart Settings_ dialog in the UI. This option allows users to show/hide the last day change values in the main series legend. @default false */
+/** Adds the _Last day change values_ option to the _Settings_ dialog in the UI. This option allows users to show/hide the last day change values in the main series legend. @default false */
 "legend_last_day_change" | 
 /** Enable context menu support in the watchlist. */
 "watchlist_context_menu " | 
