@@ -49,6 +49,7 @@ from chanlun.zixuan import ZiXuan
 from .alert_tasks import AlertTasks
 from .backtest_routes import register_backtest_routes
 from .other_tasks import OtherTasks
+from .tv_storage import tv_storage_bp
 from .xuangu_tasks import XuanguTasks
 
 # 已知的不安全密钥，禁止使用（含历史版本硬编码的密钥）
@@ -789,149 +790,6 @@ def create_app(test_config=None):
         服务器时间
         """
         return fun.datetime_to_int(datetime.datetime.now())
-
-    @app.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
-    @login_required
-    def tv_charts(version):
-        """
-        图表
-        """
-        client_id = str(request.args.get("client"))
-        user_id = str(request.args.get("user"))
-
-        if request.method == "GET":
-            chart_id = request.args.get("chart")
-            if chart_id is None:
-                # 列出保存的图表列表
-                chart_list = db.tv_chart_list("chart", client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": [
-                        {
-                            "timestamp": c.timestamp,
-                            "symbol": c.symbol,
-                            "resolution": c.resolution,
-                            "id": c.id,
-                            "name": c.name,
-                        }
-                        for c in chart_list
-                    ],
-                }
-            else:
-                # 获取图表信息
-                chart = db.tv_chart_get("chart", chart_id, client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": {
-                        "content": chart.content,
-                        "timestamp": chart.timestamp,
-                        "name": chart.name,
-                        "id": chart.id,
-                    },
-                }
-        elif request.method == "DELETE":
-            # 删除操作
-            chart_id = request.args.get("chart")
-            db.tv_chart_del("chart", chart_id, client_id, user_id)
-            return {
-                "status": "ok",
-            }
-        else:
-            # 更新与保存操作
-            name = request.form["name"]
-            content = request.form["content"]
-            symbol = request.form["symbol"]
-            resolution = request.form["resolution"]
-            chart_id = request.args.get("chart")
-
-            if chart_id is None:
-                # 保存新的图表信息
-                id = db.tv_chart_save(
-                    "chart", client_id, user_id, name, content, symbol, resolution
-                )
-                return {
-                    "status": "ok",
-                    "id": id,
-                }
-            else:
-                # 保存已有的图表信息
-                db.tv_chart_update(
-                    "chart",
-                    chart_id,
-                    client_id,
-                    user_id,
-                    name,
-                    content,
-                    symbol,
-                    resolution,
-                )
-                return {"status": "ok"}
-
-    @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
-    @login_required
-    def tv_study_templates(version):
-        """
-        图表
-        """
-        client_id = str(request.args.get("client"))
-        user_id = str(request.args.get("user"))
-
-        if request.method == "GET":
-            template = request.args.get("template")
-            if template is None:
-                # 列出保存的图表列表
-                template_list = db.tv_chart_list("template", client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": [{"name": t.name} for t in template_list],
-                }
-            else:
-                # 获取图表信息
-                template = db.tv_chart_get_by_name(
-                    "template", template, client_id, user_id
-                )
-                return {
-                    "status": "ok",
-                    "data": {"name": template.name, "content": template.content},
-                }
-        elif request.method == "DELETE":
-            # 删除操作
-            name = request.args.get("template")
-            db.tv_chart_del_by_name("template", name, client_id, user_id)
-            return {
-                "status": "ok",
-            }
-        else:
-            name = request.form["name"]
-            content = request.form["content"]
-
-            # 保存图表信息
-            db.tv_chart_save("template", client_id, user_id, name, content, "", "")
-            return {"status": "ok"}
-
-    @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
-    @login_required
-    def tv_drawings(version):
-        """
-        图表绘图保存与加载 TODO TV 库报错，暂时不用
-        """
-        client_id = str(request.args.get("client"))
-        user_id = str(request.args.get("user"))
-        chart_id = request.args.get("chart")
-        layout_id = request.args.get("layout")
-
-        print(
-            f"{request.method} client_id={client_id}, user_id={user_id}, chart_id={chart_id}, layout_id={layout_id}"
-        )
-
-        if request.method == "GET":
-            return {
-                "status": "ok",
-                "data": {},
-            }
-        else:
-            # 更新与保存操作
-            return {"status": "ok"}
 
     # 查询配置项
     @app.route("/get_cl_config/<market>/<code>")
@@ -1690,5 +1548,8 @@ def create_app(test_config=None):
 
     # 注册回测学习路由
     register_backtest_routes(app)
+
+    # 注册 TradingView 独立存储（布局与绘图分离）接口
+    app.register_blueprint(tv_storage_bp)
 
     return app

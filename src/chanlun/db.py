@@ -1,20 +1,25 @@
 import datetime
 import json
+import re
 import time
 import warnings
 
 import numpy as np
 import pandas as pd
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     create_engine,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -29,6 +34,97 @@ warnings.filterwarnings("ignore")
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+
+# ----------------------------------------------------------------------
+# TradingView 独立存储（布局与绘图分离）常量与工具
+# ----------------------------------------------------------------------
+
+# 存储身份：单用户应用沿用历史前端写死的 user_id
+TV_STORAGE_USER_ID = 999
+# 模板类数据统一写入的 client_id（仅作冗余，读路径只按 user_id 过滤）
+TV_STORAGE_CLIENT_ID = "chanlun_pro"
+# 绘图条目类型
+TV_STORAGE_ITEM_SOURCE = "source"
+TV_STORAGE_ITEM_GROUP = "group"
+# SharingMode.GloballyShared 的数值（NotShared=0 / SharedInLayout=1 / GloballyShared=2）
+TV_STORAGE_SHARING_GLOBAL = 2
+# 判定旧布局 content 中是否含“真正的绘图 source 类型”。
+# 旧 content 里 chartProperties.axisLineToolLabelBackgroundColor* 也会命中裸子串
+# LineTool，因此不能用 `"LineTool" in content`；历史布局 content 可能被二次序列化，
+# 引号可能带反斜杠（\"type\":\"LineToolTrendLine\"），正则需同时兼容。
+LEGACY_DRAWING_PATTERN = re.compile(r'\\?"type\\?"\s*:\s*\\?"LineTool')
+
+
+def _tv_storage_content_text(content) -> str:
+    """模板 content 统一转字符串：str 原样、None -> ""、其它 json 序列化"""
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    return json.dumps(content, ensure_ascii=False)
+
+
+def _tv_storage_clean_symbol(symbol):
+    """空字符串归一为 None（数据库存 NULL）"""
+    if symbol is None:
+        return None
+    symbol = str(symbol).strip()
+    return symbol or None
+
+
+def _tv_storage_decode_state(state):
+    """绘图条目 state 反序列化，异常时原样返回"""
+    try:
+        return json.loads(state)
+    except (TypeError, ValueError):
+        return state
+
+
+# cl_tv_charts 需要幂等补齐的列（MySQL / SQLite 分别给出 DDL）
+TV_STORAGE_CHART_LEGACY_COLUMNS = ("drawings_migrated", "legacy_content")
+_MYSQL_CHART_LEGACY_DDL = {
+    "drawings_migrated": (
+        "ALTER TABLE `cl_tv_charts` ADD COLUMN `drawings_migrated` TINYINT(1) "
+        "NOT NULL DEFAULT 0 COMMENT '是否已按独立存储（绘图分离）模式保存过'"
+    ),
+    "legacy_content": (
+        "ALTER TABLE `cl_tv_charts` ADD COLUMN `legacy_content` TEXT NULL "
+        "COMMENT '迁移前布局 content 的一次性备份'"
+    ),
+}
+_SQLITE_CHART_LEGACY_DDL = {
+    "drawings_migrated": (
+        "ALTER TABLE cl_tv_charts ADD COLUMN drawings_migrated "
+        "BOOLEAN NOT NULL DEFAULT 0"
+    ),
+    "legacy_content": "ALTER TABLE cl_tv_charts ADD COLUMN legacy_content TEXT",
+}
+
+
+def migrate_tv_storage_schema(engine) -> list:
+    """幂等补齐 cl_tv_charts 的独立存储迁移列，返回本次实际执行的列名。
+
+    create_all 不会为已存在的表补列，因此这里检查现有列后按需 ALTER。
+    MySQL 与 SQLite 均可重复执行；已存在列直接跳过。
+    """
+    inspector = inspect(engine)
+    if not inspector.has_table("cl_tv_charts"):
+        return []
+
+    existing = {col["name"] for col in inspector.get_columns("cl_tv_charts")}
+    if engine.dialect.name == "mysql":
+        ddl_map = _MYSQL_CHART_LEGACY_DDL
+    else:
+        ddl_map = _SQLITE_CHART_LEGACY_DDL
+
+    executed = []
+    with engine.begin() as conn:
+        for column_name in TV_STORAGE_CHART_LEGACY_COLUMNS:
+            if column_name in existing:
+                continue
+            conn.execute(text(ddl_map[column_name]))
+            executed.append(column_name)
+    return executed
 
 
 class TableByCache(Base):
@@ -176,7 +272,7 @@ class TableByOrder(Base):
 
 
 class TableByTVCharts(Base):
-    # TV 图表的布局
+    # TV 图表的布局（chart_type='chart'）与指标模板（chart_type='template'）
     __tablename__ = "cl_tv_charts"
     id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
     client_id = Column(String(50), comment="客户端id")
@@ -187,8 +283,94 @@ class TableByTVCharts(Base):
     content = Column(Text, comment="布局内容")
     timestamp = Column(Integer, comment="时间戳")
     name = Column(String(50), comment="布局名称")
+    drawings_migrated = Column(
+        Boolean, default=False, comment="是否已按独立存储（绘图分离）模式保存过"
+    )
+    legacy_content = Column(
+        Text, nullable=True, comment="迁移前布局 content 的一次性备份"
+    )
     # 添加配置设置编码
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+
+
+class TableByTVDrawingItems(Base):
+    # TV 图表的绘图条目（布局与绘图分离存储，按条增量读写）
+    __tablename__ = "cl_tv_drawing_items"
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
+    client_id = Column(String(50), comment="客户端id")
+    user_id = Column(Integer, comment="用户id")
+    layout_id = Column(String(50), default="", comment="布局id")
+    chart_id = Column(Integer, default=0, comment="图表id")
+    sharing_mode = Column(Integer, default=0, comment="共享模式 0/1/2")
+    item_type = Column(String(16), comment="条目类型 source/group")
+    item_id = Column(String(64), comment="条目id")
+    symbol = Column(String(64), nullable=True, comment="标的")
+    owner_source = Column(String(64), nullable=True, comment="所属绘图源")
+    state = Column(Text, comment="绘图状态 JSON")
+    updated_at = Column(DateTime, comment="更新时间")
+    # 添加配置设置编码
+    __table_args__ = (
+        UniqueConstraint(
+            "client_id",
+            "user_id",
+            "layout_id",
+            "chart_id",
+            "sharing_mode",
+            "item_type",
+            "item_id",
+            name="table_tv_drawing_item_unique",
+        ),
+        Index(
+            "table_tv_drawing_items_scope_index",
+            "client_id",
+            "user_id",
+            "layout_id",
+            "chart_id",
+        ),
+        Index(
+            "table_tv_drawing_items_global_index",
+            "client_id",
+            "user_id",
+            "sharing_mode",
+            "symbol",
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
+
+
+class TableByTVDrawingTemplates(Base):
+    # TV 图表的画图模板
+    __tablename__ = "cl_tv_drawing_templates"
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
+    client_id = Column(String(50), comment="客户端id")
+    user_id = Column(Integer, comment="用户id")
+    tool = Column(String(50), comment="画图工具名称")
+    name = Column(String(100), comment="模板名称")
+    content = Column(Text, comment="模板内容")
+    updated_at = Column(DateTime, comment="更新时间")
+    # 添加配置设置编码
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "tool", "name", name="table_tv_drawing_template_unique"
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
+
+
+class TableByTVChartTemplates(Base):
+    # TV 图表的图表模板
+    __tablename__ = "cl_tv_chart_templates"
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
+    client_id = Column(String(50), comment="客户端id")
+    user_id = Column(Integer, comment="用户id")
+    name = Column(String(100), comment="模板名称")
+    content = Column(Text, comment="模板内容（任意 JSON）")
+    updated_at = Column(DateTime, comment="更新时间")
+    # 添加配置设置编码
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="table_tv_chart_template_unique"),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
 
 
 class TableByAIAnalyse(Base):
@@ -261,6 +443,9 @@ class DB:
         self.Session = sessionmaker(bind=self.engine)
 
         Base.metadata.create_all(self.engine)
+
+        # 新表由 create_all 建，cl_tv_charts 的历史表靠幂等 ALTER 补齐新列
+        migrate_tv_storage_schema(self.engine)
 
         self.__cache_tables = {}
 
@@ -1131,110 +1316,545 @@ class DB:
             session.commit()
         return True
 
-    def tv_chart_list(self, chart_type, client_id, user_id):
+    # ------------------------------------------------------------------
+    # TradingView 独立存储：布局（charts）
+    # ------------------------------------------------------------------
+    def tv_storage_list_charts(self, client_id, user_id=TV_STORAGE_USER_ID):
+        # 布局列表：只取 chart_type='chart'，按 user_id + client_id 过滤
         with self.Session() as session:
             return (
                 session.query(TableByTVCharts)
                 .filter(
-                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.chart_type == "chart",
                     TableByTVCharts.client_id == client_id,
                     TableByTVCharts.user_id == user_id,
+                )
+                .order_by(TableByTVCharts.timestamp.desc(), TableByTVCharts.id.desc())
+                .all()
+            )
+
+    def tv_storage_save_chart(
+        self,
+        client_id,
+        user_id,
+        chart_id,
+        name,
+        symbol,
+        resolution,
+        content,
+        timestamp=None,
+    ):
+        """保存/更新布局，返回布局 id；更新时做迁移记账（一次性备份旧 content）"""
+        if timestamp is None:
+            timestamp = int(time.time())
+        timestamp = int(timestamp)
+
+        with self.Session() as session:
+            chart = None
+            if chart_id:
+                chart = (
+                    session.query(TableByTVCharts)
+                    .filter(
+                        TableByTVCharts.id == chart_id,
+                        TableByTVCharts.chart_type == "chart",
+                        TableByTVCharts.client_id == client_id,
+                        TableByTVCharts.user_id == user_id,
+                    )
+                    .first()
+                )
+
+            if chart is None:
+                # 新增分支：新布局天然是独立存储
+                chart = TableByTVCharts(
+                    client_id=client_id,
+                    user_id=user_id,
+                    chart_type="chart",
+                    name=name,
+                    symbol=symbol,
+                    resolution=resolution,
+                    content=content,
+                    timestamp=timestamp,
+                    drawings_migrated=True,
+                    legacy_content=None,
+                )
+                session.add(chart)
+            else:
+                # 更新分支：迁移记账必须在覆盖 content 之前完成
+                if not chart.drawings_migrated:
+                    old_content = chart.content or ""
+                    if (
+                        LEGACY_DRAWING_PATTERN.search(old_content)
+                        and not chart.legacy_content
+                    ):
+                        chart.legacy_content = old_content
+                    chart.drawings_migrated = True
+                chart.name = name
+                chart.symbol = symbol
+                chart.resolution = resolution
+                chart.content = content
+                chart.timestamp = timestamp
+
+            session.commit()
+            return int(chart.id)
+
+    def tv_storage_get_chart_content(self, client_id, user_id, chart_id):
+        # 获取布局 content，不存在返回 None
+        with self.Session() as session:
+            chart = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.id == chart_id,
+                    TableByTVCharts.chart_type == "chart",
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                )
+                .first()
+            )
+            return chart.content if chart is not None else None
+
+    def tv_storage_delete_chart(self, client_id, user_id, chart_id):
+        # 删除布局，并连带删除该布局的绘图条目
+        with self.Session() as session:
+            chart = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.id == chart_id,
+                    TableByTVCharts.chart_type == "chart",
+                    TableByTVCharts.client_id == client_id,
+                    TableByTVCharts.user_id == user_id,
+                )
+                .first()
+            )
+            if chart is None:
+                return False
+
+            session.query(TableByTVDrawingItems).filter(
+                TableByTVDrawingItems.client_id == client_id,
+                TableByTVDrawingItems.user_id == user_id,
+                TableByTVDrawingItems.layout_id == str(chart_id),
+            ).delete(synchronize_session=False)
+
+            session.delete(chart)
+            session.commit()
+            return True
+
+    def tv_storage_migration_status(self, client_id, user_id):
+        # 迁移进度：总数 / 已迁移 / 待迁移列表
+        charts = self.tv_storage_list_charts(client_id, user_id)
+        migrated = [c for c in charts if c.drawings_migrated]
+        pending = [c for c in charts if not c.drawings_migrated]
+        return {
+            "total": len(charts),
+            "migrated": len(migrated),
+            "pending": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "symbol": c.symbol,
+                    "timestamp": c.timestamp,
+                }
+                for c in pending
+            ],
+        }
+
+    # ------------------------------------------------------------------
+    # TradingView 独立存储：指标模板（复用 cl_tv_charts chart_type='template'）
+    # 模板类数据只按 user_id 过滤（旧数据分散在各 client 下，必须都能看到）
+    # ------------------------------------------------------------------
+    def tv_storage_list_study_templates(self, user_id):
+        # 指标模板名称列表（按 name 去重）
+        with self.Session() as session:
+            rows = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == "template",
+                    TableByTVCharts.user_id == user_id,
+                )
+                .order_by(TableByTVCharts.id.asc())
+                .all()
+            )
+
+        names = []
+        seen = set()
+        for row in rows:
+            if row.name in seen:
+                continue
+            seen.add(row.name)
+            names.append(row.name)
+        return names
+
+    def tv_storage_get_study_template_content(self, user_id, name):
+        # 获取指标模板 content（同名多份时取最新一条），不存在返回 None
+        with self.Session() as session:
+            row = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == "template",
+                    TableByTVCharts.user_id == user_id,
+                    TableByTVCharts.name == name,
+                )
+                .order_by(TableByTVCharts.id.desc())
+                .first()
+            )
+            return row.content if row is not None else None
+
+    def tv_storage_save_study_template(self, user_id, name, content):
+        # upsert 指标模板（chart_type='template'）
+        content_text = _tv_storage_content_text(content)
+        with self.Session() as session:
+            updated = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == "template",
+                    TableByTVCharts.user_id == user_id,
+                    TableByTVCharts.name == name,
+                )
+                .update(
+                    {TableByTVCharts.content: content_text},
+                    synchronize_session=False,
+                )
+            )
+            if updated == 0:
+                session.add(
+                    TableByTVCharts(
+                        client_id=TV_STORAGE_CLIENT_ID,
+                        user_id=user_id,
+                        chart_type="template",
+                        name=name,
+                        content=content_text,
+                        symbol="",
+                        resolution="",
+                        timestamp=int(time.time()),
+                    )
+                )
+            session.commit()
+
+    def tv_storage_delete_study_template(self, user_id, name):
+        # 删除指标模板（同名多份一并删除）
+        with self.Session() as session:
+            deleted = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == "template",
+                    TableByTVCharts.user_id == user_id,
+                    TableByTVCharts.name == name,
+                )
+                .delete(synchronize_session=False)
+            )
+            session.commit()
+            return deleted > 0
+
+    # ------------------------------------------------------------------
+    # TradingView 独立存储：画图模板
+    # ------------------------------------------------------------------
+    def tv_storage_list_drawing_templates(self, user_id, tool):
+        # 画图模板名称列表
+        with self.Session() as session:
+            rows = (
+                session.query(TableByTVDrawingTemplates)
+                .filter(
+                    TableByTVDrawingTemplates.user_id == user_id,
+                    TableByTVDrawingTemplates.tool == tool,
+                )
+                .order_by(TableByTVDrawingTemplates.id.asc())
+                .all()
+            )
+            return [row.name for row in rows]
+
+    def tv_storage_get_drawing_template_content(self, user_id, tool, name):
+        # 获取画图模板 content，不存在返回 None
+        with self.Session() as session:
+            row = (
+                session.query(TableByTVDrawingTemplates)
+                .filter(
+                    TableByTVDrawingTemplates.user_id == user_id,
+                    TableByTVDrawingTemplates.tool == tool,
+                    TableByTVDrawingTemplates.name == name,
+                )
+                .first()
+            )
+            return row.content if row is not None else None
+
+    def tv_storage_save_drawing_template(self, user_id, tool, name, content):
+        # upsert 画图模板
+        content_text = _tv_storage_content_text(content)
+        with self.Session() as session:
+            row = (
+                session.query(TableByTVDrawingTemplates)
+                .filter(
+                    TableByTVDrawingTemplates.user_id == user_id,
+                    TableByTVDrawingTemplates.tool == tool,
+                    TableByTVDrawingTemplates.name == name,
+                )
+                .first()
+            )
+            if row is not None:
+                row.content = content_text
+                row.updated_at = datetime.datetime.now()
+            else:
+                session.add(
+                    TableByTVDrawingTemplates(
+                        client_id=TV_STORAGE_CLIENT_ID,
+                        user_id=user_id,
+                        tool=tool,
+                        name=name,
+                        content=content_text,
+                        updated_at=datetime.datetime.now(),
+                    )
+                )
+            session.commit()
+
+    def tv_storage_delete_drawing_template(self, user_id, tool, name):
+        # 删除画图模板
+        with self.Session() as session:
+            deleted = (
+                session.query(TableByTVDrawingTemplates)
+                .filter(
+                    TableByTVDrawingTemplates.user_id == user_id,
+                    TableByTVDrawingTemplates.tool == tool,
+                    TableByTVDrawingTemplates.name == name,
+                )
+                .delete(synchronize_session=False)
+            )
+            session.commit()
+            return deleted > 0
+
+    # ------------------------------------------------------------------
+    # TradingView 独立存储：图表模板（content 为任意 JSON）
+    # ------------------------------------------------------------------
+    def tv_storage_list_chart_templates(self, user_id):
+        # 图表模板名称列表
+        with self.Session() as session:
+            rows = (
+                session.query(TableByTVChartTemplates)
+                .filter(TableByTVChartTemplates.user_id == user_id)
+                .order_by(TableByTVChartTemplates.name.asc())
+                .all()
+            )
+            return [row.name for row in rows]
+
+    def tv_storage_get_chart_template_content(self, user_id, name):
+        # 获取图表模板 content（解析为任意 JSON），不存在返回 None
+        with self.Session() as session:
+            row = (
+                session.query(TableByTVChartTemplates)
+                .filter(
+                    TableByTVChartTemplates.user_id == user_id,
+                    TableByTVChartTemplates.name == name,
+                )
+                .first()
+            )
+            if row is None:
+                return None
+            try:
+                return json.loads(row.content)
+            except (TypeError, ValueError):
+                return row.content
+
+    def tv_storage_save_chart_template(self, user_id, name, content):
+        # upsert 图表模板（content 可以是任意 JSON）
+        content_text = _tv_storage_content_text(content)
+        with self.Session() as session:
+            row = (
+                session.query(TableByTVChartTemplates)
+                .filter(
+                    TableByTVChartTemplates.user_id == user_id,
+                    TableByTVChartTemplates.name == name,
+                )
+                .first()
+            )
+            if row is not None:
+                row.content = content_text
+                row.updated_at = datetime.datetime.now()
+            else:
+                session.add(
+                    TableByTVChartTemplates(
+                        client_id=TV_STORAGE_CLIENT_ID,
+                        user_id=user_id,
+                        name=name,
+                        content=content_text,
+                        updated_at=datetime.datetime.now(),
+                    )
+                )
+            session.commit()
+
+    def tv_storage_delete_chart_template(self, user_id, name):
+        # 删除图表模板
+        with self.Session() as session:
+            deleted = (
+                session.query(TableByTVChartTemplates)
+                .filter(
+                    TableByTVChartTemplates.user_id == user_id,
+                    TableByTVChartTemplates.name == name,
+                )
+                .delete(synchronize_session=False)
+            )
+            session.commit()
+            return deleted > 0
+
+    # ------------------------------------------------------------------
+    # TradingView 独立存储：绘图（line tools，按条增量读写）
+    # ------------------------------------------------------------------
+    def tv_storage_load_line_tools(
+        self,
+        client_id,
+        user_id,
+        layout_id,
+        chart_id=0,
+        symbol=None,
+        all_symbols=False,
+    ):
+        """加载绘图：作用域桶（layout_id + chart_id，非全局）+ 全局桶（sharing_mode=2）
+
+        合并顺序：先全局、后作用域（作用域覆盖全局）。
+        """
+        layout_id = str(layout_id)
+        chart_id = int(chart_id or 0)
+        symbol = _tv_storage_clean_symbol(symbol)
+
+        with self.Session() as session:
+            # 作用域桶：该布局 + 图表下的非全局条目（不按 symbol 过滤）
+            scope_rows = (
+                session.query(TableByTVDrawingItems)
+                .filter(
+                    TableByTVDrawingItems.client_id == client_id,
+                    TableByTVDrawingItems.user_id == user_id,
+                    TableByTVDrawingItems.layout_id == layout_id,
+                    TableByTVDrawingItems.chart_id == chart_id,
+                    TableByTVDrawingItems.sharing_mode != TV_STORAGE_SHARING_GLOBAL,
                 )
                 .all()
             )
 
-    def tv_chart_save(
-        self, chart_type, client_id, user_id, name, content, symbol, resolution
-    ):
-        # 保存图表布局，并返回 id
-        with self.Session() as session:
-            chart = TableByTVCharts(
-                chart_type=chart_type,
-                client_id=client_id,
-                user_id=user_id,
-                name=name,
-                content=content,
-                symbol=symbol,
-                resolution=resolution,
-                timestamp=int(time.time()),
+            # 全局桶：sharing_mode=2（跨布局），symbol 过滤大小写不敏感
+            global_query = session.query(TableByTVDrawingItems).filter(
+                TableByTVDrawingItems.client_id == client_id,
+                TableByTVDrawingItems.user_id == user_id,
+                TableByTVDrawingItems.sharing_mode == TV_STORAGE_SHARING_GLOBAL,
             )
-            session.add(chart)
-            session.commit()
-            return chart.id
-
-    def tv_chart_update(
-        self, chart_type, id, client_id, user_id, name, content, symbol, resolution
-    ):
-        # 更新图表布局
-        with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.id == id,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-                TableByTVCharts.chart_type == chart_type,
-            ).update(
-                {
-                    TableByTVCharts.name: name,
-                    TableByTVCharts.content: content,
-                    TableByTVCharts.symbol: symbol,
-                    TableByTVCharts.resolution: resolution,
-                    TableByTVCharts.timestamp: int(time.time()),
-                }
-            )
-            session.commit()
-        return True
-
-    def tv_chart_get(self, chart_type, id, client_id, user_id):
-        # 获取图表布局
-        with self.Session() as session:
-            return (
-                session.query(TableByTVCharts)
-                .filter(
-                    TableByTVCharts.id == id,
-                    TableByTVCharts.chart_type == chart_type,
-                    TableByTVCharts.client_id == client_id,
-                    TableByTVCharts.user_id == user_id,
+            if not all_symbols and symbol is not None:
+                global_query = global_query.filter(
+                    func.lower(TableByTVDrawingItems.symbol) == symbol.lower()
                 )
-                .first()
-            )
+            global_rows = global_query.all()
 
-    def tv_chart_get_by_name(self, chart_type, name, client_id, user_id):
-        # 获取图表布局
-        with self.Session() as session:
-            return (
-                session.query(TableByTVCharts)
-                .filter(
-                    TableByTVCharts.name == name,
-                    TableByTVCharts.chart_type == chart_type,
-                    TableByTVCharts.client_id == client_id,
-                    TableByTVCharts.user_id == user_id,
-                )
-                .first()
-            )
+            sources = {}
+            groups = {}
+            for row in list(global_rows) + list(scope_rows):
+                target = sources if row.item_type == TV_STORAGE_ITEM_SOURCE else groups
+                target[row.item_id] = _tv_storage_decode_state(row.state)
 
-    def tv_chart_del(self, chart_type, id, client_id, user_id):
-        # 删除图表布局
+        return {"sources": sources, "groups": groups, "symbol": symbol or ""}
+
+    def tv_storage_save_line_tools(
+        self,
+        client_id,
+        user_id,
+        layout_id,
+        chart_id,
+        sharing_mode,
+        symbol,
+        sources,
+        groups,
+    ):
+        """保存绘图（含墓碑删除 / 全局脏副本清理），返回本次 saved/deleted 计数"""
+        layout_id = str(layout_id)
+        chart_id = int(chart_id or 0)
+        sharing_mode = int(sharing_mode or 0)
+        body_symbol = _tv_storage_clean_symbol(symbol)
+
+        saved = 0
+        deleted = 0
+
         with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.id == id,
-                TableByTVCharts.chart_type == chart_type,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-            ).delete()
+            for item_type, items in (
+                (TV_STORAGE_ITEM_SOURCE, sources or {}),
+                (TV_STORAGE_ITEM_GROUP, groups or {}),
+            ):
+                for raw_item_id, item in items.items():
+                    item_id = str(raw_item_id)
+                    if not item_id:
+                        continue
+
+                    if item is None:
+                        # 墓碑：删除对应行
+                        deleted += (
+                            session.query(TableByTVDrawingItems)
+                            .filter(
+                                TableByTVDrawingItems.client_id == client_id,
+                                TableByTVDrawingItems.user_id == user_id,
+                                TableByTVDrawingItems.layout_id == layout_id,
+                                TableByTVDrawingItems.chart_id == chart_id,
+                                TableByTVDrawingItems.sharing_mode == sharing_mode,
+                                TableByTVDrawingItems.item_type == item_type,
+                                TableByTVDrawingItems.item_id == item_id,
+                            )
+                            .delete(synchronize_session=False)
+                        )
+                    else:
+                        if not isinstance(item, dict):
+                            # 非对象状态无法存储，跳过
+                            continue
+                        item_symbol = (
+                            _tv_storage_clean_symbol(item.get("symbol")) or body_symbol
+                        )
+                        owner_source = (
+                            _tv_storage_clean_symbol(item.get("ownerSource"))
+                            if item_type == TV_STORAGE_ITEM_SOURCE
+                            else None
+                        )
+                        state = json.dumps(item, ensure_ascii=False)
+
+                        row = (
+                            session.query(TableByTVDrawingItems)
+                            .filter(
+                                TableByTVDrawingItems.client_id == client_id,
+                                TableByTVDrawingItems.user_id == user_id,
+                                TableByTVDrawingItems.layout_id == layout_id,
+                                TableByTVDrawingItems.chart_id == chart_id,
+                                TableByTVDrawingItems.sharing_mode == sharing_mode,
+                                TableByTVDrawingItems.item_type == item_type,
+                                TableByTVDrawingItems.item_id == item_id,
+                            )
+                            .first()
+                        )
+                        if row is not None:
+                            row.symbol = item_symbol
+                            row.owner_source = owner_source
+                            row.state = state
+                            row.updated_at = datetime.datetime.now()
+                        else:
+                            session.add(
+                                TableByTVDrawingItems(
+                                    client_id=client_id,
+                                    user_id=user_id,
+                                    layout_id=layout_id,
+                                    chart_id=chart_id,
+                                    sharing_mode=sharing_mode,
+                                    item_type=item_type,
+                                    item_id=item_id,
+                                    symbol=item_symbol,
+                                    owner_source=owner_source,
+                                    state=state,
+                                    updated_at=datetime.datetime.now(),
+                                )
+                            )
+                        saved += 1
+
+                    # 官方要求：全局共享保存时清理同 item_id 的非全局脏副本
+                    if sharing_mode == TV_STORAGE_SHARING_GLOBAL:
+                        session.query(TableByTVDrawingItems).filter(
+                            TableByTVDrawingItems.client_id == client_id,
+                            TableByTVDrawingItems.user_id == user_id,
+                            TableByTVDrawingItems.item_type == item_type,
+                            TableByTVDrawingItems.item_id == item_id,
+                            TableByTVDrawingItems.sharing_mode
+                            != TV_STORAGE_SHARING_GLOBAL,
+                        ).delete(synchronize_session=False)
+
             session.commit()
-        return True
 
-    def tv_chart_del_by_name(self, chart_type, name, client_id, user_id):
-        # 根据名称删除图表布局
-        with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.name == name,
-                TableByTVCharts.chart_type == chart_type,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-            ).delete()
-            session.commit()
-        return True
+        return {"saved": saved, "deleted": deleted}
 
     def cache_get(self, key: str):
         with self.Session() as session:

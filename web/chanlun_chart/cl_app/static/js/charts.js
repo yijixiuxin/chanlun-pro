@@ -163,21 +163,29 @@ class ChartManager {
     this.widget = null;
     this.udf_datafeed = null;
     this.chart = null;
+    this.save_load_adapter = null;
     this.debouncedDrawChanlun = debounce(() => this.draw_chanlun(), 1000);
   }
 
   // 初始化图表
   init() {
+    const market = Utils.get_market();
+    // 存储作用域：与旧 REST 版本的 client_id 完全一致，保证历史布局/绘图可被找到并懒迁移
+    const storage_client_id = "chanlun_pro_" + market + "_" + this.id;
+    this.save_load_adapter = TvStorage.createTradingViewSaveLoadAdapter({
+      clientId: storage_client_id,
+      onWarn: (msg, err) => console.warn(msg, err),
+      onSaveNotice: (notice) => this.handle_save_notice(notice),
+    });
+
     this.udf_datafeed = new Datafeeds.UDFCompatibleDatafeed("/tv", 30000);
     this.widget = window.tvWidget = new TradingView.widget({
       debug: false,
       autosize: true,
       fullscreen: false,
       container: "tv_chart_container_" + this.id,
-      symbol: Utils.get_market() + ":" + Utils.get_code(),
-      interval: Utils.get_local_data(
-        Utils.get_market() + "_interval_" + this.id
-      ),
+      symbol: market + ":" + Utils.get_code(),
+      interval: Utils.get_local_data(market + "_interval_" + this.id),
       datafeed: this.udf_datafeed,
       library_path: "static/charting_library/",
       theme: Utils.get_local_data("theme"),
@@ -189,22 +197,49 @@ class ChartManager {
       auto_save_delay: 5,
       study_count_limit: 100,
       disabled_features: ["go_to_date"],
-      enabled_features: ["study_templates", "seconds_resolution", "two_character_bar_marks_labels"],
-      saved_data_meta_info: {
-        uid: 1,
-        name: "default",
-        description: "default",
-      },
-      charts_storage_url: "/tv",
-      charts_storage_api_version: "1.1",
-      client_id: "chanlun_pro_" + Utils.get_market() + "_" + this.id,
-      user_id: "999",
+      enabled_features: [
+        "study_templates",
+        "seconds_resolution",
+        "two_character_bar_marks_labels",
+        // 绘图与布局分离存储（按标的归属），配合 save_load_adapter 使用
+        "saveload_separate_drawings_storage",
+        // 本版本库必须开启该项才会使用 save_load_adapter / load_last_chart
+        "saveload_storage_customization",
+      ],
+      // 布局 / 指标模板 / 画图模板 / 独立绘图全部经由 API 处理器存取
+      save_load_adapter: this.save_load_adapter,
       load_last_chart: true,
       custom_indicators_getter: this.getCustomIndicators,
     });
 
+    // 历史布局懒迁移：打开旧布局时由库重新保存一次，把绘图落到独立存储
+    TvStorage.setupLayoutMigration(this.widget, this.save_load_adapter);
+
     this.setupEventListeners();
     return this;
+  }
+
+  // 保存结果提示：布局/模板成功给轻提示；绘图保存频繁成功不提示；迁移自动保存不打扰
+  handle_save_notice(notice) {
+    if (!notice) return;
+    if (!notice.ok) {
+      console.warn("TradingView 保存失败:", notice.kind, notice.error);
+      if (typeof layer !== "undefined" && layer.msg) {
+        layer.msg("保存失败：" + (notice.name || notice.kind));
+      }
+      return;
+    }
+    if (notice.migration) return;
+    const messages = {
+      chart: "布局已保存",
+      studyTemplate: "指标模板已保存",
+      drawingTemplate: "画图模板已保存",
+      chartTemplate: "图表模板已保存",
+    };
+    const message = messages[notice.kind];
+    if (message && typeof layer !== "undefined" && layer.msg) {
+      layer.msg(message);
+    }
   }
 
   // 获取自定义指标
