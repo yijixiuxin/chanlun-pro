@@ -1,5 +1,7 @@
 var ZiXuan = (function () {
   var zx_group = "我的关注";
+  // 添加自选下拉菜单的数据缓存，避免下拉菜单渲染时数据尚未返回导致显示“暂无数据”
+  var zixuan_opts_data = [];
 
   return {
     render_zixuan_opts: function () {
@@ -32,6 +34,7 @@ var ZiXuan = (function () {
             });
           });
           // 再重新请求一遍自选列表，刷新
+          zixuan_opts_data = data;
           $("#zixuan_groups").change();
           layui.dropdown.reloadData("add_zixuan", {
             data: data,
@@ -355,12 +358,14 @@ var ZiXuan = (function () {
 
         dropdown.render({
           elem: "#add_zixuan",
-          data: [],
+          data: zixuan_opts_data,
           click: function (data, othis) {
-            let opt = "ADD";
-            if (data["exists"] === 1) {
-              opt = "DEL";
-            }
+            let opt = data["exists"] === 1 ? "DEL" : "ADD";
+            let checkbox = othis.find("input[type=checkbox]");
+            // 请求失败时还原复选框的勾选状态
+            let revert_checkbox = function () {
+              checkbox.prop("checked", data["exists"] === 1);
+            };
             $.ajax({
               type: "POST",
               url: "/set_stock_zixuan",
@@ -374,10 +379,21 @@ var ZiXuan = (function () {
               },
               dataType: "json",
               success: function (res) {
-                if (data["title"] == ZiXuan.zx_group) {
+                if (!res["ok"]) {
+                  revert_checkbox();
+                  layer.msg(opt === "ADD" ? "添加自选失败" : "移除自选失败");
+                  return;
+                }
+                data["exists"] = opt === "ADD" ? 1 : 0;
+                checkbox.prop("checked", data["exists"] === 1);
+                if (data["title"] === ZiXuan.zx_group) {
                   ZiXuan.render_zixuan_opts();
                   ZiXuan.render_zixuan_stocks();
                 }
+              },
+              error: function () {
+                revert_checkbox();
+                layer.msg(opt === "ADD" ? "添加自选失败" : "移除自选失败");
               },
             });
             return false;
