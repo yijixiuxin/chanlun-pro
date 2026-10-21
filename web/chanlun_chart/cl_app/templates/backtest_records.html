@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <title>回测学习记录</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0" />
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui-theme-dark.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/backtest_records.css') }}" />
+</head>
+<body>
+  <div class="bt-records-wrap">
+    <!-- 学习统计 -->
+    <div class="bt-stat-cards">
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-count">--</div>
+        <div class="bt-stat-label">回测学习次数</div>
+      </div>
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-winrate">--</div>
+        <div class="bt-stat-label">交易成功率</div>
+      </div>
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-profit">--</div>
+        <div class="bt-stat-label">累计盈亏</div>
+      </div>
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-avg-rate">--</div>
+        <div class="bt-stat-label">平均收益率</div>
+      </div>
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-sessions">--</div>
+        <div class="bt-stat-label">盈利 / 亏损回测</div>
+      </div>
+      <div class="bt-stat-card">
+        <div class="bt-stat-value" id="bt-stat-trades">--</div>
+        <div class="bt-stat-label">平仓 / 盈利次数</div>
+      </div>
+    </div>
+
+    <!-- 回测记录列表 -->
+    <table class="layui-hide" id="bt-records-table" lay-filter="bt-records-table"></table>
+
+    <!-- 交易详情 -->
+    <div class="bt-record-detail">
+      <div class="bt-detail-head">
+        <span class="bt-detail-title">交易详情</span>
+        <span class="bt-detail-hint" id="bt-detail-hint">点击上方记录查看交易详情</span>
+      </div>
+      <div class="bt-detail-cards" id="bt-detail-cards"></div>
+      <!-- 交易明细：高度自适应弹框剩余空间，超出滚动 -->
+      <div class="bt-detail-trades-wrap" id="bt-detail-trades-wrap">
+        <table class="bt-detail-trades">
+          <thead>
+            <tr>
+              <th>序号</th>
+              <th>时间</th>
+              <th>方向</th>
+              <th>价格</th>
+              <th>数量</th>
+              <th>盈亏</th>
+            </tr>
+          </thead>
+          <tbody id="bt-detail-trades-body"></tbody>
+        </table>
+        <div class="bt-detail-empty" id="bt-detail-trades-empty">暂无交易记录</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='layui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/backtest_records.js') }}"></script>
+</body>
+</html>

@@ -57,6 +57,18 @@ body { background: #131722; }
 .bt-btn-group { margin-bottom: 8px; }
 .bt-btn-group button { margin-right: 4px; }
 
+/* 回测记录按钮：回测页固定暗色，避免 layui 默认亮色按钮不协调 */
+#bt-btn-records {
+  background: #2a2e39;
+  border: 1px solid #363a45;
+  color: #d1d4dc;
+}
+#bt-btn-records:hover {
+  background: #363a45;
+  border-color: #363a45;
+  color: #fff;
+}
+
 .bt-speed { margin: 10px 0; }
 .bt-speed label { display: block; margin-bottom: 4px; font-size: 13px; }
 .bt-speed input[type="range"] {

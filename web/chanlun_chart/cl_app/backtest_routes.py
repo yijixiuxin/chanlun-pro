@@ -8,6 +8,7 @@ from chanlun import cl, fun
 from chanlun.base import Market
 from chanlun.cl_interface import ICL, Config
 from chanlun.cl_utils import cl_data_to_tv_chart, query_cl_chart_config
+from chanlun.db import db
 from chanlun.exchange import get_exchange
 from chanlun.exchange.exchange import convert_stock_kline_frequency
 from chanlun.tools.klines_tool import klines_to_heikin_ashi_klines
@@ -18,6 +19,68 @@ _replay_sessions: dict = {}
 # 固定周期：日线 + 周线
 HIGH_FREQ = "w"
 SMALL_FREQ = "d"
+
+# 回测记录相关常量（初始资金与前端 BT_CONFIG.INITIAL_CAPITAL 保持一致）
+BACKTEST_INITIAL_CAPITAL = 100000.0
+BACKTEST_MAX_TRADE_RECORDS = 2000
+BACKTEST_RECORD_LIST_LIMIT = 200
+BACKTEST_DIRECTIONS = {"买入", "卖出", "平仓"}
+
+
+def _bt_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bt_int(value, default: int = 0) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _bt_record_to_dict(record) -> dict:
+    """回测记录 model 转前端可用的 dict"""
+    return {
+        "id": int(record.id),
+        "dt": fun.datetime_to_str(record.dt) if record.dt else "",
+        "stock_code": record.stock_code or "",
+        "stock_name": record.stock_name or "",
+        "frequency": record.frequency or "",
+        "initial_capital": round(float(record.initial_capital or 0), 2),
+        "final_capital": round(float(record.final_capital or 0), 2),
+        "position_value": round(float(record.position_value or 0), 2),
+        "unrealized_pnl": round(float(record.unrealized_pnl or 0), 2),
+        "realized_pnl": round(float(record.realized_pnl or 0), 2),
+        "total_value": round(float(record.total_value or 0), 2),
+        "profit": round(float(record.profit or 0), 2),
+        "profit_rate": round(float(record.profit_rate or 0), 2),
+        "total_trades": int(record.total_trades or 0),
+        "close_count": int(record.close_count or 0),
+        "win_count": int(record.win_count or 0),
+        "lose_count": int(record.lose_count or 0),
+        "win_rate": round(float(record.win_rate or 0), 2),
+        "start_time": record.start_time or "",
+        "end_time": record.end_time or "",
+        "start_pos": int(record.start_pos or 0),
+        "end_pos": int(record.end_pos or 0),
+        "total_bars": int(record.total_bars or 0),
+    }
+
+
+def _bt_trade_to_dict(trade) -> dict:
+    """回测交易明细 model 转前端可用的 dict"""
+    return {
+        "id": int(trade.id),
+        "seq": int(trade.seq or 0),
+        "time": trade.trade_time or "",
+        "direction": trade.direction or "",
+        "price": round(float(trade.price or 0), 3),
+        "qty": int(trade.qty or 0),
+        "pnl": round(float(trade.pnl or 0), 2),
+    }
 
 
 def register_backtest_routes(app):
@@ -216,6 +279,159 @@ def register_backtest_routes(app):
             "current_price": float(current_bar["close"]),
             "current_bar_time": new_bar["time"],
             "current_time": fun.datetime_to_str(current_bar["date"]),
+        }
+
+    @app.route("/backtest/finish", methods=["POST"])
+    @login_required
+    def backtest_finish():
+        """回测完成：接收交易记录与资金情况，服务端重新统计后保存"""
+        data = request.get_json(silent=True) or {}
+        session_key = str(data.get("session_key") or "")
+        session_id = session.get("bt_session_id")
+
+        # 同一会话重复提交（网络重试/多次触发）直接返回已保存记录
+        saved_id = db.backtest_record_id_by_session(session_key)
+        if saved_id is not None:
+            return {"ok": True, "record_id": saved_id, "duplicate": True}
+
+        if not session_key or session_id != session_key:
+            return {"ok": False, "msg": "回测会话已失效，无法保存记录"}
+        rs = _replay_sessions.get(session_key)
+        if rs is None:
+            return {"ok": False, "msg": "回测会话已结束，无法保存记录"}
+
+        # 交易记录校验：统计值全部由服务端重新计算，不信任前端传值
+        raw_records = data.get("trade_records")
+        if not isinstance(raw_records, list):
+            raw_records = []
+        raw_records = raw_records[-BACKTEST_MAX_TRADE_RECORDS:]
+
+        trade_records = []
+        for item in raw_records:
+            if not isinstance(item, dict):
+                continue
+            direction = str(item.get("direction") or "")
+            if direction not in BACKTEST_DIRECTIONS:
+                continue
+            trade_records.append(
+                {
+                    "time": str(item.get("time") or ""),
+                    "direction": direction,
+                    "price": round(_bt_float(item.get("price")), 3),
+                    "qty": max(0, _bt_int(item.get("qty"))),
+                    "pnl": round(_bt_float(item.get("pnl")), 2),
+                }
+            )
+
+        initial_capital = _bt_float(
+            data.get("initial_capital"), BACKTEST_INITIAL_CAPITAL
+        )
+        if initial_capital <= 0:
+            initial_capital = BACKTEST_INITIAL_CAPITAL
+        final_capital = _bt_float(data.get("capital"), initial_capital)
+        current_price = _bt_float(data.get("current_price"))
+
+        position = data.get("position")
+        if not isinstance(position, dict):
+            position = {}
+        position_type = str(position.get("type") or "")
+        position_qty = max(0, _bt_int(position.get("qty")))
+        position_price = _bt_float(position.get("price"))
+
+        close_trades = [t for t in trade_records if t["direction"] == "平仓"]
+        realized_pnl = round(sum(t["pnl"] for t in close_trades), 2)
+        close_count = len(close_trades)
+        win_count = len([t for t in close_trades if t["pnl"] > 0])
+        lose_count = close_count - win_count
+        win_rate = round(win_count / close_count * 100, 2) if close_count else 0.0
+
+        # 未平仓头寸按当前价计算持仓市值与浮动盈亏
+        if position_type in ("long", "short") and position_qty > 0:
+            position_value = round(position_qty * current_price, 2)
+            if position_type == "long":
+                unrealized_pnl = round(
+                    (current_price - position_price) * position_qty, 2
+                )
+            else:
+                unrealized_pnl = round(
+                    (position_price - current_price) * position_qty, 2
+                )
+        else:
+            position_value = 0.0
+            unrealized_pnl = 0.0
+
+        # 总资产 = 初始资金 + 已实现盈亏 + 浮动盈亏（空仓时即剩余资金）
+        total_value = round(initial_capital + realized_pnl + unrealized_pnl, 2)
+        profit = round(total_value - initial_capital, 2)
+
+        klines = rs["all_klines"]
+        start_pos = int(rs["start_pos"])
+        end_pos = min(int(rs["current_pos"]), len(klines) - 1)
+        summary = {
+            "session_key": session_key,
+            "market": "a",
+            "stock_code": rs["code"],
+            "stock_name": rs["name"],
+            "frequency": f"{rs['small_freq']}/{rs['high_freq']}",
+            "initial_capital": round(initial_capital, 2),
+            "final_capital": round(final_capital, 2),
+            "position_value": position_value,
+            "unrealized_pnl": unrealized_pnl,
+            "realized_pnl": realized_pnl,
+            "total_value": total_value,
+            "profit": profit,
+            "profit_rate": round(profit / initial_capital * 100, 2),
+            "total_trades": len(trade_records),
+            "close_count": close_count,
+            "win_count": win_count,
+            "lose_count": lose_count,
+            "win_rate": win_rate,
+            "start_time": fun.datetime_to_str(klines.iloc[start_pos]["date"]),
+            "end_time": fun.datetime_to_str(klines.iloc[end_pos]["date"]),
+            "start_pos": start_pos,
+            "end_pos": end_pos,
+            "total_bars": len(klines),
+        }
+
+        try:
+            record_id = db.backtest_record_save(summary, trade_records)
+        except Exception as e:
+            app.logger.error(f"保存回测记录失败: {e}")
+            return {"ok": False, "msg": "回测记录保存失败"}
+
+        # 记录已保存，清理回放 session
+        _replay_sessions.pop(session_key, None)
+        session.pop("bt_session_id", None)
+        return {"ok": True, "record_id": record_id}
+
+    @app.route("/backtest/records/page")
+    @login_required
+    def backtest_records_page():
+        """回测学习记录弹框页面"""
+        return render_template("backtest_records.html")
+
+    @app.route("/backtest/records")
+    @login_required
+    def backtest_records():
+        """回测学习记录列表与统计"""
+        records = db.backtest_record_list(limit=BACKTEST_RECORD_LIST_LIMIT)
+        return {
+            "ok": True,
+            "stats": db.backtest_record_stats(),
+            "data": [_bt_record_to_dict(record) for record in records],
+        }
+
+    @app.route("/backtest/records/<int:record_id>")
+    @login_required
+    def backtest_record_detail(record_id: int):
+        """单条回测记录与交易明细"""
+        record, trades = db.backtest_record_get(record_id)
+        if record is None:
+            return {"ok": False, "msg": "回测记录不存在"}
+        return {
+            "ok": True,
+            "record": _bt_record_to_dict(record),
+            "trades": [_bt_trade_to_dict(trade) for trade in trades],
         }
 
     @app.route("/backtest/stop", methods=["POST"])

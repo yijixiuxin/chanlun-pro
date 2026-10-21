@@ -1,0 +1,171 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  background: #131722;
+  color: #d1d4dc;
+  font-size: 13px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* 弹框内整体纵向布局：头部统计与记录列表固定，交易详情区占满剩余高度 */
+.bt-records-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 顶部学习统计 */
+.bt-stat-cards {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.bt-stat-card {
+  background: #1e222d;
+  border: 1px solid #2a2e39;
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.bt-stat-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #e0e3eb;
+  line-height: 1.2;
+}
+
+.bt-stat-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #787b86;
+}
+
+/* 记录列表（layui table），高度固定，内部滚动 */
+#bt-records-table { width: 100%; }
+
+/* 交易详情 */
+.bt-record-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #1e222d;
+  border: 1px solid #2a2e39;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.bt-detail-head {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.bt-detail-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #e0e3eb;
+}
+
+.bt-detail-hint {
+  font-size: 12px;
+  color: #787b86;
+}
+
+.bt-detail-cards {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bt-detail-item {
+  background: #131722;
+  border: 1px solid #2a2e39;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.bt-detail-item span {
+  display: block;
+  font-size: 12px;
+  color: #787b86;
+  margin-bottom: 2px;
+}
+
+.bt-detail-item b {
+  font-size: 14px;
+  font-weight: normal;
+  color: #e0e3eb;
+}
+
+/* 交易明细：占满详情区剩余高度，超过后自身滚动（表头吸顶） */
+.bt-detail-trades-wrap {
+  flex: 1;
+  min-height: 100px;
+  overflow-y: auto;
+  background: #131722;
+  border: 1px solid #2a2e39;
+  border-radius: 4px;
+}
+
+.bt-detail-trades {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bt-detail-trades thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+  color: #787b86;
+  background: #2a2e39;
+  border-bottom: 1px solid #363a45;
+}
+
+.bt-detail-trades tbody td {
+  padding: 7px 10px;
+  white-space: nowrap;
+  color: #d1d4dc;
+  border-bottom: 1px solid #2a2e39;
+}
+
+.bt-detail-trades tbody tr:last-child td { border-bottom: none; }
+.bt-detail-trades tbody tr:hover { background: #2a2e39; }
+
+.bt-detail-empty {
+  display: none;
+  padding: 24px 10px;
+  text-align: center;
+  color: #787b86;
+}
+
+.bt-muted { color: #787b86; }
+.positive { color: #ef5350; }
+.negative { color: #26a69a; }
+
+/* layui 表格暗黑适配（列表表格） */
+.layui-table { background: #1e222d; color: #d1d4dc; }
+.layui-table th { background: #2a2e39; color: #787b86; }
+.layui-table td { border-color: #2a2e39; }
+.layui-table tbody tr:hover { background: #2a2e39; }
+.layui-table-view { border-color: #2a2e39; }
+.layui-table-header { background: #1e222d; }
+.layui-table-page { background: #1e222d; border-color: #2a2e39; }
+.layui-table-tool { background: #1e222d; border-color: #2a2e39; }

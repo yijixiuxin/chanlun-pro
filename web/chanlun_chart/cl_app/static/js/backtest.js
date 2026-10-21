@@ -16,6 +16,8 @@ const BT_CONFIG = {
     BC_TEXT: "#fccbcd",
     MMD_UP: "#FA8072",
     MMD_DOWN: "#1E90FF",
+    TRADE_BUY: "#F23645",
+    TRADE_SELL: "#089981",
   },
   CHART_TYPES: ["fxs", "bis", "xds", "zsds", "bi_zss", "xd_zss", "zsd_zss", "bcs", "mmds"],
 };
@@ -112,6 +114,19 @@ const BTChartUtils = {
       },
     });
   },
+
+  // 买卖点使用画图标记（arrow_up / arrow_down），不再使用 datafeed Marks
+  createTradeShape(chart, point, trade) {
+    return this.createShape(chart, point, {
+      shape: trade.shape, text: trade.text,
+      overrides: {
+        arrowColor: trade.color,
+        color: trade.color,
+        fontsize: 12,
+        showLabel: true,
+      },
+    });
+  },
 };
 
 // === DataFeed API ===
@@ -119,7 +134,6 @@ const backtestConfigData = {
   supports_search: false,
   supports_group_request: false,
   supported_resolutions: ["1D", "1W"],
-  supports_marks: true,
   supports_timescale_marks: true,
   supports_time: false,
   exchanges: [{ value: "backtest", name: "回测", desc: "回测学习" }],
@@ -174,8 +188,6 @@ function createBacktestDatafeed(symbolName) {
   return {
     _realtimeCallback: null,
     _bars: {},
-    _marks: [],
-    _marksCallback: null,
 
     onReady: function (callback) {
       setTimeout(() => callback(backtestConfigData), 0);
@@ -235,23 +247,6 @@ function createBacktestDatafeed(symbolName) {
       this._realtimeCallback = null;
     },
 
-    getMarks: function (symbolInfo, startDate, endDate, onDataCallback, resolution) {
-      this._marksCallback = onDataCallback;
-      console.log("getMarks:", this._marks);
-      onDataCallback(this._marks);
-    },
-
-    addMark: function (mark) {
-      this._marks.push(mark);
-      console.log("addMark:", this._marks);
-      if (this._marksCallback) this._marksCallback(this._marks);
-    },
-
-    clearAllMarks: function () {
-      this._marks = [];
-      if (this._marksCallback) this._marksCallback(this._marks);
-    },
-
     pushBar: function (bar) {
       if (this._realtimeCallback) {
         this._realtimeCallback({
@@ -269,6 +264,7 @@ const BacktestApp = {
   widgetSmall: null, widgetHigh: null,
   chartSmall: null, chartHigh: null,
   datafeedSmall: null, datafeedHigh: null,
+  saveLoadAdapters: null,
   timerId: null, speedMs: 2000, currentBarTime: 0,
   sessionLoaded: false, sessionKey: null, startPos: 0,
   running: false, paused: false,
@@ -281,6 +277,7 @@ const BacktestApp = {
   capital: BT_CONFIG.INITIAL_CAPITAL,
   position: { type: null, qty: 0, price: 0 },
   tradeRecords: [],
+  resultSubmitted: false,
 
   init() {
     this.bindEvents();
@@ -314,6 +311,13 @@ const BacktestApp = {
     this.datafeedSmall = createBacktestDatafeed("small");
     this.datafeedHigh = createBacktestDatafeed("high");
 
+    // 回测学习图表布局/指标设置只保存在浏览器本地，不走 /tv/storage 服务端接口。
+    // 两张图周期固定不同（日线/周线），用 namespace 隔离各自的布局列表。
+    this.saveLoadAdapters = {
+      small: BacktestSaveLoad.createBacktestLocalSaveLoadAdapter({ namespace: "small" }),
+      high: BacktestSaveLoad.createBacktestLocalSaveLoadAdapter({ namespace: "high" }),
+    };
+
     this.widgetSmall = new TradingView.widget({
       debug: false, autosize: true, fullscreen: false,
       container: "tv_chart_small", symbol: "small", interval: "1D",
@@ -322,9 +326,10 @@ const BacktestApp = {
       theme: "Dark", timezone: "Asia/Shanghai", locale: "zh",
       disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
         "display_market_status", "symbol_info", "volume_force_overlay", 'header_screenshot', 'use_localstorage_for_settings', 'save_chart_properties_to_local_storage'],
-      enabled_features: [], time_frames: [],
-      charts_storage_url: "/backtest/tv",
-      charts_storage_api_version: "1.1", client_id: "bt_small",
+      // study_templates：允许保存指标模板；saveload_storage_customization：本版本库必须开启才会使用 save_load_adapter
+      enabled_features: ["study_templates", "saveload_storage_customization"], time_frames: [],
+      save_load_adapter: this.saveLoadAdapters.small,
+      load_last_chart: true,
       custom_indicators_getter: function (PineJS) {
         return Promise.resolve([
           TvIdxAMA.idx(PineJS), TvIdxATR.idx(PineJS), TvIdxCDBB.idx(PineJS),
@@ -345,9 +350,9 @@ const BacktestApp = {
       theme: "Dark", timezone: "Asia/Shanghai", locale: "zh",
       disabled_features: ["go_to_date", "header_symbol_search", "header_compare",
         "display_market_status", "symbol_info", "volume_force_overlay", 'header_screenshot', 'use_localstorage_for_settings', 'save_chart_properties_to_local_storage'],
-      enabled_features: [], time_frames: [],
-      charts_storage_url: "/backtest/tv",
-      charts_storage_api_version: "1.1", client_id: "bt_high",
+      enabled_features: ["study_templates", "saveload_storage_customization"], time_frames: [],
+      save_load_adapter: this.saveLoadAdapters.high,
+      load_last_chart: true,
       custom_indicators_getter: function (PineJS) {
         return Promise.resolve([
           TvIdxAMA.idx(PineJS), TvIdxATR.idx(PineJS), TvIdxCDBB.idx(PineJS),
@@ -410,6 +415,7 @@ const BacktestApp = {
     this.capital = BT_CONFIG.INITIAL_CAPITAL;
     this.position = { type: null, qty: 0, price: 0 };
     this.tradeRecords = [];
+    this.resultSubmitted = false;
     this.updateCapitalDisplay();
     this.updatePositionDisplay();
     $("#bt-trade-records tbody").empty();
@@ -454,7 +460,9 @@ const BacktestApp = {
       if (res.finished) {
         self.stopTimer();
         self.running = false;
+        $("#bt-progress").text("100%");
         layer.msg("回放已结束");
+        self.submitResult();
         return;
       }
       if (!res.ok) return;
@@ -514,16 +522,80 @@ const BacktestApp = {
     this.paused = false;
 
     if (this.sessionKey) { BTLocalStore.removeTrades(this.sessionKey); }
-    if (this.datafeedSmall) this.datafeedSmall.clearAllMarks();
-    if (this.datafeedHigh) this.datafeedHigh.clearAllMarks();
 
-    $.post("/backtest/stop", () => {
-      this.sessionLoaded = false;
-      this.sessionKey = null;
-      $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
-      $("#bt-btn-pause").text("暂停");
-      $("#bt-progress").text("--");
-      this.reloadSession();
+    const doStop = () => {
+      $.post("/backtest/stop", () => {
+        this.sessionLoaded = false;
+        this.sessionKey = null;
+        $("#bt-btn-start").removeClass("layui-btn-disabled").attr("disabled", false);
+        $("#bt-btn-pause").text("暂停");
+        $("#bt-progress").text("--");
+        this.reloadSession();
+      });
+    };
+
+    // 未跑到结束就重新开始时，先把当前进度保存为一次回测记录
+    if (this.tradeRecords.length > 0 && !this.resultSubmitted) {
+      this.submitResult(false, doStop);
+    } else {
+      doStop();
+    }
+  },
+
+  // === 回测结果上报与记录弹框 ===
+  submitResult(showPopup = true, onDone = null) {
+    const finish = () => { if (onDone) onDone(); };
+    if (!this.sessionKey || this.resultSubmitted) { finish(); return; }
+    this.resultSubmitted = true;
+
+    const priceText = $("#bt-current-price").text().replace("¥", "");
+    const payload = {
+      session_key: this.sessionKey,
+      initial_capital: BT_CONFIG.INITIAL_CAPITAL,
+      capital: this.capital,
+      position: this.position,
+      current_price: parseFloat(priceText) || 0,
+      current_time: $("#bt-current-time").text(),
+      trade_records: this.tradeRecords,
+    };
+
+    const self = this;
+    const loading = layer.load(1);
+    $.ajax({
+      type: "POST",
+      url: "/backtest/finish",
+      contentType: "application/json",
+      dataType: "json",
+      data: JSON.stringify(payload),
+      success: function (res) {
+        layer.close(loading);
+        if (!res.ok) {
+          if (showPopup) layer.msg(res.msg || "回测记录保存失败");
+        } else {
+          if (showPopup) {
+            layer.msg("回测完成，记录已保存");
+            self.openRecordsPopup();
+          }
+        }
+        finish();
+      },
+      error: function () {
+        layer.close(loading);
+        if (showPopup) layer.msg("回测记录保存失败，请检查服务是否正常");
+        finish();
+      },
+    });
+  },
+
+  openRecordsPopup() {
+    layer.open({
+      type: 2,
+      title: "回测学习记录",
+      area: ["1180px", "86vh"],
+      content: "/backtest/records/page",
+      anim: 1,
+      fixed: true,
+      shadeClose: true,
     });
   },
 
@@ -750,6 +822,7 @@ const BacktestApp = {
     $("#bt-btn-buy").click(() => self.trade("buy"));
     $("#bt-btn-sell").click(() => self.trade("sell"));
     $("#bt-btn-close").click(() => self.trade("close"));
+    $("#bt-btn-records").click(() => self.openRecordsPopup());
 
     $("#bt-speed-slider").on("input", function () {
       const val = parseInt($(this).val());
@@ -809,6 +882,7 @@ const BacktestApp = {
       this.addTradeRecord("卖出", price, qty);
     } else if (action === "close") {
       if (!this.position.type) { layer.msg("无持仓可平"); return; }
+      const closedType = this.position.type;
       let pnl = 0;
       if (this.position.type === "long") {
         pnl = (price - this.position.price) * this.position.qty;
@@ -816,7 +890,7 @@ const BacktestApp = {
         pnl = (this.position.price - price) * this.position.qty;
       }
       this.capital += this.position.price * this.position.qty + pnl;
-      this.addTradeRecord("平仓", price, this.position.qty, pnl);
+      this.addTradeRecord("平仓", price, this.position.qty, pnl, closedType);
       this.position = { type: null, qty: 0, price: 0 };
     }
 
@@ -824,7 +898,7 @@ const BacktestApp = {
     this.updatePositionDisplay();
   },
 
-  addTradeRecord(direction, price, qty, pnl) {
+  addTradeRecord(direction, price, qty, pnl, positionType) {
     const time = $("#bt-current-time").text();
     const rec = { time, direction, price, qty, pnl: pnl || 0 };
     this.tradeRecords.push(rec);
@@ -840,53 +914,43 @@ const BacktestApp = {
     </tr>`;
     $("#bt-trade-records tbody").prepend(row);
 
-    // 添加图表 marks 标记
-    this.addTradeMark(direction, price, qty, pnl);
+    // 使用图表画图标记买卖点
+    this.addTradeShape(direction, price, qty, pnl, positionType);
   },
 
-  addTradeMark(direction, price, qty, pnl) {
-    // barTime 是秒级，需转为毫秒以匹配 getBars 中的 bar time 格式
+  // 在图表上画箭头标记买卖点（替代 datafeed Marks）
+  addTradeShape(direction, price, qty, pnl, positionType) {
     const barTime = this.currentBarTime;
     if (!barTime) return;
 
-    let mark;
+    let isBuy, color, text;
     if (direction === "买入") {
-      mark = {
-        id: Date.now(),
-        time: barTime,
-        color: "red",
-        text: `买入 ${qty}股 @¥${price.toFixed(2)}`,
-        label: "B",
-        labelFontColor: "white",
-        minSize: 20,
-      };
+      isBuy = true;
+      color = BT_CONFIG.COLORS.TRADE_BUY;
+      text = `买入 ${qty}股 @¥${price.toFixed(2)}`;
     } else if (direction === "卖出") {
-      mark = {
-        id: Date.now(),
-        time: barTime,
-        color: "green",
-        text: `卖出 ${qty}股 @¥${price.toFixed(2)}`,
-        label: "S",
-        labelFontColor: "white",
-        minSize: 20,
-      };
+      isBuy = false;
+      color = BT_CONFIG.COLORS.TRADE_SELL;
+      text = `卖出 ${qty}股 @¥${price.toFixed(2)}`;
     } else if (direction === "平仓") {
-      const pnlStr = pnl !== undefined ? (pnl >= 0 ? "+¥" : "-¥") + Math.abs(pnl).toFixed(2) : "";
-      mark = {
-        id: Date.now(),
-        time: barTime,
-        color: pnl >= 0 ? "red" : "green",
-        text: `平仓 ${qty}股 @¥${price.toFixed(2)} ${pnlStr}`,
-        label: "C",
-        labelFontColor: "white",
-        minSize: 20,
-      };
+      // 平多 = 卖出（箭头向下），平空 = 买入（箭头向上）
+      isBuy = positionType === "short";
+      color = pnl >= 0 ? BT_CONFIG.COLORS.TRADE_BUY : BT_CONFIG.COLORS.TRADE_SELL;
+      const pnlStr = (pnl >= 0 ? "+¥" : "-¥") + Math.abs(pnl).toFixed(2);
+      text = `平仓 ${qty}股 @¥${price.toFixed(2)} ${pnlStr}`;
+    } else {
+      return;
     }
 
-    if (mark) {
-      this.datafeedSmall.addMark(mark);
-      this.datafeedHigh.addMark(mark);
-    }
+    // 买点箭头贴 bar 低点，卖点箭头贴 bar 高点（时间会自动对齐到当前周期的 bar）
+    const point = { time: barTime, channel: isBuy ? "low" : "high" };
+    const trade = { shape: isBuy ? "arrow_up" : "arrow_down", color, text };
+
+    [this.chartSmall, this.chartHigh].forEach(chart => {
+      if (!chart) return;
+      BTChartUtils.createTradeShape(chart, point, trade)
+        .catch(() => { /* 图表未就绪时忽略，不影响交易 */ });
+    });
   },
 
   updateCapitalDisplay() {

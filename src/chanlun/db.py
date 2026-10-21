@@ -409,6 +409,62 @@ class TableByAIPrediction(Base):
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
+class TableByBacktestRecord(Base):
+    # 回测学习记录（一次回测回放的汇总结果）
+    __tablename__ = "cl_backtest_records"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_key = Column(String(64), comment="回测会话id")
+    market = Column(String(20), comment="市场")
+    stock_code = Column(String(20), comment="标的代码")
+    stock_name = Column(String(100), comment="标的名称")
+    frequency = Column(String(10), comment="周期")
+    initial_capital = Column(Float, comment="初始资金")
+    final_capital = Column(Float, comment="期末可用资金")
+    position_value = Column(Float, comment="持仓市值")
+    unrealized_pnl = Column(Float, comment="浮动盈亏")
+    realized_pnl = Column(Float, comment="已实现盈亏")
+    total_value = Column(Float, comment="期末总资产")
+    profit = Column(Float, comment="总盈亏")
+    profit_rate = Column(Float, comment="收益率(%)")
+    total_trades = Column(Integer, comment="交易操作次数")
+    close_count = Column(Integer, comment="平仓次数")
+    win_count = Column(Integer, comment="盈利次数")
+    lose_count = Column(Integer, comment="亏损次数")
+    win_rate = Column(Float, comment="交易成功率(%)")
+    start_time = Column(String(30), comment="回测起始时间")
+    end_time = Column(String(30), comment="回测结束时间")
+    start_pos = Column(Integer, comment="起始K线位置")
+    end_pos = Column(Integer, comment="结束K线位置")
+    total_bars = Column(Integer, comment="K线总数")
+    dt = Column(DateTime, comment="记录时间")
+
+    # 添加配置设置编码
+    __table_args__ = (
+        UniqueConstraint("session_key", name="table_backtest_session_unique"),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
+
+
+class TableByBacktestTrade(Base):
+    # 回测学习交易明细
+    __tablename__ = "cl_backtest_trades"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    record_id = Column(Integer, comment="回测记录id")
+    seq = Column(Integer, comment="序号")
+    trade_time = Column(String(30), comment="交易时间")
+    direction = Column(String(10), comment="交易方向")
+    price = Column(Float, comment="成交价格")
+    qty = Column(Integer, comment="成交数量")
+    pnl = Column(Float, comment="平仓盈亏")
+    dt = Column(DateTime, comment="记录时间")
+
+    # 添加配置设置编码
+    __table_args__ = (
+        Index("table_backtest_trades_record_index", "record_id"),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
+
+
 @fun.singleton
 class DB:
     global Base
@@ -1855,6 +1911,123 @@ class DB:
             session.commit()
 
         return {"saved": saved, "deleted": deleted}
+
+    # ------------------------------------------------------------------
+    # 回测学习记录
+    # ------------------------------------------------------------------
+    def backtest_record_save(self, summary: dict, trades: list) -> int:
+        """保存回测汇总与交易明细（按 session_key 幂等），返回记录 id"""
+        with self.Session() as session:
+            exists = (
+                session.query(TableByBacktestRecord)
+                .filter(TableByBacktestRecord.session_key == summary["session_key"])
+                .first()
+            )
+            if exists is not None:
+                return int(exists.id)
+
+            record = TableByBacktestRecord(**summary, dt=datetime.datetime.now())
+            session.add(record)
+            session.flush()
+
+            now = datetime.datetime.now()
+            for seq, trade in enumerate(trades):
+                session.add(
+                    TableByBacktestTrade(
+                        record_id=record.id,
+                        seq=seq,
+                        trade_time=trade.get("time", ""),
+                        direction=trade.get("direction", ""),
+                        price=trade.get("price", 0.0),
+                        qty=trade.get("qty", 0),
+                        pnl=trade.get("pnl", 0.0),
+                        dt=now,
+                    )
+                )
+            session.commit()
+            return int(record.id)
+
+    def backtest_record_id_by_session(self, session_key: str):
+        # 按会话id查询已保存的回测记录 id，不存在返回 None
+        if not session_key:
+            return None
+        with self.Session() as session:
+            record = (
+                session.query(TableByBacktestRecord.id)
+                .filter(TableByBacktestRecord.session_key == session_key)
+                .first()
+            )
+            return int(record[0]) if record is not None else None
+
+    def backtest_record_list(self, limit: int = 200) -> list[TableByBacktestRecord]:
+        # 回测记录列表，最新的在前
+        with self.Session() as session:
+            return (
+                session.query(TableByBacktestRecord)
+                .order_by(TableByBacktestRecord.id.desc())
+                .limit(limit)
+                .all()
+            )
+
+    def backtest_record_get(self, record_id: int):
+        # 获取单条回测记录与交易明细，不存在时返回 (None, [])
+        with self.Session() as session:
+            record = (
+                session.query(TableByBacktestRecord)
+                .filter(TableByBacktestRecord.id == record_id)
+                .first()
+            )
+            if record is None:
+                return None, []
+            trades = (
+                session.query(TableByBacktestTrade)
+                .filter(TableByBacktestTrade.record_id == record_id)
+                .order_by(TableByBacktestTrade.seq.asc())
+                .all()
+            )
+            return record, trades
+
+    def backtest_record_stats(self) -> dict:
+        # 回测学习统计：学习次数、交易成功率、累计盈亏等
+        with self.Session() as session:
+            total_count = (
+                session.query(func.count(TableByBacktestRecord.id)).scalar() or 0
+            )
+            profit_count = (
+                session.query(func.count(TableByBacktestRecord.id))
+                .filter(TableByBacktestRecord.profit > 0)
+                .scalar()
+                or 0
+            )
+            total_profit = (
+                session.query(func.sum(TableByBacktestRecord.profit)).scalar() or 0.0
+            )
+            avg_profit_rate = (
+                session.query(func.avg(TableByBacktestRecord.profit_rate)).scalar()
+                or 0.0
+            )
+            total_close_count = (
+                session.query(func.sum(TableByBacktestRecord.close_count)).scalar() or 0
+            )
+            total_win_count = (
+                session.query(func.sum(TableByBacktestRecord.win_count)).scalar() or 0
+            )
+
+        trade_win_rate = (
+            round(total_win_count / total_close_count * 100, 2)
+            if total_close_count
+            else 0.0
+        )
+        return {
+            "total_count": int(total_count),
+            "profit_count": int(profit_count),
+            "loss_count": int(total_count) - int(profit_count),
+            "total_profit": round(float(total_profit), 2),
+            "avg_profit_rate": round(float(avg_profit_rate), 2),
+            "total_close_count": int(total_close_count),
+            "total_win_count": int(total_win_count),
+            "trade_win_rate": trade_win_rate,
+        }
 
     def cache_get(self, key: str):
         with self.Session() as session:

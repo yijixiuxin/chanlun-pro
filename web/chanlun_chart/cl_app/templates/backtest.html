@@ -4,8 +4,8 @@
   <title>缠论回测学习</title>
   <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/layui-theme-dark.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/backtest.css') }}" />
-  {% include 'dark.html' %}
 </head>
 <body>
   <div class="bt-container">
@@ -26,6 +26,7 @@
           <button class="layui-btn layui-btn-normal" id="bt-btn-start">开始</button>
           <button class="layui-btn" id="bt-btn-pause">暂停</button>
           <button class="layui-btn layui-btn-warm" id="bt-btn-stop">重新开始</button>
+          <button class="layui-btn layui-btn-primary" id="bt-btn-records">回测记录</button>
         </div>
         <div class="bt-speed">
           <label>回放速度: <span id="bt-speed-label">2s</span></label>
@@ -107,6 +108,7 @@
   <script src="{{ url_for('static', filename='js/tv_indicators/chart_idx_vegasma.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tv_indicators/chart_idx_vol.js') }}"></script>
   <script src="{{ url_for('static', filename='js/tv_indicators/chart_idx_rsx.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/backtest_save_load_adapter.js') }}"></script>
   <script src="{{ url_for('static', filename='js/backtest.js') }}"></script>
 </body>
 </html>
