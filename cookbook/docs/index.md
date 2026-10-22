@@ -11,6 +11,26 @@
 
 ----
 
+### AI 自动安装（复制提示词给 AI）
+
+配套 AI 安装文档：<https://gitee.com/wang-student/chanlun-pro/raw/master/AI-INSTALL.md>
+
+把下面整段提示词复制给具备终端与文件操作能力的 AI（如 Claude Code、Cursor、Codex），它会自动完成安装、启动与验收：
+
+```text
+请阅读并严格遵守以下安装文档，在我的机器上安装并运行 chanlun-pro：
+https://gitee.com/wang-student/chanlun-pro/raw/master/AI-INSTALL.md
+
+执行要求：
+1. 先完整阅读文档，确认我的系统/架构在支持矩阵内（§2.1），再按 Gate 0 → Gate 6 顺序执行，每道 Gate 验收通过后再继续；
+2. 开工前先向我确认文档 §2.4 的 5 个问题（授权文件、访问范围、端口、数据库、是否常驻）；
+3. 授权文件 src/pyarmor_runtime_005445/pyarmor.rkey 必须由我提供；缺失时停下来向我要，不要伪造或绕过；
+4. 安装完成后按文档 §5 验收，并把访问地址、启动命令、日志位置、验收结果发给我；
+5. 遇到文档 §7 排查表解决不了的问题，把完整报错和已执行命令发给我；不要修改核心加密代码。
+```
+
+> AI 唯一无法自动完成的是**授权文件**（`pyarmor.rkey`）：请先按[授权方式](licensing.md)申请，把文件交给 AI 后，其余步骤（克隆、环境、配置、启动、验收）均可自动完成。默认使用 SQLite，无需 MySQL/Redis。
+
 ### 在线网站与本地部署的区别
 
 > 手机端可左右拖动进行查看
