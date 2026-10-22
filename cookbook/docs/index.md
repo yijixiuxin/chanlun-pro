@@ -29,8 +29,6 @@ https://gitee.com/wang-student/chanlun-pro/raw/master/AI-INSTALL.md
 5. 遇到文档 §7 排查表解决不了的问题，把完整报错和已执行命令发给我；不要修改核心加密代码。
 ```
 
-> AI 唯一无法自动完成的是**授权文件**（`pyarmor.rkey`）：请先按[授权方式](licensing.md)申请，把文件交给 AI 后，其余步骤（克隆、环境、配置、启动、验收）均可自动完成。默认使用 SQLite，无需 MySQL/Redis。
-
 ### 在线网站与本地部署的区别
 
 > 手机端可左右拖动进行查看

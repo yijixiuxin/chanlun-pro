@@ -22,8 +22,6 @@ https://gitee.com/wang-student/chanlun-pro/raw/master/AI-INSTALL.md
 5. 遇到文档 §7 排查表解决不了的问题，把完整报错和已执行命令发给我；不要修改核心加密代码。
 ```
 
-> AI 唯一无法自动完成的是**授权文件**（`pyarmor.rkey`）：请先按[授权方式](licensing.md)申请，把文件交给 AI 后，其余步骤均可自动完成。默认使用 SQLite，本页下方“前置条件”里的 MySQL/Redis 不是必须的。
-
 > Python 版本支持 3.11 3.12 3.13 3.14 ，不然运行会报 RuntimeError 错误
 > 前置条件
 > 已经安装 git、MySQL、Redis
