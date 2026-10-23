@@ -824,6 +824,21 @@ const BacktestApp = {
     $("#bt-btn-close").click(() => self.trade("close"));
     $("#bt-btn-records").click(() => self.openRecordsPopup());
 
+    // 空格键快捷切换开始/暂停：未运行时开始，运行中暂停，暂停中继续
+    // 同时阻断空格默认行为（页面滚动、聚焦按钮被激活等）
+    $(document).on("keydown", function (e) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key !== " " && e.code !== "Space") return;
+      e.preventDefault();
+      if (e.repeat) return;
+
+      if (!self.running) {
+        self.startReplay();
+      } else {
+        self.togglePause();
+      }
+    });
+
     $("#bt-speed-slider").on("input", function () {
       const val = parseInt($(this).val());
       self.speedMs = val * 500;
