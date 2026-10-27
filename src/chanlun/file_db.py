@@ -145,7 +145,7 @@ class FileCacheDB:
         """
         删除15天前的k线数据，不活跃的，减少占用空间
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (  # noqa: DTZ005
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
             15 * 24 * 60 * 60
         )
         for filename in (self.klines_path / market).glob("*.csv"):
@@ -182,6 +182,8 @@ class FileCacheDB:
         # 如果K线类型是平均K线，则对k线进行转换
         if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
             klines = klines_to_heikin_ashi_klines(klines)
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI_3.value:
+            klines = klines_to_heikin_ashi_klines(klines, 3)
         try:
             if file_pathname.is_file():
                 # print(f'{market}-{code}-{frequency} {key} K-Nums {len(klines)} 使用缓存')
@@ -290,7 +292,7 @@ class FileCacheDB:
         """
         清除时间超过15天的缓存数据
         """
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (  # noqa: DTZ005
+        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (
             15 * 24 * 60 * 60
         )
         for _market in Market:

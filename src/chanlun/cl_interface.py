@@ -21,6 +21,7 @@ class Config(Enum):
     # K 线类型
     KLINE_TYPE_DEFAULT = "kline_default"  # 默认K线
     KLINE_TYPE_HEIKIN_ASHI = "kline_Heikin_Ashi"  # 平滑平均K线
+    KLINE_TYPE_HEIKIN_ASHI_3 = "kline_Heikin_Ashi_3"  # 平滑平均K线(3倍平滑)
     KLINE_TYPE_CHANLUN = "kline_chanlun"  # 包含处理后的缠论K线
     # K 线缺口定义 (个人定制，不清楚的使用默认 none 配置)
     KLINE_QK_NONE = "none"

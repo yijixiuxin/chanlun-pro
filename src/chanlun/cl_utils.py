@@ -422,7 +422,7 @@ def set_cl_chart_config(
         db.cache_del(f"cl_config_{market}_{code}{suffix}")
 
     for new_key, new_val in config.items():
-        if new_key in old_config.keys():
+        if new_key in old_config:
             old_config[new_key] = new_val
         else:
             old_config[new_key] = new_val

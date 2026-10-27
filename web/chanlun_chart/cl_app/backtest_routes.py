@@ -163,6 +163,8 @@ def register_backtest_routes(app):
         cal_klines = klines.copy()
         if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
             cal_klines = klines_to_heikin_ashi_klines(cal_klines)
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI_3.value:
+            cal_klines = klines_to_heikin_ashi_klines(cal_klines, smooth_num=3)
 
         # 初始计算小级别（日线）
         cd_small = cl.CL(stock["code"], small_freq, cl_config)
@@ -175,6 +177,10 @@ def register_backtest_routes(app):
         cal_high_klines = high_klines.copy()
         if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
             cal_high_klines = klines_to_heikin_ashi_klines(cal_high_klines)
+        if cl_config.get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI_3.value:
+            cal_high_klines = klines_to_heikin_ashi_klines(
+                cal_high_klines, smooth_num=3
+            )
         cd_high = cl.CL(stock["code"], high_freq, cl_config)
         cd_high.process_klines(cal_high_klines)
 
