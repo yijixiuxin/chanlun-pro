@@ -259,14 +259,14 @@ def register_backtest_routes(app):
         cl_small_data = cl_data_to_tv_chart(rs["cl_small"], rs["cl_config"])
         cl_high_data = cl_data_to_tv_chart(rs["cl_high"], rs["cl_config"])
 
-        current_bar = klines.iloc[pos]
+        # 图表新增的 K 线必须使用计算后的 K 线（如平均K线），否则后续每一步推送的都是原始K线
         new_bar = {
-            "time": fun.datetime_to_int(current_bar["date"]),
-            "close": float(current_bar["close"]),
-            "open": float(current_bar["open"]),
-            "high": float(current_bar["high"]),
-            "low": float(current_bar["low"]),
-            "volume": float(current_bar["volume"]),
+            "time": cl_small_data["t"][-1],
+            "close": cl_small_data["c"][-1],
+            "open": cl_small_data["o"][-1],
+            "high": cl_small_data["h"][-1],
+            "low": cl_small_data["l"][-1],
+            "volume": cl_small_data["v"][-1],
         }
 
         # 大级别新 bar
@@ -280,6 +280,7 @@ def register_backtest_routes(app):
             "volume": cl_high_data["v"][-1],
         }
 
+        current_bar = klines.iloc[pos]
         return {
             "ok": True,
             "current_pos": pos,
