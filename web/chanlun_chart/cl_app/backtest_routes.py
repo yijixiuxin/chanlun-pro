@@ -238,6 +238,8 @@ def register_backtest_routes(app):
         cal_klines = klines.copy()
         if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
             cal_klines = klines_to_heikin_ashi_klines(cal_klines)
+        if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI_3.value:
+            cal_klines = klines_to_heikin_ashi_klines(cal_klines, smooth_num=3)
         rs["cl_small"].process_klines(cal_klines.iloc[: pos + 1])
 
         # 增量更新大级别 CL
@@ -247,6 +249,10 @@ def register_backtest_routes(app):
         cal_high_klines = high_klines.copy()
         if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI.value:
             cal_high_klines = klines_to_heikin_ashi_klines(cal_high_klines)
+        if rs["cl_config"].get("kline_type") == Config.KLINE_TYPE_HEIKIN_ASHI_3.value:
+            cal_high_klines = klines_to_heikin_ashi_klines(
+                cal_high_klines, smooth_num=3
+            )
         rs["cl_high"].process_klines(cal_high_klines)
 
         # 生成 TV 数据
