@@ -18,7 +18,10 @@ def get_logger(filename=None, level=logging.INFO) -> logging.Logger:
     """
     log_path = get_data_path() / "logs"
     if log_path.is_dir() is False:
-        log_path.mkdir(parents=True)
+        try:
+            log_path.mkdir(parents=True)
+        except OSError as e:
+            print(f"无法创建日志目录 {log_path}，日志仅输出到控制台：{e}")
     logger = logging.getLogger(f"{filename}")
     logger.setLevel(level)
     fmt = logging.Formatter("%(asctime)s - %(levelname)s : %(message)s")
@@ -36,11 +39,18 @@ def get_logger(filename=None, level=logging.INFO) -> logging.Logger:
         logger.addHandler(stream_handler)
 
     if filename and file_exists is False:
-        file_handler = logging.FileHandler(
-            filename=str(log_path / filename), encoding="utf-8"
-        )
-        file_handler.setFormatter(fmt)
-        logger.addHandler(file_handler)
+        try:
+            file_handler = logging.FileHandler(
+                filename=str(log_path / filename), encoding="utf-8"
+            )
+        except OSError as e:
+            # 数据目录不可写时不能让日志初始化阻断程序启动
+            logger.warning(
+                f"无法写入日志文件 {log_path / filename}，日志仅输出到控制台：{e}"
+            )
+        else:
+            file_handler.setFormatter(fmt)
+            logger.addHandler(file_handler)
 
     return logger
 

@@ -189,6 +189,11 @@ class BackTestKlines(MarketDatas):
                     == Config.KLINE_TYPE_HEIKIN_ASHI.value
                 ):
                     klines = klines_to_heikin_ashi_klines(klines)
+                if (
+                    cl_config.get("kline_type", "")
+                    == Config.KLINE_TYPE_HEIKIN_ASHI_3.value
+                ):
+                    klines = klines_to_heikin_ashi_klines(klines, smooth_num=3)
                 self.cl_datas[key] = cl.CL(code, frequency, cl_config).process_klines(
                     klines
                 )
@@ -210,6 +215,11 @@ class BackTestKlines(MarketDatas):
                     == Config.KLINE_TYPE_HEIKIN_ASHI.value
                 ):
                     klines = klines_to_heikin_ashi_klines(klines)
+                if (
+                    cl_config.get("kline_type", "")
+                    == Config.KLINE_TYPE_HEIKIN_ASHI_3.value
+                ):
+                    klines = klines_to_heikin_ashi_klines(klines, smooth_num=3)
 
                 if len(klines) > 0:
                     if len(cd.get_klines()) == 0:

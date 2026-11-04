@@ -12,6 +12,9 @@
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='css/app.css') }}" />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/ths_special.css') }}?version=1.0.15" />
 
     <script
       type="text/javascript"
@@ -387,10 +390,11 @@
   <script src="{{ url_for('static', filename='js/tradingview/save_load_adapter.js') }}"></script>
   <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ai_prediction.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/zixuan.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/zixuan.js') }}?version=1.0.15"></script>
   <script src="{{ url_for('static', filename='js/alert.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ai.js') }}"></script>
   <script src="{{ url_for('static', filename='js/bkgn.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ths_special.js') }}?version=1.0.15"></script>
   <script>
     $(function () {
       // 缠论配置项更改
@@ -750,6 +754,9 @@
           });
         }
         ZiXuan.render_zixuan_opts();
+        if (Utils.get_market() === "a") {
+          ThsSpecial.init();
+        }
         interval_update_rates = setInterval(ZiXuan.stocks_update_rate, 10000);
       }
 

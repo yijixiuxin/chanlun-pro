@@ -612,7 +612,11 @@ class ExchangeTDX(Exchange):
                     + data["day"].map(str)
                 )
                 data["date"] = pd.to_datetime(data["date"])
-            data.to_pickle(str(xdxr_file))
+            try:
+                data.to_pickle(str(xdxr_file))
+            except OSError as e:
+                # 缓存不可写时，使用本次获取到的除权数据继续计算
+                print(f"写入除权除息缓存失败 {xdxr_file}：{e}")
         else:
             # print('直接读取缓存')
             data = pd.read_pickle(str(xdxr_file))

@@ -138,7 +138,12 @@ class FileCacheDB:
         file_pathname = (
             self.klines_path / market / f"{code.replace('.', '_')}_{frequency}.csv"
         )
-        kline.to_csv(file_pathname, index=False)
+        try:
+            kline.to_csv(file_pathname, index=False)
+        except OSError as e:
+            # 本地缓存不可写时不应影响已经获取到的行情数据
+            print(f"写入 K 线缓存失败 {file_pathname}：{e}")
+            return False
         return True
 
     def clear_tdx_old_klines(self, market):

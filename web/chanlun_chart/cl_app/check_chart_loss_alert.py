@@ -1,6 +1,5 @@
 import json
 import traceback
-from typing import Dict, List, Optional, Tuple
 
 from chanlun.base import Market
 from chanlun.db import TableByTVCharts, db
@@ -15,7 +14,7 @@ logger = get_logger("check_chart_loss_alert.log")
 """
 
 # symbol 前缀 -> Market 枚举 映射
-SYMBOL_MARKET_MAP: Dict[str, Market] = {
+SYMBOL_MARKET_MAP: dict[str, Market] = {
     "US": Market.US,
     "A": Market.A,
     "HK": Market.HK,
@@ -27,7 +26,7 @@ SYMBOL_MARKET_MAP: Dict[str, Market] = {
 }
 
 
-def parse_symbol(symbol: str) -> Optional[Tuple[Market, str]]:
+def parse_symbol(symbol: str) -> tuple[Market, str] | None:
     """
     解析 symbol 字符串，格式如 "US:AMZN"、"A:SH.600519"
     返回 (Market, code) 或 None
@@ -48,7 +47,7 @@ def parse_symbol(symbol: str) -> Optional[Tuple[Market, str]]:
     return market, code
 
 
-def get_stop_loss_lines() -> List[dict]:
+def get_stop_loss_lines() -> list[dict]:
     """
     从数据库中读取所有图表，解析出止损线信息。
     返回止损线信息列表，每条包含 market, code, stop_price, chart_name, direction 等字段。
@@ -60,10 +59,10 @@ def get_stop_loss_lines() -> List[dict]:
         "做空止损线": "short",
     }
 
-    results: List[dict] = []
+    results: list[dict] = []
     try:
         with db.Session() as session:
-            charts: List[TableByTVCharts] = session.query(TableByTVCharts).all()
+            charts: list[TableByTVCharts] = session.query(TableByTVCharts).all()
     except Exception as e:
         logger.error(f"Failed to query charts from database: {e}")
         return results
@@ -162,11 +161,11 @@ def check_and_alert():
         return
 
     # 按 market 分组，同一市场的代码批量获取 ticks
-    market_codes: Dict[Market, List[dict]] = {}
+    market_codes: dict[Market, list[dict]] = {}
     for sl in stop_loss_lines:
         market_codes.setdefault(sl["market"], []).append(sl)
 
-    alert_msgs: Dict[str, List[str]] = {}  # market_value -> list of alert messages
+    alert_msgs: dict[str, list[str]] = {}  # market_value -> list of alert messages
 
     for market, sl_list in market_codes.items():
         codes = [sl["code"] for sl in sl_list]
@@ -235,5 +234,5 @@ def check_and_alert():
     # logger.info("Stop-loss check cycle completed")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(get_stop_loss_lines())

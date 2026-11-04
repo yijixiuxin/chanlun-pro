@@ -49,6 +49,7 @@ from chanlun.zixuan import ZiXuan
 from .alert_tasks import AlertTasks
 from .backtest_routes import register_backtest_routes
 from .other_tasks import OtherTasks
+from .ths_routes import register_ths_routes
 from .tv_storage import tv_storage_bp
 from .xuangu_tasks import XuanguTasks
 
@@ -1548,6 +1549,9 @@ def create_app(test_config=None):
 
     # 注册回测学习路由
     register_backtest_routes(app)
+
+    # 注册同花顺特色数据路由
+    register_ths_routes(app)
 
     # 注册 TradingView 独立存储（布局与绘图分离）接口
     app.register_blueprint(tv_storage_bp)

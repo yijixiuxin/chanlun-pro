@@ -229,10 +229,19 @@ var ZiXuan = (function () {
             menu_data.splice(3, 0, { title: "操盘必读", id: "dfcf" });
             menu_data.splice(4, 0, { title: "相关资讯", id: "news" });
             menu_data.splice(5, 0, { title: "股吧", id: "guba" });
+            menu_data.splice(
+              6,
+              0,
+              { title: "同花顺财务体检", id: "ths_financial" },
+              { title: "同花顺异动解读", id: "ths_anomaly" },
+              { title: "同花顺龙虎榜", id: "ths_institution" },
+              { title: "同花顺热榜走势", id: "ths_hot_rank" },
+            );
           }
           dropdown.render({
             trigger: "contextmenu",
             show: true,
+            className: "ths-context-menu",
             data: menu_data,
             click: function (menuData, othis) {
               if (menuData["id"] === "del") {
@@ -321,6 +330,22 @@ var ZiXuan = (function () {
                     data.code.split(".")[1] +
                     ".html"
                 );
+              } else if (menuData["id"] === "ths_financial") {
+                if (window.ThsSpecial) {
+                  ThsSpecial.open_financial_health(data.code, data.name);
+                }
+              } else if (menuData["id"] === "ths_anomaly") {
+                if (window.ThsSpecial) {
+                  ThsSpecial.open_stock_anomaly(data.code, data.name);
+                }
+              } else if (menuData["id"] === "ths_institution") {
+                if (window.ThsSpecial) {
+                  ThsSpecial.open_institution(data.code, data.name);
+                }
+              } else if (menuData["id"] === "ths_hot_rank") {
+                if (window.ThsSpecial) {
+                  ThsSpecial.open_hot_rank(data.code, data.name);
+                }
               }
             },
           });
