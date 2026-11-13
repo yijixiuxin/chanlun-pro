@@ -8,7 +8,6 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Union
 
 import pandas as pd
 import pytz
@@ -22,7 +21,7 @@ _tq_user_path = str(Path(TDX_PATH) / "PYPlugins" / "user")
 if _tq_user_path not in sys.path:
     sys.path.insert(0, _tq_user_path)
 
-from tqcenter import tq  # noqa: E402
+from tqcenter import tq
 
 # 初始化 tq 连接
 tq.initialize(__file__)
@@ -65,7 +64,7 @@ class ExchangeTDXQuant(Exchange):
         self.market = market
         self._cfg = cfg
         self.tz = pytz.timezone("Asia/Shanghai")
-        self._all_stocks: List[dict] = []
+        self._all_stocks: list[dict] = []
 
     # ========================
     # 代码格式转换
@@ -219,7 +218,7 @@ class ExchangeTDXQuant(Exchange):
 
         return stock_type, precision
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict | None:
         """获取股票基本信息"""
         for s in self.all_stocks():
             if s["code"] == code:
@@ -233,7 +232,7 @@ class ExchangeTDXQuant(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """获取 K 线数据"""
         tq_period = self._FREQ_TO_TQ.get(frequency)
         if tq_period is None:
@@ -306,7 +305,7 @@ class ExchangeTDXQuant(Exchange):
 
         return df[["date", "code", "open", "close", "high", "low", "volume"]]
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         """获取 Tick 数据"""
         ticks = {}
         for code in codes:
@@ -406,7 +405,6 @@ class ExchangeTDXQuant(Exchange):
 
 
 if __name__ == "__main__":
-
     ex = ExchangeTDXQuant(Market.A)
     # stocks = ex.all_stocks()
     # print(stocks)
@@ -415,7 +413,7 @@ if __name__ == "__main__":
     # info = tq.get_stock_info("ZROZ.US", field_list=["XsFlag", "HSStockKind"])
     # print(info)
 
-    klines = ex.klines("SZ.000001", "d")
+    klines = ex.klines("SZ.000001", "5m")
     print(klines)
 
     # 回调函数 功能为收到更新后请求最新的report数据

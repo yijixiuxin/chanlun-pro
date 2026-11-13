@@ -2,6 +2,9 @@
 
 ---
 
+
+---
+
 ### 2026-11-04
 
 * 新增同花顺api数据，需要在 config.py 中设置对应的api key
@@ -14,7 +17,7 @@
 
 > 数据库变更
 > 
-> 执行 `uv run .\script\tv_storage_schema.py` 进行数据表同步修改
+> 执行 `uv run .\script\db_change_schema.py` 进行数据表同步修改（启动项目时会自动执行）
 
 * 修改图表布局保存方式
 
