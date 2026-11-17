@@ -756,6 +756,8 @@
         ZiXuan.render_zixuan_opts();
         if (Utils.get_market() === "a") {
           ThsSpecial.init();
+          // 按用户本地保存的设置恢复同花顺底部条显示状态
+          Utils.apply_ths_bar_visible();
         }
         interval_update_rates = setInterval(ZiXuan.stocks_update_rate, 10000);
       }

@@ -1,5 +1,36 @@
 var Utils = (function () {
+  var THS_BAR_VISIBLE_KEY = "ths_bar_visible";
+
+  // 同花顺底部条默认显示
+  function ths_bar_visible() {
+    var value = Utils.get_local_data(THS_BAR_VISIBLE_KEY);
+    return value === undefined ? true : !!value;
+  }
+
+  function apply_ths_bar_visible() {
+    $("#ths-floating-bar").toggle(ths_bar_visible());
+  }
+
+  function sync_ths_bar_button() {
+    var $btn = $('.layui-fixbar li[lay-type="ths_bar"]');
+    if (!$btn.length) {
+      return;
+    }
+    var visible = ths_bar_visible();
+    $btn
+      .toggleClass("layui-icon-eye", visible)
+      .toggleClass("layui-icon-eye-invisible", !visible)
+      .attr("title", visible ? "隐藏同花顺底部条" : "显示同花顺底部条");
+  }
+
+  function toggle_ths_bar() {
+    Utils.set_local_data(THS_BAR_VISIBLE_KEY, !ths_bar_visible());
+    apply_ths_bar_visible();
+    sync_ths_bar_button();
+  }
+
   return {
+    apply_ths_bar_visible: apply_ths_bar_visible,
     get_local_data: function (key) {
       if (layui.data("tv_chart")) {
         let val = layui.data("tv_chart")[key];
@@ -60,14 +91,19 @@ var Utils = (function () {
       // 固定条，显示与隐藏菜单栏
       layui.use(function () {
         var util = layui.util;
+        var bars = [
+          {
+            // 定义可显示的 bar 列表信息 -- v2.8.0 新增
+            type: "hide_menu",
+            icon: "layui-icon-spread-left", // layui-icon-shrink-right
+          },
+        ];
+        // 同花顺底部条仅在 A 股显示
+        if (Utils.get_market() === "a") {
+          bars.push({ type: "ths_bar", icon: "layui-icon-eye" });
+        }
         util.fixbar({
-          bars: [
-            {
-              // 定义可显示的 bar 列表信息 -- v2.8.0 新增
-              type: "hide_menu",
-              icon: "layui-icon-spread-left", // layui-icon-shrink-right
-            },
-          ],
+          bars: bars,
           default: false,
           on: {
             // 任意事件 --  v2.8.0 新增
@@ -75,7 +111,7 @@ var Utils = (function () {
           // 点击事件
           click: function (type) {
             if (type === "hide_menu") {
-              var fixed_li = $(".layui-fixbar  li:first-child");
+              var fixed_li = $('.layui-fixbar li[lay-type="hide_menu"]');
               if (fixed_li.attr("class").includes("layui-icon-spread-left")) {
                 fixed_li
                   .removeClass("layui-icon-spread-left")
@@ -93,9 +129,12 @@ var Utils = (function () {
                   .removeClass("layui-col-xs12 layui-col-sm12 layui-col-md12")
                   .addClass("layui-col-xs10 layui-col-sm10 layui-col-md10");
               }
+            } else if (type === "ths_bar") {
+              toggle_ths_bar();
             }
           },
         });
+        sync_ths_bar_button();
       });
     },
   };
